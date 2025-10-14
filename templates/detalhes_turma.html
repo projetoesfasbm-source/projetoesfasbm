@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+
+{% block title %}Detalhes da Turma - {{ turma.nome }}{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <h1>{{ turma.nome }}</h1>
+    <p>Visualize os alunos e gerencie os cargos desta turma.</p>
+</div>
+
+<div class="turma-details-grid">
+    <div class="details-section">
+        <div class="section-header">
+            <h3>Alunos na Turma ({{ turma.alunos|length }})</h3>
+        </div>
+        
+        <div class="table-responsive">
+            <table class="table-styled">
+                <thead>
+                    <tr>
+                        <th>Nome Completo</th>
+                        <th>Matrícula</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for aluno in turma.alunos | sort(attribute='user.nome_completo') %}
+                    <tr>
+                        <td>{{ aluno.user.nome_completo or aluno.user.username }}</td>
+                        <td>{{ aluno.user.matricula }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="2" class="text-center">Nenhum aluno cadastrado nesta turma.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="details-section">
+        <div class="section-header">
+            <h3>Cargos da Turma</h3>
+        </div>
+        <div class="cargos-grid">
+            {% for cargo in cargos_lista %}
+            <div class="cargo-item">
+                <label>{{ cargo }}</label>
+                <div class="cargo-assignee">
+                    {% set aluno_id = cargos_atuais[cargo] %}
+                    {% if aluno_id %}
+                        {% set aluno_obj = turma.alunos|selectattr('id', 'equalto', aluno_id)|first %}
+                        {{ aluno_obj.user.nome_de_guerra if aluno_obj and aluno_obj.user.nome_de_guerra else (aluno_obj.user.nome_completo if aluno_obj else 'Aluno não encontrado') }}
+                    {% else %}
+                        <span class="text-muted">-- Vago --</span>
+                    {% endif %}
+                </div>
+                {% if current_user.role in ['programador', 'admin_escola'] %}
+                <button class="btn btn-sm btn-secondary" onclick="openCargoModal('{{ cargo }}', '{{ aluno_id or '' }}')">Gerenciar</button>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        <div class="form-actions" style="border-top: none; margin-top: 1rem;">
+            <a href="{{ url_for('turma.listar_turmas') }}" class="btn btn-secondary">Voltar</a>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="cargoModal">
+    <div class="modal-content">
+        <form id="cargoForm" method="POST" action="{{ url_for('turma.salvar_cargos_turma', turma_id=turma.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="cargo_nome" id="modalCargoNome">
+            <h3 id="modalTitle">Gerenciar Cargo</h3>
+            <div class="form-group">
+                <label for="modalAlunoSelect">Aluno</label>
+                <select id="modalAlunoSelect" name="aluno_id" class="form-control" onchange="updateDateLabel(this)">
+                    <option value="">-- Remover do Cargo (Vago) --</option>
+                    {% for aluno in turma.alunos | sort(attribute='user.nome_completo') %}
+                        <option value="{{ aluno.id }}">{{ aluno.user.nome_completo }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="modalDataEvento" id="modalDataLabel">Data</label>
+                <input type="date" id="modalDataEvento" name="data_evento" class="form-control" required>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeCargoModal()">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Salvar Alteração</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+.turma-details-grid { display: grid; grid-template-columns: 1fr; gap: 2rem; }
+@media (min-width: 992px) { .turma-details-grid { grid-template-columns: 2fr 1fr; } }
+.details-section { background: var(--color-white); border-radius: var(--border-radius); padding: 2rem; box-shadow: var(--shadow-soft); border: 1px solid var(--color-border); }
+.section-header { padding-bottom: 1rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--color-border); }
+.section-header h3 { font-size: 1.5rem; font-weight: 700; margin: 0; }
+.cargos-grid { display: flex; flex-direction: column; gap: 1rem; }
+.cargo-item { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 1rem; padding: 0.75rem; border-radius: 8px; background-color: #f8fafc; border: 1px solid #e2e8f0; }
+.cargo-item label { font-weight: 600; }
+.cargo-assignee { text-align: right; font-size: 0.9rem; color: #333; }
+</style>
+
+<script>
+    const cargoModal = document.getElementById('cargoModal');
+    const modalTitle = document.getElementById('modalTitle');
+    const modalCargoNome = document.getElementById('modalCargoNome');
+    const modalAlunoSelect = document.getElementById('modalAlunoSelect');
+    const modalDataEvento = document.getElementById('modalDataEvento');
+    const modalDataLabel = document.getElementById('modalDataLabel');
+
+    function updateDateLabel(selectElement) {
+        if (selectElement.value === "") {
+            modalDataLabel.textContent = "Data de Fim da Função";
+        } else {
+            modalDataLabel.textContent = "Data de Início da Função";
+        }
+    }
+
+    function openCargoModal(cargo, alunoId) {
+        modalTitle.textContent = `Gerenciar Cargo: ${cargo}`;
+        modalCargoNome.value = cargo;
+        modalAlunoSelect.value = alunoId;
+        modalDataEvento.valueAsDate = new Date();
+        
+        // Chama a função para definir a label correta ao abrir
+        updateDateLabel(modalAlunoSelect);
+
+        cargoModal.classList.add('visible');
+    }
+
+    function closeCargoModal() {
+        cargoModal.classList.remove('visible');
+    }
+
+    window.onclick = function(event) {
+        if (event.target == cargoModal) {
+            closeCargoModal();
+        }
+    }
+</script>
+{% endblock %}

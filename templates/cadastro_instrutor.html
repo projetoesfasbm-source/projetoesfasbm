@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Cadastrar Instrutor</h1>
+<form method="post">
+  {{ form.csrf_token }}
+  <div class="mb-2">
+    <label>Nome completo</label>
+    {{ form.nome_completo(class="form-control") }}
+  </div>
+  <div class="mb-2">
+    <label>Nome de guerra</label>
+    {{ form.nome_de_guerra(class="form-control") }}
+  </div>
+  <div class="mb-2">
+    <label>Matrícula</label>
+    {{ form.matricula(class="form-control") }}
+  </div>
+  <div class="mb-2">
+    <label>E-mail</label>
+    {{ form.email(class="form-control") }}
+  </div>
+  <div class="mb-2">
+    <label>Senha</label>
+    {{ form.password(class="form-control") }}
+  </div>
+  <div class="mb-2">
+    <label>Confirmar Senha</label>
+    {{ form.password2(class="form-control") }}
+  </div>
+
+  <div class="row">
+    <div class="col-md-6 mb-2">
+      <label for="posto_categoria">Categoria</label>
+      {{ form.posto_categoria(class="form-select", id="posto_categoria") }}
+    </div>
+    <div class="col-md-6 mb-2">
+      <label for="posto_graduacao">Posto/Graduação</label>
+      {{ form.posto_graduacao(class="form-select", id="posto_graduacao") }}
+    </div>
+  </div>
+
+  <div class="mb-2" id="posto_graduacao_outro_div" style="display: none;">
+    <label for="posto_graduacao_outro">Outro (especifique)</label>
+    {{ form.posto_graduacao_outro(class="form-control", id="posto_graduacao_outro") }}
+  </div>
+  <div class="mb-2">
+    <label>Telefone</label>
+    {{ form.telefone(class="form-control") }}
+  </div>
+  <div class="form-group mb-3">
+    <label class="form-label">Efetivo da Reserva Remunerada (RR)</label>
+    <div class="btn-group" role="group">
+        {% for subfield in form.is_rr %}
+            <input type="radio" class="btn-check" name="{{ subfield.name }}" id="{{ subfield.id }}" value="{{ subfield.data }}" {% if subfield.checked %}checked{% endif %}>
+            <label class="btn btn-outline-primary" for="{{ subfield.id }}">{{ subfield.label.text }}</label>
+        {% endfor %}
+    </div>
+  </div>
+  <button class="btn btn-primary" type="submit">Salvar</button>
+  <a class="btn btn-secondary" href="{{ url_for('instrutor.listar_instrutores') }}">Voltar</a>
+</form>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const postosData = {{ postos_data | tojson }};
+    const categoriaSelect = document.getElementById('posto_categoria');
+    const postoSelect = document.getElementById('posto_graduacao');
+    const outroDiv = document.getElementById('posto_graduacao_outro_div');
+    const outroInput = document.getElementById('posto_graduacao_outro');
+
+    function updatePostoOptions() {
+        const selectedCategoria = categoriaSelect.value;
+        const postos = postosData[selectedCategoria] || [];
+        
+        postoSelect.innerHTML = '';
+        postos.forEach(posto => {
+            const option = new Option(posto, posto);
+            postoSelect.add(option);
+        });
+        
+        toggleOutroField();
+    }
+
+    function toggleOutroField() {
+        if (postoSelect.value === 'Outro') {
+            outroDiv.style.display = 'block';
+        } else {
+            outroDiv.style.display = 'none';
+            outroInput.value = '';
+        }
+    }
+
+    categoriaSelect.addEventListener('change', updatePostoOptions);
+    postoSelect.addEventListener('change', toggleOutroField);
+
+    // Inicializa na primeira carga
+    updatePostoOptions();
+});
+</script>
+{% endblock %}

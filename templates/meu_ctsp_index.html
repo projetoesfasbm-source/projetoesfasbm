@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}Meu CTSP{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <h1>Meu CTSP</h1>
+    <p>Acesse aqui suas informações acadêmicas e funcionais relacionadas ao curso.</p>
+</div>
+
+<div class="modules-grid">
+    
+    <a href="{{ url_for('historico.minhas_notas') }}" class="module-card">
+        <div class="card-content">
+            <div class="card-icon">📊</div>
+            <h3 class="card-title">Minhas Notas</h3>
+            <p class="card-description">Acompanhe seu desempenho, calcule médias e visualize as notas de cada disciplina.</p>
+        </div>
+    </a>
+    
+    <a href="{{ url_for('historico.sancoes') }}" class="module-card">
+        <div class="card-content">
+            <div class="card-icon">📜</div>
+            <h3 class="card-title">Sanções</h3>
+            <p class="card-description">Visualize os registros de sanções disciplinares aplicadas durante o curso.</p>
+        </div>
+    </a>
+    
+    <a href="{{ url_for('historico.elogios') }}" class="module-card">
+        <div class="card-content">
+            <div class="card-icon">⭐</div>
+            <h3 class="card-title">Elogios</h3>
+            <p class="card-description">Acesse os elogios e reconhecimentos recebidos ao longo do período letivo.</p>
+        </div>
+    </a>
+
+    <a href="{{ url_for('historico.historico_funcional', aluno_id=current_user.aluno_profile.id) }}" class="module-card">
+        <div class="card-content">
+            <div class="card-icon">📋</div>
+            <h3 class="card-title">Histórico Funcional</h3>
+            <p class="card-description">Acompanhe o seu histórico de atividades, funções e outras observações de perfil.</p>
+        </div>
+    </a>
+
+</div>
+{% endblock %}

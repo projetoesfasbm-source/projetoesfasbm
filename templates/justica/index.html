@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+
+{% block title %}Justiça e Disciplina{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <h1>Justiça e Disciplina</h1>
+    <p>Acompanhamento de processos disciplinares.</p>
+</div>
+
+<div class="justice-container">
+    <div class="justice-options">
+        <button class="btn btn-primary justice-option-btn active" data-target="inProgressContent">Em Andamento</button>
+        <button class="btn btn-warning justice-option-btn" data-target="finalizadosContent">Finalizados</button>
+        {% if current_user.role != 'aluno' %}
+        <button class="btn btn-success justice-option-btn" data-target="newTransgressionContent">Nova Transgressão</button>
+        <a href="{{ url_for('justica.exportar_selecao') }}" class="btn btn-info">Exportar para BI</a>
+        {% endif %}
+    </div>
+
+    <div class="justice-content active" id="inProgressContent">
+        <h3 class="justice-content-title">Processos em Andamento</h3>
+        {% for processo in em_andamento %}
+            {% if current_user.role == 'aluno' %}
+                {% include 'partials/_processo_card_aluno.html' %}
+            {% else %}
+                {% include 'partials/_processo_card_admin.html' %}
+            {% endif %}
+        {% else %}
+            <p>Nenhum processo em andamento encontrado.</p>
+        {% endfor %}
+    </div>
+    
+    <div class="justice-content" id="finalizadosContent">
+        <h3 class="justice-content-title">Processos Finalizados</h3>
+        {% for processo in finalizados %}
+            {% if current_user.role == 'aluno' %}
+                {% include 'partials/_processo_card_aluno.html' %}
+            {% else %}
+                {% include 'partials/_processo_card_admin.html' %}
+            {% endif %}
+        {% else %}
+            <p>Nenhum processo finalizado encontrado.</p>
+        {% endfor %}
+    </div>
+
+    {% if current_user.role != 'aluno' %}
+    <div class="justice-content" id="newTransgressionContent">
+        <h3 class="justice-content-title">Registrar Nova Transgressão</h3>
+        <form method="POST" action="{{ url_for('justica.novo_processo') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group">
+                <label for="aluno_search_input">Aluno</label>
+                <div class="search-form-container">
+                    <div class="input-group">
+                        <input type="search" id="aluno_search_input" class="form-control" placeholder="Buscar por nome ou matrícula..." autocomplete="off">
+                    </div>
+                </div>
+                <div id="aluno_results" class="search-results"></div>
+                <input type="hidden" name="aluno_id" id="aluno_id_hidden" required>
+                <div id="aluno_selected" class="selected-item-display" style="display: none;"></div>
+            </div>
+            
+            <div id="transgression_fields" style="display: none;">
+                <div class="form-group">
+                    <label for="fato">Fato Constatado</label>
+                    <textarea id="fato" name="fato" class="form-control" rows="4" required placeholder="Descreva aqui o fato ocorrido..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="observacao">Observação (Termo de Justificação)</label>
+                    <textarea id="observacao" name="observacao" class="form-control" rows="12"></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Registrar</button>
+                </div>
+            </div>
+        </form>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+    .justice-options { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.5rem; align-items: center; }
+    .justice-option-btn.active {
+        filter: brightness(1.1);
+        box-shadow: inset 0 2px 4px rgba(0,0,0,0.15);
+        transform: translateY(1px);
+    }
+    .justice-content { display: none; }
+    .justice-content.active { display: block; }
+    .justice-content-title { margin-bottom: 1.5rem; }
+    .process-card { background-color: var(--color-white); border-radius: 8px; padding: 1.5rem; margin-bottom: 1rem; border: 1px solid var(--color-border); border-left-width: 4px; }
+    .process-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; }
+    .process-title { font-weight: bold; }
+    .process-id { font-size: 0.8rem; color: var(--color-text-muted); }
+    .process-detail { margin-bottom: 0.75rem; }
+    .detail-label { font-weight: 600; }
+    .status-badge { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
+    .status-badge.pendente { background-color: #fefce8; color: #a16207; }
+    .status-badge.notificado { background-color: #eff6ff; color: #1d4ed8; }
+    .status-badge.defesa-enviada { background-color: #f0fdf4; color: #166534; }
+    .status-badge.finalizado { background-color: #f1f5f9; color: #475569; }
+    .search-form-container { position: relative; }
+    .search-results { max-height: 200px; overflow-y: auto; border: 1px solid #ccc; border-radius: 0 0 8px 8px; background: white; position: absolute; width: 100%; z-index: 10; display: none; }
+    .result-item { padding: 10px; cursor: pointer; }
+    .result-item:hover { background-color: #f0f0f0; }
+    .selected-item-display { background-color: #e9ecef; padding: 10px; border-radius: 4px; margin-top: 5px; display: flex; justify-content: space-between; align-items: center; }
+    .remove-selected-btn { cursor: pointer; color: red; font-weight: bold; }
+    .preserve-whitespace { white-space: pre-wrap; word-wrap: break-word; }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const optionBtns = document.querySelectorAll('.justice-option-btn');
+    const contentDivs = document.querySelectorAll('.justice-content');
+    const searchInput = document.getElementById('aluno_search_input');
+    const resultsContainer = document.getElementById('aluno_results');
+    const hiddenInput = document.getElementById('aluno_id_hidden');
+    const selectedDisplay = document.getElementById('aluno_selected');
+    const transgressionFields = document.getElementById('transgression_fields');
+    const fatoTextarea = document.getElementById('fato');
+    const observacaoTextarea = document.getElementById('observacao');
+
+    optionBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            // Lógica para alternar o botão ativo
+            optionBtns.forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+
+            // Lógica para mostrar/esconder conteúdo
+            contentDivs.forEach(div => div.classList.remove('active'));
+            document.getElementById(this.dataset.target).classList.add('active');
+        });
+    });
+
+    if (searchInput) {
+        let searchTimeout;
+        searchInput.addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            const query = this.value;
+            hiddenInput.value = '';
+            transgressionFields.style.display = 'none';
+
+            if (query.length < 2) {
+                resultsContainer.innerHTML = '';
+                resultsContainer.style.display = 'none';
+                return;
+            }
+
+            searchTimeout = setTimeout(() => {
+                fetch(`{{ url_for('justica.api_get_alunos') }}?q=${query}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        resultsContainer.innerHTML = '';
+                        if (data.length > 0) {
+                            data.forEach(aluno => {
+                                const item = document.createElement('div');
+                                item.className = 'result-item';
+                                item.textContent = aluno.text;
+                                item.dataset.id = aluno.id;
+                                item.addEventListener('click', function() {
+                                    selectAluno(this.dataset.id, this.textContent);
+                                });
+                                resultsContainer.appendChild(item);
+                            });
+                            resultsContainer.style.display = 'block';
+                        } else {
+                            resultsContainer.style.display = 'none';
+                        }
+                    });
+            }, 300);
+        });
+
+        function selectAluno(alunoId, alunoText) {
+            searchInput.style.display = 'none';
+            selectedDisplay.innerHTML = `<span>${alunoText}</span><span class="remove-selected-btn" title="Remover seleção"> &times;</span>`;
+            selectedDisplay.style.display = 'flex';
+            hiddenInput.value = alunoId;
+            resultsContainer.style.display = 'none';
+            
+            fetch(`{{ url_for('justica.api_get_aluno_details', aluno_id=0) }}${alunoId}`)
+                .then(response => response.json())
+                .then(details => {
+                    const hoje = new Date();
+                    const dia = hoje.getDate();
+                    const mes = hoje.toLocaleString('pt-BR', { month: 'long' });
+                    const ano = hoje.getFullYear();
+
+                    const autoridadeNome = "{{ current_user.nome_completo or 'NOME DA AUTORIDADE' }}";
+                    const autoridadePosto = "{{ current_user.posto_graduacao or 'POSTO DA AUTORIDADE' }}";
+                    
+                    const obsTemplate = `Tendo em vista as informações constantes na Parte Nº 000/CAl/EsFAS/${ano}, evidenciando a existência, em tese, de transgressão das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação:\n\n1. Justificante: ${details.posto_graduacao} ${details.nome_completo}, Id Func. ${details.matricula}.\n\n2. Descrição da conduta infracional: O ${details.posto_graduacao} ${details.nome_completo}, Id Func. ${details.matricula}, no dia ${dia} de ${mes} de ${ano}, ...... \nCom isso, incorreu no item...\n\n3. Cientifico-lhe que a contar do recebimento da presente, abre-se o prazo de 24 horas, para que, querendo, apresente resposta escrita com as provas que entender cabíveis. Fica advertido o acusado que a não entrega da justificação dentro do prazo estipulado, implicará em reconhecimento como verdadeiros os fatos imputados.\n\n\n${autoridadeNome}\n${autoridadePosto}`;
+
+                    fatoTextarea.value = '';
+                    observacaoTextarea.value = obsTemplate;
+                    transgressionFields.style.display = 'block';
+                });
+        }
+        
+        selectedDisplay.addEventListener('click', function(e) {
+            if (e.target.classList.contains('remove-selected-btn')) {
+                searchInput.style.display = 'block';
+                searchInput.value = '';
+                selectedDisplay.style.display = 'none';
+                hiddenInput.value = '';
+                transgressionFields.style.display = 'none';
+                fatoTextarea.value = '';
+                observacaoTextarea.value = '';
+                searchInput.focus();
+            }
+        });
+
+        document.addEventListener('click', function(e) {
+            if (!searchInput.contains(e.target)) {
+                resultsContainer.style.display = 'none';
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

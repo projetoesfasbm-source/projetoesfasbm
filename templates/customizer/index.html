@@ -1,0 +1,339 @@
+{% extends "base.html" %}
+
+{% block title %}Customizar Site - Sistema EsFAS{% endblock %}
+
+{% block page_title %}Customizar Site{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="customizer-header">
+        <h1>🎨 Customização do Site</h1>
+        <div class="header-actions">
+            <a href="{{ url_for('customizer.preview') }}" class="btn btn-info" target="_blank">
+                👁️ Preview
+            </a>
+            <a href="{{ url_for('assets.manage_assets') }}" class="btn btn-secondary">
+                📁 Gerenciar Assets
+            </a>
+            <form method="POST" action="{{ url_for('customizer.reset_configs') }}" style="display: inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-warning" onclick="return confirm('Resetar todas as configurações?')">
+                    🔄 Resetar
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div class="customizer-grid">
+        <div class="config-section">
+            <h2>⚙️ Configurações Gerais</h2>
+            <div class="config-cards">
+                {% for config in configs_by_category.get('general', []) %}
+                <div class="config-card">
+                    <label class="config-label">{{ config.description or config.config_key }}</label>
+                    
+                    {% if config.config_type == 'image' %}
+                        <div class="image-selector">
+                            <div class="current-image">
+                                {% if config.config_value %}
+                                    <img src="{{ config.config_value }}" alt="Current" class="preview-img">
+                                {% else %}
+                                    <div class="no-image">Nenhuma imagem</div>
+                                {% endif %}
+                            </div>
+                            <select class="form-control image-select" data-config-key="{{ config.config_key }}" data-config-type="image">
+                                <option value="">Nenhuma imagem</option>
+                                {% for asset in assets %}
+                                    <option value="{{ url_for('static', filename='uploads/' + asset.filename) }}" 
+                                           {% if config.config_value == url_for('static', filename='uploads/' + asset.filename) %}selected{% endif %}>
+                                        {{ asset.original_filename }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    
+                    {% elif config.config_type == 'color' %}
+                        <input type="color" class="form-control color-input" 
+                               value="{{ config.config_value or '#3b82f6' }}"
+                               data-config-key="{{ config.config_key }}" 
+                               data-config-type="color">
+                    
+                    {% else %}
+                        <input type="text" class="form-control text-input" 
+                               value="{{ config.config_value or '' }}"
+                               data-config-key="{{ config.config_key }}" 
+                               data-config-type="text"
+                               placeholder="Digite o valor...">
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="config-section">
+            <h2>📊 Dashboard - Ícones e Imagens</h2>
+            <div class="config-cards">
+                {% for config in configs_by_category.get('dashboard', []) %}
+                <div class="config-card">
+                    <label class="config-label">{{ config.description or config.config_key }}</label>
+                    
+                    {% if 'icon' in config.config_key %}
+                        <div class="icon-selector">
+                            <div class="current-icon">
+                                {{ config.config_value or '📋' }}
+                            </div>
+                            <select class="form-control icon-select" data-config-key="{{ config.config_key }}" data-config-type="text">
+                                <option value="👥" {% if config.config_value == '👥' %}selected{% endif %}>👥 Pessoas</option>
+                                <option value="🎓" {% if config.config_value == '🎓' %}selected{% endif %}>🎓 Graduação</option>
+                                <option value="📚" {% if config.config_value == '📚' %}selected{% endif %}>📚 Livros</option>
+                                <option value="📊" {% if config.config_value == '📊' %}selected{% endif %}>📊 Gráfico</option>
+                                <option value="🎨" {% if config.config_value == '🎨' %}selected{% endif %}>🎨 Arte</option>
+                                <option value="🏠" {% if config.config_value == '🏠' %}selected{% endif %}>🏠 Casa</option>
+                                <option value="⚙️" {% if config.config_value == '⚙️' %}selected{% endif %}>⚙️ Configurações</option>
+                                <option value="📋" {% if config.config_value == '📋' %}selected{% endif %}>📋 Lista</option>
+                                <option value="🔍" {% if config.config_value == '🔍' %}selected{% endif %}>🔍 Pesquisa</option>
+                                <option value="💼" {% if config.config_value == '💼' %}selected{% endif %}>💼 Trabalho</option>
+                                <option value="🎖️" {% if config.config_value == '🎖️' %}selected{% endif %}>🎖️ Medalha</option>
+                                <option value="⭐" {% if config.config_value == '⭐' %}selected{% endif %}>⭐ Estrela</option>
+                                <option value="🚀" {% if config.config_value == '🚀' %}selected{% endif %}>🚀 Foguete</option>
+                                <option value="💻" {% if config.config_value == '💻' %}selected{% endif %}>💻 Computador</option>
+                            </select>
+                        </div>
+                    
+                    {% elif 'bg' in config.config_key %}
+                        <div class="image-selector">
+                            <div class="current-image card-preview">
+                                {% if config.config_value %}
+                                    <img src="{{ config.config_value }}" alt="Current" class="preview-img">
+                                    <div class="preview-overlay">
+                                        <span class="preview-text">PREVIEW</span>
+                                    </div>
+                                {% else %}
+                                    <div class="no-image">
+                                        <div class="default-bg">Imagem Padrão</div>
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <select class="form-control image-select" data-config-key="{{ config.config_key }}" data-config-type="image">
+                                <option value="">Imagem padrão</option>
+                                {% for asset in assets %}
+                                    <option value="{{ url_for('static', filename='uploads/' + asset.filename) }}" 
+                                           {% if config.config_value == url_for('static', filename='uploads/' + asset.filename) %}selected{% endif %}>
+                                        {{ asset.original_filename }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    
+                    {% else %}
+                        <input type="text" class="form-control text-input" 
+                               value="{{ config.config_value or '' }}"
+                               data-config-key="{{ config.config_key }}" 
+                               data-config-type="text">
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="config-section">
+            <h2>📂 Sidebar</h2>
+            <div class="config-cards">
+                {% for config in configs_by_category.get('sidebar', []) %}
+                <div class="config-card">
+                    <label class="config-label">{{ config.description or config.config_key }}</label>
+                    
+                    {% if config.config_type == 'image' %}
+                        <div class="image-selector">
+                            <div class="current-image">
+                                {% if config.config_value %}
+                                    <img src="{{ config.config_value }}" alt="Current" class="preview-img">
+                                {% else %}
+                                    <div class="no-image">Nenhuma imagem</div>
+                                {% endif %}
+                            </div>
+                            <select class="form-control image-select" data-config-key="{{ config.config_key }}" data-config-type="image">
+                                <option value="">Nenhuma imagem</option>
+                                {% for asset in assets %}
+                                    {% if asset.asset_type in ['logo', 'icon'] %}
+                                        <option value="{{ url_for('static', filename='uploads/' + asset.filename) }}" 
+                                               {% if config.config_value == url_for('static', filename='uploads/' + asset.filename) %}selected{% endif %}>
+                                            {{ asset.original_filename }}
+                                        </option>
+                                    {% endif %}
+                                {% endfor %}
+                            </select>
+                        </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="config-section">
+            <h2>🏫 Ícones das Turmas</h2>
+            <div class="config-cards">
+                {% for config in configs_by_category.get('turmas', []) %}
+                <div class="config-card">
+                    <label class="config-label">{{ config.description or config.config_key }}</label>
+                    <div class="image-selector">
+                        <div class="current-image">
+                            {% if config.config_value %}
+                                <img src="{{ config.config_value }}" alt="Current" class="preview-img">
+                            {% else %}
+                                <div class="no-image">🏫</div>
+                            {% endif %}
+                        </div>
+                        <select class="form-control image-select" data-config-key="{{ config.config_key }}" data-config-type="image">
+                            <option value="">Ícone Padrão</option>
+                            {% for asset in assets %}
+                                {% if asset.asset_type in ['logo', 'icon'] %}
+                                    <option value="{{ url_for('static', filename='uploads/' + asset.filename) }}" 
+                                           {% if config.config_value == url_for('static', filename='uploads/' + asset.filename) %}selected{% endif %}>
+                                        {{ asset.original_filename }}
+                                    </option>
+                                {% endif %}
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="save-section">
+        <button id="apply-changes" class="btn btn-success btn-lg">
+            ✅ Aplicar Todas as Mudanças
+        </button>
+        <p class="save-help">As mudanças serão aplicadas automaticamente no site</p>
+    </div>
+</div>
+
+<style>
+.customizer-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid #e2e8f0; }
+.customizer-header h1 { color: #1a202c; font-size: 2rem; font-weight: 800; margin: 0; }
+.header-actions { display: flex; gap: 1rem; flex-wrap: wrap; }
+.customizer-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 2rem; margin-bottom: 3rem; }
+.config-section { background: white; border-radius: 12px; padding: 2rem; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); border: 1px solid #e2e8f0; }
+.config-section h2 { color: #1a202c; font-size: 1.5rem; font-weight: 700; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem; }
+.config-cards { display: flex; flex-direction: column; gap: 1.5rem; }
+.config-card { border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.5rem; transition: all 0.3s ease; }
+.config-card:hover { border-color: #3b82f6; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1); }
+.config-label { display: block; font-weight: 600; color: #374151; margin-bottom: 0.75rem; font-size: 0.9rem; }
+.image-selector { display: flex; align-items: center; gap: 1rem; }
+.current-image { width: 80px; height: 60px; border: 1px solid #e2e8f0; border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; }
+.current-image.card-preview { position: relative; background: linear-gradient(135deg, #1a232c, #2d3748); }
+.preview-img { width: 100%; height: 100%; object-fit: cover; }
+.preview-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; color: white; font-size: 0.7rem; font-weight: bold; }
+.no-image { color: #94a3b8; font-size: 0.8rem; text-align: center; width: 100%; }
+.default-bg { background: linear-gradient(135deg, #e2e8f0, #cbd5e1); color: #64748b; padding: 0.5rem; border-radius: 4px; font-size: 0.7rem; }
+.icon-selector { display: flex; align-items: center; gap: 1rem; }
+.current-icon { width: 50px; height: 50px; border: 1px solid #e2e8f0; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; flex-shrink: 0; }
+.save-section { text-align: center; padding: 2rem; background: white; border-radius: 12px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); border: 1px solid #e2e8f0; }
+.save-help { color: #64748b; margin-top: 0.5rem; font-size: 0.9rem; }
+.color-input { width: 80px; height: 40px; border-radius: 8px; border: 1px solid #e2e8f0; cursor: pointer; }
+@media (max-width: 768px) {
+    .customizer-header { flex-direction: column; gap: 1rem; align-items: stretch; }
+    .customizer-grid { grid-template-columns: 1fr; }
+    .image-selector,
+    .icon-selector { flex-direction: column; align-items: stretch; text-align: center; }
+    .current-image { width: 100%; height: 80px; }
+}
+</style>
+
+<script>
+let pendingChanges = {};
+
+function updateConfig(key, value, type) {
+    pendingChanges[key] = { value: value, type: type };
+    const card = document.querySelector(`[data-config-key="${key}"]`).closest('.config-card');
+    card.style.borderColor = '#f59e0b';
+    card.style.backgroundColor = '#fffbeb';
+}
+
+document.addEventListener('change', function(e) {
+    if (e.target.matches('.image-select, .icon-select, .text-input, .color-input')) {
+        const key = e.target.dataset.configKey;
+        const value = e.target.value;
+        const type = e.target.dataset.configType;
+        updateConfig(key, value, type);
+        
+        if (type === 'image') {
+            const previewImg = e.target.closest('.image-selector').querySelector('.preview-img');
+            const noImage = e.target.closest('.image-selector').querySelector('.no-image');
+            const currentImage = e.target.closest('.image-selector').querySelector('.current-image');
+            
+            if (value) {
+                if (previewImg) {
+                    previewImg.src = value;
+                } else if (noImage) {
+                    currentImage.innerHTML = `<img src="${value}" alt="Preview" class="preview-img">`;
+                    if (currentImage.classList.contains('card-preview')) {
+                        currentImage.innerHTML += '<div class="preview-overlay"><span class="preview-text">PREVIEW</span></div>';
+                    }
+                }
+            } else {
+                if (currentImage) {
+                    const defaultText = currentImage.closest('.config-section').querySelector('h2').textContent.includes('Turmas') ? '🏫' : 'Nenhuma imagem';
+                    currentImage.innerHTML = `<div class="no-image">${defaultText}</div>`;
+                }
+            }
+        } else if (type === 'text' && key.includes('icon')) {
+            const currentIcon = e.target.closest('.icon-selector').querySelector('.current-icon');
+            if (currentIcon) {
+                currentIcon.textContent = value || '📋';
+            }
+        }
+    }
+});
+
+document.getElementById('apply-changes').addEventListener('click', function() {
+    if (Object.keys(pendingChanges).length === 0) {
+        alert('Nenhuma alteração para aplicar');
+        return;
+    }
+    this.disabled = true;
+    this.innerHTML = '⏳ Aplicando...';
+    
+    const promises = Object.entries(pendingChanges).map(([key, config]) => {
+        const formData = new FormData();
+        formData.append('config_key', key);
+        formData.append('config_value', config.value);
+        formData.append('config_type', config.type);
+        return fetch('/customizer/update', { method: 'POST', body: formData, headers: {'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')}}).then(response => response.json());
+    });
+    
+    Promise.all(promises)
+        .then(results => {
+            const failed = results.filter(r => !r.success);
+            if (failed.length === 0) {
+                alert('✅ Todas as configurações foram aplicadas com sucesso!\n\n🔄 A página será recarregada para mostrar as mudanças.');
+                setTimeout(() => window.location.reload(), 1000);
+            } else {
+                alert(`❌ Algumas configurações falharam: ${failed.map(f => f.message).join(', ')}`);
+            }
+        })
+        .catch(error => alert('❌ Erro ao aplicar configurações: ' + error))
+        .finally(() => {
+            this.disabled = false;
+            this.innerHTML = '✅ Aplicar Todas as Mudanças';
+        });
+});
+
+function updatePendingIndicator() {
+    const count = Object.keys(pendingChanges).length;
+    const button = document.getElementById('apply-changes');
+    if (count > 0) {
+        button.innerHTML = `✅ Aplicar ${count} Mudança${count > 1 ? 's' : ''}`;
+        button.classList.add('btn-warning');
+        button.classList.remove('btn-success');
+    } else {
+        button.innerHTML = '✅ Aplicar Todas as Mudanças';
+        button.classList.add('btn-success');
+        button.classList.remove('btn-warning');
+    }
+}
+setInterval(updatePendingIndicator, 500);
+</script>
+{% endblock %}

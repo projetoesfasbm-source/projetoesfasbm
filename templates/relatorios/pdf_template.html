@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Mapa de Gratificação Magistério</title>
+    <style>
+        @page { size: A4 landscape; margin: 1cm 1.5cm; }
+
+        body { font-family: 'Times New Roman', Times, serif; font-size: 9pt; line-height: 1.3; color: #000; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #000; padding: 4px; text-align: center; vertical-align: middle; word-wrap: break-word; }
+        .header-table { border: none; margin-bottom: 0.5cm; }
+        .header-table td { border: none; vertical-align: top; padding: 0; }
+        .coluna-esquerda, .coluna-direita { width: 27.5%; padding: 0.2cm !important; }
+        .coluna-central { width: 45%; text-align: center; padding: 0 0.5cm !important; }
+        .main-table th { background-color: #E0E0E0; }
+        .text-left { text-align: left; }
+        .assinaturas { margin-top: 2cm; table-layout: fixed; width: 100%; }
+        .assinaturas td { border: none; text-align: center; vertical-align: bottom; }
+        .assinatura-auxiliar { width: 60%; }
+        .assinatura-digitador { width: 40%; }
+        .assinatura-linha { border-top: 1px solid black; padding-top: 2px; display: inline-block; }
+        .total-geral-row td { font-weight: bold; background-color: #E0E0E0; }
+        p { margin: 2px 0; }
+        
+        .orientacoes-table { margin-top: 0.2cm; }
+        .orientacoes-table td { border: 1px solid #000; vertical-align: top; }
+        .orientacoes-left { width: 70%; text-align: left; padding: 8px; }
+        .orientacoes-right { width: 30%; text-align: center; padding: 8px; }
+        .ori-title { font-weight: bold; margin-bottom: 6px; }
+        .ori-list { margin: 0; padding-left: 18px; text-align: left; }
+        .ori-list li { margin-bottom: 4px; }
+    </style>
+</head>
+<body>
+
+    <table class="header-table">
+        <tr>
+            <td class="coluna-esquerda" style="border: 1px solid black; vertical-align: bottom; text-align: center;">
+                <div style="padding-bottom: 8px;">
+                    <p class="assinatura-linha" style="min-width: 8cm;"><strong>{{ comandante_nome or 'NOME DO COMANDANTE' }}</strong></p>
+                    <p>{{ comandante_funcao or 'Comandante da Escola' }}</p>
+                </div>
+            </td>
+            <td class="coluna-central">
+                <h3 style="margin: 0; font-size: 11pt;">MAPA DE GRATIFICAÇÃO MAGISTÉRIO</h3>
+                <p><strong>OPM:</strong> {{ opm or 'Nome da OPM' }}</p>
+                <p><strong>Telefone:</strong> {{ telefone or 'N/D' }}</p>
+                <p>Horas aulas a pagar do Mês de <strong>{{ nome_mes_ano }}</strong></p>
+                <p><strong>{{ titulo_curso }}</strong></p>
+            </td>
+            <td class="coluna-direita" style="border: 1px solid black;">
+                <p><strong>LANÇAR NO RHE</strong></p>
+                <p>____/_____/_____</p>
+                <br><br>
+                <p>____________________</p>
+                <p>Ch da SEÇÃO ADM DE</p>
+            </td>
+        </tr>
+    </table>
+
+    <table class="main-table">
+        <thead>
+            <tr>
+                <th>Posto / graduação</th>
+                <th>Id. Func.</th>
+                <th style="width: 25%;">Nome completo do servidor</th>
+                <th style="width: 25%;">Disciplina</th>
+                <th>CH total</th>
+                <th>CH paga anteriormente</th>
+                <th>CH a pagar</th>
+                <th>Valor em R$</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% set total_geral_ch_a_pagar = namespace(valor=0) %}
+            {% set total_geral_valor_a_pagar = namespace(valor=0) %}
+
+            {% for instrutor_data in dados %}
+                {% for disciplina in instrutor_data.disciplinas %}
+                    {% set valor_a_pagar = (disciplina.ch_a_pagar or 0) * (valor_hora_aula or 0) %}
+                    <tr>
+                        <td>{{ instrutor_data.info.user.posto_graduacao or 'N/D' }}</td>
+                        <td>{{ instrutor_data.info.user.matricula }}</td>
+                        <td class="text-left">{{ instrutor_data.info.user.nome_completo }}</td>
+                        <td class="text-left">{{ disciplina.nome }}</td>
+                        <td>{{ disciplina.ch_total }}</td>
+                        <td>{{ disciplina.ch_paga_anteriormente }}</td>
+                        <td>{{ "%.1f"|format(disciplina.ch_a_pagar) }}</td>
+                        <td style="text-align: right;">R$ {{ "%.2f"|format(valor_a_pagar)|replace('.', ',') }}</td>
+                    </tr>
+                    {% set total_geral_ch_a_pagar.valor = total_geral_ch_a_pagar.valor + (disciplina.ch_a_pagar or 0) %}
+                    {% set total_geral_valor_a_pagar.valor = total_geral_valor_a_pagar.valor + valor_a_pagar %}
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="8">Nenhum dado encontrado para o período e filtros selecionados.</td>
+                </tr>
+            {% endfor %}
+
+            <tr class="total-geral-row">
+                <td colspan="6" style="text-align: right; padding-right: 10px;"><strong>CARGA HORARIA TOTAL</strong></td>
+                <td><strong>{{ "%.1f"|format(total_geral_ch_a_pagar.valor) }}</strong></td>
+                <td style="text-align: right;"><strong>R$ {{ "%.2f"|format(total_geral_valor_a_pagar.valor)|replace('.', ',') }}</strong></td>
+            </tr>
+        </tbody>
+    </table>
+
+    <table class="orientacoes-table">
+        <tr>
+            <td class="orientacoes-left">
+                <div class="ori-title">ORIENTAÇÕES:</div>
+                <ol class="ori-list">
+                    <li>Id. Func. em ordem crescente.</li>
+                    <li>Mapa deverá dar entrada no DE até o dia 05 de cada mês.</li>
+                    <li>Mapa atrasado do mês anterior ficará para o próximo mês, cumulativamente como do mês vigente.</li>
+                    <li>Mapas atrasados com mais de dois meses deverão ser devidamente fundamentados pelo comandante da escola, sob pena da não aceitação e restituição.</li>
+                    <li>Nos termos do item anterior, após chegar fundamentado, será adotada a medida da letra “g”, nº 5 do Item nº 3.</li>
+                </ol>
+            </td>
+            <td class="orientacoes-right" style="vertical-align: bottom;">
+                <p>Quartel em {{ cidade or 'Sua Cidade' }}, {{ nome_mes_ano }}.</p>
+            </td>
+        </tr>
+    </table>
+    
+    <table class="assinaturas">
+        <tr>
+            <td class="assinatura-auxiliar">
+                <p class="assinatura-linha">{{ auxiliar_nome or '' }}</p>
+                <p><small>{{ auxiliar_funcao or 'Auxiliar da Seção de Ensino' }}</small></p>
+            </td>
+            <td class="assinatura-digitador">
+                <p>Em ___/___/___</p>
+                <p class="assinatura-linha" style="min-width: 5cm;">{{ digitador_nome or '' }}</p>
+                <p><small>Digitador</small></p>
+            </td>
+        </tr>
+    </table>
+
+</body>
+</html>

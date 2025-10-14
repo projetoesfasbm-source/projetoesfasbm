@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}Lista de Disciplinas{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <h1>Disciplinas</h1>
+    <p>Gerencie as matérias e seus respectivos instrutores por turma.</p>
+</div>
+
+<div class="table-filters">
+    <form method="GET" action="{{ url_for('disciplina.listar_disciplinas') }}" id="filter-form" class="d-flex flex-wrap align-items-end gap-3">
+        <div class="filter-group">
+            <label for="turma_select"><strong>Selecione uma Turma para Visualizar/Adicionar Disciplinas:</strong></label>
+            <select name="turma_id" id="turma_select" class="form-control" onchange="this.form.submit()">
+                <option value="">-- Selecione uma Turma --</option>
+                {% for t in turmas %}
+                <option value="{{ t.id }}" {% if t.id == turma_selecionada_id %}selected{% endif %}>{{ t.nome }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </form>
+</div>
+
+{% if turma_selecionada_id %}
+<div class="table-container">
+    <div class="table-header">
+        <h3>
+            {% set turma_atual = turmas|selectattr('id', 'equalto', turma_selecionada_id)|first %}
+            Disciplinas da Turma: {{ turma_atual.nome if turma_atual else '' }}
+        </h3>
+        {% if current_user.role in ['programador', 'admin_escola'] %}
+        <a href="{{ url_for('disciplina.adicionar_disciplina') }}" class="btn btn-primary">
+            <span>+</span> Adicionar Disciplina a esta Turma
+        </a>
+        {% endif %}
+    </div>
+
+    <div class="table-responsive">
+        {% if disciplinas_com_progresso %}
+            <table class="table-styled">
+                <thead>
+                    <tr>
+                        <th style="width: 40%;">Matéria</th>
+                        <th>Carga Horária</th>
+                        <th style="width: 30%;">Progresso</th>
+                        {% if current_user.role in ['programador', 'admin_escola'] %}
+                        <th class="text-right">Ações</th>
+                        {% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in disciplinas_com_progresso %}
+                    <tr>
+                        <td data-label="Matéria">{{ item.disciplina.materia }}</td>
+                        <td data-label="Carga Horária">{{ item.disciplina.carga_horaria_prevista }}h</td>
+                        <td data-label="Progresso">
+                            <div class="progress-bar-container">
+                                <div class="progress-bar-fill" style="width: {{ item.progresso.percentual }}%;">
+                                    <span class="progress-bar-text">
+                                        {{ item.progresso.agendado }} / {{ item.progresso.previsto }}h ({{ item.progresso.percentual }}%)
+                                    </span>
+                                </div>
+                            </div>
+                        </td>
+                        {% if current_user.role in ['programador', 'admin_escola'] %}
+                        <td data-label="Ações" class="text-right">
+                            <div class="btn-group">
+                                <a href="{{ url_for('disciplina.editar_disciplina', disciplina_id=item.disciplina.id) }}" class="btn btn-sm btn-warning">Gerenciar</a>
+                                <form method="POST" action="{{ url_for('disciplina.excluir_disciplina', disciplina_id=item.disciplina.id) }}" style="display: inline;" onsubmit="return confirm('Tem certeza que deseja excluir esta disciplina?');">
+                                    {{ delete_form.hidden_tag() }}
+                                    <button type="submit" class="btn btn-sm btn-danger">Excluir</button>
+                                </form>
+                            </div>
+                        </td>
+                        {% endif %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <div class="empty-state">
+                <h2>Nenhuma Disciplina Cadastrada</h2>
+                <p>Nenhuma disciplina foi encontrada para esta turma.</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% else %}
+<div class="empty-state" style="margin-top: 2rem;">
+    <p>Por favor, selecione uma turma no menu acima para começar.</p>
+</div>
+{% endif %}
+
+<style>
+.progress-bar-container { width: 100%; background-color: #e9ecef; border-radius: 8px; overflow: hidden; height: 24px; position: relative; border: 1px solid #dee2e6; }
+.progress-bar-fill { background: linear-gradient(135deg, var(--color-primary-light), var(--color-primary)); height: 100%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 0.8rem; transition: width 0.5s ease-in-out; }
+.progress-bar-text { padding: 0 10px; white-space: nowrap; }
+</style>
+{% endblock %}

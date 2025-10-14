@@ -1,0 +1,18 @@
+{% if aula != 'SKIP' %}
+    <td class="schedule-slot" rowspan="{{ aula.duracao if not aula.is_disposicao else 1 }}">
+        <div class="slot-content
+            {% if aula.is_disposicao %}disposicao{% endif %}
+            {% if aula.status == 'pendente' %}pendente{% endif %}">
+            
+            <div class="disciplina-title">{{ aula.materia }}</div>
+            {% if aula.instrutor %}
+            <div class="instrutor-name">{{ aula.instrutor }}</div>
+            {% endif %}
+
+            {# --- OBSERVAÇÃO EXIBIDA AQUI --- #}
+            {% if aula.observacao %}
+            <div class="slot-observacao">{{ aula.observacao }}</div>
+            {% endif %}
+        </div>
+    </td>
+{% endif %}

@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}Exportar Processos para BI{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <h1>Exportar Processos Finalizados</h1>
+    <p>Selecione os processos disciplinares que você deseja exportar para um documento.</p>
+</div>
+
+<div class="table-container">
+    <form method="POST" action="{{ url_for('justica.exportar_documento') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        
+        <div class="table-responsive">
+            {% if processos %}
+                <table class="table-styled">
+                    <thead>
+                        <tr>
+                            <th style="width: 50px;"><input type="checkbox" id="select-all"></th>
+                            <th>Aluno</th>
+                            <th>Fato Constatado</th>
+                            <th>Decisão Final</th>
+                            <th>Data da Decisão</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for processo in processos %}
+                        <tr>
+                            <td><input type="checkbox" name="processo_ids" value="{{ processo.id }}" class="process-checkbox"></td>
+                            <td data-label="Aluno">{{ processo.aluno.user.nome_completo }}</td>
+                            <td data-label="Fato">{{ processo.fato_constatado | truncate(80) }}</td>
+                            <td data-label="Decisão">{{ processo.decisao_final or 'N/A' }}</td>
+                            <td data-label="Data">{{ processo.data_decisao.strftime('%d/%m/%Y') if processo.data_decisao else 'N/A' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <div class="empty-state">
+                    <h2>Nenhum Processo Finalizado</h2>
+                    <p>Não há processos com o status "Finalizado" para exportar no momento.</p>
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="form-actions">
+            <a href="{{ url_for('justica.index') }}" class="btn btn-secondary">Cancelar</a>
+            {% if processos %}
+            <button type="submit" class="btn btn-primary">Exportar Selecionados (.doc)</button>
+            {% endif %}
+        </div>
+    </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const selectAllCheckbox = document.getElementById('select-all');
+    const processCheckboxes = document.querySelectorAll('.process-checkbox');
+
+    if (selectAllCheckbox) {
+        selectAllCheckbox.addEventListener('change', function() {
+            processCheckboxes.forEach(checkbox => {
+                checkbox.checked = this.checked;
+            });
+        });
+    }
+});
+</script>
+{% endblock %}

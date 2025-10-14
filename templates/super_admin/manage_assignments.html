@@ -1,0 +1,170 @@
+{% extends 'base.html' %}
+
+{% block title %}Gerenciar Atribuições{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">Gerenciar Atribuições de Papéis</h1>
+
+    {# Formulário de Atribuição (Layout Corrigido) #}
+    <div class="card mb-4">
+        <div class="card-header">
+            Atribuir Papel a Usuário em uma Escola
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('super_admin.manage_assignments') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <input type="hidden" name="action" value="assign">
+                
+                <div class="row g-3 align-items-end">
+                    <div class="col-md">
+                        <label for="user_id" class="form-label">Usuário</label>
+                        <select id="user_id" name="user_id" class="form-control" required>
+                            <option value="" disabled selected>-- Selecione um Usuário --</option>
+                            {% for user in users %}
+                                <option value="{{ user.id }}">{{ user.nome_completo or user.username or user.matricula }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md">
+                        <label for="school_id" class="form-label">Escola</label>
+                        <select id="school_id" name="school_id" class="form-control" required>
+                            <option value="" disabled selected>-- Selecione uma Escola --</option>
+                            {% for school in schools %}
+                                <option value="{{ school.id }}">{{ school.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md">
+                        <label for="role" class="form-label">Papel</label>
+                        <select id="role" name="role" class="form-control" required>
+                            <option value="admin_escola" selected>Admin da Escola</option>
+                            <option value="instrutor">Instrutor</option>
+                            <option value="aluno">Aluno</option>
+                        </select>
+                    </div>
+                    <div class="col-md-auto">
+                        <button type="submit" class="btn btn-primary w-100">Atribuir</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {# Resetar Senha #}
+    <div class="card mb-4">
+        <div class="card-header bg-warning">
+            Resetar Senha de Usuário
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('super_admin.reset_user_password') }}" onsubmit="return confirm('Tem certeza que deseja resetar a senha deste usuário? Uma nova senha temporária será gerada.');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <p class="text-muted">Selecione um usuário para gerar uma nova senha temporária. A nova senha será exibida em uma mensagem no topo da tela.</p>
+                <div class="row g-3 align-items-end">
+                    <div class="col-md">
+                        <label for="reset_user_id" class="form-label">Usuário (Pesquisável)</label>
+                        <input type="text" id="user-search-input" class="form-control mb-2" placeholder="Digite um nome ou matrícula para pesquisar...">
+                        <select id="reset_user_id" name="user_id" class="form-control" required size="8">
+                            <option value="" disabled selected>-- Selecione um Usuário --</option>
+                            {% for user in users %}
+                                <option value="{{ user.id }}">{{ user.nome_completo or user.username }} (Matrícula: {{ user.matricula }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-auto">
+                        <button type="submit" class="btn btn-danger w-100">Resetar Senha</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {# Tabela de Atribuições Existentes #}
+    <div class="card">
+        <div class="card-header">
+            Atribuições Atuais
+        </div>
+        <div class="card-body">
+            {% if assignments %}
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th scope="col">Usuário</th>
+                            <th scope="col">Escola</th>
+                            <th scope="col">Papel</th>
+                            <th scope="col">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for assignment in assignments %}
+                        {% set u = assignment.user %}
+                        {% set s = assignment.school %}
+                        {% set is_protected = (u.role in ['super_admin','programador']) or ((u.username or '') in ['super_admin','programador']) %}
+                        <tr>
+                            <td>{{ u.nome_completo or u.username or u.matricula }}</td>
+                            <td>{{ s.nome }}</td>
+                            <td>{{ assignment.role }}</td>
+                            <td class="d-flex gap-2">
+                                {# Remover vínculo #}
+                                <form method="POST"
+                                      action="{{ url_for('super_admin.manage_assignments') }}"
+                                      onsubmit="return confirm('Tem certeza que deseja remover este vínculo?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                    <input type="hidden" name="action" value="remove">
+                                    <input type="hidden" name="user_id" value="{{ assignment.user_id }}">
+                                    <input type="hidden" name="school_id" value="{{ assignment.school_id }}">
+                                    <button type="submit"
+                                            class="btn btn-warning btn-sm"
+                                            {% if is_protected %}disabled title="Não permitido para usuários privilegiados"{% endif %}>
+                                        Remover
+                                    </button>
+                                </form>
+
+                                {# Excluir usuário (permanente) #}
+                                <form method="POST"
+                                      action="{{ url_for('super_admin.delete_user', user_id=u.id) }}"
+                                      onsubmit="return confirm('EXCLUIR o usuário {{ u.nome_completo or u.username or u.matricula }}? Esta ação é permanente.');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                    <button type="submit"
+                                            class="btn btn-danger btn-sm"
+                                            {% if is_protected %}disabled title="Não permitido para usuários privilegiados"{% endif %}>
+                                        Excluir usuário
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <p class="text-center">Nenhum papel atribuído ainda.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('user-search-input');
+    const userSelect = document.getElementById('reset_user_id');
+    if (!searchInput || !userSelect) return;
+
+    const options = Array.from(userSelect.options);
+
+    searchInput.addEventListener('input', function() {
+        const searchTerm = this.value.toLowerCase();
+
+        // preserva o placeholder
+        const placeholder = options.find(o => o.value === "");
+        userSelect.innerHTML = '';
+        if (placeholder) userSelect.appendChild(placeholder);
+
+        options.forEach(option => {
+            if (option.value !== "" && option.text.toLowerCase().includes(searchTerm)) {
+                userSelect.appendChild(option);
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

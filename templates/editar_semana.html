@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Semana - {{ semana.nome }}{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <h1>Editar Semana</h1>
+    <p>Ajuste as informações da semana letiva selecionada.</p>
+</div>
+
+<div class="table-container" style="max-width: 700px; margin: 0 auto;">
+    <div class="table-header">
+        {# --- CORREÇÃO APLICADA AQUI --- #}
+        <h3>Editando: {{ semana.nome }} ({{ semana.ciclo.nome }})</h3>
+    </div>
+    
+    <form method="POST" action="{{ url_for('semana.editar_semana', semana_id=semana.id) }}" style="padding: 1rem 0;">
+        <div class="form-group">
+            <label for="nome">Nome da Semana</label>
+            <input type="text" id="nome" name="nome" class="form-control" value="{{ semana.nome }}" required>
+        </div>
+        <div class="form-group">
+            <label for="data_inicio">Data de Início</label>
+            <input type="date" id="data_inicio" name="data_inicio" class="form-control" value="{{ semana.data_inicio.strftime('%Y-%m-%d') }}" required>
+        </div>
+        <div class="form-group">
+            <label for="data_fim">Data de Fim</label>
+            <input type="date" id="data_fim" name="data_fim" class="form-control" value="{{ semana.data_fim.strftime('%Y-%m-%d') }}" required>
+        </div>
+
+        <div class="visibility-options">
+            <div class="period-group">
+                <strong>Períodos Extras:</strong>
+                <label class="checkbox-item"><input type="checkbox" name="mostrar_periodo_13" {% if semana.mostrar_periodo_13 %}checked{% endif %}> 13º</label>
+                <label class="checkbox-item"><input type="checkbox" name="mostrar_periodo_14" {% if semana.mostrar_periodo_14 %}checked{% endif %}> 14º</label>
+                <label class="checkbox-item"><input type="checkbox" name="mostrar_periodo_15" {% if semana.mostrar_periodo_15 %}checked{% endif %}> 15º</label>
+            </div>
+            <div class="weekend-container">
+                <div class="weekend-group">
+                    <label class="checkbox-item"><input type="checkbox" name="mostrar_sabado" data-target="periodos_sabado" {% if semana.mostrar_sabado %}checked{% endif %}> Habilitar Sábado</label>
+                    <input type="number" name="periodos_sabado" class="form-control period-input" value="{{ semana.periodos_sabado or '' }}" min="1" max="15" {% if not semana.mostrar_sabado %}disabled{% endif %}>
+                </div>
+                <div class="weekend-group">
+                    <label class="checkbox-item"><input type="checkbox" name="mostrar_domingo" data-target="periodos_domingo" {% if semana.mostrar_domingo %}checked{% endif %}> Habilitar Domingo</label>
+                    <input type="number" name="periodos_domingo" class="form-control period-input" value="{{ semana.periodos_domingo or '' }}" min="1" max="15" {% if not semana.mostrar_domingo %}disabled{% endif %}>
+                </div>
+            </div>
+        </div>
+        
+        <div class="form-actions">
+            <a href="{{ url_for('semana.gerenciar_semanas') }}" class="btn btn-secondary">Cancelar</a>
+            <button type="submit" class="btn btn-primary">Salvar Alterações</button>
+        </div>
+    </form>
+</div>
+
+<style>
+.visibility-options {
+    display: flex; flex-wrap: wrap; gap: 1rem 2rem; align-items: center;
+    margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--color-border);
+}
+.period-group { display: flex; align-items: center; gap: 1rem; }
+.checkbox-item { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; }
+.weekend-container { display: flex; flex-wrap: wrap; gap: 1.5rem; }
+.weekend-group { display: flex; align-items: center; gap: 0.5rem; }
+.period-input { width: 120px; }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('input[type="checkbox"][data-target]').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const targetInput = document.querySelector(`input[name="${this.dataset.target}"]`);
+            targetInput.disabled = !this.checked;
+            if (!this.checked) {
+                targetInput.value = '';
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

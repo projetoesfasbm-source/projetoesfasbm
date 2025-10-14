@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Relatórios{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <h1>Módulo de Relatórios</h1>
+    <p>Gere documentos a partir dos dados do sistema.</p>
+</div>
+
+<div class="modules-grid">
+    <div class="module-card">
+        <div class="card-content">
+            <div class="card-header">
+                <span class="card-icon">📄</span>
+                <h3 class="card-title">Exportação Mensal</h3>
+            </div>
+            <p class="card-description">Gera o mapa mensal padrão para pagamento de horas-aula.</p>
+            <div class="card-actions">
+                <a href="{{ url_for('relatorios.gerar_relatorio_horas_aula', tipo='mensal') }}" class="btn-card primary">
+                    Gerar Relatório
+                </a>
+            </div>
+        </div>
+    </div>
+    <div class="module-card">
+        <div class="card-content">
+            <div class="card-header">
+                <span class="card-icon">🎖️</span>
+                <h3 class="card-title">Exportação Efetivo RR</h3>
+            </div>
+            <p class="card-description">Gera o mapa específico para o efetivo da Reserva Remunerada (RR).</p>
+            <div class="card-actions">
+                <a href="{{ url_for('relatorios.gerar_relatorio_horas_aula', tipo='efetivo_rr') }}" class="btn-card primary">
+                    Gerar Relatório
+                </a>
+            </div>
+        </div>
+    </div>
+    <div class="module-card">
+        <div class="card-content">
+            <div class="card-header">
+                <span class="card-icon">🧑‍🏫</span>
+                <h3 class="card-title">Exportação por Instrutor</h3>
+            </div>
+            <p class="card-description">Gera um relatório individualizado selecionando instrutores específicos.</p>
+            <div class="card-actions">
+                <a href="{{ url_for('relatorios.gerar_relatorio_horas_aula', tipo='por_instrutor') }}" class="btn-card primary">
+                    Gerar Relatório
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

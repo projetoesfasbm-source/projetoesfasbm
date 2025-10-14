@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+
+{% block title %}Realizar Questionário{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <h1>Realizar Questionário</h1>
+    <p>Selecione um questionário e um participante para iniciar.</p>
+</div>
+
+<div class="table-container">
+    <form id="realizar-form" method="POST" action="{{ url_for('questionario.realizar_questionario') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="questionario-body">
+            <div class="form-group">
+                <label for="questionario_id" class="form-label fw-bold">1. Selecione o Questionário</label>
+                <select id="questionario_id" name="questionario_id" class="form-control" required>
+                    <option value="">-- Selecione um questionário --</option>
+                    {% for questionario in questionarios %}
+                    <option value="{{ questionario.id }}">{{ questionario.titulo }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="user-type-selector">
+                <label class="form-label fw-bold">2. Selecione o Público-Alvo</label>
+                <div class="btn-group w-100" role="group">
+                    <input type="radio" class="btn-check" name="tipo_usuario" id="tipo_aluno" value="aluno" autocomplete="off">
+                    <label class="btn btn-outline-primary" for="tipo_aluno">Aluno</label>
+
+                    <input type="radio" class="btn-check" name="tipo_usuario" id="tipo_instrutor" value="instrutor" autocomplete="off">
+                    <label class="btn btn-outline-primary" for="tipo_instrutor">Instrutor</label>
+                </div>
+            </div>
+            
+            <div id="selecao_usuario_container" class="form-group" style="display: none;">
+                <label for="user_id" class="form-label fw-bold">3. Selecione o Participante</label>
+                
+                <input type="text" id="user-search-input" class="form-control mb-2" placeholder="Pesquisar por nome ou matrícula..." style="display: none;">
+                
+                <select id="user_id" name="user_id" class="form-control" required>
+                </select>
+            </div>
+
+            <hr>
+            <div id="perguntas-container">
+            </div>
+        </div>
+
+        <div class="form-actions sticky-actions-footer">
+            <a href="{{ url_for('questionario.index') }}" class="btn btn-secondary">Cancelar</a>
+            <button type="submit" class="btn btn-primary" id="submit-button" disabled>Salvar Respostas</button>
+        </div>
+    </form>
+</div>
+
+<style>
+    /* Estilos existentes do questionário */
+</style>
+
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const tipoUsuarioRadios = document.querySelectorAll('input[name="tipo_usuario"]');
+    const selecaoUsuarioContainer = document.getElementById('selecao_usuario_container');
+    const userSelect = document.getElementById('user_id');
+    const questionarioSelect = document.getElementById('questionario_id');
+    const perguntasContainer = document.getElementById('perguntas-container');
+    const submitButton = document.getElementById('submit-button');
+    // --- NOVO SCRIPT ---
+    const searchInput = document.getElementById('user-search-input');
+
+    const alunos = {{ alunos|tojson }};
+    const instrutores = {{ instrutores|tojson }};
+    let currentUsersList = []; // Para armazenar a lista completa de usuários do tipo selecionado
+
+    // Função para popular o select de usuários
+    function populateUserSelect(users) {
+        userSelect.innerHTML = '<option value="">-- Selecione um participante --</option>';
+        users.forEach(user => {
+            const displayText = `${user.nome_completo} (${user.matricula})`;
+            const option = new Option(displayText, user.id);
+            userSelect.add(option);
+        });
+    }
+
+    tipoUsuarioRadios.forEach(radio => {
+        radio.addEventListener('change', function() {
+            selecaoUsuarioContainer.style.display = 'block';
+            searchInput.style.display = 'block';
+            searchInput.value = ''; // Limpa a busca
+            
+            currentUsersList = this.value === 'aluno' ? alunos : instrutores;
+            populateUserSelect(currentUsersList);
+            checkFormValidity();
+        });
+    });
+
+    // Event listener para o campo de busca
+    searchInput.addEventListener('input', function() {
+        const searchTerm = this.value.toLowerCase().trim();
+        const filteredUsers = currentUsersList.filter(user => {
+            const name = (user.nome_completo || '').toLowerCase();
+            const matricula = (user.matricula || '').toLowerCase();
+            return name.includes(searchTerm) || matricula.includes(searchTerm);
+        });
+        populateUserSelect(filteredUsers);
+    });
+    // --- FIM DO NOVO SCRIPT ---
+
+    questionarioSelect.addEventListener('change', function() {
+        const questionarioId = this.value;
+        perguntasContainer.innerHTML = '';
+        if (questionarioId) {
+            fetch(`/questionario/api/get-perguntas/${questionarioId}`)
+                .then(response => response.json())
+                .then(perguntas => {
+                    perguntas.forEach(p => {
+                        const perguntaDiv = document.createElement('div');
+                        perguntaDiv.className = 'form-group question-block';
+                        
+                        let conteudoHtml = '';
+                        if (p.tipo === 'texto_livre') {
+                            conteudoHtml = `<textarea name="texto_livre_${p.id}" class="form-control" rows="3" placeholder="Digite sua resposta..."></textarea>`;
+                        } else {
+                            const inputType = p.tipo === 'multipla' ? 'checkbox' : 'radio';
+                            conteudoHtml = '<div class="answer-options-container">';
+                            p.opcoes.forEach(o => {
+                                conteudoHtml += `
+                                    <div class="answer-option">
+                                        <input type="${inputType}" name="pergunta_${p.id}" id="opcao_${o.id}" value="${o.id}">
+                                        <label for="opcao_${o.id}">${o.texto}</label>
+                                    </div>
+                                `;
+                            });
+                            conteudoHtml += '</div>';
+
+                            if (p.opcoes.some(o => ['outro', 'outra área', 'outro motivo', 'outra forma', 'quais'].includes(o.texto.toLowerCase()))) {
+                                conteudoHtml += `<div class="form-group mt-2" id="outro_container_${p.id}" style="display:none;"><input type="text" name="outro_${p.id}" class="form-control" placeholder="Por favor, especifique."></div>`;
+                            }
+                        }
+
+                        perguntaDiv.innerHTML = `<label class="question-title">${p.texto}</label>${conteudoHtml}`;
+                        perguntasContainer.appendChild(perguntaDiv);
+
+                        if (p.tipo !== 'texto_livre' && p.opcoes.some(o => ['outro', 'outra área', 'outro motivo', 'outra forma', 'quais'].includes(o.texto.toLowerCase()))) {
+                            const container = perguntaDiv.querySelector('.answer-options-container');
+                            container.addEventListener('change', (e) => {
+                                const input = e.target;
+                                const outroContainer = document.getElementById(`outro_container_${p.id}`);
+                                if (outroContainer) {
+                                    const labelText = input.labels[0].textContent.toLowerCase();
+                                    const shouldShow = input.checked && ['outro', 'outra área', 'outro motivo', 'outra forma', 'quais'].includes(labelText);
+                                    outroContainer.style.display = shouldShow ? 'block' : 'none';
+                                    outroContainer.querySelector('input').required = shouldShow;
+                                }
+                            });
+                        }
+                    });
+                    checkFormValidity();
+                });
+        }
+    });
+
+    document.getElementById('realizar-form').addEventListener('change', checkFormValidity);
+
+    function checkFormValidity() {
+        const questionarioOK = questionarioSelect.value !== '';
+        const usuarioOK = userSelect.value !== '';
+        const perguntasOK = perguntasContainer.children.length > 0;
+        submitButton.disabled = !(questionarioOK && usuarioOK && perguntasOK);
+    }
+});
+</script>
+{% endblock %}

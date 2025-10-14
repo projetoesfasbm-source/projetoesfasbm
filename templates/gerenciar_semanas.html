@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block title %}Gerenciar Ciclos e Semanas{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <h1>Gerenciar Ciclos e Semanas</h1>
+    <p>Crie e organize os ciclos letivos e adicione as semanas de aulas a cada um.</p>
+</div>
+
+<div class="management-grid">
+    <div class="table-container">
+        <div class="table-header">
+            <h3>Ciclos Letivos</h3>
+        </div>
+        <div class="ciclos-list">
+            {% for ciclo in todos_os_ciclos %}
+                <div class="ciclo-item {% if ciclo.id == ciclo_selecionado_id %}active{% endif %}">
+                    <a href="{{ url_for('semana.gerenciar_semanas', ciclo_id=ciclo.id) }}" class="ciclo-name">{{ ciclo.nome }}</a>
+                    <form method="POST" action="{{ url_for('semana.deletar_ciclo', ciclo_id=ciclo.id) }}" onsubmit="return confirm('Tem certeza que deseja deletar o ciclo \'{{ ciclo.nome }}\'? Esta ação não pode ser desfeita.');" style="display: inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-danger">Excluir</button>
+                    </form>
+                </div>
+            {% else %}
+                <p>Nenhum ciclo criado.</p>
+            {% endfor %}
+        </div>
+        <hr>
+        <form method="POST" action="{{ url_for('semana.adicionar_ciclo') }}" class="mt-3">
+             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group">
+                <label for="nome_ciclo"><strong>Novo Ciclo</strong></label>
+                <input type="text" name="nome_ciclo" class="form-control" placeholder="Ex: Ciclo 1, Ciclo 2025/2" required>
+            </div>
+            <button type="submit" class="btn btn-success" style="width: 100%;">+ Adicionar Ciclo</button>
+        </form>
+    </div>
+
+    <div class="table-container">
+        <div class="table-header">
+            <h3>Semanas do Ciclo Selecionado</h3>
+        </div>
+        
+        {% if ciclo_selecionado_id %}
+            <form method="POST" action="{{ url_for('semana.adicionar_semana') }}" style="padding-bottom: 1.5rem; border-bottom: 1px solid var(--color-border); margin-bottom: 1.5rem;">
+                {{ add_form.hidden_tag() }}
+                <input type="hidden" name="ciclo_id" value="{{ ciclo_selecionado_id }}">
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        {{ add_form.nome.label }}
+                        {{ add_form.nome(class="form-control", placeholder="Ex: Semana 1") }}
+                    </div>
+                    <div class="form-group">
+                        {{ add_form.data_inicio.label }}
+                        {{ add_form.data_inicio(class="form-control") }}
+                    </div>
+                    <div class="form-group">
+                        {{ add_form.data_fim.label }}
+                        {{ add_form.data_fim(class="form-control") }}
+                    </div>
+                </div>
+
+                <div class="visibility-options">
+                    <div class="period-group">
+                        <strong>Períodos Extras:</strong>
+                        <label class="checkbox-item">{{ add_form.mostrar_periodo_13() }} 13º</label>
+                        <label class="checkbox-item">{{ add_form.mostrar_periodo_14() }} 14º</label>
+                        <label class="checkbox-item">{{ add_form.mostrar_periodo_15() }} 15º</label>
+                    </div>
+                    <div class="weekend-container">
+                        <div class="weekend-group">
+                            <label class="checkbox-item">{{ add_form.mostrar_sabado(data_target="periodos_sabado") }} Habilitar Sábado</label>
+                            {{ add_form.periodos_sabado(class="form-control period-input", placeholder="Nº Períodos", disabled=True) }}
+                        </div>
+                        <div class="weekend-group">
+                            <label class="checkbox-item">{{ add_form.mostrar_domingo(data_target="periodos_domingo") }} Habilitar Domingo</label>
+                            {{ add_form.periodos_domingo(class="form-control period-input", placeholder="Nº Períodos", disabled=True) }}
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">+ Adicionar Semana ao Ciclo</button>
+            </form>
+            
+            <div class="table-responsive">
+                <table class="table-styled">
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>Início</th>
+                            <th>Fim</th>
+                            <th class="text-right">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for semana in semanas %}
+                        <tr>
+                            <td>{{ semana.nome }}</td>
+                            <td>{{ semana.data_inicio.strftime('%d/%m/%Y') }}</td>
+                            <td>{{ semana.data_fim.strftime('%d/%m/%Y') }}</td>
+                            <td class="text-right actions-group">
+                                <a href="{{ url_for('semana.editar_semana', semana_id=semana.id) }}" class="btn btn-sm btn-warning">Editar</a>
+                                <form method="POST" action="{{ url_for('semana.deletar_semana', semana_id=semana.id) }}" onsubmit="return confirm('Tem certeza?');">
+                                    {{ delete_form.hidden_tag() }}
+                                    <button type="submit" class="btn btn-sm btn-danger">Deletar</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="4" class="text-center">Nenhuma semana cadastrada para este ciclo.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="empty-state">
+                <p>Selecione ou crie um ciclo à esquerda para gerenciar suas semanas.</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<style>
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
+.visibility-options { display: flex; flex-wrap: wrap; gap: 1rem 2rem; align-items: center; margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--color-border); }
+.period-group { display: flex; align-items: center; gap: 1rem; }
+.checkbox-item { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; }
+.weekend-container { display: flex; flex-wrap: wrap; gap: 1.5rem; }
+.weekend-group { display: flex; align-items: center; gap: 0.5rem; }
+.period-input { width: 120px; }
+.management-grid { display: grid; grid-template-columns: 1fr 2fr; gap: 2rem; align-items: start; }
+.ciclos-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.ciclo-item { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; border-radius: 6px; transition: background-color 0.2s; }
+.ciclo-item.active { background-color: var(--color-primary-light); }
+.ciclo-item.active .ciclo-name { color: white; font-weight: bold; }
+.ciclo-item:hover { background-color: #f1f5f9; }
+.ciclo-name { text-decoration: none; color: inherit; flex-grow: 1; }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('input[type="checkbox"][data-target]').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const targetInput = document.querySelector(`input[name="${this.dataset.target}"]`);
+            targetInput.disabled = !this.checked;
+            if (!this.checked) {
+                targetInput.value = '';
+            }
+        });
+    });
+});
+</script>
+
+{% endblock %}

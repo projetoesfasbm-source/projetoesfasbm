@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}Aprovar Horários{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <h1>Aprovar Horários</h1>
+    <p>Visualize e aprove ou negue as solicitações de agendamento de aulas pendentes.</p>
+</div>
+
+<div class="table-container">
+    <div class="table-header">
+        <h3>Aulas Pendentes de Aprovação</h3>
+    </div>
+
+    <div class="table-responsive">
+        {% if aulas_pendentes %}
+            <table class="table-styled">
+                <thead>
+                    <tr>
+                        <th>Semana</th>
+                        <th>Pelotão</th>
+                        <th>Dia</th>
+                        <th>Período</th>
+                        <th>Disciplina</th>
+                        <th>Ciclo</th>
+                        <th>Instrutor</th>
+                        <th class="text-right">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for aula in aulas_pendentes %}
+                    <tr>
+                        <td data-label="Semana">{{ aula.semana.nome }}</td>
+                        <td data-label="Pelotão">{{ aula.pelotao }}</td>
+                        <td data-label="Dia">{{ aula.dia_semana }}</td>
+                        <td data-label="Período">{{ aula.periodo }}º</td>
+                        <td data-label="Disciplina">{{ aula.disciplina.materia }}</td>
+                        <td data-label="Ciclo">{{ aula.disciplina.ciclo.nome if aula.disciplina.ciclo else 'N/A' }}</td>
+                        <td data-label="Instrutor">{{ aula.instrutor.user.nome_completo or aula.instrutor.user.username }}</td>
+                        <td data-label="Ações" class="text-right">
+                            <div class="btn-group" style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                                {# --- CORREÇÃO APLICADA AQUI: Adicionado csrf_token() diretamente --- #}
+                                <form method="POST" action="{{ url_for('horario.aprovar_horarios') }}" style="margin: 0;">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <input type="hidden" name="horario_id" value="{{ aula.id }}">
+                                    <input type="hidden" name="action" value="aprovar">
+                                    <button type="submit" class="btn btn-sm btn-success">Aprovar</button>
+                                </form>
+                                <form method="POST" action="{{ url_for('horario.aprovar_horarios') }}" style="margin: 0;">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <input type="hidden" name="horario_id" value="{{ aula.id }}">
+                                    <input type="hidden" name="action" value="negar">
+                                    <button type="submit" class="btn btn-sm btn-danger">Negar</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <div class="empty-state">
+                <div class="empty-icon">✅</div>
+                <h2>Nenhuma Aula Pendente</h2>
+                <p>Não há nenhuma solicitação de agendamento de aula pendente no momento.</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

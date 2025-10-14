@@ -1,0 +1,46 @@
+# backend/models/processo_disciplina.py
+
+from __future__ import annotations
+import typing as t
+from datetime import datetime, timezone
+from .database import db
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+if t.TYPE_CHECKING:
+    from .aluno import Aluno
+    from .user import User
+
+class ProcessoDisciplina(db.Model):
+    __tablename__ = 'processos_disciplinares'
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    
+    # Chave estrangeira para o aluno envolvido
+    aluno_id: Mapped[int] = mapped_column(db.ForeignKey('alunos.id'), nullable=False)
+    
+    # Chave estrangeira para quem registrou a transgressão
+    relator_id: Mapped[int] = mapped_column(db.ForeignKey('users.id'), nullable=False)
+
+    # Informações do processo
+    fato_constatado: Mapped[str] = mapped_column(db.Text, nullable=False)
+    observacao: Mapped[t.Optional[str]] = mapped_column(db.Text)
+    status: Mapped[str] = mapped_column(db.String(50), default='Pendente', nullable=False) # Ex: Pendente, Aluno Notificado, Defesa Enviada, Finalizado
+    
+    # Defesa do aluno
+    defesa: Mapped[t.Optional[str]] = mapped_column(db.Text)
+    data_defesa: Mapped[t.Optional[datetime]] = mapped_column()
+    
+    # Decisão final
+    decisao_final: Mapped[t.Optional[str]] = mapped_column(db.String(100)) # Ex: Justificado, Abertura de Sindicância, etc.
+    data_decisao: Mapped[t.Optional[datetime]] = mapped_column()
+
+    # Timestamps
+    data_ocorrencia: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
+    data_ciente: Mapped[t.Optional[datetime]] = mapped_column()
+
+    # Relacionamentos
+    aluno: Mapped["Aluno"] = relationship(back_populates="processos_disciplinares")
+    relator: Mapped["User"] = relationship()
+
+    def __repr__(self):
+        return f"<ProcessoDisciplina id={self.id} aluno_id={self.aluno_id} status='{self.status}'>"

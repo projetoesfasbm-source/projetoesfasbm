@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+
+{% block title %}Meu Perfil{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <h1>Meu Perfil</h1>
+    <p>Atualize suas informações pessoais e de acesso.</p>
+</div>
+
+<div class="auth-container">
+    <div class="auth-card" style="max-width: 600px;">
+        <h2>Dados Pessoais</h2>
+        <form method="POST" action="{{ url_for('user.meu_perfil') }}">
+            {{ form.hidden_tag() }}
+            <div class="form-group">
+                <label for="matricula">Matrícula</label>
+                <input type="text" id="matricula" name="matricula" class="form-control" value="{{ current_user.matricula }}" readonly>
+            </div>
+
+            <div class="form-group">
+                {{ form.nome_completo.label }}
+                {{ form.nome_completo(class="form-control") }}
+            </div>
+            
+            <div class="form-group">
+                <label for="nome_de_guerra">Nome de Guerra</label>
+                <input type="text" id="nome_de_guerra" name="nome_de_guerra" class="form-control" value="{{ current_user.nome_de_guerra or '' }}" required>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        {{ form.posto_categoria.label(class="form-label") }}
+                        {{ form.posto_categoria(class="form-control", id="posto_categoria") }}
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        {{ form.posto_graduacao.label(class="form-label") }}
+                        {{ form.posto_graduacao(class="form-control", id="posto_graduacao") }}
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                {{ form.email.label }}
+                {{ form.email(class="form-control") }}
+            </div>
+
+            {% if current_user.role == 'aluno' and current_user.aluno_profile %}
+            <div class="form-group">
+                {{ form.turma_id.label(class="form-label") }}
+                {{ form.turma_id(class="form-control") }}
+            </div>
+            {% elif current_user.role == 'instrutor' %}
+            <div class="form-group">
+                {{ form.is_rr.label(class="form-label") }}
+                <div class="btn-group" role="group">
+                    {% for subfield in form.is_rr %}
+                        <input type="radio" class="btn-check" name="{{ subfield.name }}" id="{{ subfield.id }}" value="{{ subfield.data }}" {% if subfield.checked %}checked{% endif %}>
+                        <label class="btn btn-outline-primary" for="{{ subfield.id }}">{{ subfield.label.text }}</label>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <hr style="margin: 2rem 0;">
+            <h2>Alterar Senha</h2>
+            <p style="font-size: 0.9rem; color: #64748b; margin-top: -1rem; margin-bottom: 1rem;">Preencha os campos abaixo somente se desejar alterar sua senha.</p>
+            
+            <div class="form-group">
+                {{ form.current_password.label }}
+                {{ form.current_password(class="form-control") }}
+            </div>
+            <div class="form-group">
+                {{ form.new_password.label }}
+                {{ form.new_password(class="form-control") }}
+            </div>
+            <div class="form-group">
+                {{ form.confirm_new_password.label }}
+                {{ form.confirm_new_password(class="form-control") }}
+            </div>
+
+            <div class="form-actions" style="justify-content: flex-end;">
+                 <a href="{{ url_for('main.dashboard') }}" class="btn btn-secondary">Voltar</a>
+                {{ form.submit(class="btn btn-primary") }}
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const postosData = {{ postos_data | tojson }};
+    const categoriaSelect = document.getElementById('posto_categoria');
+    const postoSelect = document.getElementById('posto_graduacao');
+
+    function updatePostoOptions() {
+        const selectedCategoria = categoriaSelect.value;
+        const postos = postosData[selectedCategoria] || [];
+        
+        const currentPostoValue = postoSelect.value;
+        
+        postoSelect.innerHTML = '';
+        postos.forEach(posto => {
+            const option = new Option(posto, posto);
+            postoSelect.add(option);
+        });
+
+        if (postos.includes(currentPostoValue)) {
+            postoSelect.value = currentPostoValue;
+        }
+    }
+
+    categoriaSelect.addEventListener('change', updatePostoOptions);
+
+    // Inicializa o formulário com a categoria e o posto corretos
+    const initialPosto = "{{ form.posto_graduacao.data or '' }}";
+    let initialCategoria = "{{ form.posto_categoria.data or 'Praças' }}";
+    
+    categoriaSelect.value = initialCategoria;
+    updatePostoOptions(); // Popula o segundo select
+    if (initialPosto) {
+        postoSelect.value = initialPosto; // Define o valor correto
+    }
+});
+</script>
+{% endblock %}

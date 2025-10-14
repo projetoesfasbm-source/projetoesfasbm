@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}Histórico Funcional de {{ aluno.user.nome_completo }}{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <h1>Histórico Funcional</h1>
+    <p>Registros de atividades, funções e processos para <strong>{{ aluno.user.nome_completo }}</strong>.</p>
+</div>
+
+<div class="table-container">
+    {% if historico %}
+        <div class="timeline">
+            {% for evento in historico %}
+            <div class="timeline-item">
+                <div class="timeline-icon">
+                    {% if 'Função' in evento.tipo %}
+                        <span title="Função de Turma">⭐</span>
+                    {% elif 'Processo' in evento.tipo %}
+                        <span title="Processo Disciplinar">⚖️</span>
+                    {% else %}
+                        <span title="Outro Evento">📋</span>
+                    {% endif %}
+                </div>
+                <div class="timeline-content">
+                    <div class="timeline-header">
+                        <span class="timeline-title">{{ evento.tipo }}</span>
+                        <span class="timeline-date">
+                            {{ evento.data_inicio.strftime('%d/%m/%Y') }}
+                            {% if evento.data_fim %}
+                                a {{ evento.data_fim.strftime('%d/%m/%Y') }}
+                            {% endif %}
+                        </span>
+                    </div>
+                    <p class="timeline-description">{{ evento.descricao }}</p>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="empty-state">
+            <div class="empty-icon">📋</div>
+            <h2>Nenhum Histórico Registrado</h2>
+            <p>Não há atividades registradas para este aluno no momento.</p>
+        </div>
+    {% endif %}
+
+    <div class="form-actions">
+        <a href="{{ url_for('aluno.listar_alunos') }}" class="btn btn-secondary">Voltar para a Lista de Alunos</a>
+    </div>
+</div>
+
+<style>
+.timeline {
+    position: relative;
+    padding: 1rem 0;
+}
+.timeline-item {
+    display: flex;
+    gap: 1.5rem;
+    position: relative;
+    padding-bottom: 2rem;
+}
+.timeline-item:not(:last-child)::before {
+    content: '';
+    position: absolute;
+    left: 24px;
+    top: 50px;
+    bottom: -1rem;
+    width: 2px;
+    background-color: var(--color-border);
+}
+.timeline-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background-color: var(--color-background);
+    border: 2px solid var(--color-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    z-index: 1;
+}
+.timeline-content {
+    flex: 1;
+}
+.timeline-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 0.5rem;
+}
+.timeline-title {
+    font-weight: bold;
+    font-size: 1.1rem;
+}
+.timeline-date {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+}
+.timeline-description {
+    margin: 0;
+}
+</style>
+{% endblock %}

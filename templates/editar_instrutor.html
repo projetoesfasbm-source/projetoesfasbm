@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Instrutor - {{ instrutor.user.nome_completo }}{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <h1>Editar Perfil do Instrutor</h1>
+    <p>Atualize as informações de <strong>{{ instrutor.user.nome_completo or instrutor.user.username }}</strong>.</p>
+</div>
+
+<div class="auth-container">
+    <div class="auth-card" style="max-width: 700px;">
+        <h2>Dados do Instrutor</h2>
+        <form method="POST" action="{{ url_for('instrutor.editar_instrutor', instrutor_id=instrutor.id) }}">
+            {{ form.hidden_tag() }}
+
+            <div class="form-group">
+                {{ form.nome_completo.label(class="form-label") }}
+                {{ form.nome_completo(class="form-control") }}
+            </div>
+            <div class="form-group">
+                {{ form.nome_de_guerra.label(class="form-label") }}
+                {{ form.nome_de_guerra(class="form-control") }}
+            </div>
+            <div class="form-group">
+                {{ form.matricula.label(class="form-label") }}
+                {{ form.matricula(class="form-control") }}
+                <small class="form-text text-muted">A matrícula não pode ser alterada.</small>
+            </div>
+            <div class="form-group">
+                {{ form.email.label(class="form-label") }}
+                {{ form.email(class="form-control") }}
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        {{ form.posto_categoria.label(class="form-label") }}
+                        {{ form.posto_categoria(class="form-control", id="posto_categoria") }}
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        {{ form.posto_graduacao.label(class="form-label") }}
+                        {{ form.posto_graduacao(class="form-control", id="posto_graduacao") }}
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group" id="posto_graduacao_outro_div" style="display:none;">
+                {{ form.posto_graduacao_outro.label(class="form-label") }}
+                {{ form.posto_graduacao_outro(class="form-control", id="posto_graduacao_outro") }}
+            </div>
+
+            <div class="form-group">
+                {{ form.telefone.label(class="form-label") }}
+                {{ form.telefone(class="form-control") }}
+            </div>
+
+            <div class="form-group">
+                {{ form.is_rr.label(class="form-label") }}
+                <div class="btn-group" role="group">
+                    {% for subfield in form.is_rr %}
+                        <input type="radio" class="btn-check" name="{{ subfield.name }}" id="{{ subfield.id }}" value="{{ subfield.data }}" {% if subfield.checked %}checked{% endif %}>
+                        <label class="btn btn-outline-primary" for="{{ subfield.id }}">{{ subfield.label.text }}</label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <a href="{{ url_for('instrutor.listar_instrutores') }}" class="btn btn-secondary">Cancelar</a>
+                {{ form.submit(class="btn btn-primary") }}
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const postosData = {{ postos_data | tojson }};
+    const categoriaSelect = document.getElementById('posto_categoria');
+    const postoSelect = document.getElementById('posto_graduacao');
+    const outroDiv = document.getElementById('posto_graduacao_outro_div');
+    const outroInput = document.getElementById('posto_graduacao_outro');
+
+    function updatePostoOptions() {
+        const selectedCategoria = categoriaSelect.value;
+        const postos = postosData[selectedCategoria] || [];
+        
+        const currentPostoValue = postoSelect.value;
+        
+        postoSelect.innerHTML = '';
+        postos.forEach(posto => {
+            const option = new Option(posto, posto);
+            postoSelect.add(option);
+        });
+
+        if (postos.includes(currentPostoValue)) {
+            postoSelect.value = currentPostoValue;
+        }
+        
+        toggleOutroField();
+    }
+
+    function toggleOutroField() {
+        if (postoSelect.value === 'Outro') {
+            outroDiv.style.display = 'block';
+        } else {
+            outroDiv.style.display = 'none';
+            outroInput.value = '';
+        }
+    }
+
+    categoriaSelect.addEventListener('change', updatePostoOptions);
+    postoSelect.addEventListener('change', toggleOutroField);
+
+    updatePostoOptions();
+});
+</script>
+{% endblock %}

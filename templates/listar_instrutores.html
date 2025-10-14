@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+
+{% block title %}Lista de Instrutores{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <h1>Lista de Instrutores</h1>
+    <p>Consulte e gerencie os instrutores cadastrados na escola.</p>
+</div>
+
+<div class="table-container">
+    <div class="table-header">
+        <h3>Instrutores Cadastrados</h3>
+        
+        {% if current_user.role in ['programador', 'admin_escola'] %}
+        <div class="header-actions">
+            <a href="{{ url_for('main.pre_cadastro', role='instrutor') }}" class="btn btn-info">
+                <span>+</span> Inserir Pré-Cadastro
+            </a>
+            <a href="{{ url_for('instrutor.cadastrar_instrutor') }}" class="btn btn-primary">
+                <span>+</span> Cadastrar Novo Instrutor
+            </a>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="search-and-filters">
+        <div class="search-form-container">
+            <form method="GET" action="{{ url_for('instrutor.listar_instrutores') }}">
+                <div class="input-group">
+                    <input type="search" name="q" class="form-control" placeholder="Buscar por nome ou matrícula..." value="{{ search_term or '' }}">
+                    <button class="btn btn-primary" type="submit">Buscar</button>
+                </div>
+            </form>
+        </div>
+        {% if search_term %}
+        <a href="{{ url_for('instrutor.listar_instrutores') }}" class="btn btn-sm btn-danger">Limpar Busca</a>
+        {% endif %}
+    </div>
+
+    <div class="table-responsive">
+        {% if instrutores_paginados.items %}
+            <table class="table-styled">
+                <thead>
+                    <tr>
+                        <th>Posto/Graduação</th>
+                        <th>Nome Completo</th>
+                        <th>Matrícula</th>
+                        <th>Nome de Guerra</th>
+                        <th>E-mail</th>
+                        {% if current_user.role in ['programador', 'admin_escola'] %}
+                        <th class="text-right">Ações</th>
+                        {% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for instrutor in instrutores_paginados.items %}
+                    <tr>
+                        <td data-label="Posto/Graduação">{{ instrutor.user.posto_graduacao or 'N/D' }}</td>
+                        <td data-label="Nome Completo">{{ instrutor.user.nome_completo if instrutor.user else 'N/A' }}</td>
+                        <td data-label="Matrícula">{{ instrutor.user.matricula if instrutor.user else 'N/A' }}</td>
+                        <td data-label="Nome de Guerra">{{ instrutor.user.nome_de_guerra if instrutor.user else 'N/A' }}</td>
+                        <td data-label="Email">{{ instrutor.user.email if instrutor.user else 'N/A' }}</td>
+                        {% if current_user.role in ['programador', 'admin_escola'] %}
+                        <td data-label="Ações" class="text-right">
+                            <div class="btn-group">
+                                <a href="{{ url_for('instrutor.editar_instrutor', instrutor_id=instrutor.id) }}" class="btn btn-sm btn-warning">Editar</a>
+                                <form method="POST" action="{{ url_for('instrutor.excluir_instrutor', instrutor_id=instrutor.id) }}" onsubmit="return confirm('Tem certeza que deseja excluir este instrutor? Esta ação não pode ser desfeita.');" style="display: inline;">
+                                    {{ delete_form.hidden_tag() }}
+                                    <button type="submit" class="btn btn-sm btn-danger">Excluir</button>
+                                </form>
+                            </div>
+                        </td>
+                        {% endif %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <div class="empty-state">
+                <div class="empty-icon">🎓</div>
+                <h2>Nenhum Instrutor Encontrado</h2>
+                <p>
+                    {% if search_term %}
+                        Nenhum instrutor corresponde à sua busca.
+                    {% else %}
+                        Nenhum instrutor cadastrado no sistema.
+                    {% endif %}
+                </p>
+            </div>
+        {% endif %}
+    </div>
+
+    {# --- BLOCO DE PAGINAÇÃO CORRIGIDO --- #}
+    {% if instrutores_paginados.pages > 1 %}
+    <div class="pagination-container">
+        {% with pagination_object=instrutores_paginados %}
+            {% include 'partials/_pagination.html' %}
+        {% endwith %}
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.search-and-filters {
+    margin-bottom: 2rem;
+}
+.search-form-container {
+    max-width: 400px;
+    margin-bottom: 1rem;
+}
+.pagination-container {
+    margin-top: 2rem;
+    display: flex;
+    justify-content: center;
+}
+</style>
+{% endblock %}

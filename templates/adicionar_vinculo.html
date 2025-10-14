@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}Adicionar Vínculo{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <h1>Adicionar Novo Vínculo</h1>
+    <p>Selecione a turma para carregar suas disciplinas e então vincule os instrutores.</p>
+</div>
+
+<div class="table-container" style="max-width: 700px; margin: 0 auto;">
+    <form method="POST" action="{{ url_for('vinculo.adicionar_vinculo') }}">
+        {{ form.hidden_tag() }}
+        <div class="form-group">
+            <label for="turma_select" class="form-label">1. Selecione a Turma</label>
+            <select id="turma_select" class="form-control" required>
+                <option value="">-- Selecione uma turma para carregar as disciplinas --</option>
+                {% for turma in turmas %}
+                <option value="{{ turma.id }}">{{ turma.nome }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            {{ form.disciplina_id.label(class="form-label", text='2. Selecione a Disciplina') }}
+            {{ form.disciplina_id(class="form-control", disabled=True) }}
+        </div>
+        <div class="form-group">
+            {{ form.instrutor_id_1.label(class="form-label", text='3. Selecione o Instrutor 1') }}
+            {{ form.instrutor_id_1(class="form-control") }}
+        </div>
+        <div class="form-group">
+            {{ form.instrutor_id_2.label(class="form-label", text='4. Selecione o Instrutor 2 (Opcional)') }}
+            {{ form.instrutor_id_2(class="form-control") }}
+            <small class="form-text text-muted">Deixe como "-- Nenhum --" para vincular apenas um instrutor.</small>
+        </div>
+
+        <div class="form-actions">
+            <a href="{{ url_for('vinculo.gerenciar_vinculos') }}" class="btn btn-secondary">Cancelar</a>
+            <button type="submit" class="btn btn-primary">Adicionar Vínculo</button>
+        </div>
+    </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const turmaSelect = document.getElementById('turma_select');
+    const disciplinaSelect = document.getElementById('disciplina_id');
+
+    turmaSelect.addEventListener('change', function() {
+        const turmaId = this.value;
+        disciplinaSelect.innerHTML = '<option value="">Carregando...</option>';
+        disciplinaSelect.disabled = true;
+
+        if (!turmaId) {
+            disciplinaSelect.innerHTML = '<option value="">-- Selecione uma turma --</option>';
+            return;
+        }
+
+        fetch(`/disciplina/api/por-turma/${turmaId}`)
+            .then(response => response.json())
+            .then(data => {
+                disciplinaSelect.innerHTML = '<option value="" selected disabled>-- Selecione uma disciplina --</option>';
+                data.forEach(disciplina => {
+                    const option = new Option(disciplina.materia, disciplina.id);
+                    disciplinaSelect.add(option);
+                });
+                disciplinaSelect.disabled = false;
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                disciplinaSelect.innerHTML = '<option value="">Erro ao carregar</option>';
+            });
+    });
+});
+</script>
+{% endblock %}

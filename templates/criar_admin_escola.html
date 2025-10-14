@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Criar Administrador da Escola{% endblock %}
+
+{% block content %}
+<style>
+  .glass-card {
+    background: rgba(255,255,255,0.62) !important;
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+    border: 1px solid rgba(255,255,255,0.35);
+    border-radius: 14px;
+    box-shadow: 0 10px 26px rgba(0,0,0,0.08);
+  }
+  .glass-card .card-header { background: transparent; border-bottom: 1px solid rgba(0,0,0,0.05); }
+  .glass-card .card-body { background: transparent; }
+</style>
+
+<div class="card glass-card mb-4">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <h3 class="m-0">Criar Administrador da Escola</h3>
+    <a href="{{ url_for('user.lista_admins_escola') }}" class="btn btn-outline-secondary">Ver Administradores</a>
+  </div>
+
+  <div class="card-body">
+    <form method="POST" enctype="multipart/form-data" action="{{ url_for('user.criar_admin_escola') }}">
+      {{ csrf_token() if csrf_token is defined else "" }}
+
+      <div class="row">
+        <div class="col-md-6 mb-3">
+          <label class="form-label">Nome completo</label>
+          <input type="text" name="nome" class="form-control" required>
+        </div>
+
+        <div class="col-md-6 mb-3">
+          <label class="form-label">E-mail institucional</label>
+          <input type="email" name="email" class="form-control" required>
+        </div>
+
+        <div class="col-md-6 mb-3">
+          <label class="form-label">ID Func</label>
+          <input type="text" name="id_func" class="form-control" placeholder="Apenas números" required>
+        </div>
+
+        <div class="col-md-6 mb-3">
+          <label class="form-label">Telefone</label>
+          <input type="text" name="telefone" class="form-control" placeholder="(xx) xxxxx-xxxx">
+        </div>
+      </div>
+
+      <div class="text-end">
+        <button class="btn btn-primary">Criar Administrador</button>
+      </div>
+    </form>
+
+    <hr class="my-4">
+
+    <div class="alert alert-info mb-0">
+      O usuário será criado com papel <strong>admin_escola</strong> na <strong>mesma escola</strong> do seu login atual.
+      Uma <strong>senha temporária</strong> será gerada e exibida na mensagem de sucesso.
+    </div>
+  </div>
+</div>
+{% endblock %}

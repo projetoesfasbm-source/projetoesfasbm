@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Administradores da Escola{% endblock %}
+
+{% block content %}
+<style>
+  .glass-card {
+    background: rgba(255,255,255,0.62) !important;
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+    border: 1px solid rgba(255,255,255,0.35);
+    border-radius: 14px;
+    box-shadow: 0 10px 26px rgba(0,0,0,0.08);
+  }
+  .glass-card .card-header { background: transparent; border-bottom: 1px solid rgba(0,0,0,0.05); }
+  .glass-card .card-body { background: transparent; }
+  .table thead th { background-color: rgba(255,255,255,0.88) !important; }
+</style>
+
+<div class="card glass-card mb-4">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <h3 class="m-0">Administradores da Escola</h3>
+    <a href="{{ url_for('user.criar_admin_escola') }}" class="btn btn-primary">Criar Administrador</a>
+  </div>
+
+  <div class="card-body">
+    {% if admins and admins|length %}
+      <div class="table-responsive">
+        <table class="table align-middle">
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>E-mail</th>
+              <th>ID Func</th>
+              <th>Telefone</th>
+              <th>Ativo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for u in admins %}
+              <tr>
+                <td>{{ u.nome or '—' }}</td>
+                <td>{{ u.email or '—' }}</td>
+                <td>{{ u.id_func or '—' }}</td>
+                <td>{{ u.telefone or '—' }}</td>
+                <td>
+                  {% if u.is_active is defined %}
+                    <span class="badge bg-{{ 'success' if u.is_active else 'secondary' }}">
+                      {{ 'Ativo' if u.is_active else 'Inativo' }}
+                    </span>
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="text-center py-5">
+        <div style="font-size:48px; line-height:1;">👤</div>
+        <h4 class="mt-3 mb-2">Nenhum administrador encontrado</h4>
+        <p class="text-muted mb-4">Clique em <strong>“Criar Administrador”</strong> para adicionar o primeiro.</p>
+        <a href="{{ url_for('user.criar_admin_escola') }}" class="btn btn-primary">Criar Administrador</a>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

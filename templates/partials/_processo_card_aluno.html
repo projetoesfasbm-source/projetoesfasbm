@@ -1,0 +1,49 @@
+{# templates/partials/_processo_card_aluno.html #}
+<div class="process-card" style="border-left-color: {% if processo.status == 'Pendente' %}#f59e0b{% elif processo.status == 'Aluno Notificado' %}#3b82f6{% elif processo.status == 'Defesa Enviada' %}#10b981{% else %}#64748b{% endif %};">
+    <div class="process-header">
+        <div>
+            <div class="process-title">Processo Disciplinar</div>
+            <small class="text-muted">Data da Ocorrência: {{ processo.data_ocorrencia.strftime('%d/%m/%Y') }}</small>
+        </div>
+        <div class="process-id">ID: {{ processo.id }}</div>
+    </div>
+    <div class="process-detail">
+        <span class="detail-label">Fato Constatado:</span>
+        <div class="preserve-whitespace">{{ processo.fato_constatado }}</div>
+    </div>
+    <div class="process-detail">
+        <span class="detail-label">Status:</span> 
+        <span class="status-badge {% if 'Pendente' in processo.status %}pendente{% elif 'Notificado' in processo.status %}notificado{% elif 'Defesa' in processo.status %}defesa-enviada{% else %}finalizado{% endif %}">
+            {{ processo.status }}
+        </span>
+    </div>
+    {% if processo.status == 'Pendente' %}
+        <form method="POST" action="{{ url_for('justica.dar_ciente', processo_id=processo.id) }}" class="mt-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-primary">Dar Ciência</button>
+        </form>
+    {% endif %}
+    {% if processo.status == 'Aluno Notificado' %}
+        <form method="POST" action="{{ url_for('justica.enviar_defesa', processo_id=processo.id) }}" class="mt-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group">
+                <label for="defesa_{{ processo.id }}">Sua Defesa:</label>
+                <textarea name="defesa" id="defesa_{{ processo.id }}" class="form-control" rows="4" required></textarea>
+            </div>
+            <div class="form-actions mt-2">
+                <button type="submit" class="btn btn-primary">Enviar Defesa</button>
+            </div>
+        </form>
+    {% endif %}
+    {% if processo.status == 'Defesa Enviada' or processo.status == 'Finalizado' %}
+        <div class="process-detail">
+            <span class="detail-label">Sua Defesa:</span>
+            <div class="preserve-whitespace" style="background-color: #f8fafc; padding: 0.5rem; border-radius: 4px; border: 1px solid #e2e8f0;">{{ processo.defesa }}</div>
+        </div>
+    {% endif %}
+    {% if processo.status == 'Finalizado' %}
+    <div class="process-detail">
+        <span class="detail-label">Decisão Final:</span> {{ processo.decisao_final }}
+    </div>
+    {% endif %}
+</div>

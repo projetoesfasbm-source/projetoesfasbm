@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+
+{% block title %}Gerenciar Escolas{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">Gerenciar Escolas</h1>
+
+    {# Formulário de Criação #}
+    <div class="card mb-4">
+        <div class="card-header">
+            Adicionar Nova Escola
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('super_admin.manage_schools') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <div class="form-group">
+                    <label for="school_name">Nome da Escola</label>
+                    <input type="text" class="form-control" id="school_name" name="school_name" required>
+                </div>
+                <button type="submit" class="btn btn-primary mt-3">Criar Escola</button>
+            </form>
+        </div>
+    </div>
+
+    {# Formulário de Criação de Administrador #}
+    <div class="card mb-4">
+        <div class="card-header">
+            Adicionar Novo Administrador de Escola
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('super_admin.create_administrator') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <div class="form-group mb-3">
+                    <label for="nome_completo">Nome Completo</label>
+                    <input type="text" class="form-control" id="nome_completo" name="nome_completo" required>
+                </div>
+                <div class="form-group mb-3">
+                    <label for="email">Email</label>
+                    <input type="email" class="form-control" id="email" name="email" required>
+                </div>
+                <div class="form-group mb-3">
+                    <label for="matricula">Matrícula</label>
+                    <input type="text" class="form-control" id="matricula" name="matricula" required>
+                </div>
+                <div class="form-group mb-3">
+                    <label for="school_id">Escola</label>
+                    <select class="form-select" id="school_id" name="school_id" required>
+                        <option value="">-- Selecione a Escola --</option>
+                        {% for school in schools %}
+                            <option value="{{ school.id }}">{{ school.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-success mt-3">Criar Administrador</button>
+            </form>
+        </div>
+    </div>
+
+    {# Tabela de Escolas Existentes #}
+    <div class="card">
+        <div class="card-header">
+            Escolas Cadastradas
+        </div>
+        <div class="card-body">
+            {% if schools %}
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th scope="col">ID</th>
+                            <th scope="col">Nome</th>
+                            <th scope="col">Ativa</th>
+                            <th scope="col">Criada em</th>
+                            <th scope="col">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for school in schools %}
+                        <tr>
+                            <th scope="row">{{ school.id }}</th>
+                            <td>{{ school.nome }}</td>
+                            <td>{{ 'Sim' if school.is_active else 'Não' }}</td>
+                            <td>{{ school.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+                            <td>
+                                <form method="POST" action="{{ url_for('super_admin.delete_school', school_id=school.id) }}" onsubmit="return confirm('ATENÇÃO: Excluir esta escola irá remover permanentemente todos os seus dados (turmas, alunos, vínculos, etc.). Esta ação não pode ser desfeita. Deseja continuar?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                    <button type="submit" class="btn btn-danger btn-sm">Excluir</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <p class="text-center">Nenhuma escola cadastrada ainda.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

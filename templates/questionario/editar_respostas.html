@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Respostas{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <h1>Editar Respostas</h1>
+    <p>A modificar as respostas de <strong>{{ participante.nome_completo }}</strong> para o questionário <strong>"{{ questionario.titulo }}"</strong>.</p>
+</div>
+
+<div class="table-container">
+    <form id="editar-respostas-form" method="POST" action="{{ url_for('questionario.editar_respostas', questionario_id=questionario.id, user_id=participante.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="questionario-body">
+            <div id="perguntas-container">
+                {% for p in questionario.perguntas %}
+                    <div class="form-group question-block">
+                        <label class="question-title">{{ p.texto }}</label>
+                        
+                        {% if p.tipo == 'texto_livre' %}
+                            {% set resposta_atual = respostas_map.get(p.id, {}) %}
+                            <textarea name="texto_livre_{{ p.id }}" class="form-control" rows="3">{{ resposta_atual.get('texto_livre', '') }}</textarea>
+                        {% else %}
+                            <div class="answer-options-container">
+                                {% for o in p.opcoes %}
+                                    <div class="answer-option">
+                                        {% set resposta_atual = respostas_map.get(p.id, {}) %}
+                                        {% set selected_ids = resposta_atual.get('selected_ids', []) %}
+                                        <input class="form-check-input" type="{{ 'checkbox' if p.tipo == 'multipla' else 'radio' }}" 
+                                               name="pergunta_{{ p.id }}" id="opcao_{{ o.id }}" value="{{ o.id }}"
+                                               {% if o.id in selected_ids %}checked{% endif %}
+                                               {% if p.tipo == 'unica' %}required{% endif %}>
+                                        <label class="form-check-label" for="opcao_{{ o.id }}">{{ o.texto }}</label>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                            
+                            {% if p.opcoes|selectattr('texto', 'in', ['Outro', 'Outra área', 'Outro motivo', 'Outra forma', 'Quais'])|list %}
+                                {% set resposta_atual = respostas_map.get(p.id, {}) %}
+                                {% set texto_livre_atual = resposta_atual.get('texto_livre', '') %}
+                                {% set is_outro_selected = p.opcoes|selectattr('texto', 'in', ['Outro', 'Outra área', 'Outro motivo', 'Outra forma', 'Quais'])|map(attribute='id')|list and selected_ids and (p.opcoes|selectattr('texto', 'in', ['Outro', 'Outra área', 'Outro motivo', 'Outra forma', 'Quais'])|map(attribute='id')|list)[0] in selected_ids %}
+                                
+                                <div class="form-group mt-2" id="outro_container_{{ p.id }}" style="display: {% if is_outro_selected %}block{% else %}none{% endif %};">
+                                    <input type="text" name="outro_{{ p.id }}" class="form-control" placeholder="Por favor, especifique." value="{{ texto_livre_atual or '' }}">
+                                </div>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="form-actions sticky-actions-footer">
+            <a href="{{ url_for('questionario.ver_participantes', questionario_id=questionario.id) }}" class="btn btn-secondary">Cancelar</a>
+            <button type="submit" class="btn btn-primary">Salvar Alterações</button>
+        </div>
+    </form>
+</div>
+
+<style>
+    /* ... (seu CSS existente aqui, sem alterações) ... */
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.answer-options-container').forEach(container => {
+        container.addEventListener('change', (e) => {
+            const input = e.target;
+            const perguntaId = input.name.split('_')[1];
+            const outroContainer = document.getElementById(`outro_container_${perguntaId}`);
+
+            if (outroContainer) {
+                let showOutro = false;
+                if (input.type === 'checkbox') {
+                    const checkedInputs = container.querySelectorAll(`input[name="pergunta_${perguntaId}"]:checked`);
+                    checkedInputs.forEach(checkedInput => {
+                        const labelText = checkedInput.labels[0].textContent.toLowerCase();
+                         if (['outro', 'outra área', 'outro motivo', 'outra forma', 'quais'].some(term => labelText.includes(term))) {
+                            showOutro = true;
+                        }
+                    });
+                } else { // radio
+                    const labelText = input.labels[0].textContent.toLowerCase();
+                    if (input.checked && ['outro', 'outra área', 'outro motivo', 'outra forma', 'quais'].some(term => labelText.includes(term))) {
+                        showOutro = true;
+                    }
+                }
+                
+                outroContainer.style.display = showOutro ? 'block' : 'none';
+                outroContainer.querySelector('input').required = showOutro;
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

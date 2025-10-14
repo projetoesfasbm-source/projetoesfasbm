@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block title %}Cadastrar Turma{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <h1>Cadastrar Nova Turma</h1>
+    <p>Defina o nome da turma e adicione os alunos que farão parte dela.</p>
+</div>
+
+<div class="table-container" style="max-width: 700px; margin: 0 auto;">
+    <form method="POST" action="{{ url_for('turma.cadastrar_turma') }}">
+        {{ form.hidden_tag() }}
+        <div class="form-group">
+            {{ form.nome.label }}
+            {{ form.nome(class="form-control", placeholder="Ex: 1º Pelotão - Turma 2025") }}
+        </div>
+        <div class="form-group">
+            {{ form.ano.label }}
+            {{ form.ano(class="form-control", placeholder="Ex: 2025") }}
+        </div>
+        <div class="form-group">
+            {{ form.alunos_ids.label }}
+            
+            {# --- CAIXA DE PESQUISA ADICIONADA AQUI --- #}
+            <input type="text" id="aluno-search" class="form-control mb-2" placeholder="Pesquisar por nome ou matrícula...">
+
+            <div class="checkbox-list" id="alunos-checkbox-list">
+                {% for subfield in form.alunos_ids %}
+                    <label class="checkbox-item">
+                        {{ subfield }} {{ subfield.label.text }}
+                    </label>
+                {% else %}
+                    <p style="color: #94a3b8; font-style: italic;">Nenhum aluno sem turma encontrado para adicionar.</p>
+                {% endfor %}
+            </div>
+        </div>
+        <div class="form-actions">
+            <a href="{{ url_for('turma.listar_turmas') }}" class="btn btn-secondary">Cancelar</a>
+            {{ form.submit(class="btn btn-primary") }}
+        </div>
+    </form>
+</div>
+
+<style>
+.checkbox-list {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid var(--color-border);
+    padding: 1rem;
+    border-radius: 8px;
+    background-color: var(--color-background);
+}
+.checkbox-item {
+    display: block;
+    margin-bottom: 0.5rem;
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+.checkbox-item:hover {
+    background-color: #eef5ff;
+}
+</style>
+
+{# --- SCRIPT DE FILTRAGEM ADICIONADO AQUI --- #}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('aluno-search');
+    const checkboxList = document.getElementById('alunos-checkbox-list');
+    const checkboxItems = checkboxList.querySelectorAll('.checkbox-item');
+
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase().trim();
+
+            checkboxItems.forEach(function(item) {
+                const labelText = item.textContent.toLowerCase();
+                if (labelText.includes(searchTerm)) {
+                    item.style.display = 'block';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        });
+    }
+});
+</script>
+{% endblock %}

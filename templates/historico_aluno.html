@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+
+{% block title %}Minhas Notas - Meu CTSP{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <h1>Minhas Notas</h1>
+    <p>Acompanhe suas notas e médias das disciplinas do Curso Técnico em Segurança Pública.</p>
+</div>
+
+<div class="media-final-curso-container">
+    <div class="stat-icon">🏆</div>
+    <div class="stat-info">
+        <span class="stat-number">{{ "%.3f"|format(media_final_curso) }}</span>
+        <span class="stat-label">Média Final do Curso</span>
+    </div>
+    <p class="stat-description">Esta é a média de todas as disciplinas com notas já lançadas e salvas.</p>
+</div>
+
+<div class="content-header" style="margin-top: 2rem;">
+    <h2>Notas por Disciplina</h2>
+</div>
+
+<div class="disciplinas-grid">
+    {% for registro in historico_disciplinas %}
+    <div class="disciplina-card status-{{ registro.status|lower }}">
+        <form method="POST" action="{{ url_for('historico.avaliar_aluno_disciplina', historico_id=registro.id) }}" class="disciplina-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="disciplina-header">
+                <h4>{{ registro.disciplina.materia }}</h4>
+                <span class="status-badge">{{ registro.status|title }}</span>
+            </div>
+
+            <div class="disciplina-body">
+                <div class="notas-grid">
+                    <div class="nota-item">
+                        <label for="nota_p1_{{ registro.id }}" class="nota-label">Nota P1</label>
+                        <input type="number" step="0.01" min="0" max="10" 
+                               name="nota_p1" id="nota_p1_{{ registro.id }}" 
+                               class="form-control nota-input" 
+                               value="{{ registro.nota_p1 if registro.nota_p1 is not none else '' }}"
+                               {% if not is_own_profile %}readonly{% endif %}>
+                    </div>
+                    <div class="nota-item">
+                        <label for="nota_p2_{{ registro.id }}" class="nota-label">Nota P2</label>
+                        <input type="number" step="0.01" min="0" max="10"
+                               name="nota_p2" id="nota_p2_{{ registro.id }}"
+                               class="form-control nota-input"
+                               value="{{ registro.nota_p2 if registro.nota_p2 is not none else '' }}"
+                               {% if not is_own_profile %}readonly{% endif %}>
+                    </div>
+                    <div class="nota-item">
+                        <label for="nota_rec_{{ registro.id }}" class="nota-label">Recuperação</label>
+                        <input type="number" step="0.01" min="0" max="10"
+                               name="nota_rec" id="nota_rec_{{ registro.id }}"
+                               class="form-control nota-input"
+                               value="{{ registro.nota_rec if registro.nota_rec is not none else '' }}"
+                               {% if not current_user.role in ['super_admin', 'programador', 'admin_escola'] %}readonly{% endif %}>
+                    </div>
+                </div>
+            </div>
+
+            <div class="disciplina-footer">
+                <div class="media-final-display">
+                    <span class="media-final-label">Média Final na Disciplina</span>
+                    <span class="media-final-valor-disciplina" data-output-for="{{ registro.id }}">{{ "%.3f"|format(registro.nota) if registro.nota is not none else 'N/A' }}</span>
+                </div>
+                {% if is_own_profile or current_user.role in ['super_admin', 'programador', 'admin_escola'] %}
+                    <button type="submit" class="btn btn-sm btn-primary">Salvar</button>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+    {% else %}
+    <p>Nenhuma disciplina encontrada no seu histórico.</p>
+    {% endfor %}
+</div>
+
+<style>
+/* Estilos para o novo card de média final */
+.media-final-curso-container {
+    background: linear-gradient(135deg, var(--color-secondary), #3c4a5c);
+    color: white;
+    padding: 2rem;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-medium);
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+}
+.media-final-curso-container .stat-icon { font-size: 3rem; opacity: 0.8; }
+.media-final-curso-container .stat-number { font-size: 2.5rem; font-weight: 800; line-height: 1; }
+.media-final-curso-container .stat-label { font-size: 1.1rem; opacity: 0.9; }
+.media-final-curso-container .stat-description { margin: 0 0 0 auto; text-align: right; font-size: 0.9rem; opacity: 0.7; max-width: 250px; }
+
+
+/* Estilos para a grelha de disciplinas */
+.disciplinas-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem; }
+.disciplina-card {
+    background-color: var(--color-white);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-soft);
+    display: flex;
+    flex-direction: column;
+    border-left: 5px solid var(--color-info); /* Cor padrão para 'cursando' */
+}
+.disciplina-card.status-aprovado { border-left-color: var(--color-success); }
+.disciplina-card.status-reprovado { border-left-color: var(--color-danger); }
+
+.disciplina-form { display: flex; flex-direction: column; height: 100%; }
+.disciplina-header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; border-bottom: 1px solid var(--color-border); }
+.disciplina-header h4 { font-size: 1.1rem; font-weight: 700; margin: 0; }
+.status-badge { padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
+.disciplina-card.status-cursando .status-badge { background-color: #eff6ff; color: #1d4ed8; }
+.disciplina-card.status-aprovado .status-badge { background-color: #dcfce7; color: #166534; }
+.disciplina-card.status-reprovado .status-badge { background-color: #fef2f2; color: #991b1b; }
+
+.disciplina-body { padding: 1.5rem; }
+.notas-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; text-align: center; }
+.nota-item { display: flex; flex-direction: column; gap: 0.5rem; }
+.nota-label { font-size: 0.8rem; color: var(--color-text-muted); text-transform: uppercase; }
+.nota-input { font-size: 1.2rem; font-weight: 700; text-align: center; padding: 0.5rem; background-color: #f8fafc; }
+
+.disciplina-footer {
+    margin-top: auto;
+    padding: 1rem 1.5rem;
+    background-color: #f8fafc;
+    border-top: 1px solid var(--color-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+}
+.media-final-display { text-align: left; }
+.media-final-label { font-weight: 600; font-size: 0.9rem; }
+.media-final-valor-disciplina { font-size: 1.75rem; font-weight: 800; color: var(--color-primary); line-height: 1; }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // Função para calcular a média de uma disciplina em tempo real
+    function calcularMediaDisciplina(card) {
+        const notaP1Input = card.querySelector('input[name="nota_p1"]');
+        const notaP2Input = card.querySelector('input[name="nota_p2"]');
+        const mediaOutput = card.querySelector('.media-final-valor-disciplina');
+
+        const notaP1 = parseFloat(notaP1Input.value);
+        const notaP2 = parseFloat(notaP2Input.value);
+
+        if (!isNaN(notaP1) && !isNaN(notaP2)) {
+            const media = (notaP1 + notaP2) / 2;
+            mediaOutput.textContent = media.toFixed(3);
+        } else {
+            mediaOutput.textContent = 'N/A';
+        }
+    }
+
+    // Adiciona o listener de evento para cada input de nota
+    document.querySelectorAll('.nota-input').forEach(input => {
+        input.addEventListener('input', function() {
+            const card = this.closest('.disciplina-card');
+            calcularMediaDisciplina(card);
+        });
+    });
+});
+</script>
+{% endblock %}

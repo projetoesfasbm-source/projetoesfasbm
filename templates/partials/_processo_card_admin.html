@@ -1,0 +1,62 @@
+{# templates/partials/_processo_card_admin.html #}
+<div class="process-card" style="border-left-color: {% if processo.status == 'Pendente' %}#f59e0b{% elif processo.status == 'Aluno Notificado' %}#3b82f6{% elif processo.status == 'Defesa Enviada' %}#10b981{% else %}#64748b{% endif %};">
+    <div class="process-header">
+        <div>
+            <div class="process-title">{{ processo.aluno.user.nome_completo }} ({{ processo.aluno.user.matricula }})</div>
+            <small class="text-muted">Relatado por: {{ processo.relator.nome_de_guerra or processo.relator.username }} em {{ processo.data_ocorrencia.strftime('%d/%m/%Y') }}</small>
+        </div>
+        <div class="process-id">ID: {{ processo.id }}</div>
+    </div>
+    <div class="process-detail">
+        <span class="detail-label">Fato Constatado:</span>
+        <div class="preserve-whitespace">{{ processo.fato_constatado }}</div>
+    </div>
+    {% if processo.observacao %}
+    <div class="process-detail">
+        <span class="detail-label">Observação:</span>
+        <div class="preserve-whitespace">{{ processo.observacao }}</div>
+    </div>
+    {% endif %}
+    <div class="process-detail">
+        <span class="detail-label">Status:</span> 
+        <span class="status-badge {% if 'Pendente' in processo.status %}pendente{% elif 'Notificado' in processo.status %}notificado{% elif 'Defesa' in processo.status %}defesa-enviada{% else %}finalizado{% endif %}">
+            {{ processo.status }}
+        </span>
+    </div>
+    {% if processo.defesa %}
+    <div class="process-detail">
+        <span class="detail-label">Defesa do Aluno:</span>
+        <div class="preserve-whitespace" style="background-color: #f8fafc; padding: 0.5rem; border-radius: 4px; border: 1px solid #e2e8f0;">{{ processo.defesa }}</div>
+    </div>
+    {% endif %}
+    {% if processo.status == 'Defesa Enviada' %}
+    <form method="POST" action="{{ url_for('justica.finalizar_processo', processo_id=processo.id) }}" class="mt-3">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group">
+            <label for="decisao_{{ processo.id }}">Decisão Final:</label>
+            <select name="decisao" id="decisao_{{ processo.id }}" class="form-control" required>
+                <option value="">-- Selecione uma decisão --</option>
+                <option value="Justificado">Justificado</option>
+                <option value="Abertura de Sindicância">Abertura de Sindicância</option>
+                <option value="Abertura de IPM">Abertura de IPM</option>
+                <option value="Sustação da Dispensa">Sustação da Dispensa</option>
+            </select>
+        </div>
+        <div class="form-actions mt-2">
+            <button type="submit" class="btn btn-primary btn-sm">Finalizar Processo</button>
+        </div>
+    </form>
+    {% endif %}
+    {% if processo.status == 'Finalizado' %}
+    <div class="process-detail">
+        <span class="detail-label">Decisão Final:</span> {{ processo.decisao_final }}
+    </div>
+    {% endif %}
+
+    <div class="form-actions mt-3" style="justify-content: flex-end; border-top: 1px solid #eee; padding-top: 1rem;">
+        <form method="POST" action="{{ url_for('justica.deletar_processo', processo_id=processo.id) }}" onsubmit="return confirm('Tem certeza que deseja excluir esta transgressão permanentemente? Esta ação não pode ser desfeita.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-danger btn-sm">Excluir Transgressão</button>
+        </form>
+    </div>
+</div>

@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Mapa de Gratificação Magistério</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        .toolbar { display: flex; justify-content: center; margin: 12px 0; gap: 8px; }
+        .btn { padding: 8px 12px; border: 1px solid #333; background: #f7f7f7; cursor: pointer; }
+        .btn:hover { background: #eaeaea; }
+        table { width: 100%; border-collapse: collapse; font-size: 10pt; }
+        th, td { border: 1px solid #000; padding: 4px; }
+        thead tr { background-color: #E0E0E0; }
+    </style>
+</head>
+<body>
+
+    <div class="toolbar">
+        <!-- Altere a URL /mapa.xlsx para o caminho do seu endpoint -->
+        <form method="GET" action="/mapa.xlsx">
+            <button type="submit" class="btn">Baixar .xlsx</button>
+        </form>
+    </div>
+
+    <div style="text-align: center;">
+        <h3 style="margin: 0; font-size: 14pt;">MAPA DE GRATIFICAÇÃO MAGISTÉRIO</h3>
+        <p><strong>OPM:</strong> Escola de Formação e Aperfeiçoamento de Sargentos</p>
+        <p><strong>Telefone:</strong> (55) 3220-6462</p>
+        <p>Horas aulas a pagar do Mês de <strong>{{ nome_mes_ano }}</strong></p>
+        <p><strong>{{ titulo_curso }}</strong></p>
+    </div>
+
+    <br>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Posto /graduação</th>
+                <th>Matrícula</th>
+                <th style="width: 25%;">Nome completo do servidor</th>
+                <th style="width: 25%;">Disciplina</th>
+                <th>CH total</th>
+                <th>CH paga anteriormente</th>
+                <th>CH a pagar</th>
+                <th>Valor em R$</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% set total_geral_ch_a_pagar = namespace(valor=0) %}
+            {% set total_geral_valor_a_pagar = namespace(valor=0) %}
+            
+            {% for instrutor_data in dados %}
+                {% for disciplina in instrutor_data.disciplinas %}
+                    {% set valor_a_pagar = (disciplina.ch_a_pagar or 0) * (valor_hora_aula or 0) %}
+                    <tr>
+                        <td style="text-align: center;">{{ instrutor_data.info.user.posto_graduacao or 'N/D' }}</td>
+                        <td style="text-align: center;">{{ instrutor_data.info.user.matricula }}</td>
+                        <td>{{ instrutor_data.info.user.nome_completo }}</td>
+                        <td>{{ disciplina.nome }}</td>
+                        <td style="text-align: center;">{{ disciplina.ch_total }}</td>
+                        <td style="text-align: center;">{{ disciplina.ch_paga_anteriormente }}</td>
+                        <td style="text-align: center;">{{ disciplina.ch_a_pagar }}</td>
+                        <td style="text-align: center;">
+                            {{ "%.2f"|format(valor_a_pagar)|replace('.', ',') }}
+                        </td>
+                    </tr>
+                    {% set total_geral_ch_a_pagar.valor = total_geral_ch_a_pagar.valor + (disciplina.ch_a_pagar or 0) %}
+                    {% set total_geral_valor_a_pagar.valor = total_geral_valor_a_pagar.valor + valor_a_pagar %}
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="8" style="text-align: center;">Nenhum dado encontrado para o período e filtros selecionados.</td>
+                </tr>
+            {% endfor %}
+
+            <tr style="background-color: #E0E0E0; font-weight: bold;">
+                <td colspan="6" style="text-align: right; padding: 5px 10px;">CARGA HORÁRIA TOTAL</td>
+                <td style="text-align: center;">{{ total_geral_ch_a_pagar.valor }}</td>
+                <td style="text-align: center;">{{ "%.2f"|format(total_geral_valor_a_pagar.valor)|replace('.', ',') }}</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <br><br><br>
+
+    <table style="width: 100%; border: none;">
+        <tr>
+            <td style="text-align: center; width: 50%; border: none;">
+                <p>____________________________________</p>
+                <p>{{ auxiliar_nome or 'Auxiliar da Seção de Ensino' }}</p>
+            </td>
+            <td style="text-align: center; width: 50%; border: none;">
+                <p>____________________________________</p>
+                <p>{{ comandante_nome or 'Comandante da EsFAS' }}</p>
+            </td>
+        </tr>
+    </table>
+
+</body>
+</html>

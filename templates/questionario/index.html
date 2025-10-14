@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}Módulo de Questionários{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <h1>Módulo de Questionários</h1>
+    <p>Crie, visualize e aplique questionários aos alunos e instrutores.</p>
+</div>
+
+<div class="modules-grid">
+    <a href="{{ url_for('questionario.novo_questionario') }}" class="module-card-link">
+        <div class="module-card">
+            <div class="card-content">
+                <div class="card-icon">➕</div>
+                <h3 class="card-title">Novo Questionário</h3>
+                <p class="card-description">Elabore um novo formulário com perguntas de múltipla escolha e campos abertos.</p>
+            </div>
+        </div>
+    </a>
+    
+    <a href="{{ url_for('questionario.ver_questionarios') }}" class="module-card-link">
+        <div class="module-card">
+            <div class="card-content">
+                <div class="card-icon">📊</div>
+                <h3 class="card-title">Ver Questionários</h3>
+                <p class="card-description">Analise as respostas dos questionários já aplicados e visualize os resultados em gráficos.</p>
+            </div>
+        </div>
+    </a>
+    
+    <a href="{{ url_for('questionario.realizar_questionario') }}" class="module-card-link">
+        <div class="module-card">
+            <div class="card-content">
+                <div class="card-icon">✍️</div>
+                <h3 class="card-title">Realizar Questionário</h3>
+                <p class="card-description">Selecione um aluno ou instrutor para responder a um questionário existente.</p>
+            </div>
+        </div>
+    </a>
+</div>
+
+<style>
+.module-card-link {
+    text-decoration: none;
+    color: inherit;
+}
+</style>
+{% endblock %}

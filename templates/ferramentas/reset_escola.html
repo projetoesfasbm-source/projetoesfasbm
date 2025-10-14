@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}Reset de Escola{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <h1>Reset de Escola</h1>
+    <p>Ferramentas para limpeza de dados em massa para o início de um novo curso.</p>
+</div>
+
+<div class="alert alert-danger" role="alert">
+    <h4 class="alert-heading">⚠️ ATENÇÃO! AÇÕES IRREVERSÍVEIS!</h4>
+    <p>As ações nesta página apagam permanentemente os registros do banco de dados. Use com extrema cautela, idealmente apenas ao final de um ciclo de curso para preparar o sistema para o próximo.</p>
+    <hr>
+    <p class="mb-0">É obrigatório confirmar sua senha para executar qualquer uma destas operações.</p>
+</div>
+
+<div class="tools-grid">
+    <div class="card border-danger">
+        <div class="card-header bg-danger text-white">
+            Excluir TODOS os Alunos
+        </div>
+        <div class="card-body">
+            <p class="card-text">Esta ação removerá permanentemente todos os usuários com o perfil "aluno" e seus dados associados (notas, históricos, etc.) da sua escola.</p>
+            <form method="POST" action="{{ url_for('tools.clear_data') }}" onsubmit="return confirm('CONFIRMAÇÃO FINAL:\n\nTem certeza ABSOLUTA de que deseja excluir TODOS os alunos? Esta ação não pode ser desfeita.');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="clear_students">
+                <div class="form-group mb-3">
+                    <label for="password_students">Confirme sua senha:</label>
+                    <input type="password" name="password" id="password_students" class="form-control" required autocomplete="current-password">
+                </div>
+                <button type="submit" class="btn btn-danger w-100">Excluir Todos os Alunos</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="card border-danger">
+        <div class="card-header bg-danger text-white">
+            Excluir TODOS os Instrutores
+        </div>
+        <div class="card-body">
+            <p class="card-text">Esta ação removerá permanentemente todos os usuários com o perfil "instrutor" e seus dados associados (vínculos, aulas, etc.) da sua escola.</p>
+            <form method="POST" action="{{ url_for('tools.clear_data') }}" onsubmit="return confirm('CONFIRMAÇÃO FINAL:\n\nTem certeza ABSOLUTA de que deseja excluir TODOS os instrutores? Esta ação não pode ser desfeita.');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="clear_instructors">
+                <div class="form-group mb-3">
+                    <label for="password_instructors">Confirme sua senha:</label>
+                    <input type="password" name="password" id="password_instructors" class="form-control" required autocomplete="current-password">
+                </div>
+                <button type="submit" class="btn btn-danger w-100">Excluir Todos os Instrutores</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="card border-danger">
+        <div class="card-header bg-danger text-white">
+            Excluir TODAS as Disciplinas
+        </div>
+        <div class="card-body">
+            <p class="card-text">Esta ação removerá permanentemente todas as disciplinas da sua escola, incluindo vínculos com turmas, aulas agendadas e notas de alunos.</p>
+            <form method="POST" action="{{ url_for('tools.clear_data') }}" onsubmit="return confirm('CONFIRMAÇÃO FINAL:\n\nTem certeza ABSOLUTA de que deseja excluir TODAS as disciplinas? Esta ação não pode ser desfeita.');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="clear_disciplines">
+                <div class="form-group mb-3">
+                    <label for="password_disciplines">Confirme sua senha:</label>
+                    <input type="password" name="password" id="password_disciplines" class="form-control" required autocomplete="current-password">
+                </div>
+                <button type="submit" class="btn btn-danger w-100">Excluir Todas as Disciplinas</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+    .tools-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+        gap: 1.5rem;
+        margin-top: 2rem;
+    }
+</style>
+{% endblock %}

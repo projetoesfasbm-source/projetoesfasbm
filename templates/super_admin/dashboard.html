@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+
+{% block title %}Super Admin Dashboard{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">Painel do Super Administrador</h1>
+    <p>Bem-vindo ao painel de controle geral do sistema.</p>
+
+    <div class="row">
+        <!-- Card para Visualizar como Admin de Escola -->
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Visualizar como Administrador de Escola</h5>
+                </div>
+                <div class="card-body">
+                    <p class="card-text">Selecione uma escola para visualizar o painel principal como se fosse um administrador daquela unidade.</p>
+                    <div class="mb-3">
+                        <label for="school_select_view" class="form-label">Selecione uma Escola:</label>
+                        <select class="form-select" id="school_select_view" name="school_id_view" onchange="if(this.value) { window.location.href = '{{ url_for('main.dashboard') }}?view_as_school=' + this.value; }">
+                            <option value="">-- Selecione para visualizar --</option>
+                            {% for school in all_schools %}
+                                <option value="{{ school.id }}">{{ school.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card para Gerenciamento -->
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Gerenciamento do Sistema</h5>
+                </div>
+                <div class="card-body">
+                    <p class="card-text">Crie novas escolas ou gerencie as atribuições de usuários às escolas existentes.</p>
+                    <a href="{{ url_for('super_admin.manage_schools') }}" class="btn btn-primary">
+                        <i class="fas fa-school me-2"></i>Gerenciar Escolas
+                    </a>
+                    <a href="{{ url_for('super_admin.manage_assignments') }}" class="btn btn-secondary">
+                        <i class="fas fa-user-cog me-2"></i>Gerenciar Atribuições
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+
+{% block title %}Lista de Turmas{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <h1>Turmas</h1>
+    <p>Visualize as turmas e seus alunos.</p>
+</div>
+
+<div class="table-container">
+    <div class="table-header">
+        <h3>Turmas Cadastradas</h3>
+        {% if current_user.role in ['programador', 'admin_escola'] %}
+        <div class="header-actions">
+            <a href="{{ url_for('turma.cadastrar_turma') }}" class="btn btn-primary">
+                <span>+</span> Cadastrar Nova Turma
+            </a>
+            <button type="button" class="btn btn-warning" onclick="openModal('editModal')">Editar Turma</button>
+            <button type="button" class="btn btn-danger" onclick="openModal('deleteModal')">Excluir Turma</button>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="turmas-grid">
+        {% for turma in turmas %}
+        {% set is_my_turma = current_user.role == 'aluno' and current_user.aluno_profile and current_user.aluno_profile.turma_id == turma.id %}
+        
+        <a href="{{ url_for('turma.detalhes_turma', turma_id=turma.id) }}" class="turma-card-link">
+            <div class="turma-card {% if is_my_turma %}my-turma{% endif %}">
+                
+                {% if is_my_turma %}
+                <div class="my-turma-badge">Minha Turma</div>
+                {% endif %}
+
+                <div class="turma-card-icon">
+                    {% set turma_index = loop.index %}
+                    {% set icon_key = 'turma_' ~ turma_index ~ '_icon' %}
+                    {% if site_config[icon_key] %}
+                        <img src="{{ site_config[icon_key] }}" alt="Ícone da {{ turma.nome }}" class="turma-icon-img">
+                    {% else %}
+                        <span>🏫</span>
+                    {% endif %}
+                </div>
+                <div class="turma-card-content">
+                    <div class="turma-card-title">
+                        <h4>{{ turma.nome }}</h4>
+                        <p>{{ turma.ano }}</p>
+                    </div>
+                    <span class="aluno-count">{{ turma.alunos|length }} aluno(s)</span>
+                </div>
+            </div>
+        </a>
+        {% else %}
+        <div class="empty-state">
+            <div class="empty-icon">🏫</div>
+            <h2>Nenhuma Turma Cadastrada</h2>
+            {% if current_user.role in ['programador', 'admin_escola'] %}
+            <p>Clique no botão acima para cadastrar a primeira turma.</p>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="modal-overlay" id="editModal">
+    <div class="modal-content">
+        <h3>Selecione a turma para editar</h3>
+        <div class="form-group">
+            <label for="turmaEditSelect">Turma</label>
+            <select id="turmaEditSelect" class="form-control">
+                <option value="">-- Selecione uma turma --</option>
+                {% for turma in turmas %}
+                <option value="{{ turma.id }}">{{ turma.nome }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-actions">
+            <button type="button" class="btn btn-secondary" onclick="closeModal('editModal')">Cancelar</button>
+            <button type="button" class="btn btn-primary" onclick="confirmEdit()">Confirmar</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="deleteModal">
+    <div class="modal-content">
+        <h3>Selecione a turma para excluir</h3>
+        <form id="deleteForm" method="POST" action="#" onsubmit="return confirm('ATENÇÃO: Excluir esta turma irá desvincular todos os alunos e remover todos os vínculos de disciplinas e cargos associados a ela. Esta ação não pode ser desfeita. Deseja continuar?');">
+            {{ delete_form.hidden_tag() }}
+            <div class="form-group">
+                <label for="turmaDeleteSelect">Turma</label>
+                <select id="turmaDeleteSelect" class="form-control" name="turma_id" required>
+                    <option value="">-- Selecione uma turma --</option>
+                    {% for turma in turmas %}
+                    <option value="{{ turma.id }}">{{ turma.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('deleteModal')">Cancelar</button>
+                <button type="submit" class="btn btn-danger">Excluir Turma</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+
+<style>
+.header-actions { display: flex; gap: 0.5rem; }
+.turmas-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+}
+.turma-card-link { text-decoration: none; color: inherit; }
+.turma-card {
+    background-color: var(--color-white);
+    padding: 1.5rem;
+    border-radius: var(--border-radius);
+    border: 1px solid var(--color-border);
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    position: relative;
+    overflow: hidden;
+}
+.turma-card:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--shadow-medium);
+    border-color: var(--color-primary-light);
+}
+.turma-card-icon {
+    width: 64px; height: 64px; font-size: 2.5rem; color: var(--color-primary);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; border-radius: 8px; background-color: var(--color-background);
+}
+.turma-icon-img { width: 90%; height: 90%; object-fit: contain; }
+.turma-card-title { display: flex; align-items: baseline; gap: 0.5rem; margin-bottom: 0.25rem; }
+.turma-card-title h4 { font-size: 1.25rem; font-weight: 700; margin: 0; line-height: 1; }
+.turma-card-title p { color: var(--color-text-muted); margin: 0; font-weight: 500; }
+.aluno-count { font-size: 0.875rem; font-weight: 600; color: var(--color-primary-light); }
+.empty-state {
+    grid-column: 1 / -1; text-align: center; padding: 3rem;
+    background-color: var(--color-background); border-radius: var(--border-radius);
+    border: 1px dashed var(--color-border); color: var(--color-text-muted);
+}
+.empty-state .empty-icon { font-size: 4rem; margin-bottom: 1rem; }
+.empty-state h2 { font-size: 1.8rem; margin-bottom: 0.5rem; color: var(--color-text-dark); }
+
+/* --- ESTILOS DE DESTAQUE CORRIGIDOS --- */
+.turma-card.my-turma {
+    border: 2px solid var(--color-primary);
+    background-color: #eff6ff;
+}
+.my-turma-badge {
+    position: absolute;
+    top: 18px;          /* Move um pouco para baixo */
+    right: -40px;       /* Move mais para a direita (para fora) */
+    background-color: var(--color-primary);
+    color: white;
+    padding: 5px 40px;  /* Aumenta o espaço lateral */
+    font-size: 0.7rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    transform: rotate(45deg);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    z-index: 1;
+}
+</style>
+
+<script>
+function openModal(modalId) {
+    document.getElementById(modalId).classList.add('visible');
+}
+
+function closeModal(modalId) {
+    document.getElementById(modalId).classList.remove('visible');
+}
+
+function confirmEdit() {
+    const select = document.getElementById('turmaEditSelect');
+    const turmaId = select.value;
+    if (turmaId) {
+        window.location.href = `/turma/editar/${turmaId}`;
+    } else {
+        alert('Por favor, selecione uma turma para editar.');
+    }
+}
+
+document.getElementById('turmaDeleteSelect').addEventListener('change', function() {
+    const turmaId = this.value;
+    const form = document.getElementById('deleteForm');
+    if (turmaId) {
+        form.action = `/turma/excluir/${turmaId}`;
+    } else {
+        form.action = '#';
+    }
+});
+
+window.onclick = function(event) {
+    if (event.target.classList.contains('modal-overlay')) {
+        event.target.classList.remove('visible');
+    }
+}
+</script>
+{% endblock %}

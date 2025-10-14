@@ -1,0 +1,26 @@
+# Ambiente Virtual
+venv/
+.venv/
+
+# Arquivos temporários do Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Arquivos de banco de dados e de instância
+instance/
+*.db
+*.sqlite3
+
+# Arquivos de variáveis de ambiente (IMPORTANTE PARA SEGURANÇA)
+.env
+.flaskenv
+
+# Arquivos de configuração do editor
+.vscode/
+.idea/
+
+# Arquivos do Sistema Operacional
+.DS_Store
+Thumbs.dbbackend/credentials.json

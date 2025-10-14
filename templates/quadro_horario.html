@@ -1,0 +1,317 @@
+{% extends "base.html" %}
+
+{% block title %}Quadro Horário{% endblock %}
+
+{% block content %}
+<div class="horario-header-container">
+    <div class="page-title-with-controls">
+        <div class="title-group">
+            <h1>Quadro Horário</h1>
+            <p>Selecione um pelotão, ciclo e semana para visualizar o horário correspondente.</p>
+        </div>
+        
+        {% if semana_selecionada and current_user.role in ['programador', 'admin_escola', 'instrutor', 'super_admin'] %}
+        <div class="controls-group d-flex gap-2">
+            {# --- CORREÇÃO APLICADA AQUI: a classe do botão foi alterada para btn-danger --- #}
+            {% if current_user.role in ['programador', 'admin_escola', 'super_admin'] %}
+            <a href="{{ url_for('horario.exportar_pdf', pelotao=pelotao_selecionado, semana_id=semana_selecionada.id) }}" class="btn btn-danger" target="_blank">
+                Exportar PDF
+            </a>
+            {% endif %}
+            
+            <button type="button" class="btn btn-primary" onclick="openConfirmationModal()">
+                Agendar/Desmarcar Aulas
+            </button>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="ciclo-selector">
+        <strong>Ciclo:</strong>
+        <div class="filter-buttons">
+            {% for ciclo in ciclos %}
+            <a href="{{ url_for('horario.index', ciclo=ciclo.id, pelotao=pelotao_selecionado, semana_id=semana_selecionada.id if semana_selecionada else '') }}"
+               class="btn btn-sm {% if ciclo_selecionado == ciclo.id %}btn-warning{% else %}btn-secondary{% endif %}">
+                {{ ciclo.nome }}
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    
+    <div class="horario-selectors">
+        <div class="pelotao-pills">
+            {% for turma in todas_as_turmas %}
+                <a href="{{ url_for('horario.index', pelotao=turma.nome, semana_id=semana_selecionada.id if semana_selecionada else '', ciclo=ciclo_selecionado) }}"
+                   class="btn btn-sm {% if turma.nome == pelotao_selecionado %}btn-primary{% else %}btn-secondary{% endif %}">
+                    {{ turma.nome }}
+                </a>
+            {% endfor %}
+        </div>
+        <div class="semana-selector-wrapper">
+            <label for="semana_selector">Semana:</label>
+            <select id="semana_selector" name="semana" class="form-control" {% if not todas_as_semanas %}disabled{% endif %}>
+                {% if todas_as_semanas %}
+                    {% for semana in todas_as_semanas %}
+                        <option value="{{ semana.id }}" {% if semana_selecionada and semana.id == semana_selecionada.id %}selected{% endif %}>
+                            {{ semana.nome }} ({{ semana.data_inicio.strftime('%d/%m') }} a {{ semana.data_fim.strftime('%d/%m') }})
+                        </option>
+                    {% endfor %}
+                {% else %}
+                    <option>Nenhuma semana cadastrada para este ciclo</option>
+                {% endif %}
+            </select>
+            {% if current_user.role in ['admin_escola', 'programador'] %}
+            <a href="{{ url_for('semana.gerenciar_semanas') }}" class="btn btn-sm btn-info">
+                Gerenciar Semanas
+            </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% if horario_matrix and semana_selecionada %}
+    <div class="table-wrapper">
+        <table class="horario-table-new">
+            <thead>
+                <tr>
+                    <th class="header-tempo">Horário</th>
+                    <th class="header-dia">Segunda-feira <br><small>({{ datas_semana.segunda }})</small></th>
+                    <th class="header-dia">Terça-feira <br><small>({{ datas_semana.terca }})</small></th>
+                    <th class="header-dia">Quarta-feira <br><small>({{ datas_semana.quarta }})</small></th>
+                    <th class="header-dia">Quinta-feira <br><small>({{ datas_semana.quinta }})</small></th>
+                    <th class="header-dia">Sexta-feira <br><small>({{ datas_semana.sexta }})</small></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% set tempos = [
+                    ("1º", "07:30-08:15"), ("2º", "08:15-09:00"), ("3º", "09:00-09:45"),
+                    ("4º", "10:00-10:45"), ("5º", "10:45-11:30"), ("6º", "11:30-12:15"),
+                    ("7º", "13:45-14:30"), ("8º", "14:30-15:15"), ("9º", "15:15-16:00"),
+                    ("10º", "16:15-17:00"), ("11º", "17:00-17:45"), ("12º", "17:45-18:30"),
+                    ("13º", "18:30-19:15"), ("14º", "19:15-20:00"), ("15º", "20:00-20:45")
+                ] %}
+
+                {% for row_idx in range(15) %}
+                    {% set periodo_num = row_idx + 1 %}
+                    {% if (periodo_num <= 12) or 
+                          (periodo_num == 13 and semana_selecionada.mostrar_periodo_13) or
+                          (periodo_num == 14 and semana_selecionada.mostrar_periodo_14) or
+                          (periodo_num == 15 and semana_selecionada.mostrar_periodo_15) %}
+                    
+                    <tr class="periodo-row">
+                        <td class="cell-tempo"><strong>{{ tempos[row_idx][0] }}</strong><span>{{ tempos[row_idx][1] }}</span></td>
+                        {% for col_idx in range(5) %}
+                            {% set aula = horario_matrix[row_idx][col_idx] %}
+                            {% include 'partials/_horario_slot_view.html' %}
+                        {% endfor %}
+                    </tr>
+
+                    {% if periodo_num == 3 %}
+                    <tr class="intervalo-row">
+                        <td class="cell-tempo"><strong>INTERVALO</strong><span>09:45-10:00</span></td>
+                        <td colspan="5">INTERVALO</td>
+                    </tr>
+                    {% endif %}
+                    
+                    {% if periodo_num == 9 %}
+                    <tr class="intervalo-row">
+                        <td class="cell-tempo"><strong>INTERVALO</strong><span>16:00-16:15</span></td>
+                        <td colspan="5">INTERVALO</td>
+                    </tr>
+                    {% endif %}
+                    
+                    {% endif %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if semana_selecionada.mostrar_sabado or semana_selecionada.mostrar_domingo %}
+    <button class="weekend-toggle-btn" id="weekend-toggle">
+        <span>Fim de Semana</span>
+    </button>
+    
+    <div class="weekend-panel" id="weekend-panel">
+        <div class="table-wrapper">
+            <table class="horario-table-new weekend-table">
+                <thead>
+                    <tr>
+                        <th class="header-tempo">Horário</th>
+                        {% if semana_selecionada.mostrar_sabado %}<th class="header-dia weekend">Sábado <br><small>({{ datas_semana.sabado }})</small></th>{% endif %}
+                        {% if semana_selecionada.mostrar_domingo %}<th class="header-dia weekend">Domingo <br><small>({{ datas_semana.domingo }})</small></th>{% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row_idx in range(15) %}
+                        {% if (semana_selecionada.mostrar_sabado and loop.index <= semana_selecionada.periodos_sabado) or
+                              (semana_selecionada.mostrar_domingo and loop.index <= semana_selecionada.periodos_domingo) %}
+                        <tr class="periodo-row">
+                            <td class="cell-tempo"><strong>{{ tempos[row_idx][0] }}</strong><span>{{ tempos[row_idx][1] }}</span></td>
+                            {% if semana_selecionada.mostrar_sabado %}
+                                {% set aula = horario_matrix[row_idx][5] %}
+                                {% include 'partials/_horario_slot_view.html' %}
+                            {% endif %}
+                            {% if semana_selecionada.mostrar_domingo %}
+                                {% set aula = horario_matrix[row_idx][6] %}
+                                {% include 'partials/_horario_slot_view.html' %}
+                            {% endif %}
+                        </tr>
+                        {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if pelotao_selecionado and semana_selecionada %}
+    <div class="modal-overlay" id="confirmation-modal-overlay">
+        <div class="modal-content" style="max-width: 600px;">
+            {% if current_user.role == 'instrutor' %}
+                <h3 id="modal-title">Selecionar Turma para Edição</h3>
+                <p style="margin-top: 1rem; margin-bottom: 1.5rem;">
+                    Você possui vínculos com as seguintes turmas. Selecione qual quadro horário deseja editar:
+                </p>
+                <div class="turma-selection-buttons">
+                    {% for turma in instrutor_turmas_vinculadas %}
+                        <a href="{{ url_for('horario.editar_horario_grid', pelotao=turma.nome, semana_id=semana_selecionada.id, ciclo_id=ciclo_selecionado) }}" class="btn btn-primary btn-turma">
+                            {{ turma.nome }}
+                        </a>
+                    {% else %}
+                        <p class="text-muted">Nenhum vínculo encontrado.</p>
+                    {% endfor %}
+                </div>
+            {% else %} {# Para admins #}
+                <h3 id="modal-title">Confirmar Edição de Horário</h3>
+                <p style="margin-top: 1rem; margin-bottom: 1.5rem; font-size: 1.1rem;">
+                    Você está prestes a entrar no modo de edição do quadro horário para a turma:
+                </p>
+                <div style="background-color: #f1f5f9; border: 1px solid #e2e8f0; padding: 1rem; border-radius: 8px; text-align: center; margin-bottom: 2rem;">
+                    <strong style="font-size: 1.5rem; color: #1e3a8a;">{{ pelotao_selecionado }}</strong>
+                </div>
+                <p>Deseja continuar?</p>
+            {% endif %}
+
+            <div class="form-actions" style="justify-content: flex-end; margin-top: 2rem;">
+                <button type="button" class="btn btn-secondary" onclick="closeConfirmationModal()">Cancelar</button>
+                {% if current_user.role != 'instrutor' %}
+                    <a href="{{ url_for('horario.editar_horario_grid', pelotao=pelotao_selecionado, semana_id=semana_selecionada.id, ciclo_id=ciclo_selecionado) }}" class="btn btn-primary">
+                        Confirmar e Continuar
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+{% else %}
+    <div class="empty-state" style="margin-top: 2rem;">
+        <div class="empty-icon">📅</div>
+        <h2>Quadro Horário Indisponível</h2>
+        {% if not todas_as_turmas %}
+            <p>Nenhuma turma foi cadastrada. Por favor, vá para a seção "Turmas" para criar a primeira.</p>
+        {% elif not todas_as_semanas %}
+            <p>Nenhuma semana foi cadastrada para o <strong>Ciclo {{ ciclo_selecionado }}</strong>. Utilize o botão "Gerenciar Semanas" acima para começar.</p>
+        {% else %}
+            <p>Não foi possível carregar o quadro de horários. Verifique se há turmas e semanas cadastradas.</p>
+        {% endif %}
+    </div>
+{% endif %}
+
+<style>
+.horario-header-container { background-color: var(--color-white); border-radius: var(--border-radius); padding: 1.5rem 2rem; margin-bottom: 1.5rem; box-shadow: var(--shadow-soft); }
+.page-title-with-controls { display: flex; justify-content: space-between; align-items: flex-start; }
+.horario-selectors { margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--color-border); }
+.pelotao-pills { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.5rem; }
+.semana-selector-wrapper { display: flex; align-items: center; gap: 1rem; max-width: 500px; }
+.semana-selector-wrapper label { font-weight: 600; white-space: nowrap; }
+.slot-content.disposicao .disciplina-title { color: #94a3b8; font-style: italic; font-size: 0.75rem; }
+.horario-actions { display: flex; justify-content: center; margin-top: 1.5rem; }
+.ciclo-selector {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background-color: var(--color-background);
+    border-radius: 8px;
+    border: 1px solid var(--color-border);
+    margin-top: 1rem;
+}
+.btn.btn-warning {
+    background-color: var(--color-warning);
+    color: var(--color-white);
+}
+.header-dia small {
+    font-weight: 400;
+    font-size: 0.8em;
+    opacity: 0.8;
+}
+.weekend-slot.disabled {
+    background-color: #f1f5f9;
+    cursor: not-allowed;
+}
+.turma-selection-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    justify-content: center;
+    padding: 1rem 0;
+}
+.btn-turma {
+    flex-grow: 1;
+    padding: 1rem;
+    font-size: 1.1rem;
+}
+.intervalo-row td {
+    background-color: #fffbeb;
+    color: #b45309;
+    font-weight: bold;
+    text-align: center;
+    border-left: none;
+    border-right: none;
+}
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const semanaSelector = document.getElementById('semana_selector');
+        if (semanaSelector) {
+            semanaSelector.addEventListener('change', function() {
+                const semanaId = this.value;
+                const pelotao = "{{ pelotao_selecionado or (todas_as_turmas[0].nome if todas_as_turmas else '') }}";
+                const ciclo = "{{ ciclo_selecionado }}";
+                window.location.href = `{{ url_for('horario.index') }}?pelotao=${pelotao}&semana_id=${semanaId}&ciclo=${ciclo}`;
+            });
+        }
+
+        const toggleBtn = document.getElementById('weekend-toggle');
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', function() {
+                document.body.classList.toggle('weekend-panel-open');
+            });
+        }
+    });
+
+    const confirmationModal = document.getElementById('confirmation-modal-overlay');
+
+    function openConfirmationModal() {
+        if (confirmationModal) {
+            confirmationModal.classList.add('visible');
+        }
+    }
+
+    function closeConfirmationModal() {
+        if (confirmationModal) {
+            confirmationModal.classList.remove('visible');
+        }
+    }
+
+    if (confirmationModal) {
+        confirmationModal.addEventListener('click', (e) => {
+            if (e.target === confirmationModal) {
+                closeConfirmationModal();
+            }
+        });
+    }
+</script>
+{% endblock %}

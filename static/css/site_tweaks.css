@@ -1,0 +1,72 @@
+/* ===========================
+   BACKGROUND uniforme do site
+   =========================== */
+
+/* Usa o <html> para garantir cobertura total */
+html, body{ height: 100%; background: transparent !important; }
+
+html::before{
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -3;
+  background-image: var(--site-bg-url, none);
+  background-size: cover;
+  background-position: center center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
+/* Véu suave por cima da foto para manter legibilidade */
+html::after{
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background: rgba(255,255,255,0.80); /* ajuste 0.70–0.88 conforme desejar */
+  pointer-events: none;
+}
+
+/* Garante que nenhum wrapper pinte branco chapado */
+.page-container,
+.main-content,
+.container, .container-fluid,
+.row, .page, .page-content, .wrapper {
+  background: transparent !important;
+}
+
+/* Sidebar colada no topo */
+.sidebar{ position: sticky; top: 0; height: 100vh; z-index: 2; }
+
+/* HERO (faixa topo) com <img> — sem corte */
+.hero{
+  width: 100%;
+  border-radius: 12px;
+  overflow: hidden;            /* arredondado real */
+  box-shadow: 0 6px 18px rgba(0,0,0,.10);
+  margin-bottom: .75rem;
+}
+.hero-img{
+  display: block;
+  width: 100%;
+  height: auto;                /* preserva proporção, não corta */
+}
+
+/* Conteúdo legível; seu style.css também aplica estilos */
+.content-wrapper{
+  background: rgba(255,255,255,0.92);
+  border-radius: 12px;
+}
+
+/* Cartões/macros (opcional; seu style.css pode sobrescrever) */
+.card, .panel, .box, .section, .table-container, .form-container,
+.alert, .modal-content {
+  background-color: rgba(255,255,255,0.96);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+}
+
+/* Responsivo: ajuste fino do véu no mobile, se quiser mais contraste */
+@media (max-width: 480px){
+  html::after{ background: rgba(255,255,255,0.85); }
+}

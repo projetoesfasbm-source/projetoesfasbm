@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 20px auto; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }
+        .button { display: inline-block; background-color: #1e3a8a; color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h3>Redefinição de Senha - Sistema EsFAS</h3>
+        <p>Olá, {{ user.nome_de_guerra or user.nome_completo }}!</p>
+        <p>Recebemos uma solicitação para redefinir a senha da sua conta. Para continuar, clique no botão abaixo:</p>
+        <p style="text-align: center; margin: 20px 0;">
+            <a href="{{ url_for('auth.redefinir_senha', token=token, _external=True) }}" class="button">Redefinir Minha Senha</a>
+        </p>
+        <p>Se você não solicitou esta alteração, por favor, ignore este e-mail. Este link é válido por 1 hora.</p>
+        <hr>
+        <p style="font-size: 0.8em; color: #777;">Sistema de Gerenciamento da Escola de Formação e Aperfeiçoamento de Sargentos (EsFAS)</p>
+    </div>
+</body>
+</html>

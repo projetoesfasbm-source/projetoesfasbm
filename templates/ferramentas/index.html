@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}Ferramentas do Administrador{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <h1>Ferramentas do Administrador</h1>
+    <p>Acesse ferramentas de gerenciamento avançado e personalização do sistema.</p>
+</div>
+
+<div class="modules-grid">
+    <a href="{{ url_for('tools.reset_escola') }}" class="module-card-link">
+        <div class="module-card">
+            <div class="card-content">
+                <div class="card-icon">🔄</div>
+                <h3 class="card-title">Reset de Escola</h3>
+                <p class="card-description">Exclua em massa todos os alunos, instrutores ou disciplinas para iniciar um novo ciclo de curso.</p>
+            </div>
+        </div>
+    </a>
+    
+    <a href="{{ url_for('customizer.index') }}" class="module-card-link">
+        <div class="module-card">
+            <div class="card-content">
+                <div class="card-icon">🎨</div>
+                <h3 class="card-title">Personalizar Site</h3>
+                <p class="card-description">Altere as cores, logos e imagens de fundo do sistema para se adequar à identidade visual da sua escola.</p>
+            </div>
+        </div>
+    </a>
+    
+    <a href="{{ url_for('assets.manage_assets') }}" class="module-card-link">
+        <div class="module-card">
+            <div class="card-content">
+                <div class="card-icon">📁</div>
+                <h3 class="card-title">Gerenciar Assets</h3>
+                <p class="card-description">Faça o upload e gerencie as imagens (logos, ícones, fundos) que serão usadas na personalização do site.</p>
+            </div>
+        </div>
+    </a>
+</div>
+
+<style>
+.module-card-link {
+    text-decoration: none;
+    color: inherit;
+}
+</style>
+{% endblock %}

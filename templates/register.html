@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+
+{% block title %}Ativar Conta - Sistema EsFAS{% endblock %}
+
+{% block navbar_content %}{% endblock %}
+
+{% block content %}
+<div class="auth-page-container">
+    <div class="auth-card" style="max-width: 450px;">
+        <div class="card-logo-container">
+            <img src="{{ url_for('static', filename='img/brasao.png') }}" alt="Brasão da Escola">
+        </div>
+        <h2>Ativar sua Conta</h2>
+        <p style="font-size: 0.9rem; opacity: 0.8; margin-top: -15px; margin-bottom: 20px;">Complete seus dados para ativar seu acesso.</p>
+
+        <form method="POST" action="{{ url_for('auth.register') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="form-group">
+                <label for="role">Eu sou:</label>
+                <select id="role" name="role" class="form-control" required>
+                    <option value="aluno" {% if form_data.get('role', 'aluno') == 'aluno' %}selected{% endif %}>Aluno</option>
+                    <option value="instrutor" {% if form_data.get('role') == 'instrutor' %}selected{% endif %}>Instrutor</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="matricula">Sua Matrícula:</label>
+                <input type="text" id="matricula" name="matricula" class="form-control"
+                       pattern="[0-9]*" inputmode="numeric" maxlength="7"
+                       placeholder="Digite sua Matrícula (apenas números)"
+                       value="{{ form_data.get('matricula', '') }}" required>
+            </div>
+            <div class="form-group">
+                <label for="nome_completo">Seu Nome Completo:</label>
+                <input type="text" id="nome_completo" name="nome_completo" class="form-control"
+                       placeholder="Digite seu nome completo"
+                       value="{{ form_data.get('nome_completo', '') }}" required>
+            </div>
+            <div class="form-group">
+                <label for="nome_de_guerra">Seu Nome de Guerra:</label>
+                <input type="text" id="nome_de_guerra" name="nome_de_guerra" class="form-control"
+                       placeholder="Digite seu nome de guerra"
+                       value="{{ form_data.get('nome_de_guerra', '') }}" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="posto_graduacao">Seu Posto/Graduação:</label>
+                <select id="posto_graduacao" name="posto_graduacao" class="form-control" required>
+                    <option value="" disabled selected>-- Selecione --</option>
+                    <optgroup label="Praças">
+                        <option value="Soldado PM">Soldado PM</option>
+                        <option value="2º Sargento PM">2º Sargento PM</option>
+                        <option value="1º Sargento PM">1º Sargento PM</option>
+                    </optgroup>
+                    <optgroup label="Oficiais">
+                        <option value="1º Tenente PM">1º Tenente PM</option>
+                        <option value="Capitão PM">Capitão PM</option>
+                        <option value="Major PM">Major PM</option>
+                        <option value="Tenente-Coronel PM">Tenente-Coronel PM</option>
+                        <option value="Coronel PM">Coronel PM</option>
+                    </optgroup>
+                    <optgroup label="Saúde - Enfermagem">
+                        <option value="Ten Enf">Ten Enf</option>
+                        <option value="Cap Enf">Cap Enf</option>
+                        <option value="Maj Enf">Maj Enf</option>
+                        <option value="Ten Cel Enf">Ten Cel Enf</option>
+                        <option value="Cel Enf">Cel Enf</option>
+                    </optgroup>
+                    <optgroup label="Saúde - Médicos">
+                        <option value="Ten Med">Ten Med</option>
+                        <option value="Cap Med">Cap Med</option>
+                        <option value="Maj Med">Maj Med</option>
+                        <option value="Ten Cel Med">Ten Cel Med</option>
+                        <option value="Cel Med">Cel Med</option>
+                    </optgroup>
+                    <optgroup label="Outros">
+                        <option value="Civil">Civil</option>
+                    </optgroup>
+                </select>
+            </div>
+            
+            <div id="aluno-fields">
+                <div class="form-group">
+                    <label for="opm">Sua OPM (Unidade):</label>
+                    <input type="text" id="opm" name="opm" class="form-control"
+                           placeholder="Ex: 1º RPMon, CRPO/FN, etc."
+                           value="{{ form_data.get('opm', '') }}">
+                </div>
+                <div class="form-group">
+                    <label for="turma_id">Sua Turma (Seu Pelotão):</label>
+                    <select id="turma_id" name="turma_id" class="form-control" required>
+                        <option value="" disabled selected>-- Selecione sua Turma --</option>
+                        {% for turma in turmas %}
+                            <option value="{{ turma.id }}">{{ turma.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="email">Seu E-mail (Ex: nome.sobrenome@bm.rs.gov.br):</label>
+                <input type="email" id="email" name="email" class="form-control" placeholder="Digite seu e-mail completo" value="{{ form_data.get('email', '') }}" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Crie uma Senha:</label>
+                <input type="password" id="password" name="password" class="form-control" autocomplete="new-password" required>
+            </div>
+            <div class="password-rules">
+                <small>A senha deve conter pelo menos 8 caracteres.</small>
+            </div>
+            <div class="form-group">
+                <label for="password2">Confirme a Senha:</label>
+                <input type="password" id="password2" name="password2" class="form-control" autocomplete="new-password" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Ativar Conta</button>
+        </form>
+
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                const roleSelect = document.getElementById('role');
+                const alunoFields = document.getElementById('aluno-fields');
+                const opmInput = document.getElementById('opm');
+                const turmaSelect = document.getElementById('turma_id');
+
+                function toggleAlunoFields() {
+                    if (roleSelect.value === 'aluno') {
+                        alunoFields.style.display = 'block';
+                        opmInput.required = true;
+                        turmaSelect.required = true;
+                    } else {
+                        alunoFields.style.display = 'none';
+                        opmInput.required = false;
+                        turmaSelect.required = false;
+                    }
+                }
+
+                toggleAlunoFields();
+                roleSelect.addEventListener('change', toggleAlunoFields);
+            });
+        </script>
+
+         <div class="auth-link" style="margin-top: 1rem; display: flex; flex-direction: column; gap: 0.5rem;">
+            <a href="{{ url_for('auth.login') }}">Já tem uma conta ativa? Faça o login.</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

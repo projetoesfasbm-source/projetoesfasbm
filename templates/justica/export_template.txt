@@ -1,0 +1,20 @@
+--------------------------------------------------
+PROCESSO DISCIPLINAR ID: {{ processo.id }}
+--------------------------------------------------
+
+ALUNO: {{ processo.aluno.user.posto_graduacao }} {{ processo.aluno.user.nome_completo }} (Id Func: {{ processo.aluno.user.matricula }})
+
+DATA DA OCORRÊNCIA: {{ processo.data_ocorrencia.strftime('%d/%m/%Y') if processo.data_ocorrencia else 'N/A' }}
+
+RELATOR: {{ processo.relator.nome_de_guerra or processo.relator.nome_completo }}
+
+FATO CONSTATADO:
+{{ processo.fato_constatado }}
+
+OBSERVAÇÃO (TERMO DE JUSTIFICAÇÃO):
+{{ processo.observacao }}
+
+DEFESA DO ALUNO:
+{{ processo.defesa or 'Nenhuma defesa foi apresentada.' }}
+
+DECISÃO FINAL: {{ processo.decisao_final }} (em {{ processo.data_decisao.strftime('%d/%m/%Y') if processo.data_decisao else 'data não registrada' }})

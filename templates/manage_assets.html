@@ -1,0 +1,448 @@
+{% extends "base.html" %}
+
+{% block title %}Gerenciar Assets - Sistema EsFAS{% endblock %}
+
+{% block page_title %}Gerenciar Assets{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="asset-header">
+        <h1>📁 Gerenciamento de Assets</h1>
+        <div class="header-actions">
+            <a href="{{ url_for('customizer.index') }}" class="btn btn-info">
+                🎨 Customizar Site
+            </a>
+            <a href="{{ url_for('assets.upload_asset') }}" class="btn btn-success">
+                📁 Enviar Novo Asset
+            </a>
+        </div>
+    </div>
+
+    <div class="asset-filters">
+        <div class="filter-group">
+            <label for="type-filter">Tipo:</label>
+            <select id="type-filter" class="form-control">
+                <option value="">Todos</option>
+                <option value="icon">Ícones</option>
+                <option value="background">Backgrounds</option>
+                <option value="logo">Logos</option>
+            </select>
+        </div>
+        
+        <div class="filter-group">
+            <label for="category-filter">Categoria:</label>
+            <select id="category-filter" class="form-control">
+                <option value="">Todas</option>
+                <option value="dashboard">Dashboard</option>
+                <option value="sidebar">Sidebar</option>
+                <option value="general">Geral</option>
+            </select>
+        </div>
+        
+        <div class="filter-group">
+            <label for="status-filter">Status:</label>
+            <select id="status-filter" class="form-control">
+                <option value="">Todos</option>
+                <option value="active">Ativo</option>
+                <option value="inactive">Inativo</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="assets-grid" id="assets-container">
+        {% for asset in assets %}
+        <div class="asset-card" data-type="{{ asset.asset_type }}" data-category="{{ asset.category }}" data-status="{% if asset.is_active %}active{% else %}inactive{% endif %}">
+            <div class="asset-preview">
+                <img src="{{ url_for('static', filename='uploads/' + asset.filename) }}" alt="{{ asset.original_filename }}">
+            </div>
+            
+            <div class="asset-info">
+                <h3>{{ asset.original_filename }}</h3>
+                <div class="asset-meta">
+                    <span class="asset-type">{{ asset.asset_type.title() }}</span>
+                    <span class="asset-category">{{ asset.category.title() }}</span>
+                </div>
+                
+                {% if asset.description %}
+                <p class="asset-description">{{ asset.description }}</p>
+                {% endif %}
+                
+                <div class="asset-status">
+                    <span class="status-badge {% if asset.is_active %}active{% else %}inactive{% endif %}">
+                        {% if asset.is_active %}Ativo{% else %}Inativo{% endif %}
+                    </span>
+                    <small class="upload-date">{{ asset.created_at.strftime('%d/%m/%Y') }}</small>
+                </div>
+            </div>
+            
+            <div class="asset-actions">
+                <button class="btn btn-sm btn-info copy-url-btn" data-url="{{ url_for('static', filename='uploads/' + asset.filename) }}" title="Copiar URL">
+                    📋 URL
+                </button>
+                
+                <a href="{{ url_for('customizer.index') }}" class="btn btn-sm btn-primary" title="Usar no Customizador">
+                    🎨 Usar
+                </a>
+                
+                <button class="btn btn-sm {% if asset.is_active %}btn-warning{% else %}btn-success{% endif %} toggle-btn" 
+                        data-asset-id="{{ asset.id }}" title="{% if asset.is_active %}Desativar{% else %}Ativar{% endif %}">
+                    {% if asset.is_active %}❌{% else %}✅{% endif %}
+                </button>
+                
+                <form method="POST" action="{{ url_for('assets.delete_asset', asset_id=asset.id) }}" 
+                      style="display: inline;" onsubmit="return confirm('Tem certeza que deseja deletar este asset?')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-sm btn-danger" title="Excluir Asset">
+                        🗑️
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    {% if not assets %}
+    <div class="empty-state">
+        <div class="empty-icon">📷</div>
+        <h3>Nenhum asset encontrado</h3>
+        <p>Faça o upload do primeiro asset para começar a personalizar o site.</p>
+        <div class="empty-actions">
+            <a href="{{ url_for('assets.upload_asset') }}" class="btn btn-primary">📁 Enviar Asset</a>
+            <a href="{{ url_for('customizer.index') }}" class="btn btn-secondary">🎨 Customizar Site</a>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="integration-tip">
+        <div class="tip-icon">💡</div>
+        <div class="tip-content">
+            <h4>Dica: Integração com Customizador</h4>
+            <p>Após fazer upload de assets, vá para <strong>🎨 Customizar Site</strong> para aplicá-los automaticamente no sistema!</p>
+        </div>
+    </div>
+</div>
+
+<style>
+.asset-header .header-actions {
+    display: flex;
+    gap: 1rem;
+}
+
+.integration-tip {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+    border: 1px solid #3b82f6;
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-top: 2rem;
+}
+
+.tip-icon {
+    font-size: 2rem;
+    flex-shrink: 0;
+}
+
+.tip-content h4 {
+    color: #1e40af;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.tip-content p {
+    color: #1e40af;
+    margin: 0;
+}
+
+.empty-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+/* Resto do CSS do manage_assets anterior... */
+.asset-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.asset-header h1 {
+    color: #1a202c;
+    font-size: 2rem;
+    font-weight: 800;
+    margin: 0;
+}
+
+.asset-filters {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+    border: 1px solid #e2e8f0;
+}
+
+.filter-group label {
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 0.5rem;
+    display: block;
+}
+
+.assets-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1.5rem;
+}
+
+.asset-card {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+    border: 1px solid #e2e8f0;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.asset-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
+}
+
+.asset-preview {
+    height: 180px;
+    background: #f8fafc;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-bottom: 1px solid #e2e8f0;
+    overflow: hidden;
+}
+
+.asset-preview img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.asset-info {
+    padding: 1.5rem;
+}
+
+.asset-info h3 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #1a202c;
+    margin-bottom: 0.5rem;
+    word-break: break-word;
+}
+
+.asset-meta {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.asset-type,
+.asset-category {
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    color: white;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.asset-category {
+    background: linear-gradient(135deg, #10b981, #059669);
+}
+
+.asset-description {
+    color: #64748b;
+    font-size: 0.875rem;
+    line-height: 1.4;
+    margin-bottom: 0.75rem;
+}
+
+.asset-status {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.status-badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.status-badge.active {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.status-badge.inactive {
+    background: #fef2f2;
+    color: #991b1b;
+}
+
+.upload-date {
+    color: #94a3b8;
+    font-size: 0.75rem;
+}
+
+.asset-actions {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.5rem;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid #e2e8f0;
+    background: #f8fafc;
+}
+
+.asset-actions .btn {
+    font-size: 0.75rem;
+    padding: 0.5rem;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+    border: 1px solid #e2e8f0;
+}
+
+.empty-icon {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+}
+
+.empty-state h3 {
+    color: #1a202c;
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.empty-state p {
+    color: #64748b;
+    margin-bottom: 2rem;
+}
+
+@media (max-width: 768px) {
+    .asset-header {
+        flex-direction: column;
+        gap: 1rem;
+        align-items: stretch;
+    }
+    
+    .asset-filters {
+        grid-template-columns: 1fr;
+    }
+    
+    .assets-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .asset-actions {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .integration-tip {
+        flex-direction: column;
+        text-align: center;
+    }
+}
+</style>
+
+<script>
+// Filtros
+const typeFilter = document.getElementById('type-filter');
+const categoryFilter = document.getElementById('category-filter');
+const statusFilter = document.getElementById('status-filter');
+const assetsContainer = document.getElementById('assets-container');
+
+function filterAssets() {
+    const type = typeFilter.value;
+    const category = categoryFilter.value;
+    const status = statusFilter.value;
+    
+    const cards = assetsContainer.querySelectorAll('.asset-card');
+    
+    cards.forEach(card => {
+        const cardType = card.dataset.type;
+        const cardCategory = card.dataset.category;
+        const cardStatus = card.dataset.status;
+        
+        const matchesType = !type || cardType === type;
+        const matchesCategory = !category || cardCategory === category;
+        const matchesStatus = !status || cardStatus === status;
+        
+        if (matchesType && matchesCategory && matchesStatus) {
+            card.style.display = 'block';
+        } else {
+            card.style.display = 'none';
+        }
+    });
+}
+
+typeFilter.addEventListener('change', filterAssets);
+categoryFilter.addEventListener('change', filterAssets);
+statusFilter.addEventListener('change', filterAssets);
+
+// Copiar URL
+document.addEventListener('click', function(e) {
+    if (e.target.classList.contains('copy-url-btn')) {
+        const url = e.target.dataset.url;
+        navigator.clipboard.writeText(window.location.origin + url).then(() => {
+            e.target.textContent = '✅ Copiado!';
+            
+            setTimeout(() => {
+                e.target.textContent = '📋 URL';
+            }, 2000);
+        });
+    }
+});
+
+// Toggle status
+document.addEventListener('click', function(e) {
+    if (e.target.classList.contains('toggle-btn')) {
+        const assetId = e.target.dataset.assetId;
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        
+        fetch(`/assets/toggle/${assetId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Erro: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao alterar status do asset.');
+        });
+    }
+});
+</script>
+{% endblock %}

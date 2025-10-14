@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+
+{% block title %}Selecionar Horário{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <h1>Visualizar Quadro Horário</h1>
+    <p>Por favor, selecione um pelotão e uma semana para continuar.</p>
+</div>
+
+<div class="table-container" style="max-width: 900px; margin: 0 auto;">
+    <form method="POST" action="{{ url_for('horario.visualizar_quadro_horario') }}">
+        <div class="selection-step">
+            <h3>1. Selecione o Pelotão/Turma</h3>
+            <div class="filter-buttons" id="pelotao-selector">
+                {% for turma in turmas %}
+                <button type="button" class="btn btn-sm btn-secondary" data-pelotao="{{ turma.nome }}">
+                    {{ turma.nome }}
+                </button>
+                {% endfor %}
+            </div>
+            <input type="hidden" name="pelotao" id="selected-pelotao" required>
+        </div>
+
+        <div class="selection-step">
+            <h3>2. Selecione a Semana</h3>
+            <div class="selection-list">
+                {% for item in semanas_com_status if item.status in ['atual', 'futura'] %}
+                <label class="selection-item {{ item.status }}">
+                    <input type="radio" name="semana_id" value="{{ item.semana.id }}" required>
+                    <div class="selection-content">
+                        <strong>{{ item.semana.nome }}</strong>
+                        <span>{{ item.semana.data_inicio.strftime('%d/%m/%Y') }} até {{ item.semana.data_fim.strftime('%d/%m/%Y') }}</span>
+                    </div>
+                </label>
+                {% endfor %}
+            </div>
+
+            <div class="past-weeks-toggle" id="past-weeks-toggle">Ver Semanas Anteriores ▼</div>
+            <div class="selection-list" id="past-weeks-list" style="display: none; margin-top: 1rem;">
+                {% for item in semanas_com_status if item.status == 'passada' %}
+                <label class="selection-item {{ item.status }}">
+                    <input type="radio" name="semana_id" value="{{ item.semana.id }}" required>
+                    <div class="selection-content">
+                        <strong>{{ item.semana.nome }}</strong>
+                        <span>{{ item.semana.data_inicio.strftime('%d/%m/%Y') }} até {{ item.semana.data_fim.strftime('%d/%m/%Y') }}</span>
+                    </div>
+                </label>
+                {% endfor %}
+            </div>
+            
+        </div>
+
+        <div class="form-actions" style="justify-content: center; margin-top: 2rem;">
+            <a href="{{ url_for('main.dashboard') }}" class="btn btn-secondary">Cancelar</a>
+            <button type="submit" class="btn btn-primary" id="confirm-button" disabled>Visualizar Horário</button>
+        </div>
+    </form>
+</div>
+
+<style>
+.selection-step { margin-bottom: 2rem; }
+.selection-step h3 { font-size: 1.5rem; margin-bottom: 1rem; border-bottom: 1px solid var(--color-border); padding-bottom: 0.5rem; }
+.selection-list { display: flex; flex-direction: column; gap: 1rem; }
+.selection-item { display: block; padding: 1rem 1.5rem; border: 2px solid var(--color-border); border-radius: 8px; cursor: pointer; transition: all 0.2s ease; }
+.selection-item:hover { border-color: var(--color-primary-light); background-color: #eff6ff; }
+.selection-item input[type="radio"] { display: none; }
+.selection-item input[type="radio"]:checked + .selection-content { border-left: 4px solid var(--color-primary); padding-left: 1rem; }
+.selection-content { transition: all 0.2s ease; border-left: 4px solid transparent; }
+.selection-item.atual { background-color: #f0fdf4; border-color: #bbf7d0; }
+.selection-item.futura { background-color: #fefce8; border-color: #fde68a; }
+.selection-item.passada { background-color: #f1f5f9; border-color: #e2e8f0; }
+.past-weeks-toggle { color: var(--color-primary); cursor: pointer; text-align: center; margin-top: 1rem; font-weight: 600; }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const pelotaoButtons = document.querySelectorAll('#pelotao-selector button');
+    const pelotaoInput = document.getElementById('selected-pelotao');
+    const semanaRadios = document.querySelectorAll('input[name="semana_id"]');
+    const confirmButton = document.getElementById('confirm-button');
+    const pastWeeksToggle = document.getElementById('past-weeks-toggle');
+    const pastWeeksList = document.getElementById('past-weeks-list');
+
+    function checkSelections() {
+        const pelotaoSelecionado = pelotaoInput.value !== '';
+        const semanaSelecionada = document.querySelector('input[name="semana_id"]:checked') !== null;
+        confirmButton.disabled = !(pelotaoSelecionado && semanaSelecionada);
+    }
+
+    pelotaoButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            pelotaoButtons.forEach(btn => {
+                btn.classList.remove('btn-primary');
+                btn.classList.add('btn-secondary');
+            });
+            this.classList.remove('btn-secondary');
+            this.classList.add('btn-primary');
+            pelotaoInput.value = this.dataset.pelotao;
+            checkSelections();
+        });
+    });
+
+    semanaRadios.forEach(radio => {
+        radio.addEventListener('change', checkSelections);
+    });
+
+    pastWeeksToggle.addEventListener('click', () => {
+        const isHidden = pastWeeksList.style.display === 'none';
+        pastWeeksList.style.display = isHidden ? 'flex' : 'none';
+        pastWeeksToggle.textContent = isHidden ? 'Ocultar Semanas Anteriores ▲' : 'Ver Semanas Anteriores ▼';
+    });
+});
+</script>
+{% endblock %}

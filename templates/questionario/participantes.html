@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}Participantes do Questionário{% endblock %}
+
+{% block content %}
+<div class="content-header d-flex justify-content-between align-items-center">
+    <div>
+        <h1>Participantes: {{ questionario.titulo }}</h1>
+        <p class="text-muted">Lista de utilizadores que responderam a este questionário.</p>
+    </div>
+    <a href="{{ url_for('questionario.ver_questionarios') }}" class="btn btn-secondary">← Voltar para a lista</a>
+</div>
+
+<div class="table-container">
+    <div class="table-responsive">
+        {% if participantes %}
+            <table class="table-styled">
+                <thead>
+                    <tr>
+                        <th>Nome do Participante</th>
+                        <th>Função</th>
+                        <th class="text-right">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for participante in participantes %}
+                    <tr>
+                        <td data-label="Nome">{{ participante.nome_completo or participante.username }}</td>
+                        <td data-label="Função">{{ participante.role|capitalize }}</td>
+                        <td data-label="Ações" class="text-right">
+                            <div class="btn-group">
+                                <a href="{{ url_for('questionario.editar_respostas', questionario_id=questionario.id, user_id=participante.id) }}" class="btn btn-sm btn-warning">Editar Respostas</a>
+                                <form method="POST" action="{{ url_for('questionario.excluir_resposta_usuario', questionario_id=questionario.id, user_id=participante.id) }}" onsubmit="return confirm('Tem a certeza de que deseja excluir todas as respostas deste participante?');" style="display: inline;">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-danger">Excluir</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <div class="empty-state">
+                <div class="empty-icon">👥</div>
+                <h2>Nenhum Participante</h2>
+                <p>Ainda ninguém respondeu a este questionário.</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,19 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  weasyprint-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.weasyprint
+    ports:
+      - "5001:5001"
+    restart: unless-stopped
+
+volumes:
+  redis_data:
