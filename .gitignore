@@ -1,26 +1,75 @@
-# Ambiente Virtual
-venv/
+# ─────────────────────────────────────────────────────────────
+# Projeto EsFAS — .gitignore (Flask / PythonAnywhere)
+# ─────────────────────────────────────────────────────────────
+
+# Ambiente virtual
 .venv/
+venv/
+env/
+.virtualenvs/
 
-# Arquivos temporários do Python
+# Bytecode/artefatos Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
 
-# Arquivos de banco de dados e de instância
+# Logs
+*.log
+
+# Banco de dados / instância Flask
 instance/
 *.db
 *.sqlite3
 
-# Arquivos de variáveis de ambiente (IMPORTANTE PARA SEGURANÇA)
+# Variáveis de ambiente (NUNCA versionar)
 .env
 .flaskenv
 
-# Arquivos de configuração do editor
+# Credenciais e chaves (NUNCA versionar)
+*.key
+*.pem
+*.p12
+*.pfx
+*.cer
+*.crt
+*.der
+# GCP service account (ex.: JSON da conta de serviço)
+backend/credentials.json
+**/credentials.json
+
+# Caches de ferramentas / testes / cobertura
+.mypy_cache/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+pip-wheel-metadata/
+.cache/
+
+# Editor/IDE
 .vscode/
 .idea/
 
-# Arquivos do Sistema Operacional
+# SO
 .DS_Store
-Thumbs.dbbackend/credentials.json
+Thumbs.db
+
+# Build/Distribuição
+build/
+dist/
+*.egg-info/
+
+# Arquivos grandes/temporários/backup
+*.zip
+*.tar
+*.gz
+*.bak
+*.old
+*.tmp
+*.swp
+*.swo
+
+# Dumps de banco
+*.sql
+*.dump
+
