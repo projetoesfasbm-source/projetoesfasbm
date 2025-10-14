@@ -15,11 +15,9 @@
         .coluna-central { width: 45%; text-align: center; padding: 0 0.5cm !important; }
         .main-table th { background-color: #E0E0E0; }
         .text-left { text-align: left; }
-        .assinaturas { margin-top: 2cm; table-layout: fixed; width: 100%; }
-        .assinaturas td { border: none; text-align: center; vertical-align: bottom; }
-        .assinatura-auxiliar { width: 60%; }
-        .assinatura-digitador { width: 40%; }
-        .assinatura-linha { border-top: 1px solid black; padding-top: 2px; display: inline-block; }
+        .assinaturas-finais { margin-top: 1cm; table-layout: fixed; width: 100%; }
+        .assinaturas-finais td { border: none; text-align: center; vertical-align: bottom; }
+        .assinatura-linha { border-top: 1px solid black; display: inline-block; padding-top: 2px; }
         .total-geral-row td { font-weight: bold; background-color: #E0E0E0; }
         p { margin: 2px 0; }
         
@@ -38,7 +36,7 @@
         <tr>
             <td class="coluna-esquerda" style="border: 1px solid black; vertical-align: bottom; text-align: center;">
                 <div style="padding-bottom: 8px;">
-                    <p class="assinatura-linha" style="min-width: 8cm;"><strong>{{ comandante_nome or 'NOME DO COMANDANTE' }}</strong></p>
+                    <p class="assinatura-linha" style="min-width: 8cm;"><strong>{{ comandante_nome or '' }}</strong></p>
                     <p>{{ comandante_funcao or 'Comandante da Escola' }}</p>
                 </div>
             </td>
@@ -118,22 +116,21 @@
                     <li>Nos termos do item anterior, após chegar fundamentado, será adotada a medida da letra “g”, nº 5 do Item nº 3.</li>
                 </ol>
             </td>
-            <td class="orientacoes-right" style="vertical-align: bottom;">
-                <p>Quartel em {{ cidade or 'Sua Cidade' }}, {{ nome_mes_ano }}.</p>
-            </td>
-        </tr>
-    </table>
-    
-    <table class="assinaturas">
-        <tr>
-            <td class="assinatura-auxiliar">
-                <p class="assinatura-linha">{{ auxiliar_nome or '' }}</p>
-                <p><small>{{ auxiliar_funcao or 'Auxiliar da Seção de Ensino' }}</small></p>
-            </td>
-            <td class="assinatura-digitador">
-                <p>Em ___/___/___</p>
-                <p class="assinatura-linha" style="min-width: 5cm;">{{ digitador_nome or '' }}</p>
-                <p><small>Digitador</small></p>
+            <td class="orientacoes-right">
+                <p>Quartel em {{ cidade or 'Sua Cidade' }}, {{ data_assinatura }}.</p>
+                <table class="assinaturas-finais">
+                    <tr>
+                        <td style="width: 65%; padding-top: 3cm;">
+                            <p class="assinatura-linha" style="min-width: 6cm;">{{ auxiliar_nome or '' }}</p>
+                            <p><small>{{ auxiliar_funcao or 'Auxiliar da Seção de Ensino' }}</small></p>
+                        </td>
+                        <td style="width: 35%; padding-top: 3cm;">
+                            <p>Em ___/___/___</p>
+                            <p class="assinatura-linha" style="min-width: 4cm;">{{ digitador_nome or '' }}</p>
+                            <p><small>Digitador</small></p>
+                        </td>
+                    </tr>
+                </table>
             </td>
         </tr>
     </table>

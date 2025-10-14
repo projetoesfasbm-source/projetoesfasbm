@@ -15,30 +15,25 @@ class ProcessoDisciplina(db.Model):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     
-    # Chave estrangeira para o aluno envolvido
     aluno_id: Mapped[int] = mapped_column(db.ForeignKey('alunos.id'), nullable=False)
-    
-    # Chave estrangeira para quem registrou a transgressão
     relator_id: Mapped[int] = mapped_column(db.ForeignKey('users.id'), nullable=False)
 
-    # Informações do processo
     fato_constatado: Mapped[str] = mapped_column(db.Text, nullable=False)
     observacao: Mapped[t.Optional[str]] = mapped_column(db.Text)
-    status: Mapped[str] = mapped_column(db.String(50), default='Pendente', nullable=False) # Ex: Pendente, Aluno Notificado, Defesa Enviada, Finalizado
+    status: Mapped[str] = mapped_column(db.String(50), default='Pendente', nullable=False)
     
-    # Defesa do aluno
     defesa: Mapped[t.Optional[str]] = mapped_column(db.Text)
     data_defesa: Mapped[t.Optional[datetime]] = mapped_column()
     
-    # Decisão final
-    decisao_final: Mapped[t.Optional[str]] = mapped_column(db.String(100)) # Ex: Justificado, Abertura de Sindicância, etc.
+    decisao_final: Mapped[t.Optional[str]] = mapped_column(db.String(100))
     data_decisao: Mapped[t.Optional[datetime]] = mapped_column()
+    
+    # --- NOVO CAMPO ADICIONADO ---
+    fundamentacao: Mapped[t.Optional[str]] = mapped_column(db.Text)
 
-    # Timestamps
     data_ocorrencia: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
     data_ciente: Mapped[t.Optional[datetime]] = mapped_column()
 
-    # Relacionamentos
     aluno: Mapped["Aluno"] = relationship(back_populates="processos_disciplinares")
     relator: Mapped["User"] = relationship()
 

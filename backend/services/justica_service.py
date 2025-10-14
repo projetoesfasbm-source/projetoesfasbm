@@ -14,10 +14,9 @@ class JusticaService:
     @staticmethod
     def get_processos_para_usuario(user):
         """Busca processos para um usuário específico (aluno ou admin)."""
-        if user.role == 'aluno':
-            stmt = select(ProcessoDisciplina).where(ProcessoDisciplina.aluno_id == user.aluno_profile.id)
-        else: # Para admins
-            stmt = select(ProcessoDisciplina)
+        stmt = select(ProcessoDisciplina)
+        if user.role == 'aluno' and hasattr(user, 'aluno_profile') and user.aluno_profile:
+            stmt = stmt.where(ProcessoDisciplina.aluno_id == user.aluno_profile.id)
             
         return db.session.scalars(stmt.options(
             joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.user),
@@ -82,7 +81,7 @@ class JusticaService:
     def registrar_ciente(processo_id, user):
         """Registra que o aluno deu ciência do processo."""
         processo = db.session.get(ProcessoDisciplina, processo_id)
-        if not processo or processo.aluno_id != user.aluno_profile.id:
+        if not processo or (hasattr(user, 'aluno_profile') and processo.aluno_id != user.aluno_profile.id):
             return False, "Processo não encontrado ou não pertence a você."
         
         processo.status = 'Aluno Notificado'
@@ -94,7 +93,7 @@ class JusticaService:
     def enviar_defesa(processo_id, defesa, user):
         """Salva a defesa do aluno para um processo."""
         processo = db.session.get(ProcessoDisciplina, processo_id)
-        if not processo or processo.aluno_id != user.aluno_profile.id:
+        if not processo or (hasattr(user, 'aluno_profile') and processo.aluno_id != user.aluno_profile.id):
             return False, "Processo não encontrado ou não pertence a você."
             
         processo.status = 'Defesa Enviada'
@@ -104,8 +103,8 @@ class JusticaService:
         return True, "Defesa enviada com sucesso."
 
     @staticmethod
-    def finalizar_processo(processo_id, decisao):
-        """Finaliza um processo com a decisão do administrador."""
+    def finalizar_processo(processo_id, justificacao, fundamentacao):
+        """Finaliza um processo com base na justificação e fundamentação."""
         processo = db.session.get(ProcessoDisciplina, processo_id)
         if not processo:
             return False, "Processo não encontrado."
@@ -120,8 +119,14 @@ class JusticaService:
             historico_correspondente.data_fim = datetime.now(timezone.utc)
             
         processo.status = 'Finalizado'
-        processo.decisao_final = decisao
+        processo.fundamentacao = fundamentacao
         processo.data_decisao = datetime.now(timezone.utc)
+
+        if justificacao == 'Justificado':
+            processo.decisao_final = 'Justificado'
+        else: # Não Justificado
+            processo.decisao_final = 'Sustação da Dispensa'
+        
         db.session.commit()
         return True, "Processo finalizado com sucesso."
 

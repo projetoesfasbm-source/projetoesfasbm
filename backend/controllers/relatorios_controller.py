@@ -1,10 +1,11 @@
 # backend/controllers/relatorios_controller.py
 
 from flask import Blueprint, render_template, request, flash, Response, redirect, url_for
-from flask_login import login_required
+from flask_login import login_required, current_user
 from datetime import datetime
 from urllib.parse import quote
-import locale
+# O import de 'locale' não é mais necessário para esta função
+# import locale
 
 from weasyprint import HTML
 
@@ -12,8 +13,6 @@ from ..services.relatorio_service import RelatorioService
 from ..services.instrutor_service import InstrutorService
 from ..services.site_config_service import SiteConfigService
 from utils.decorators import admin_or_programmer_required
-
-# ... (resto dos imports) ...
 
 relatorios_bp = Blueprint('relatorios', __name__, url_prefix='/relatorios')
 
@@ -33,7 +32,12 @@ def gerar_relatorio_horas_aula():
     report_type = request.args.get('tipo', 'mensal')
     tipo_relatorio_titulo = report_type.replace("_", " ").title()
 
-    todos_instrutores = InstrutorService.get_all_instrutores(current_user).items if report_type == 'por_instrutor' else []
+    todos_instrutores = []
+    # Garante que a chamada de serviço só ocorra se necessário
+    if report_type == 'por_instrutor':
+        paginated_instrutores = InstrutorService.get_all_instrutores(current_user)
+        if paginated_instrutores:
+            todos_instrutores = paginated_instrutores.items
 
     if request.method == 'POST':
         data_inicio_str = request.form.get('data_inicio')
@@ -64,13 +68,19 @@ def gerar_relatorio_horas_aula():
         )
 
         valor_hora_aula = SiteConfigService.get_valor_hora_aula()
-
+        
+        # --- LÓGICA DE TRADUÇÃO DO MÊS ---
+        meses = ("Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro")
+        nome_mes_ano_pt = f"{meses[data_inicio.month - 1]} de {data_inicio.year}"
+        data_assinatura_pt = f"{data_fim.day} de {meses[data_fim.month - 1]} de {data_fim.year}"
+        
         contexto = {
             "dados": dados_relatorio,
             "data_inicio": data_inicio,
             "data_fim": data_fim,
             "titulo_curso": request.form.get('curso_nome'),
-            "nome_mes_ano": data_inicio.strftime("%B de %Y").capitalize(),
+            "nome_mes_ano": nome_mes_ano_pt,
+            "data_assinatura": data_assinatura_pt,
             "comandante_nome": request.form.get('comandante_nome'),
             "auxiliar_nome": request.form.get('auxiliar_nome'),
             "valor_hora_aula": valor_hora_aula,
@@ -84,11 +94,7 @@ def gerar_relatorio_horas_aula():
         if action == 'preview':
             rendered_html = render_template('relatorios/pdf_template.html', **contexto)
             return rendered_html
-
-        # ... (resto da função sem alterações) ...
-        elif action == 'download_xlsx':
-            # ... (código para gerar XLSX) ...
-            pass # Omitido por brevidade
+        
         elif action == 'download':
             rendered_html = render_template('relatorios/pdf_template.html', **contexto)
             try:

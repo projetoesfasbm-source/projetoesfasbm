@@ -4,9 +4,6 @@ from flask import Blueprint, render_template, request, flash, redirect, url_for,
 from flask_login import login_required, current_user
 from sqlalchemy import select, or_
 
-# WeasyPrint não é mais necessário aqui, mas pode ser mantido se for usado em outro lugar.
-from weasyprint import HTML 
-
 from ..models.database import db
 from ..models.aluno import Aluno
 from ..models.user import User
@@ -24,49 +21,28 @@ def index():
     processos_em_andamento = [p for p in processos if p.status != 'Finalizado']
     processos_finalizados = [p for p in processos if p.status == 'Finalizado']
 
-    alunos_list = []
-    if current_user.role != 'aluno':
-        alunos = db.session.scalars(select(Aluno).join(User).order_by(User.nome_completo)).all()
-        alunos_list = [{'id': a.id, 'nome': a.user.nome_completo, 'matricula': a.user.matricula} for a in alunos]
-
     return render_template(
         'justica/index.html',
         em_andamento=processos_em_andamento,
         finalizados=processos_finalizados,
-        alunos_list=alunos_list
     )
 
-@justica_bp.route('/exportar', methods=['GET'])
+@justica_bp.route('/finalizar/<int:processo_id>', methods=['POST'])
 @login_required
 @admin_or_programmer_required
-def exportar_selecao():
-    """Renderiza a página de seleção de processos para exportação."""
-    processos_finalizados = JusticaService.get_finalized_processos()
-    return render_template('justica/exportar_selecao.html', processos=processos_finalizados)
+def finalizar_processo(processo_id):
+    justificacao = request.form.get('justificacao')
+    fundamentacao = request.form.get('fundamentacao')
 
-@justica_bp.route('/exportar', methods=['POST'])
-@login_required
-@admin_or_programmer_required
-def exportar_documento():
-    """Gera e baixa o arquivo .doc (HTML formatado) com os processos selecionados."""
-    processo_ids = request.form.getlist('processo_ids')
-    if not processo_ids:
-        flash('Nenhum processo selecionado para exportar.', 'warning')
-        return redirect(url_for('justica.exportar_selecao'))
+    if not justificacao or not fundamentacao:
+        flash('É necessário selecionar uma opção (Justificado/Não Justificado) e preencher a fundamentação.', 'danger')
+        return redirect(url_for('justica.index'))
 
-    processos = JusticaService.get_processos_por_ids([int(pid) for pid in processo_ids])
+    success, message = JusticaService.finalizar_processo(processo_id, justificacao, fundamentacao)
+    flash(message, 'success' if success else 'danger')
+    return redirect(url_for('justica.index'))
     
-    # Renderiza o mesmo template HTML que seria usado para o PDF
-    rendered_html = render_template('justica/export_bi_template.html', processos=processos)
-    
-    # Retorna o HTML com o mimetype do Word para que ele abra como um documento editável
-    return Response(
-        rendered_html,
-        mimetype="application/msword",
-        headers={"Content-disposition": "attachment; filename=export_processos_BI.doc"}
-    )
-
-# ... (restante do arquivo sem alterações)
+# ... (o resto do arquivo pode permanecer como está)
 @justica_bp.route('/novo', methods=['POST'])
 @login_required
 @admin_or_programmer_required
@@ -99,19 +75,6 @@ def enviar_defesa(processo_id):
         return redirect(url_for('justica.index'))
     
     success, message = JusticaService.enviar_defesa(processo_id, defesa, current_user)
-    flash(message, 'success' if success else 'danger')
-    return redirect(url_for('justica.index'))
-
-@justica_bp.route('/finalizar/<int:processo_id>', methods=['POST'])
-@login_required
-@admin_or_programmer_required
-def finalizar_processo(processo_id):
-    decisao = request.form.get('decisao')
-    if not decisao:
-        flash('É necessário selecionar uma decisão para finalizar o processo.', 'danger')
-        return redirect(url_for('justica.index'))
-
-    success, message = JusticaService.finalizar_processo(processo_id, decisao)
     flash(message, 'success' if success else 'danger')
     return redirect(url_for('justica.index'))
 
@@ -158,3 +121,26 @@ def api_get_aluno_details(aluno_id):
         'nome_completo': aluno.user.nome_completo or 'NOME DO ALUNO'
     }
     return jsonify(details)
+
+@justica_bp.route('/exportar', methods=['GET', 'POST'])
+@login_required
+@admin_or_programmer_required
+def exportar_selecao():
+    if request.method == 'POST':
+        processo_ids = request.form.getlist('processo_ids')
+        if not processo_ids:
+            flash('Nenhum processo selecionado para exportar.', 'warning')
+            return redirect(url_for('justica.exportar_selecao'))
+
+        processos = JusticaService.get_processos_por_ids([int(pid) for pid in processo_ids])
+        
+        rendered_html = render_template('justica/export_bi_template.html', processos=processos)
+        
+        return Response(
+            rendered_html,
+            mimetype="application/msword",
+            headers={"Content-disposition": "attachment; filename=export_processos_BI.doc"}
+        )
+    
+    processos_finalizados = JusticaService.get_finalized_processos()
+    return render_template('justica/exportar_selecao.html', processos=processos_finalizados)

@@ -11,11 +11,44 @@ from backend.models.user import User
 from backend.models.user_school import UserSchool
 from utils.normalizer import normalize_matricula, normalize_name
 
-from backend.models.disciplina_turma import DisciplinaTurma
-from backend.models.horario import Horario
-
-
 class InstrutorService:
+    # ... (outras funções do serviço sem alteração) ...
+
+    @staticmethod
+    def get_all_instrutores(user=None, search_term=None, page=1, per_page=15):
+        """
+        Lista instrutores de forma paginada e com filtro de busca.
+        """
+        stmt = (
+            select(Instrutor)
+            .join(User, Instrutor.user_id == User.id)
+            .join(UserSchool, UserSchool.user_id == User.id)
+            .where(
+                User.is_active.is_(True),
+                User.role == 'instrutor',
+            )
+            .options(joinedload(Instrutor.user))
+            .order_by(User.nome_completo, User.matricula)
+        )
+        if user is not None:
+            school_ids = InstrutorService._visible_school_ids_for(user)
+            if school_ids == []:
+                return db.paginate(select(Instrutor).where(db.false()), page=page, per_page=per_page)
+            if school_ids is not None:
+                stmt = stmt.where(UserSchool.school_id.in_(school_ids))
+        
+        if search_term:
+            like_term = f"%{search_term}%"
+            stmt = stmt.where(
+                or_(
+                    User.nome_completo.ilike(like_term),
+                    User.matricula.ilike(like_term)
+                )
+            )
+
+        return db.paginate(stmt, page=page, per_page=per_page, error_out=False)
+    
+    # ... (resto do arquivo sem alterações) ...
     @staticmethod
     def _find_user_by_email_or_username(email: str):
         email = (email or '').strip()
@@ -53,11 +86,12 @@ class InstrutorService:
             nome_completo = normalize_name(data.get('nome_completo'))
             nome_de_guerra = normalize_name(data.get('nome_de_guerra'))
             
-            posto_sel = (data.get('posto_graduacao_select') or '').strip()
-            posto_outro = (data.get('posto_graduacao_outro') or '').strip()
-            posto = posto_outro if (posto_sel == 'Outro' and posto_outro) else (posto_sel or None)
+            posto = data.get('posto_graduacao')
+            if posto == 'Outro':
+                posto = data.get('posto_graduacao_outro')
+
             telefone = (data.get('telefone') or '').strip() or None
-            is_rr = str(data.get('is_rr') or '').lower() in ('sim', 'true', '1', 'on')
+            is_rr = data.get('is_rr', False)
 
             if not matricula:
                 return False, "Matrícula inválida. Use apenas números e no máximo 7 dígitos."
@@ -87,6 +121,7 @@ class InstrutorService:
 
             instrutor = Instrutor(
                 user_id=user.id,
+                school_id=school_id,
                 telefone=telefone,
                 is_rr=is_rr
             )
@@ -116,11 +151,12 @@ class InstrutorService:
             return False, "Este usuário já possui um perfil de instrutor."
 
         try:
-            posto_sel = (data.get('posto_graduacao_select') or '').strip()
-            posto_outro = (data.get('posto_graduacao_outro') or '').strip()
-            posto = posto_outro if (posto_sel == 'Outro' and posto_outro) else (posto_sel or None)
+            posto = data.get('posto_graduacao')
+            if posto == 'Outro':
+                posto = data.get('posto_graduacao_outro')
+            
             telefone = (data.get('telefone') or '').strip() or None
-            is_rr = str(data.get('is_rr') or '').lower() in ('sim', 'true', '1', 'on')
+            is_rr = data.get('is_rr', False)
 
             user.posto_graduacao = posto
 
@@ -143,40 +179,6 @@ class InstrutorService:
         return db.session.get(Instrutor, instrutor_id)
 
     @staticmethod
-    def get_all_instrutores(user=None, search_term=None, page=1, per_page=15):
-        """
-        Lista instrutores de forma paginada e com filtro de busca.
-        """
-        stmt = (
-            select(Instrutor)
-            .join(User, Instrutor.user_id == User.id)
-            .join(UserSchool, UserSchool.user_id == User.id)
-            .where(
-                User.is_active.is_(True),
-                User.role == 'instrutor',
-            )
-            .options(joinedload(Instrutor.user))
-            .order_by(User.nome_completo, User.matricula)
-        )
-        if user is not None:
-            school_ids = InstrutorService._visible_school_ids_for(user)
-            if school_ids == []:
-                return db.paginate(select(Instrutor).where(db.false()), page=page, per_page=per_page)
-            if school_ids is not None:
-                stmt = stmt.where(UserSchool.school_id.in_(school_ids))
-        
-        if search_term:
-            like_term = f"%{search_term}%"
-            stmt = stmt.where(
-                or_(
-                    User.nome_completo.ilike(like_term),
-                    User.matricula.ilike(like_term)
-                )
-            )
-
-        return db.paginate(stmt, page=page, per_page=per_page, error_out=False)
-
-    @staticmethod
     def update_instrutor(instrutor_id: int, data: dict):
         instrutor = db.session.get(Instrutor, instrutor_id)
         if not instrutor:
@@ -188,11 +190,11 @@ class InstrutorService:
             email = (data.get('email') or '').strip().lower()
             telefone = (data.get('telefone') or '').strip()
 
-            posto_sel = (data.get('posto_graduacao_select') or '').strip()
-            posto_outro = (data.get('posto_graduacao_outro') or '').strip()
-            posto = posto_outro if (posto_sel == 'Outro' and posto_outro) else (posto_sel or None)
+            posto = data.get('posto_graduacao')
+            if posto == 'Outro':
+                posto = data.get('posto_graduacao_outro')
 
-            is_rr = str(data.get('is_rr') or '').lower() in ('sim', 'true', '1', 'on')
+            is_rr = data.get('is_rr', False)
 
             user = db.session.get(User, instrutor.user_id)
             if user:
