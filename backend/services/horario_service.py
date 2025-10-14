@@ -71,13 +71,23 @@ class HorarioService:
 
                     can_see_details = HorarioService.can_edit_horario(aula, user) or user.role == 'aluno'
                     
-                    instrutores_nomes = []
+                    # --- CORREÇÃO APLICADA AQUI ---
+                    instrutores_display_list = []
+                    # Instrutor 1
                     if aula.instrutor and aula.instrutor.user:
-                        instrutores_nomes.append(aula.instrutor.user.nome_de_guerra or aula.instrutor.user.username)
+                        nome = aula.instrutor.user.nome_de_guerra or aula.instrutor.user.username
+                        posto = aula.instrutor.user.posto_graduacao
+                        display_text = f"{nome} - {posto}" if posto else nome
+                        instrutores_display_list.append(display_text)
+                    # Instrutor 2
                     if aula.instrutor_2 and aula.instrutor_2.user:
-                        instrutores_nomes.append(aula.instrutor_2.user.nome_de_guerra or aula.instrutor_2.user.username)
-                    instrutor_display = " / ".join(instrutores_nomes) if instrutores_nomes else "N/D"
-
+                        nome = aula.instrutor_2.user.nome_de_guerra or aula.instrutor_2.user.username
+                        posto = aula.instrutor_2.user.posto_graduacao
+                        display_text = f"{nome} - {posto}" if posto else nome
+                        instrutores_display_list.append(display_text)
+                    
+                    instrutor_display = " / ".join(instrutores_display_list) if instrutores_display_list else "N/D"
+                    # --- FIM DA CORREÇÃO ---
 
                     aula_info = {
                         'id': aula.id,
@@ -152,9 +162,16 @@ class HorarioService:
             return total_agendado or 0
 
         disciplinas_disponiveis = []
+        
+        turma_obj = db.session.scalar(select(Turma).where(Turma.nome == pelotao))
+        if not turma_obj:
+            return {'success': False, 'message': 'Turma não encontrada.'}
+
         if is_admin:
-            disciplinas_do_ciclo = db.session.scalars(select(Disciplina).where(Disciplina.ciclo_id == ciclo_id).order_by(Disciplina.materia)).all()
-            for d in disciplinas_do_ciclo:
+            disciplinas_da_turma = db.session.scalars(
+                select(Disciplina).where(Disciplina.turma_id == turma_obj.id).order_by(Disciplina.materia)
+            ).all()
+            for d in disciplinas_da_turma:
                 horas_agendadas = get_horas_agendadas(d.id, pelotao)
                 horas_restantes = d.carga_horaria_prevista - horas_agendadas
                 disciplinas_disponiveis.append({"id": d.id, "nome": d.materia, "restantes": horas_restantes})
@@ -164,8 +181,7 @@ class HorarioService:
                 select(Disciplina)
                 .join(DisciplinaTurma, Disciplina.id == DisciplinaTurma.disciplina_id)
                 .where(
-                    DisciplinaTurma.pelotao == pelotao,
-                    Disciplina.ciclo_id == ciclo_id,
+                    Disciplina.turma_id == turma_obj.id,
                     (DisciplinaTurma.instrutor_id_1 == instrutor_id) | (DisciplinaTurma.instrutor_id_2 == instrutor_id)
                 )
                 .order_by(Disciplina.materia)
@@ -237,7 +253,6 @@ class HorarioService:
             if periodo_fim > max_periodo:
                 return False, f'A duração da aula ultrapassa o último período permitido ({max_periodo}º) para este dia.', 400
 
-            # --- NOVA LÓGICA DE VERIFICAÇÃO DE CONFLITO ---
             query_conflito = select(Horario).where(
                 Horario.pelotao == pelotao,
                 Horario.semana_id == semana_id,

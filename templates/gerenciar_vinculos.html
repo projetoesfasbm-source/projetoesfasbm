@@ -20,24 +20,16 @@
 
     <form method="GET" action="{{ url_for('vinculo.gerenciar_vinculos') }}" class="table-filters" id="filter-form">
         <div class="filter-group">
-            <label for="turma"><strong>Filtrar por Turma:</strong></label>
-            <select name="turma" id="turma" class="form-control" onchange="this.form.submit()">
+            <label for="turma_id"><strong>Filtrar por Turma:</strong></label>
+            <select name="turma_id" id="turma_id" class="form-control" onchange="this.form.submit()">
                 <option value="">Todas as Turmas</option>
                 {% for t in turmas %}
-                <option value="{{ t.nome }}" {% if t.nome == turma_filtrada %}selected{% endif %}>{{ t.nome }}</option>
+                <option value="{{ t.id }}" {% if t.id == turma_filtrada_id %}selected{% endif %}>{{ t.nome }}</option>
                 {% endfor %}
             </select>
         </div>
-        <div class="filter-group">
-            <label for="disciplina_id"><strong>Filtrar por Disciplina:</strong></label>
-            <select name="disciplina_id" id="disciplina_id" class="form-control" onchange="this.form.submit()">
-                <option value="">Todas as Disciplinas</option>
-                {% for d in disciplinas %}
-                <option value="{{ d.id }}" {% if d.id == disciplina_filtrada_id %}selected{% endif %}>{{ d.materia }} ({{ d.ciclo.nome }})</option>
-                {% endfor %}
-            </select>
-        </div>
-        {% if turma_filtrada or disciplina_filtrada_id %}
+        
+        {% if turma_filtrada_id %}
         <a href="{{ url_for('vinculo.gerenciar_vinculos') }}" class="btn btn-sm btn-danger">Limpar Filtros</a>
         {% endif %}
     </form>
@@ -61,11 +53,12 @@
                         <td data-label="Disciplina">{{ vinculo.disciplina.materia }}</td>
                         <td data-label="Ciclo">{{ vinculo.disciplina.ciclo.nome if vinculo.disciplina.ciclo else 'N/A' }}</td>
                         <td data-label="Instrutor">
+                            {# --- CORREÇÃO APLICADA AQUI --- #}
                             {% if vinculo.instrutor_1 %}
-                                <div><strong>1:</strong> {{ vinculo.instrutor_1.user.nome_completo or vinculo.instrutor_1.user.username }}</div>
+                                <div><strong>1:</strong> {{ (vinculo.instrutor_1.user.nome_de_guerra or vinculo.instrutor_1.user.nome_completo) }}{% if vinculo.instrutor_1.user.posto_graduacao %} - {{ vinculo.instrutor_1.user.posto_graduacao }}{% endif %}</div>
                             {% endif %}
                             {% if vinculo.instrutor_2 %}
-                                <div><strong>2:</strong> {{ vinculo.instrutor_2.user.nome_completo or vinculo.instrutor_2.user.username }}</div>
+                                <div><strong>2:</strong> {{ (vinculo.instrutor_2.user.nome_de_guerra or vinculo.instrutor_2.user.nome_completo) }}{% if vinculo.instrutor_2.user.posto_graduacao %} - {{ vinculo.instrutor_2.user.posto_graduacao }}{% endif %}</div>
                             {% endif %}
                             {% if not vinculo.instrutor_1 and not vinculo.instrutor_2 %}
                                 <span style="color: #aaa;">Não atribuído</span>

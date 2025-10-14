@@ -60,19 +60,39 @@ def adicionar_vinculo():
     instrutores = db.session.scalars(select(Instrutor).join(User).order_by(User.nome_de_guerra)).all()
     turmas = db.session.scalars(select(Turma).where(Turma.school_id == school_id).order_by(Turma.nome)).all()
     
-    instrutor_choices = [
-        (i.id, f"{i.user.posto_graduacao or ''} {i.user.nome_de_guerra or i.user.username}".strip()) 
-        for i in instrutores
-    ]
+    # --- CORREÇÃO APLICADA AQUI ---
+    instrutor_choices = []
+    for i in instrutores:
+        nome = i.user.nome_de_guerra or i.user.username
+        posto = i.user.posto_graduacao
+        display_text = f"{nome} - {posto}" if posto else nome
+        instrutor_choices.append((i.id, display_text))
+    # --- FIM DA CORREÇÃO ---
+
     form.instrutor_id_1.choices = [(0, '-- Nenhum --')] + instrutor_choices
     form.instrutor_id_2.choices = [(0, '-- Nenhum --')] + instrutor_choices
-    form.disciplina_id.choices = []
+    
+    if request.method == 'POST':
+        turma_id_selecionada = request.form.get('turma_id', type=int)
+        if turma_id_selecionada:
+            disciplinas_da_turma = db.session.scalars(
+                select(Disciplina).where(Disciplina.turma_id == turma_id_selecionada).order_by(Disciplina.materia)
+            ).all()
+            form.disciplina_id.choices = [(d.id, d.materia) for d in disciplinas_da_turma]
+        else:
+            form.disciplina_id.choices = []
+    else:
+        form.disciplina_id.choices = []
 
     if form.validate_on_submit():
         success, message = VinculoService.add_vinculo(form.data)
         flash(message, 'success' if success else 'danger')
         if success:
             return redirect(url_for('vinculo.gerenciar_vinculos'))
+    elif form.errors:
+         for field, error_messages in form.errors.items():
+            for error in error_messages:
+                flash(f"Erro no campo '{getattr(form, field).label.text}': {error}", 'danger')
     
     return render_template('adicionar_vinculo.html', form=form, turmas=turmas)
 
@@ -89,11 +109,19 @@ def editar_vinculo(vinculo_id):
     form = VinculoForm(obj=vinculo)
     
     instrutores = db.session.scalars(select(Instrutor).join(User).order_by(User.nome_de_guerra)).all()
-    instrutor_choices = [(i.id, f"{i.user.posto_graduacao or ''} {i.user.nome_de_guerra or i.user.username}".strip()) for i in instrutores]
+    
+    # --- CORREÇÃO APLICADA AQUI ---
+    instrutor_choices = []
+    for i in instrutores:
+        nome = i.user.nome_de_guerra or i.user.username
+        posto = i.user.posto_graduacao
+        display_text = f"{nome} - {posto}" if posto else nome
+        instrutor_choices.append((i.id, display_text))
+    # --- FIM DA CORREÇÃO ---
+
     form.instrutor_id_1.choices = [(0, '-- Nenhum --')] + instrutor_choices
     form.instrutor_id_2.choices = [(0, '-- Nenhum --')] + instrutor_choices
 
-    # Popula as disciplinas da turma do vínculo
     turma_atual = db.session.scalar(select(Turma).where(Turma.nome == vinculo.pelotao))
     if turma_atual:
         form.disciplina_id.choices = [(d.id, d.materia) for d in turma_atual.disciplinas]

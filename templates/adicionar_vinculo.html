@@ -13,7 +13,8 @@
         {{ form.hidden_tag() }}
         <div class="form-group">
             <label for="turma_select" class="form-label">1. Selecione a Turma</label>
-            <select id="turma_select" class="form-control" required>
+            {# --- CORREÇÃO: Adicionado o atributo name="turma_id" --- #}
+            <select id="turma_select" name="turma_id" class="form-control" required>
                 <option value="">-- Selecione uma turma para carregar as disciplinas --</option>
                 {% for turma in turmas %}
                 <option value="{{ turma.id }}">{{ turma.nome }}</option>

@@ -17,11 +17,10 @@ class VinculoService:
             joinedload(DisciplinaTurma.instrutor_1).joinedload(Instrutor.user),
             joinedload(DisciplinaTurma.instrutor_2).joinedload(Instrutor.user),
             joinedload(DisciplinaTurma.disciplina).joinedload(Disciplina.ciclo),
-            joinedload(DisciplinaTurma.disciplina).joinedload(Disciplina.turma) # Carrega a turma através da disciplina
+            joinedload(DisciplinaTurma.disciplina).joinedload(Disciplina.turma)
         )
 
         if turma_filtrada_id:
-            # Filtra juntando a tabela de disciplinas e depois a de turmas
             query = query.join(Disciplina).where(Disciplina.turma_id == turma_filtrada_id)
 
         query = query.order_by(DisciplinaTurma.id.desc())
@@ -45,17 +44,15 @@ class VinculoService:
         if instrutor_1 > 0 and instrutor_1 == instrutor_2:
             return False, 'Os instrutores 1 e 2 não podem ser a mesma pessoa.'
 
-        # --- LÓGICA CORRIGIDA ---
         disciplina = db.session.get(Disciplina, disciplina_id)
         if not disciplina or not disciplina.turma:
             return False, 'Disciplina ou turma associada não encontrada.'
         
         pelotao_nome = disciplina.turma.nome
-        # --- FIM DA CORREÇÃO ---
 
         vinculo_existente = db.session.scalars(select(DisciplinaTurma).filter_by(
             disciplina_id=disciplina_id,
-            pelotao=pelotao_nome # Adicionado para garantir a verificação correta
+            pelotao=pelotao_nome
         )).first()
 
         try:
@@ -63,7 +60,7 @@ class VinculoService:
                 return False, 'Já existe um vínculo para esta disciplina nesta turma. Edite o vínculo existente na lista.'
             else:
                 novo_vinculo = DisciplinaTurma(
-                    pelotao=pelotao_nome, # --- CAMPO ADICIONADO ---
+                    pelotao=pelotao_nome,
                     disciplina_id=disciplina_id,
                     instrutor_id_1=instrutor_1 if instrutor_1 > 0 else None,
                     instrutor_id_2=instrutor_2 if instrutor_2 > 0 else None
@@ -100,16 +97,14 @@ class VinculoService:
         if instrutor_1 > 0 and instrutor_1 == instrutor_2:
             return False, 'Os instrutores 1 e 2 não podem ser a mesma pessoa.'
 
-        # --- LÓGICA CORRIGIDA ---
         disciplina = db.session.get(Disciplina, disciplina_id)
         if not disciplina or not disciplina.turma:
             return False, 'Disciplina ou turma associada não encontrada.'
         
         pelotao_nome = disciplina.turma.nome
-        # --- FIM DA CORREÇÃO ---
 
         try:
-            vinculo.pelotao = pelotao_nome # --- CAMPO ADICIONADO ---
+            vinculo.pelotao = pelotao_nome
             vinculo.disciplina_id = disciplina_id
             vinculo.instrutor_id_1 = instrutor_1 if instrutor_1 > 0 else None
             vinculo.instrutor_id_2 = instrutor_2 if instrutor_2 > 0 else None
