@@ -45,15 +45,25 @@ class VinculoService:
         if instrutor_1 > 0 and instrutor_1 == instrutor_2:
             return False, 'Os instrutores 1 e 2 não podem ser a mesma pessoa.'
 
+        # --- LÓGICA CORRIGIDA ---
+        disciplina = db.session.get(Disciplina, disciplina_id)
+        if not disciplina or not disciplina.turma:
+            return False, 'Disciplina ou turma associada não encontrada.'
+        
+        pelotao_nome = disciplina.turma.nome
+        # --- FIM DA CORREÇÃO ---
+
         vinculo_existente = db.session.scalars(select(DisciplinaTurma).filter_by(
-            disciplina_id=disciplina_id
+            disciplina_id=disciplina_id,
+            pelotao=pelotao_nome # Adicionado para garantir a verificação correta
         )).first()
 
         try:
             if vinculo_existente:
-                return False, 'Já existe um vínculo para esta disciplina. Edite o vínculo existente na lista.'
+                return False, 'Já existe um vínculo para esta disciplina nesta turma. Edite o vínculo existente na lista.'
             else:
                 novo_vinculo = DisciplinaTurma(
+                    pelotao=pelotao_nome, # --- CAMPO ADICIONADO ---
                     disciplina_id=disciplina_id,
                     instrutor_id_1=instrutor_1 if instrutor_1 > 0 else None,
                     instrutor_id_2=instrutor_2 if instrutor_2 > 0 else None
@@ -90,7 +100,16 @@ class VinculoService:
         if instrutor_1 > 0 and instrutor_1 == instrutor_2:
             return False, 'Os instrutores 1 e 2 não podem ser a mesma pessoa.'
 
+        # --- LÓGICA CORRIGIDA ---
+        disciplina = db.session.get(Disciplina, disciplina_id)
+        if not disciplina or not disciplina.turma:
+            return False, 'Disciplina ou turma associada não encontrada.'
+        
+        pelotao_nome = disciplina.turma.nome
+        # --- FIM DA CORREÇÃO ---
+
         try:
+            vinculo.pelotao = pelotao_nome # --- CAMPO ADICIONADO ---
             vinculo.disciplina_id = disciplina_id
             vinculo.instrutor_id_1 = instrutor_1 if instrutor_1 > 0 else None
             vinculo.instrutor_id_2 = instrutor_2 if instrutor_2 > 0 else None
