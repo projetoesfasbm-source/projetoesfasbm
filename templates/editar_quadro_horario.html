@@ -314,7 +314,13 @@ document.addEventListener('DOMContentLoaded', function() {
         if (action === 'add') {
             openModal({ dia: slot.dataset.dia, periodo: slot.dataset.periodo });
         } else if (action === 'edit') {
-            openModal({ horario_id: id });
+            // --- CORREÇÃO APLICADA AQUI ---
+            // Agora, também passamos o dia e o período para a função openModal
+            openModal({
+                horario_id: id,
+                dia: slot.dataset.dia,
+                periodo: slot.dataset.periodo
+            });
         } else if (action === 'delete') {
             if (confirm('Tem certeza que deseja remover esta aula?')) {
                 fetch('/horario/remover-aula', {

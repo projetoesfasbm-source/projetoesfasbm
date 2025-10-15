@@ -71,15 +71,12 @@ class HorarioService:
 
                     can_see_details = HorarioService.can_edit_horario(aula, user) or user.role == 'aluno'
                     
-                    # --- CORREÇÃO APLICADA AQUI ---
                     instrutores_display_list = []
-                    # Instrutor 1
                     if aula.instrutor and aula.instrutor.user:
                         nome = aula.instrutor.user.nome_de_guerra or aula.instrutor.user.username
                         posto = aula.instrutor.user.posto_graduacao
                         display_text = f"{nome} - {posto}" if posto else nome
                         instrutores_display_list.append(display_text)
-                    # Instrutor 2
                     if aula.instrutor_2 and aula.instrutor_2.user:
                         nome = aula.instrutor_2.user.nome_de_guerra or aula.instrutor_2.user.username
                         posto = aula.instrutor_2.user.posto_graduacao
@@ -87,7 +84,6 @@ class HorarioService:
                         instrutores_display_list.append(display_text)
                     
                     instrutor_display = " / ".join(instrutores_display_list) if instrutores_display_list else "N/D"
-                    # --- FIM DA CORREÇÃO ---
 
                     aula_info = {
                         'id': aula.id,
@@ -227,7 +223,9 @@ class HorarioService:
     def save_aula(data, user):
         """Salva uma nova aula ou atualiza uma existente, com validação robusta de conflitos."""
         try:
-            horario_id = data.get('horario_id')
+            horario_id_raw = data.get('horario_id')
+            horario_id = int(horario_id_raw) if horario_id_raw else None
+            
             pelotao = data['pelotao']
             semana_id = int(data['semana_id'])
             dia = data['dia']
@@ -261,7 +259,7 @@ class HorarioService:
                 (Horario.periodo + Horario.duracao - 1) >= periodo_inicio
             )
             if horario_id:
-                query_conflito = query_conflito.where(Horario.id != int(horario_id))
+                query_conflito = query_conflito.where(Horario.id != horario_id)
             
             conflito_existente = db.session.execute(query_conflito).scalars().first()
             if conflito_existente:
@@ -271,15 +269,15 @@ class HorarioService:
             if not disciplina:
                 return False, 'Disciplina não encontrada.', 404
                 
-            total_agendado = db.session.scalar(
+            total_agendado_outras_aulas = db.session.scalar(
                 select(func.sum(Horario.duracao)).where(
                     Horario.disciplina_id == disciplina_id,
                     Horario.pelotao == pelotao,
-                    Horario.id != (int(horario_id) if horario_id else 0)
+                    (Horario.id != horario_id) if horario_id else True
                 )
             ) or 0
             
-            horas_restantes = disciplina.carga_horaria_prevista - total_agendado
+            horas_restantes = disciplina.carga_horaria_prevista - total_agendado_outras_aulas
             if duracao > horas_restantes:
                 return False, f'Não é possível agendar {duracao}h. Apenas {horas_restantes}h restam para esta disciplina.', 400
 
@@ -305,7 +303,7 @@ class HorarioService:
             return False, 'Dados inválidos ou incompletos.', 400
 
         if horario_id:
-            aula = db.session.get(Horario, int(horario_id))
+            aula = db.session.get(Horario, horario_id)
             if not aula: return False, 'Aula não encontrada.', 404
             if not HorarioService.can_edit_horario(aula, user): return False, 'Sem permissão para editar esta aula.', 403
         else:

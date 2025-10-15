@@ -45,9 +45,9 @@ def _get_horario_context_data():
         tempos.append((periodo_str, time_str))
     
     intervalos = {
-        'intervalo_1': SiteConfigService.get_config('horario_intervalo_1', 'N/D'),
-        'almoco': SiteConfigService.get_config('horario_almoco', 'N/D'),
-        'intervalo_2': SiteConfigService.get_config('horario_intervalo_2', 'N/D'),
+        'intervalo_1': SiteConfigService.get_config('horario_intervalo_manha', 'N/D'),
+        'almoco': SiteConfigService.get_config('horario_intervalo_almoco', 'N/D'),
+        'intervalo_2': SiteConfigService.get_config('horario_intervalo_tarde', 'N/D'),
     }
     return tempos, intervalos
 
