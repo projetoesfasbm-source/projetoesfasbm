@@ -117,17 +117,17 @@ class JusticaService:
 
             novo_historico = HistoricoAluno(
                 aluno_id=aluno_id,
-                tipo='Processo Disciplinar',
+                tipo='Infração Disciplinar', # ALTERADO
                 descricao=f'Abertura de processo: {fato}',
                 data_inicio=datetime.now(timezone.utc)
             )
             db.session.add(novo_historico)
             
             db.session.commit()
-            return True, "Transgressão registrada com sucesso e adicionada ao histórico do aluno!"
+            return True, "Infração registrada com sucesso e adicionada ao histórico do aluno!" # ALTERADO
         except Exception as e:
             db.session.rollback()
-            return False, f"Erro ao registrar transgressão: {e}"
+            return False, f"Erro ao registrar infração: {e}" # ALTERADO
 
     @staticmethod
     def registrar_ciente(processo_id, user):

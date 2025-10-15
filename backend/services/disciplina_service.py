@@ -23,41 +23,57 @@ class DisciplinaService:
         carga_horaria = data.get('carga_horaria_prevista')
         ciclo_id = data.get('ciclo_id')
         carga_cumprida = data.get('carga_horaria_cumprida', 0)
-        turma_id = data.get('turma_id')
+        turma_ids = data.get('turma_ids', []) # Recebe uma lista de IDs
 
-        if not all([materia, carga_horaria, ciclo_id, turma_id]):
-            return False, 'Matéria, Carga Horária, Ciclo e Turma são obrigatórios.'
+        if not all([materia, carga_horaria, ciclo_id, turma_ids]):
+            return False, 'Matéria, Carga Horária, Ciclo e pelo menos uma Turma são obrigatórios.'
 
-        # Verifica se a disciplina já existe para esta turma específica
-        if db.session.execute(select(Disciplina).where(Disciplina.materia == materia, Disciplina.turma_id == turma_id)).scalar_one_or_none():
-            return False, f'A disciplina "{materia}" já existe nesta turma.'
+        success_count = 0
+        errors = []
 
-        try:
-            turma = db.session.get(Turma, int(turma_id))
-            if not turma or turma.school_id != school_id:
-                return False, 'Turma inválida ou não pertence à sua escola.'
+        for turma_id in turma_ids:
+            try:
+                turma = db.session.get(Turma, int(turma_id))
+                if not turma or turma.school_id != school_id:
+                    errors.append(f'Turma com ID {turma_id} é inválida ou não pertence à sua escola.')
+                    continue
 
-            nova_disciplina = Disciplina(
-                materia=materia,
-                carga_horaria_prevista=int(carga_horaria),
-                carga_horaria_cumprida=int(carga_cumprida or 0),
-                ciclo_id=int(ciclo_id),
-                turma_id=int(turma_id)
-            )
-            db.session.add(nova_disciplina)
-            db.session.flush()
+                # Verifica se a disciplina já existe para esta turma específica
+                if db.session.execute(select(Disciplina).where(Disciplina.materia == materia, Disciplina.turma_id == turma_id)).scalar_one_or_none():
+                    errors.append(f'A disciplina "{materia}" já existe na turma {turma.nome}.')
+                    continue
 
-            # Associa a disciplina apenas aos alunos da turma selecionada
-            for aluno in turma.alunos:
-                matricula = HistoricoDisciplina(aluno_id=aluno.id, disciplina_id=nova_disciplina.id)
-                db.session.add(matricula)
+                nova_disciplina = Disciplina(
+                    materia=materia,
+                    carga_horaria_prevista=int(carga_horaria),
+                    carga_horaria_cumprida=int(carga_cumprida or 0),
+                    ciclo_id=int(ciclo_id),
+                    turma_id=int(turma_id)
+                )
+                db.session.add(nova_disciplina)
+                db.session.flush()
 
+                # Associa a disciplina aos alunos da turma selecionada
+                for aluno in turma.alunos:
+                    matricula = HistoricoDisciplina(aluno_id=aluno.id, disciplina_id=nova_disciplina.id)
+                    db.session.add(matricula)
+                
+                success_count += 1
+            except Exception as e:
+                db.session.rollback() # Desfaz a transação atual para esta turma
+                errors.append(f'Erro ao criar disciplina para a turma ID {turma_id}: {str(e)}')
+                # Recomeça a sessão para a próxima iteração
+                db.session.begin()
+
+        if success_count > 0:
             db.session.commit()
-            return True, f'Disciplina criada e associada aos alunos da turma {turma.nome} com sucesso!'
-        except Exception as e:
-            db.session.rollback()
-            current_app.logger.error(f"Erro ao criar disciplina: {e}")
-            return False, 'Ocorreu um erro interno ao criar a disciplina.'
+        
+        # Constrói a mensagem final
+        message = f'{success_count} disciplina(s) criada(s) com sucesso. '
+        if errors:
+            message += f"Ocorreram {len(errors)} erro(s): " + "; ".join(errors)
+        
+        return success_count > 0, message
 
     @staticmethod
     def update_disciplina(disciplina_id, data):

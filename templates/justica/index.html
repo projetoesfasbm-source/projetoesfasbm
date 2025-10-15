@@ -15,7 +15,7 @@
                 <button class="btn btn-primary justice-option-btn active" data-target="inProgressContent">Em Andamento</button>
                 <button class="btn btn-warning justice-option-btn" data-target="finalizadosContent">Finalizados</button>
                 {% if current_user.role != 'aluno' %}
-                <button class="btn btn-success justice-option-btn" data-target="newTransgressionContent">Nova Transgressão</button>
+                <button class="btn btn-success justice-option-btn" data-target="newTransgressionContent">Nova Infração</button>
                 <a href="{{ url_for('justica.exportar_selecao') }}" class="btn btn-info">Exportar para Aditamento Interno</a>
                 {% endif %}
             </div>
@@ -48,7 +48,7 @@
 
             {% if current_user.role != 'aluno' %}
             <div class="justice-content" id="newTransgressionContent">
-                <h3 class="justice-content-title">Registrar Nova Transgressão</h3>
+                <h3 class="justice-content-title">Registrar Nova Infração</h3>
                 <form method="POST" action="{{ url_for('justica.novo_processo') }}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="form-group">
@@ -94,7 +94,7 @@
             <div class="analysis-card-icon">📊</div>
             <div class="analysis-card-text">
                 <h4>Análise de Dados</h4>
-                <p>Gráficos e estatísticas sobre as transgressões.</p>
+                <p>Gráficos e estatísticas sobre as infrações.</p>
             </div>
         </a>
         {% endif %}
@@ -102,16 +102,45 @@
 </div>
 
 <style>
-    /* Estilos (sem alterações) */
-    .justice-page-layout { display: grid; grid-template-columns: 1fr; gap: 1.5rem; }
-    @media (min-width: 992px) { .justice-page-layout { grid-template-columns: 3fr 1fr; } }
-    .analysis-card { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 1.5rem; border-radius: var(--border-radius); background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light)); color: white; text-decoration: none; transition: all 0.3s ease; border: 2px solid transparent; min-height: 150px; box-shadow: var(--shadow-soft); }
+    /* --- NOVOS ESTILOS PARA O LAYOUT E O CARD DE ANÁLISE --- */
+    .justice-page-layout {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+    }
+    @media (min-width: 992px) {
+        .justice-page-layout {
+            grid-template-columns: 3fr 1fr;
+        }
+    }
+    .analysis-card {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        text-align: center; padding: 1.5rem; border-radius: var(--border-radius);
+        background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
+        color: white; text-decoration: none; transition: all 0.3s ease;
+        border: 2px solid transparent; min-height: 150px; box-shadow: var(--shadow-soft);
+    }
     .analysis-card:hover { transform: translateY(-5px); box-shadow: var(--shadow-medium); border-color: rgba(255, 255, 255, 0.5); }
     .analysis-card-icon { font-size: 2.5rem; line-height: 1; margin-bottom: 0.75rem; }
     .analysis-card-text h4 { font-size: 1.2rem; font-weight: 700; margin: 0 0 0.25rem 0; }
     .analysis-card-text p { font-size: 0.8rem; opacity: 0.8; margin: 0; }
-    .facts-list-container { max-height: 250px; overflow-y: auto; border: 1px solid #ccc; border-radius: 8px; background: #f8fafc; padding: 0.5rem; }
-    .facts-list-container .result-item.selected { background-color: var(--color-primary); color: white; font-weight: bold; }
+
+    /* --- ESTILOS DO FATO CONSTATADO --- */
+    .facts-list-container {
+        max-height: 250px;
+        overflow-y: auto;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        background: #f8fafc;
+        padding: 0.5rem;
+    }
+    .facts-list-container .result-item.selected {
+        background-color: var(--color-primary);
+        color: white;
+        font-weight: bold;
+    }
+
+    /* --- ESTILOS EXISTENTES --- */
     .justice-options { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.5rem; align-items: center; }
     .justice-option-btn.active { filter: brightness(1.1); box-shadow: inset 0 2px 4px rgba(0,0,0,0.15); transform: translateY(1px); }
     .justice-content { display: none; }
@@ -159,8 +188,8 @@ document.addEventListener('DOMContentLoaded', function() {
         
         function selectAluno(alunoId, alunoText) {
             alunoSearchInput.style.display='none'; alunoSelectedDisplay.innerHTML=`<span>${alunoText}</span><span class="remove-selected-btn" title="Remover seleção"> &times;</span>`; alunoSelectedDisplay.style.display='flex'; alunoHiddenInput.value=alunoId; alunoResults.style.display='none'; fetch(`{{ url_for('justica.api_get_aluno_details', aluno_id=0) }}${alunoId}`).then(response => response.json()).then(details => { const hoje=new Date(); const dia=hoje.getDate(); const mes=hoje.toLocaleString('pt-BR', { month: 'long' }); const ano=hoje.getFullYear(); const autoridadeNome="{{ current_user.nome_completo or 'NOME DA AUTORIDADE' }}"; const autoridadePosto="{{ current_user.posto_graduacao or 'POSTO DA AUTORIDADE' }}";
-            // --- ALTERAÇÃO: Armazena o template original ---
-            observacaoTemplateOriginal = `Tendo em vista as informações constantes na Parte Nº 000/CAl/EsFAS/${ano}, evidenciando a existência, em tese, de transgressão das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação:\n\n1. Justificante: ${details.posto_graduacao} ${details.nome_completo}, Id Func. ${details.matricula}.\n\n2. Descrição da conduta infracional: O(a) ${details.posto_graduacao} ${details.nome_completo}, Id Func. ${details.matricula}, no dia ${dia} de ${mes} de ${ano}, ...... \nCom isso, incorreu no item...\n\n3. Cientifico-lhe que a contar do recebimento da presente, abre-se o prazo de 24 horas, para que, querendo, apresente resposta escrita com as provas que entender cabíveis. Fica advertido o acusado que a não entrega da justificação dentro do prazo estipulado, implicará em reconhecimento como verdadeiros os fatos imputados.\n\n\n${autoridadeNome}\n${autoridadePosto}`;
+            // --- Armazena o template original ---
+            observacaoTemplateOriginal = `Tendo em vista as informações constantes na Parte Nº 000/CAl/EsFAS/${ano}, evidenciando a existência, em tese, de infração das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação:\n\n1. Justificante: ${details.posto_graduacao} ${details.nome_completo}, Id Func. ${details.matricula}.\n\n2. Descrição da conduta infracional: O(a) ${details.posto_graduacao} ${details.nome_completo}, Id Func. ${details.matricula}, no dia ${dia} de ${mes} de ${ano}, ...... \nCom isso, incorreu no item...\n\n3. Cientifico-lhe que a contar do recebimento da presente, abre-se o prazo de 24 horas, para que, querendo, apresente resposta escrita com as provas que entender cabíveis. Fica advertido o acusado que a não entrega da justificação dentro do prazo estipulado, implicará em reconhecimento como verdadeiros os fatos imputados.\n\n\n${autoridadeNome}\n${autoridadePosto}`;
             observacaoTextarea.value = observacaoTemplateOriginal;
             transgressionFields.style.display='block'; });
         }
@@ -203,8 +232,7 @@ document.addEventListener('DOMContentLoaded', function() {
             fatoDetalhes = `no item ${romano} - "${descricao}"`;
         }
         
-        // --- CORREÇÃO APLICADA AQUI ---
-        // Sempre começa a substituição a partir do template original guardado
+        // CORREÇÃO: A substituição agora começa sempre do template original
         let textoObservacao = observacaoTemplateOriginal; 
         textoObservacao = textoObservacao.replace(/Com isso, incorreu no item\.\.\./, `Com isso, incorreu ${fatoDetalhes};`);
         observacaoTextarea.value = textoObservacao;

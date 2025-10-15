@@ -5,7 +5,7 @@
 {% block content %}
 <div class="content-header">
     <h1>Adicionar Nova Disciplina</h1>
-    <p>Cadastre uma nova matéria para uma turma específica.</p>
+    <p>Cadastre uma nova matéria e selecione as turmas nas quais ela será criada.</p>
 </div>
 
 <div class="table-container" style="max-width: 700px; margin: 0 auto;">
@@ -15,10 +15,7 @@
     
     <form method="POST" action="{{ url_for('disciplina.adicionar_disciplina') }}">
         {{ form.hidden_tag() }}
-        <div class="form-group">
-            {{ form.turma_id.label(class="form-label") }}
-            {{ form.turma_id(class="form-control") }}
-        </div>
+        
         <div class="form-group">
             {{ form.materia.label(class="form-label") }}
             {{ form.materia(class="form-control", placeholder="Ex: Legislação Aplicada") }}
@@ -30,11 +27,28 @@
         <div class="form-group">
             {{ form.carga_horaria_cumprida.label(class="form-label") }}
             {{ form.carga_horaria_cumprida(class="form-control", placeholder="Ex: 10") }}
-            <small class="form-text text-muted">Use este campo para registrar horas já ministradas.</small>
+            <small class="form-text text-muted">Use este campo para registrar horas já ministradas, se aplicável.</small>
         </div>
         <div class="form-group">
             {{ form.ciclo_id.label(class="form-label") }}
             {{ form.ciclo_id(class="form-control") }}
+        </div>
+
+        <div class="form-group">
+            {{ form.turma_ids.label(class="form-label") }}
+            <div class="d-flex justify-content-end mb-2">
+                <button type="button" class="btn btn-sm btn-secondary" id="toggle-all-turmas">Marcar/Desmarcar Todas</button>
+            </div>
+            <div class="checkbox-list">
+                {% for subfield in form.turma_ids %}
+                    <label class="checkbox-item">
+                        {{ subfield }} {{ subfield.label.text }}
+                    </label>
+                {% else %}
+                    <p class="text-muted">Nenhuma turma cadastrada.</p>
+                {% endfor %}
+            </div>
+             <small class="form-text text-muted">Uma cópia individual desta disciplina será criada para cada turma selecionada.</small>
         </div>
         
         <div class="form-actions">
@@ -43,4 +57,42 @@
         </div>
     </form>
 </div>
+
+<style>
+.checkbox-list {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid var(--color-border);
+    padding: 1rem;
+    border-radius: 8px;
+    background-color: var(--color-background);
+}
+.checkbox-item {
+    display: block;
+    margin-bottom: 0.5rem;
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+.checkbox-item:hover {
+    background-color: #eef5ff;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const toggleButton = document.getElementById('toggle-all-turmas');
+    if (toggleButton) {
+        toggleButton.addEventListener('click', function() {
+            const checkboxes = document.querySelectorAll('input[name="turma_ids"]');
+            // Verifica se o primeiro checkbox está marcado para decidir se marca ou desmarca todos
+            const shouldCheck = !checkboxes[0].checked;
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = shouldCheck;
+            });
+        });
+    }
+});
+</script>
 {% endblock %}

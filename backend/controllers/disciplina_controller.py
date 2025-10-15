@@ -4,8 +4,10 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_required, current_user
 from sqlalchemy import select
 from flask_wtf import FlaskForm
-from wtforms import StringField, IntegerField, SubmitField, SelectField
+from wtforms import StringField, IntegerField, SubmitField, SelectField, SelectMultipleField
 from wtforms.validators import DataRequired, Length, NumberRange, Optional
+from wtforms.widgets import CheckboxInput, ListWidget
+
 
 from ..models.database import db
 from ..models.disciplina import Disciplina
@@ -22,7 +24,8 @@ class DisciplinaForm(FlaskForm):
     carga_horaria_prevista = IntegerField('Carga Horária Total Prevista', validators=[DataRequired(), NumberRange(min=1)])
     carga_horaria_cumprida = IntegerField('Carga Horária Já Cumprida', validators=[Optional(), NumberRange(min=0)], default=0)
     ciclo_id = SelectField('Ciclo', coerce=int, validators=[DataRequired()])
-    turma_id = SelectField('Turma', coerce=int, validators=[DataRequired(message="A turma é obrigatória.")])
+    turma_ids = SelectMultipleField('Turmas', coerce=int, validators=[DataRequired(message="Selecione pelo menos uma turma.")],
+                                    option_widget=CheckboxInput(), widget=ListWidget(prefix_label=False))
     submit = SubmitField('Salvar')
 
 class DeleteForm(FlaskForm):
@@ -68,13 +71,14 @@ def adicionar_disciplina():
     ciclos = db.session.scalars(select(Ciclo).order_by(Ciclo.nome)).all()
     form.ciclo_id.choices = [(c.id, c.nome) for c in ciclos]
     turmas = db.session.scalars(select(Turma).where(Turma.school_id == school_id).order_by(Turma.nome)).all()
-    form.turma_id.choices = [(t.id, t.nome) for t in turmas]
+    form.turma_ids.choices = [(t.id, t.nome) for t in turmas]
     
     if form.validate_on_submit():
         success, message = DisciplinaService.create_disciplina(form.data, school_id)
         flash(message, 'success' if success else 'danger')
         if success:
-            return redirect(url_for('disciplina.listar_disciplinas', turma_id=form.turma_id.data))
+            # Redireciona para a visão geral após o cadastro em lote
+            return redirect(url_for('disciplina.listar_disciplinas'))
 
     return render_template('adicionar_disciplina.html', form=form)
 
@@ -88,10 +92,18 @@ def editar_disciplina(disciplina_id):
         flash('Disciplina não encontrada.', 'danger')
         return redirect(url_for('disciplina.listar_disciplinas'))
 
-    form = DisciplinaForm(obj=disciplina)
+    # Usa o formulário antigo para edição individual
+    class EditDisciplinaForm(FlaskForm):
+        materia = StringField('Matéria', validators=[DataRequired(), Length(min=3, max=100)])
+        carga_horaria_prevista = IntegerField('Carga Horária Total Prevista', validators=[DataRequired(), NumberRange(min=1)])
+        carga_horaria_cumprida = IntegerField('Carga Horária Já Cumprida', validators=[Optional(), NumberRange(min=0)], default=0)
+        ciclo_id = SelectField('Ciclo', coerce=int, validators=[DataRequired()])
+        turma_id = SelectField('Turma', coerce=int, validators=[DataRequired(message="A turma é obrigatória.")])
+        submit = SubmitField('Salvar')
+
+    form = EditDisciplinaForm(obj=disciplina)
     ciclos = db.session.scalars(select(Ciclo).order_by(Ciclo.nome)).all()
     form.ciclo_id.choices = [(c.id, c.nome) for c in ciclos]
-    # O campo de turma é desabilitado na edição para não permitir mover a disciplina
     form.turma_id.choices = [(disciplina.turma.id, disciplina.turma.nome)]
     
     if form.validate_on_submit():
