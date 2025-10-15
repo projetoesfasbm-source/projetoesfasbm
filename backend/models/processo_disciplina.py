@@ -28,8 +28,10 @@ class ProcessoDisciplina(db.Model):
     decisao_final: Mapped[t.Optional[str]] = mapped_column(db.String(100))
     data_decisao: Mapped[t.Optional[datetime]] = mapped_column()
     
-    # --- NOVO CAMPO ADICIONADO ---
     fundamentacao: Mapped[t.Optional[str]] = mapped_column(db.Text)
+
+    # --- NOVO CAMPO ADICIONADO ---
+    detalhes_sancao: Mapped[t.Optional[str]] = mapped_column(db.Text)
 
     data_ocorrencia: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
     data_ciente: Mapped[t.Optional[datetime]] = mapped_column()

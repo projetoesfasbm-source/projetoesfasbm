@@ -34,23 +34,41 @@
     <form method="POST" action="{{ url_for('justica.finalizar_processo', processo_id=processo.id) }}" class="mt-3">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="form-group">
+            <label for="decisao_final_{{ processo.id }}"><strong>Decisão/Sanção a Aplicar</strong></label>
+            <select name="decisao_final" id="decisao_final_{{ processo.id }}" class="form-control" onchange="toggleSanctionDetails(this)">
+                <option value="Justificado">Justificado (Arquivar)</option>
+                <option value="Advertência">Advertência</option>
+                <option value="Repreensão">Repreensão</option>
+                <option value="Sustação da Dispensa">Sustação da Dispensa</option>
+            </select>
+        </div>
+        <div class="form-group" id="detalhes_sancao_container_{{ processo.id }}" style="display: none;">
+            <label for="detalhes_sancao_{{ processo.id }}"><strong>Detalhes da Sanção (Texto da Advertência/Repreensão)</strong></label>
+            <textarea name="detalhes_sancao" id="detalhes_sancao_{{ processo.id }}" class="form-control" rows="3" placeholder="Descreva aqui o texto que constará na advertência ou repreensão."></textarea>
+        </div>
+        <div class="form-group">
             <label for="fundamentacao_{{ processo.id }}"><strong>Fundamentação da Decisão</strong></label>
             <textarea name="fundamentacao" id="fundamentacao_{{ processo.id }}" class="form-control" rows="4" placeholder="Descreva os motivos para a sua decisão..." required></textarea>
         </div>
         <div class="form-actions mt-2" style="border-top: none; padding-top: 0; justify-content: flex-start;">
-            <button type="submit" name="justificacao" value="Justificado" class="btn btn-success">Justificado</button>
-            <button type="submit" name="justificacao" value="Nao Justificado" class="btn btn-danger">Não Justificado (Sustação da Dispensa)</button>
+            <button type="submit" class="btn btn-success">Finalizar Processo</button>
         </div>
     </form>
     {% endif %}
 
     {% if processo.status == 'Finalizado' %}
     <div class="process-detail">
+        <span class="detail-label">Decisão Final:</span> {{ processo.decisao_final }}
+    </div>
+    {% if processo.detalhes_sancao %}
+    <div class="process-detail">
+        <span class="detail-label">Detalhes da Sanção:</span>
+        <div class="preserve-whitespace">{{ processo.detalhes_sancao }}</div>
+    </div>
+    {% endif %}
+    <div class="process-detail">
         <span class="detail-label">Fundamentação:</span>
         <div class="preserve-whitespace">{{ processo.fundamentacao }}</div>
-    </div>
-    <div class="process-detail">
-        <span class="detail-label">Decisão Final:</span> {{ processo.decisao_final }}
     </div>
     {% endif %}
 
@@ -61,3 +79,19 @@
         </form>
     </div>
 </div>
+
+<script>
+    function toggleSanctionDetails(selectElement) {
+        const processoId = selectElement.id.split('_').pop();
+        const detailsContainer = document.getElementById(`detalhes_sancao_container_${processoId}`);
+        const detailsTextarea = document.getElementById(`detalhes_sancao_${processoId}`);
+        
+        if (selectElement.value === 'Advertência' || selectElement.value === 'Repreensão') {
+            detailsContainer.style.display = 'block';
+            detailsTextarea.required = true;
+        } else {
+            detailsContainer.style.display = 'none';
+            detailsTextarea.required = false;
+        }
+    }
+</script>

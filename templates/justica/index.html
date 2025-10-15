@@ -65,9 +65,16 @@
                     
                     <div id="transgression_fields" style="display: none;">
                         <div class="form-group">
-                            <label for="fato">Fato Constatado</label>
-                            <textarea id="fato" name="fato" class="form-control" rows="4" required placeholder="Descreva aqui o fato ocorrido..."></textarea>
+                            <label for="fato_search_input">Fato Constatado</label>
+                            <input type="text" id="fato_search_input" class="form-control mb-2" placeholder="Pesquisar na lista de infrações...">
+                            <div class="facts-list-container" id="facts-list-container">
+                                {% for fato in fatos_predefinidos %}
+                                    <div class="result-item" data-fato="{{ fato }}">{{ fato }}</div>
+                                {% endfor %}
+                            </div>
+                            <input type="hidden" id="fato_hidden_input" name="fato" required>
                         </div>
+
                         <div class="form-group">
                             <label for="observacao">Observação (Termo de Justificação)</label>
                             <textarea id="observacao" name="observacao" class="form-control" rows="12"></textarea>
@@ -95,68 +102,18 @@
 </div>
 
 <style>
-    /* --- NOVOS ESTILOS PARA O LAYOUT E O CARD DE ANÁLISE --- */
-    .justice-page-layout {
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: 1.5rem;
-    }
-
-    /* Em telas maiores, cria a divisão em duas colunas */
-    @media (min-width: 992px) {
-        .justice-page-layout {
-            grid-template-columns: 3fr 1fr;
-        }
-    }
-
-    .analysis-card {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        text-align: center;
-        padding: 1.5rem;
-        border-radius: var(--border-radius);
-        background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
-        color: white;
-        text-decoration: none;
-        transition: all 0.3s ease;
-        border: 2px solid transparent;
-        min-height: 150px;
-        box-shadow: var(--shadow-soft);
-    }
-
-    .analysis-card:hover {
-        transform: translateY(-5px);
-        box-shadow: var(--shadow-medium);
-        border-color: rgba(255, 255, 255, 0.5);
-    }
-
-    .analysis-card-icon {
-        font-size: 2.5rem;
-        line-height: 1;
-        margin-bottom: 0.75rem;
-    }
-
-    .analysis-card-text h4 {
-        font-size: 1.2rem;
-        font-weight: 700;
-        margin: 0 0 0.25rem 0;
-    }
-
-    .analysis-card-text p {
-        font-size: 0.8rem;
-        opacity: 0.8;
-        margin: 0;
-    }
-
-    /* --- ESTILOS EXISTENTES --- */
+    /* Estilos (sem alterações) */
+    .justice-page-layout { display: grid; grid-template-columns: 1fr; gap: 1.5rem; }
+    @media (min-width: 992px) { .justice-page-layout { grid-template-columns: 3fr 1fr; } }
+    .analysis-card { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 1.5rem; border-radius: var(--border-radius); background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light)); color: white; text-decoration: none; transition: all 0.3s ease; border: 2px solid transparent; min-height: 150px; box-shadow: var(--shadow-soft); }
+    .analysis-card:hover { transform: translateY(-5px); box-shadow: var(--shadow-medium); border-color: rgba(255, 255, 255, 0.5); }
+    .analysis-card-icon { font-size: 2.5rem; line-height: 1; margin-bottom: 0.75rem; }
+    .analysis-card-text h4 { font-size: 1.2rem; font-weight: 700; margin: 0 0 0.25rem 0; }
+    .analysis-card-text p { font-size: 0.8rem; opacity: 0.8; margin: 0; }
+    .facts-list-container { max-height: 250px; overflow-y: auto; border: 1px solid #ccc; border-radius: 8px; background: #f8fafc; padding: 0.5rem; }
+    .facts-list-container .result-item.selected { background-color: var(--color-primary); color: white; font-weight: bold; }
     .justice-options { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.5rem; align-items: center; }
-    .justice-option-btn.active {
-        filter: brightness(1.1);
-        box-shadow: inset 0 2px 4px rgba(0,0,0,0.15);
-        transform: translateY(1px);
-    }
+    .justice-option-btn.active { filter: brightness(1.1); box-shadow: inset 0 2px 4px rgba(0,0,0,0.15); transform: translateY(1px); }
     .justice-content { display: none; }
     .justice-content.active { display: block; }
     .justice-content-title { margin-bottom: 1.5rem; }
@@ -173,8 +130,8 @@
     .status-badge.finalizado { background-color: #f1f5f9; color: #475569; }
     .search-form-container { position: relative; }
     .search-results { max-height: 200px; overflow-y: auto; border: 1px solid #ccc; border-radius: 0 0 8px 8px; background: white; position: absolute; width: 100%; z-index: 10; display: none; }
-    .result-item { padding: 10px; cursor: pointer; }
-    .result-item:hover { background-color: #f0f0f0; }
+    .result-item { padding: 10px; cursor: pointer; border-radius: 4px;}
+    .result-item:hover { background-color: #e2e8f0; }
     .selected-item-display { background-color: #e9ecef; padding: 10px; border-radius: 4px; margin-top: 5px; display: flex; justify-content: space-between; align-items: center; }
     .remove-selected-btn { cursor: pointer; color: red; font-weight: bold; }
     .preserve-whitespace { white-space: pre-wrap; word-wrap: break-word; }
@@ -182,110 +139,75 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // --- Lógica das abas e busca de aluno (sem alterações) ---
     const optionBtns = document.querySelectorAll('.justice-option-btn');
     const contentDivs = document.querySelectorAll('.justice-content');
-    const searchInput = document.getElementById('aluno_search_input');
-    const resultsContainer = document.getElementById('aluno_results');
-    const hiddenInput = document.getElementById('aluno_id_hidden');
-    const selectedDisplay = document.getElementById('aluno_selected');
+    optionBtns.forEach(btn => { btn.addEventListener('click', function() { optionBtns.forEach(b => b.classList.remove('active')); this.classList.add('active'); contentDivs.forEach(div => div.classList.remove('active')); document.getElementById(this.dataset.target).classList.add('active'); }); });
+    const alunoSearchInput = document.getElementById('aluno_search_input');
+    const alunoResults = document.getElementById('aluno_results');
+    const alunoHiddenInput = document.getElementById('aluno_id_hidden');
+    const alunoSelectedDisplay = document.getElementById('aluno_selected');
     const transgressionFields = document.getElementById('transgression_fields');
-    const fatoTextarea = document.getElementById('fato');
     const observacaoTextarea = document.getElementById('observacao');
+    
+    // --- VARIÁVEL PARA GUARDAR O TEMPLATE ORIGINAL DA OBSERVAÇÃO ---
+    let observacaoTemplateOriginal = '';
 
-    optionBtns.forEach(btn => {
-        btn.addEventListener('click', function() {
-            // Lógica para alternar o botão ativo
-            optionBtns.forEach(b => b.classList.remove('active'));
-            this.classList.add('active');
+    if (alunoSearchInput) {
+        let searchTimeout;
+        alunoSearchInput.addEventListener('input', function() { clearTimeout(searchTimeout); const query=this.value; alunoHiddenInput.value=''; transgressionFields.style.display='none'; if (query.length < 2) { alunoResults.innerHTML=''; alunoResults.style.display='none'; return; } searchTimeout = setTimeout(() => { fetch(`{{ url_for('justica.api_get_alunos') }}?q=${query}`).then(response => response.json()).then(data => { alunoResults.innerHTML=''; if (data.length > 0) { data.forEach(aluno => { const item=document.createElement('div'); item.className='result-item'; item.textContent=aluno.text; item.dataset.id=aluno.id; item.addEventListener('click', function() { selectAluno(this.dataset.id, this.textContent); }); alunoResults.appendChild(item); }); alunoResults.style.display='block'; } else { alunoResults.style.display='none'; } }); }, 300); });
+        
+        function selectAluno(alunoId, alunoText) {
+            alunoSearchInput.style.display='none'; alunoSelectedDisplay.innerHTML=`<span>${alunoText}</span><span class="remove-selected-btn" title="Remover seleção"> &times;</span>`; alunoSelectedDisplay.style.display='flex'; alunoHiddenInput.value=alunoId; alunoResults.style.display='none'; fetch(`{{ url_for('justica.api_get_aluno_details', aluno_id=0) }}${alunoId}`).then(response => response.json()).then(details => { const hoje=new Date(); const dia=hoje.getDate(); const mes=hoje.toLocaleString('pt-BR', { month: 'long' }); const ano=hoje.getFullYear(); const autoridadeNome="{{ current_user.nome_completo or 'NOME DA AUTORIDADE' }}"; const autoridadePosto="{{ current_user.posto_graduacao or 'POSTO DA AUTORIDADE' }}";
+            // --- ALTERAÇÃO: Armazena o template original ---
+            observacaoTemplateOriginal = `Tendo em vista as informações constantes na Parte Nº 000/CAl/EsFAS/${ano}, evidenciando a existência, em tese, de transgressão das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação:\n\n1. Justificante: ${details.posto_graduacao} ${details.nome_completo}, Id Func. ${details.matricula}.\n\n2. Descrição da conduta infracional: O(a) ${details.posto_graduacao} ${details.nome_completo}, Id Func. ${details.matricula}, no dia ${dia} de ${mes} de ${ano}, ...... \nCom isso, incorreu no item...\n\n3. Cientifico-lhe que a contar do recebimento da presente, abre-se o prazo de 24 horas, para que, querendo, apresente resposta escrita com as provas que entender cabíveis. Fica advertido o acusado que a não entrega da justificação dentro do prazo estipulado, implicará em reconhecimento como verdadeiros os fatos imputados.\n\n\n${autoridadeNome}\n${autoridadePosto}`;
+            observacaoTextarea.value = observacaoTemplateOriginal;
+            transgressionFields.style.display='block'; });
+        }
+        alunoSelectedDisplay.addEventListener('click', function(e) { if (e.target.classList.contains('remove-selected-btn')) { alunoSearchInput.style.display='block'; alunoSearchInput.value=''; alunoSelectedDisplay.style.display='none'; alunoHiddenInput.value=''; transgressionFields.style.display='none'; observacaoTextarea.value=''; observacaoTemplateOriginal = ''; alunoSearchInput.focus(); } });
+        document.addEventListener('click', function(e) { if (!alunoSearchInput.contains(e.target) && !alunoResults.contains(e.target)) { alunoResults.style.display='none'; } });
+    }
 
-            // Lógica para mostrar/esconder conteúdo
-            contentDivs.forEach(div => div.classList.remove('active'));
-            document.getElementById(this.dataset.target).classList.add('active');
+    // --- Lógica do Fato Constatado com a correção ---
+    const fatoSearchInput = document.getElementById('fato_search_input');
+    const fatoListContainer = document.getElementById('facts-list-container');
+    const fatoHiddenInput = document.getElementById('fato_hidden_input');
+    const fatoItems = fatoListContainer.querySelectorAll('.result-item');
+
+    fatoSearchInput.addEventListener('input', function() {
+        const query = this.value.toLowerCase();
+        fatoItems.forEach(item => {
+            const fatoText = item.dataset.fato.toLowerCase();
+            item.style.display = fatoText.includes(query) ? 'block' : 'none';
         });
     });
 
-    if (searchInput) {
-        let searchTimeout;
-        searchInput.addEventListener('input', function() {
-            clearTimeout(searchTimeout);
-            const query = this.value;
-            hiddenInput.value = '';
-            transgressionFields.style.display = 'none';
-
-            if (query.length < 2) {
-                resultsContainer.innerHTML = '';
-                resultsContainer.style.display = 'none';
-                return;
-            }
-
-            searchTimeout = setTimeout(() => {
-                fetch(`{{ url_for('justica.api_get_alunos') }}?q=${query}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        resultsContainer.innerHTML = '';
-                        if (data.length > 0) {
-                            data.forEach(aluno => {
-                                const item = document.createElement('div');
-                                item.className = 'result-item';
-                                item.textContent = aluno.text;
-                                item.dataset.id = aluno.id;
-                                item.addEventListener('click', function() {
-                                    selectAluno(this.dataset.id, this.textContent);
-                                });
-                                resultsContainer.appendChild(item);
-                            });
-                            resultsContainer.style.display = 'block';
-                        } else {
-                            resultsContainer.style.display = 'none';
-                        }
-                    });
-            }, 300);
+    fatoItems.forEach(item => {
+        item.addEventListener('click', function() {
+            const fatoText = this.dataset.fato;
+            fatoItems.forEach(i => i.classList.remove('selected'));
+            this.classList.add('selected');
+            fatoHiddenInput.value = fatoText;
+            updateObservacaoComFato(fatoText);
         });
+    });
 
-        function selectAluno(alunoId, alunoText) {
-            searchInput.style.display = 'none';
-            selectedDisplay.innerHTML = `<span>${alunoText}</span><span class="remove-selected-btn" title="Remover seleção"> &times;</span>`;
-            selectedDisplay.style.display = 'flex';
-            hiddenInput.value = alunoId;
-            resultsContainer.style.display = 'none';
-            
-            fetch(`{{ url_for('justica.api_get_aluno_details', aluno_id=0) }}${alunoId}`)
-                .then(response => response.json())
-                .then(details => {
-                    const hoje = new Date();
-                    const dia = hoje.getDate();
-                    const mes = hoje.toLocaleString('pt-BR', { month: 'long' });
-                    const ano = hoje.getFullYear();
+    function updateObservacaoComFato(fatoText) {
+        const regex = /^([IVXLCDM]+)\s*-\s*(.*);?$/;
+        const match = fatoText.match(regex);
+        let fatoDetalhes = fatoText;
 
-                    const autoridadeNome = "{{ current_user.nome_completo or 'NOME DA AUTORIDADE' }}";
-                    const autoridadePosto = "{{ current_user.posto_graduacao or 'POSTO DA AUTORIDADE' }}";
-                    
-                    const obsTemplate = `Tendo em vista as informações constantes na Parte Nº 000/CAl/EsFAS/${ano}, evidenciando a existência, em tese, de transgressão das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação:\n\n1. Justificante: ${details.posto_graduacao} ${details.nome_completo}, Id Func. ${details.matricula}.\n\n2. Descrição da conduta infracional: O ${details.posto_graduacao} ${details.nome_completo}, Id Func. ${details.matricula}, no dia ${dia} de ${mes} de ${ano}, ...... \nCom isso, incorreu no item...\n\n3. Cientifico-lhe que a contar do recebimento da presente, abre-se o prazo de 24 horas, para que, querendo, apresente resposta escrita com as provas que entender cabíveis. Fica advertido o acusado que a não entrega da justificação dentro do prazo estipulado, implicará em reconhecimento como verdadeiros os fatos imputados.\n\n\n${autoridadeNome}\n${autoridadePosto}`;
-
-                    fatoTextarea.value = '';
-                    observacaoTextarea.value = obsTemplate;
-                    transgressionFields.style.display = 'block';
-                });
+        if (match) {
+            const romano = match[1];
+            const descricao = match[2].trim();
+            fatoDetalhes = `no item ${romano} - "${descricao}"`;
         }
         
-        selectedDisplay.addEventListener('click', function(e) {
-            if (e.target.classList.contains('remove-selected-btn')) {
-                searchInput.style.display = 'block';
-                searchInput.value = '';
-                selectedDisplay.style.display = 'none';
-                hiddenInput.value = '';
-                transgressionFields.style.display = 'none';
-                fatoTextarea.value = '';
-                observacaoTextarea.value = '';
-                searchInput.focus();
-            }
-        });
-
-        document.addEventListener('click', function(e) {
-            if (!searchInput.contains(e.target)) {
-                resultsContainer.style.display = 'none';
-            }
-        });
+        // --- CORREÇÃO APLICADA AQUI ---
+        // Sempre começa a substituição a partir do template original guardado
+        let textoObservacao = observacaoTemplateOriginal; 
+        textoObservacao = textoObservacao.replace(/Com isso, incorreu no item\.\.\./, `Com isso, incorreu ${fatoDetalhes};`);
+        observacaoTextarea.value = textoObservacao;
     }
 });
 </script>

@@ -155,8 +155,8 @@ class JusticaService:
         return True, "Defesa enviada com sucesso."
 
     @staticmethod
-    def finalizar_processo(processo_id, justificacao, fundamentacao):
-        """Finaliza um processo com base na justificação e fundamentação."""
+    def finalizar_processo(processo_id, decisao, fundamentacao, detalhes_sancao):
+        """Finaliza um processo com base na decisão, fundamentação e sanção aplicadas."""
         processo = db.session.get(ProcessoDisciplina, processo_id)
         if not processo:
             return False, "Processo não encontrado."
@@ -173,12 +173,9 @@ class JusticaService:
         processo.status = 'Finalizado'
         processo.fundamentacao = fundamentacao
         processo.data_decisao = datetime.now(timezone.utc)
+        processo.decisao_final = decisao
+        processo.detalhes_sancao = detalhes_sancao if detalhes_sancao else None
 
-        if justificacao == 'Justificado':
-            processo.decisao_final = 'Justificado'
-        else: # Não Justificado
-            processo.decisao_final = 'Sustação da Dispensa'
-        
         db.session.commit()
         return True, "Processo finalizado com sucesso."
 
