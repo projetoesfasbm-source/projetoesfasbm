@@ -2,75 +2,108 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Exportação de Processos Disciplinares</title>
+    <title>Termo de Justificação</title>
     <style>
+        @page {
+            size: A4;
+            margin: 1.27cm;
+        }
         body {
             font-family: 'Times New Roman', Times, serif;
             font-size: 12pt;
             line-height: 1.5;
+            margin: 0;
         }
         .processo-container {
-            border: 1px solid #ccc;
-            padding: 1.5cm;
-            margin-bottom: 2cm;
-            page-break-inside: avoid;
+            /* Remove a quebra de página para que os processos fiquem sequenciais */
         }
-        .processo-container:last-child {
-            margin-bottom: 0;
+        .processo-container.subsequente {
+            margin-top: 2cm; /* Adiciona um espaçamento entre as transgressões */
+            border-top: 1px dashed #ccc;
+            padding-top: 1cm;
         }
-        h1 {
+        .header {
             text-align: center;
-            margin-bottom: 1.5cm;
+            font-weight: bold;
         }
-        .section {
+        .title {
+            text-align: center;
+            font-weight: bold;
+            margin-top: 1cm;
             margin-bottom: 1cm;
         }
-        .section-title {
-            font-weight: bold;
-            margin-bottom: 0.25cm;
-        }
-        .content {
-            white-space: pre-wrap; /* Essencial para manter as quebras de linha */
-            word-wrap: break-word;
+        p, .section {
             text-align: justify;
+            margin-bottom: 0.5cm;
+        }
+        .signature-block {
+            text-align: center;
+            margin-top: 1.5cm;
+        }
+        .signature-line {
+            display: inline-block;
+            border-top: 1px solid #000;
+            width: 250px;
+            margin-top: 2cm;
         }
     </style>
 </head>
 <body>
 
-    <h1>Relatório de Processos Disciplinares Finalizados</h1>
+    <div class="header">
+        <p style="text-align: center;">ESTADO DO RIO GRANDE DO SUL</p>
+        <p style="text-align: center;">SECRETARIA DA SEGURANÇA PÚBLICA</p>
+        <p style="text-align: center;">BRIGADA MILITAR</p>
+        <p style="text-align: center;">DE – EsFAS</p>
+    </div>
 
     {% for processo in processos %}
-    <div class="processo-container">
-        <div class="section">
-            <div class="section-title">PROCESSO ID: {{ processo.id }}</div>
-        </div>
+    <div class="processo-container {% if not loop.first %}subsequente{% endif %}">
         
-        <div class="section">
-            <div class="section-title">DADOS DO ALUNO:</div>
-            <div class="content">
-                <strong>Nome:</strong> {{ processo.aluno.user.nome_completo }}<br>
-                <strong>Posto/Graduação:</strong> {{ processo.aluno.user.posto_graduacao }}<br>
-                <strong>Matrícula:</strong> {{ processo.aluno.user.matricula }}
-            </div>
+        <div class="title">
+            TERMO DE JUSTIFICAÇÃO Nº {{ "%03d"|format(processo.id) }}
         </div>
 
-        <div class="section">
-            <div class="section-title">TERMO DE JUSTIFICAÇÃO:</div>
-            <div class="content">{{ processo.observacao }}</div>
-        </div>
-        
-        <div class="section">
-            <div class="section-title">DEFESA APRESENTADA PELO ALUNO:</div>
-            <div class="content">{{ processo.defesa or 'Nenhuma defesa foi apresentada.' }}</div>
-        </div>
+        <p>Tendo em vista as informações constantes na Parte Nº 000/CAl/EsFAS/{{ processo.data_ocorrencia.strftime('%Y') }}, evidenciando a existência, em tese, de transgressão das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação:</p>
 
         <div class="section">
-            <div class="section-title">DECISÃO FINAL (SANÇÃO APLICADA):</div>
-            <div class="content">
-                <strong>Decisão:</strong> {{ processo.decisao_final }}<br>
-                <strong>Data:</strong> {{ processo.data_decisao.strftime('%d/%m/%Y') if processo.data_decisao else 'N/A' }}
-            </div>
+            <p><strong>1. Justificante:</strong> {{ processo.aluno.user.posto_graduacao or '(POSTO/GRADUAÇÃO)' }} {{ processo.aluno.user.nome_completo or '(NOME COMPLETO)' }} Id Func. {{ processo.aluno.user.matricula or '(MATRICULA)' }}</p>
+            
+            <p><strong>2. Descrição da conduta infracional:</strong> O(a) {{ processo.aluno.user.posto_graduacao or '(POSTO/GRADUAÇÃO)' }} {{ processo.aluno.user.nome_completo or '(NOME COMPLETO)' }} Id Func. {{ processo.aluno.user.matricula or '(MATRICULA)' }}, no dia {{ processo.data_ocorrencia.strftime('%d de %B de %Y') }}, {{ processo.fato_constatado }}. Com isso, incorreu no item (ROMANOS) - (TRANSGRESSÃO);</p>
+            
+            <p><strong>3. Cientifico-lhe</strong> que a contar do recebimento da presente, abre-se o prazo de 24 horas, para que, querendo, apresente resposta escrita com as provas que entender cabíveis. Fica advertido o acusado que a não entrega da justificação dentro do prazo estipulado, implicará em reconhecimento como verdadeiros os fatos imputados.</p>
+        </div>
+
+        <div class="signature-block">
+            <p>{{ processo.relator.nome_completo or 'NOME COMPLETO' }} – {{ processo.relator.posto_graduacao or 'POSTO/GRADUAÇÃO' }}</p>
+            <p>{{ 'POSTO/GRAD' }} Disciplina do CAl</p>
+        </div>
+
+        <div style="margin-top: 1.5cm;">
+            <p>Recebi em ___/___/___ às _______</p>
+            <div class="signature-line" style="margin-top: 0.5cm;"></div>
+            <p style="text-align: center;">(ME JUSTIFICANTE)</p>
+        </div>
+
+        <div style="margin-top: 1.5cm;">
+            <p><strong>RAZÕES DE DEFESA:</strong></p>
+            <p>{{ processo.defesa or '__________________________________________________________________' }}</p>
+            <div class="signature-line" style="margin-top: 1cm;"></div>
+            <p style="text-align: center;">ASSINATURA</p>
+        </div>
+
+        <div style="margin-top: 1.5cm;">
+            <p><strong>Diante do Exposto, RESOLVO:</strong></p>
+            <p>Considerar: {{ processo.fundamentacao or '________________________________________________________' }}</p>
+            <p>________________________________________________________</p>
+            <p>Dar Ciência ao ME da presente solução;</p>
+            <p>Publicar a presente solução em Aditamento;</p>
+            <p>Arquivar a presente solução na pasta individual do Aluno.</p>
+        </div>
+
+        <div class="signature-block">
+            <p>NOME COMPLETO – POSTO/GRADUAÇÃO</p>
+            <p>Subcomandante do CAl</p>
         </div>
     </div>
     {% endfor %}

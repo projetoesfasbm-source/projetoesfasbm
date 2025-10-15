@@ -9,7 +9,7 @@
 </div>
 
 <div class="table-container">
-    <form method="POST" action="{{ url_for('justica.exportar_documento') }}">
+    <form method="POST" action="{{ url_for('justica.exportar_selecao') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         
         <div class="table-responsive">

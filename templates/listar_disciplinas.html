@@ -56,11 +56,11 @@
                         <td data-label="Carga Horária">{{ item.disciplina.carga_horaria_prevista }}h</td>
                         <td data-label="Progresso">
                             <div class="progress-bar-container">
-                                <div class="progress-bar-fill" style="width: {{ item.progresso.percentual }}%;">
-                                    <span class="progress-bar-text">
-                                        {{ item.progresso.agendado }} / {{ item.progresso.previsto }}h ({{ item.progresso.percentual }}%)
-                                    </span>
-                                </div>
+                                <div class="progress-bar-fill" style="width: {{ item.progresso.percentual }}%;"></div>
+                                <span class="progress-bar-text">
+                                    {% set restantes = item.progresso.previsto - item.progresso.agendado %}
+                                    {{ item.progresso.agendado }} / {{ item.progresso.previsto }}h ({{ restantes }}h restantes)
+                                </span>
                             </div>
                         </td>
                         {% if current_user.role in ['programador', 'admin_escola'] %}
@@ -93,8 +93,35 @@
 {% endif %}
 
 <style>
-.progress-bar-container { width: 100%; background-color: #e9ecef; border-radius: 8px; overflow: hidden; height: 24px; position: relative; border: 1px solid #dee2e6; }
-.progress-bar-fill { background: linear-gradient(135deg, var(--color-primary-light), var(--color-primary)); height: 100%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 0.8rem; transition: width 0.5s ease-in-out; }
-.progress-bar-text { padding: 0 10px; white-space: nowrap; }
+.progress-bar-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 24px;
+    background-color: #e9ecef;
+    border-radius: 8px;
+    border: 1px solid #dee2e6;
+    overflow: hidden;
+}
+.progress-bar-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    background: linear-gradient(135deg, var(--color-primary-light), var(--color-primary));
+    transition: width 0.5s ease-in-out;
+}
+.progress-bar-text {
+    position: relative;
+    z-index: 1;
+    font-weight: 600;
+    font-size: 0.8rem;
+    color: white;
+    mix-blend-mode: difference; /* Efeito que inverte a cor do texto com base no fundo */
+    padding: 0 10px;
+    white-space: nowrap;
+}
 </style>
 {% endblock %}

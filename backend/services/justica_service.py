@@ -4,13 +4,65 @@ from ..models.database import db
 from ..models.processo_disciplina import ProcessoDisciplina
 from ..models.aluno import Aluno
 from ..models.user import User
+from ..models.turma import Turma
 from ..models.historico import HistoricoAluno
-from sqlalchemy import select, or_, and_
+from sqlalchemy import select, or_, and_, func
 from sqlalchemy.orm import joinedload
 from datetime import datetime, timezone
 from flask import current_app
+from collections import Counter
 
 class JusticaService:
+    @staticmethod
+    def get_analise_disciplinar_data():
+        """
+        Coleta e processa dados de todos os processos disciplinares para análise.
+        """
+        processos = db.session.scalars(
+            select(ProcessoDisciplina)
+            .options(
+                joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.turma),
+                joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.user)
+            )
+        ).all()
+
+        # 1. Contagens gerais
+        total_processos = len(processos)
+        status_counts = Counter(p.status for p in processos)
+
+        # 2. Contagem por turma
+        turma_counts = Counter()
+        for p in processos:
+            if p.aluno and p.aluno.turma:
+                turma_counts[p.aluno.turma.nome] += 1
+
+        # 3. Contagem por mês
+        month_counts = Counter()
+        for p in processos:
+            mes_ano = p.data_ocorrencia.strftime("%Y-%m") # Formato AAAA-MM para ordenação
+            month_counts[mes_ano] += 1
+        
+        # Ordena os meses para o gráfico de linha
+        sorted_months = sorted(month_counts.keys())
+        # Formata os meses para exibição (ex: "Out/2025")
+        month_labels = [datetime.strptime(m, "%Y-%m").strftime("%b/%Y") for m in sorted_months]
+        month_data = [month_counts[m] for m in sorted_months]
+
+        # 4. Fatos mais comuns (Top 5)
+        fato_counts = Counter(p.fato_constatado.strip() for p in processos)
+        top_5_fatos = fato_counts.most_common(5)
+
+        return {
+            'total_processos': total_processos,
+            'status_counts': dict(status_counts),
+            'turma_labels': list(turma_counts.keys()),
+            'turma_data': list(turma_counts.values()),
+            'month_labels': month_labels,
+            'month_data': month_data,
+            'top_fatos_labels': [fato[0] for fato in top_5_fatos],
+            'top_fatos_data': [fato[1] for fato in top_5_fatos],
+        }
+
     @staticmethod
     def get_processos_para_usuario(user):
         """Busca processos para um usuário específico (aluno ou admin)."""

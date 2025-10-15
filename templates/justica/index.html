@@ -8,78 +8,149 @@
     <p>Acompanhamento de processos disciplinares.</p>
 </div>
 
-<div class="justice-container">
-    <div class="justice-options">
-        <button class="btn btn-primary justice-option-btn active" data-target="inProgressContent">Em Andamento</button>
-        <button class="btn btn-warning justice-option-btn" data-target="finalizadosContent">Finalizados</button>
-        {% if current_user.role != 'aluno' %}
-        <button class="btn btn-success justice-option-btn" data-target="newTransgressionContent">Nova Transgressão</button>
-        <a href="{{ url_for('justica.exportar_selecao') }}" class="btn btn-info">Exportar para Aditamento Interno</a>
-        {% endif %}
-    </div>
+<div class="justice-page-layout">
+    <div class="justice-main-content">
+        <div class="justice-container">
+            <div class="justice-options">
+                <button class="btn btn-primary justice-option-btn active" data-target="inProgressContent">Em Andamento</button>
+                <button class="btn btn-warning justice-option-btn" data-target="finalizadosContent">Finalizados</button>
+                {% if current_user.role != 'aluno' %}
+                <button class="btn btn-success justice-option-btn" data-target="newTransgressionContent">Nova Transgressão</button>
+                <a href="{{ url_for('justica.exportar_selecao') }}" class="btn btn-info">Exportar para Aditamento Interno</a>
+                {% endif %}
+            </div>
 
-    <div class="justice-content active" id="inProgressContent">
-        <h3 class="justice-content-title">Processos em Andamento</h3>
-        {% for processo in em_andamento %}
-            {% if current_user.role == 'aluno' %}
-                {% include 'partials/_processo_card_aluno.html' %}
-            {% else %}
-                {% include 'partials/_processo_card_admin.html' %}
-            {% endif %}
-        {% else %}
-            <p>Nenhum processo em andamento encontrado.</p>
-        {% endfor %}
-    </div>
-    
-    <div class="justice-content" id="finalizadosContent">
-        <h3 class="justice-content-title">Processos Finalizados</h3>
-        {% for processo in finalizados %}
-            {% if current_user.role == 'aluno' %}
-                {% include 'partials/_processo_card_aluno.html' %}
-            {% else %}
-                {% include 'partials/_processo_card_admin.html' %}
-            {% endif %}
-        {% else %}
-            <p>Nenhum processo finalizado encontrado.</p>
-        {% endfor %}
-    </div>
-
-    {% if current_user.role != 'aluno' %}
-    <div class="justice-content" id="newTransgressionContent">
-        <h3 class="justice-content-title">Registrar Nova Transgressão</h3>
-        <form method="POST" action="{{ url_for('justica.novo_processo') }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <div class="form-group">
-                <label for="aluno_search_input">Aluno</label>
-                <div class="search-form-container">
-                    <div class="input-group">
-                        <input type="search" id="aluno_search_input" class="form-control" placeholder="Buscar por nome ou matrícula..." autocomplete="off">
-                    </div>
-                </div>
-                <div id="aluno_results" class="search-results"></div>
-                <input type="hidden" name="aluno_id" id="aluno_id_hidden" required>
-                <div id="aluno_selected" class="selected-item-display" style="display: none;"></div>
+            <div class="justice-content active" id="inProgressContent">
+                <h3 class="justice-content-title">Processos em Andamento</h3>
+                {% for processo in em_andamento %}
+                    {% if current_user.role == 'aluno' %}
+                        {% include 'partials/_processo_card_aluno.html' %}
+                    {% else %}
+                        {% include 'partials/_processo_card_admin.html' %}
+                    {% endif %}
+                {% else %}
+                    <p>Nenhum processo em andamento encontrado.</p>
+                {% endfor %}
             </div>
             
-            <div id="transgression_fields" style="display: none;">
-                <div class="form-group">
-                    <label for="fato">Fato Constatado</label>
-                    <textarea id="fato" name="fato" class="form-control" rows="4" required placeholder="Descreva aqui o fato ocorrido..."></textarea>
-                </div>
-                <div class="form-group">
-                    <label for="observacao">Observação (Termo de Justificação)</label>
-                    <textarea id="observacao" name="observacao" class="form-control" rows="12"></textarea>
-                </div>
-                <div class="form-actions">
-                    <button type="submit" class="btn btn-primary">Registrar</button>
-                </div>
+            <div class="justice-content" id="finalizadosContent">
+                <h3 class="justice-content-title">Processos Finalizados</h3>
+                {% for processo in finalizados %}
+                    {% if current_user.role == 'aluno' %}
+                        {% include 'partials/_processo_card_aluno.html' %}
+                    {% else %}
+                        {% include 'partials/_processo_card_admin.html' %}
+                    {% endif %}
+                {% else %}
+                    <p>Nenhum processo finalizado encontrado.</p>
+                {% endfor %}
             </div>
-        </form>
+
+            {% if current_user.role != 'aluno' %}
+            <div class="justice-content" id="newTransgressionContent">
+                <h3 class="justice-content-title">Registrar Nova Transgressão</h3>
+                <form method="POST" action="{{ url_for('justica.novo_processo') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="form-group">
+                        <label for="aluno_search_input">Aluno</label>
+                        <div class="search-form-container">
+                            <div class="input-group">
+                                <input type="search" id="aluno_search_input" class="form-control" placeholder="Buscar por nome ou matrícula..." autocomplete="off">
+                            </div>
+                        </div>
+                        <div id="aluno_results" class="search-results"></div>
+                        <input type="hidden" name="aluno_id" id="aluno_id_hidden" required>
+                        <div id="aluno_selected" class="selected-item-display" style="display: none;"></div>
+                    </div>
+                    
+                    <div id="transgression_fields" style="display: none;">
+                        <div class="form-group">
+                            <label for="fato">Fato Constatado</label>
+                            <textarea id="fato" name="fato" class="form-control" rows="4" required placeholder="Descreva aqui o fato ocorrido..."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="observacao">Observação (Termo de Justificação)</label>
+                            <textarea id="observacao" name="observacao" class="form-control" rows="12"></textarea>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">Registrar</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            {% endif %}
+        </div>
     </div>
-    {% endif %}
+    <div class="justice-sidebar">
+        {% if current_user.role != 'aluno' %}
+        <a href="{{ url_for('justica.analise') }}" class="analysis-card">
+            <div class="analysis-card-icon">📊</div>
+            <div class="analysis-card-text">
+                <h4>Análise de Dados</h4>
+                <p>Gráficos e estatísticas sobre as transgressões.</p>
+            </div>
+        </a>
+        {% endif %}
+    </div>
 </div>
 
 <style>
+    /* --- NOVOS ESTILOS PARA O LAYOUT E O CARD DE ANÁLISE --- */
+    .justice-page-layout {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+    }
+
+    /* Em telas maiores, cria a divisão em duas colunas */
+    @media (min-width: 992px) {
+        .justice-page-layout {
+            grid-template-columns: 3fr 1fr;
+        }
+    }
+
+    .analysis-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 1.5rem;
+        border-radius: var(--border-radius);
+        background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
+        color: white;
+        text-decoration: none;
+        transition: all 0.3s ease;
+        border: 2px solid transparent;
+        min-height: 150px;
+        box-shadow: var(--shadow-soft);
+    }
+
+    .analysis-card:hover {
+        transform: translateY(-5px);
+        box-shadow: var(--shadow-medium);
+        border-color: rgba(255, 255, 255, 0.5);
+    }
+
+    .analysis-card-icon {
+        font-size: 2.5rem;
+        line-height: 1;
+        margin-bottom: 0.75rem;
+    }
+
+    .analysis-card-text h4 {
+        font-size: 1.2rem;
+        font-weight: 700;
+        margin: 0 0 0.25rem 0;
+    }
+
+    .analysis-card-text p {
+        font-size: 0.8rem;
+        opacity: 0.8;
+        margin: 0;
+    }
+
+    /* --- ESTILOS EXISTENTES --- */
     .justice-options { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.5rem; align-items: center; }
     .justice-option-btn.active {
         filter: brightness(1.1);

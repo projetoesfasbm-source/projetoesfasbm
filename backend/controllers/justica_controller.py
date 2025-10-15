@@ -3,6 +3,7 @@
 from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, Response
 from flask_login import login_required, current_user
 from sqlalchemy import select, or_
+import locale # <-- NOVA IMPORTAÇÃO
 
 from ..models.database import db
 from ..models.aluno import Aluno
@@ -26,6 +27,15 @@ def index():
         em_andamento=processos_em_andamento,
         finalizados=processos_finalizados,
     )
+
+@justica_bp.route('/analise')
+@login_required
+@admin_or_programmer_required
+def analise():
+    """Página de análise de dados e gráficos."""
+    dados_analise = JusticaService.get_analise_disciplinar_data()
+    return render_template('justica/analise.html', dados=dados_analise)
+
 
 @justica_bp.route('/finalizar/<int:processo_id>', methods=['POST'])
 @login_required
@@ -126,6 +136,15 @@ def api_get_aluno_details(aluno_id):
 @login_required
 @admin_or_programmer_required
 def exportar_selecao():
+    # --- ALTERAÇÃO APLICADA AQUI ---
+    try:
+        # Define o locale para Português do Brasil para formatar o nome do mês
+        locale.setlocale(locale.LC_TIME, 'pt_BR.UTF-8')
+    except locale.Error:
+        # Fallback para o caso de o locale pt_BR não estar disponível no sistema
+        locale.setlocale(locale.LC_TIME, '')
+    # --- FIM DA ALTERAÇÃO ---
+
     if request.method == 'POST':
         processo_ids = request.form.getlist('processo_ids')
         if not processo_ids:

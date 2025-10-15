@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+
+{% block title %}Análise Disciplinar{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <h1>Análise Disciplinar</h1>
+    <p>Visão geral dos processos disciplinares através de dados e gráficos.</p>
+</div>
+
+<div class="quick-stats-bar">
+    <div class="stat-compact">
+        <span class="stat-icon">⚖️</span>
+        <div class="stat-info">
+            <span class="stat-number">{{ dados.total_processos }}</span>
+            <span class="stat-label">Total de Processos</span>
+        </div>
+    </div>
+    <div class="stat-compact">
+        <span class="stat-icon">⏳</span>
+        <div class="stat-info">
+            <span class="stat-number">{{ dados.status_counts.get('Pendente', 0) + dados.status_counts.get('Aluno Notificado', 0) + dados.status_counts.get('Defesa Enviada', 0) }}</span>
+            <span class="stat-label">Em Andamento</span>
+        </div>
+    </div>
+    <div class="stat-compact">
+        <span class="stat-icon">✅</span>
+        <div class="stat-info">
+            <span class="stat-number">{{ dados.status_counts.get('Finalizado', 0) }}</span>
+            <span class="stat-label">Finalizados</span>
+        </div>
+    </div>
+</div>
+
+<div class="charts-grid mt-4">
+    <div class="card shadow-sm">
+        <div class="card-header">
+            <h2 class="h5 mb-0">Transgressões por Turma</h2>
+        </div>
+        <div class="card-body">
+            <div class="chart-container" style="position: relative; height:300px; width:100%">
+                <canvas id="turmasChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-header">
+            <h2 class="h5 mb-0">Top 5 Fatos Mais Comuns</h2>
+        </div>
+        <div class="card-body">
+            <div class="chart-container" style="position: relative; height:300px; width:100%">
+                <canvas id="fatosChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm" style="grid-column: 1 / -1;">
+        <div class="card-header">
+            <h2 class="h5 mb-0">Transgressões ao Longo do Tempo</h2>
+        </div>
+        <div class="card-body">
+            <div class="chart-container" style="position: relative; height:300px; width:100%">
+                <canvas id="tempoChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .charts-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+        gap: 1.5rem;
+    }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const dadosAnalise = {{ dados | tojson }};
+
+    // Gráfico de Turmas (Barras)
+    const turmasCtx = document.getElementById('turmasChart');
+    if (turmasCtx) {
+        new Chart(turmasCtx.getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: dadosAnalise.turma_labels,
+                datasets: [{
+                    label: 'Nº de Processos',
+                    data: dadosAnalise.turma_data,
+                    backgroundColor: 'rgba(59, 130, 246, 0.7)',
+                    borderColor: 'rgb(59, 130, 246)',
+                    borderWidth: 1
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y' }
+        });
+    }
+
+    // Gráfico de Fatos (Barras Horizontais)
+    const fatosCtx = document.getElementById('fatosChart');
+    if (fatosCtx) {
+        new Chart(fatosCtx.getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: dadosAnalise.top_fatos_labels,
+                datasets: [{
+                    label: 'Ocorrências',
+                    data: dadosAnalise.top_fatos_data,
+                    backgroundColor: 'rgba(239, 68, 68, 0.7)',
+                    borderColor: 'rgb(239, 68, 68)',
+                    borderWidth: 1
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+    }
+
+    // Gráfico de Tempo (Linha)
+    const tempoCtx = document.getElementById('tempoChart');
+    if (tempoCtx) {
+        new Chart(tempoCtx.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: dadosAnalise.month_labels,
+                datasets: [{
+                    label: 'Nº de Processos por Mês',
+                    data: dadosAnalise.month_data,
+                    fill: false,
+                    borderColor: 'rgba(16, 185, 129, 0.9)',
+                    tension: 0.1
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+    }
+});
+</script>
+{% endblock %}
