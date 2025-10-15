@@ -17,6 +17,7 @@ customizer_bp = Blueprint('customizer', __name__, url_prefix='/customizer')
 def index():
     """Painel principal de customização"""
     SiteConfigService.init_default_configs()
+    db.session.commit() # <-- LINHA ADICIONADA PARA SALVAR AS CONFIGURAÇÕES
     
     configs = SiteConfigService.get_all_configs()
     assets = AssetService.get_all_assets()

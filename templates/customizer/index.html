@@ -26,6 +26,22 @@
 
     <div class="customizer-grid">
         <div class="config-section">
+            <h2>⏰ Horários dos Períodos</h2>
+            <div class="config-cards">
+                {% for config in configs_by_category.get('horarios', []) %}
+                <div class="config-card">
+                    <label class="config-label">{{ config.description or config.config_key }}</label>
+                    <input type="text" class="form-control text-input" 
+                           value="{{ config.config_value or '' }}"
+                           data-config-key="{{ config.config_key }}" 
+                           data-config-type="text"
+                           placeholder="HH:MM-HH:MM">
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="config-section">
             <h2>⚙️ Configurações Gerais</h2>
             <div class="config-cards">
                 {% for config in configs_by_category.get('general', []) %}

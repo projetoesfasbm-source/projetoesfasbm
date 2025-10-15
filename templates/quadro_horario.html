@@ -12,7 +12,6 @@
         
         {% if semana_selecionada and current_user.role in ['programador', 'admin_escola', 'instrutor', 'super_admin'] %}
         <div class="controls-group d-flex gap-2">
-            {# --- CORREÇÃO APLICADA AQUI: a classe do botão foi alterada para btn-danger --- #}
             {% if current_user.role in ['programador', 'admin_escola', 'super_admin'] %}
             <a href="{{ url_for('horario.exportar_pdf', pelotao=pelotao_selecionado, semana_id=semana_selecionada.id) }}" class="btn btn-danger" target="_blank">
                 Exportar PDF
@@ -83,14 +82,6 @@
                 </tr>
             </thead>
             <tbody>
-                {% set tempos = [
-                    ("1º", "07:30-08:15"), ("2º", "08:15-09:00"), ("3º", "09:00-09:45"),
-                    ("4º", "10:00-10:45"), ("5º", "10:45-11:30"), ("6º", "11:30-12:15"),
-                    ("7º", "13:45-14:30"), ("8º", "14:30-15:15"), ("9º", "15:15-16:00"),
-                    ("10º", "16:15-17:00"), ("11º", "17:00-17:45"), ("12º", "17:45-18:30"),
-                    ("13º", "18:30-19:15"), ("14º", "19:15-20:00"), ("15º", "20:00-20:45")
-                ] %}
-
                 {% for row_idx in range(15) %}
                     {% set periodo_num = row_idx + 1 %}
                     {% if (periodo_num <= 12) or 
@@ -108,14 +99,21 @@
 
                     {% if periodo_num == 3 %}
                     <tr class="intervalo-row">
-                        <td class="cell-tempo"><strong>INTERVALO</strong><span>09:45-10:00</span></td>
+                        <td class="cell-tempo"><strong>INTERVALO</strong><span>{{ intervalos.intervalo_1 }}</span></td>
                         <td colspan="5">INTERVALO</td>
                     </tr>
                     {% endif %}
                     
+                    {% if periodo_num == 6 %}
+                    <tr class="intervalo-row">
+                        <td class="cell-tempo"><strong>ALMOÇO</strong><span>{{ intervalos.almoco }}</span></td>
+                        <td colspan="5">INTERVALO DE ALMOÇO</td>
+                    </tr>
+                    {% endif %}
+
                     {% if periodo_num == 9 %}
                     <tr class="intervalo-row">
-                        <td class="cell-tempo"><strong>INTERVALO</strong><span>16:00-16:15</span></td>
+                        <td class="cell-tempo"><strong>INTERVALO</strong><span>{{ intervalos.intervalo_2 }}</span></td>
                         <td colspan="5">INTERVALO</td>
                     </tr>
                     {% endif %}

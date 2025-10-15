@@ -20,6 +20,7 @@ from ..models.semana import Semana
 from ..models.turma import Turma
 from ..models.ciclo import Ciclo
 from ..models.user import User
+from ..services.site_config_service import SiteConfigService
 from utils.decorators import admin_or_programmer_required, can_schedule_classes_required
 from ..services.horario_service import HorarioService
 from ..services.user_service import UserService
@@ -30,6 +31,28 @@ class AprovarHorarioForm(FlaskForm):
     horario_id = HiddenField('Horário ID', validators=[DataRequired()])
     action = HiddenField('Ação', validators=[DataRequired()])
     submit = SubmitField('Enviar')
+
+
+def _get_horario_context_data():
+    """
+    Busca e prepara os dados de horários e intervalos usando o método
+    robusto get_config para cada item.
+    """
+    tempos = []
+    for i in range(1, 16):
+        key = f"horario_periodo_{i:02d}"
+        periodo_str = f"{i}º"
+        # Chama get_config para cada um, garantindo o fallback para o valor padrão
+        time_str = SiteConfigService.get_config(key, 'N/D')
+        tempos.append((periodo_str, time_str))
+    
+    intervalos = {
+        'intervalo_1': SiteConfigService.get_config('horario_intervalo_1', 'N/D'),
+        'almoco': SiteConfigService.get_config('horario_almoco', 'N/D'),
+        'intervalo_2': SiteConfigService.get_config('horario_intervalo_2', 'N/D'),
+    }
+    return tempos, intervalos
+
 
 @horario_bp.route('/')
 @login_required
@@ -102,6 +125,8 @@ def index():
         if turma_selecionada_nome in pelotao_names:
             can_schedule_in_this_turma = True
 
+    tempos, intervalos = _get_horario_context_data()
+
     return render_template('quadro_horario.html',
                            horario_matrix=horario_matrix,
                            pelotao_selecionado=turma_selecionada_nome,
@@ -112,7 +137,9 @@ def index():
                            ciclo_selecionado=ciclo_selecionado_id,
                            datas_semana=datas_semana,
                            can_schedule_in_this_turma=can_schedule_in_this_turma,
-                           instrutor_turmas_vinculadas=instrutor_turmas_vinculadas)
+                           instrutor_turmas_vinculadas=instrutor_turmas_vinculadas,
+                           tempos=tempos,
+                           intervalos=intervalos)
 
 @horario_bp.route('/exportar-pdf')
 @login_required
@@ -168,6 +195,11 @@ def editar_horario_grid(pelotao, semana_id, ciclo_id):
     if not context_data.get('success'):
         flash(context_data.get('message', 'Erro ao carregar dados.'), 'danger')
         return redirect(url_for('horario.index'))
+    
+    tempos, intervalos = _get_horario_context_data()
+    context_data['tempos'] = tempos
+    context_data['intervalos'] = intervalos
+
     return render_template('editar_quadro_horario.html', **context_data)
 
 @horario_bp.route('/get-aula/<int:horario_id>')

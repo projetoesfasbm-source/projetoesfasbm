@@ -7,6 +7,7 @@ from ..models.database import db
 from ..models.user import User
 from ..models.user_school import UserSchool
 from ..models.disciplina import Disciplina
+from ..models.turma import Turma # Importar o modelo Turma
 
 class AdminToolsService:
     @staticmethod
@@ -75,11 +76,22 @@ class AdminToolsService:
     @staticmethod
     def clear_disciplines(school_id: int):
         """
-        Exclui permanentemente todas as disciplinas de uma escola.
-        Os dados em cascata (horários, vínculos, histórico) serão removidos.
+        Exclui permanentemente todas as disciplinas de uma escola,
+        navegando através das turmas.
         """
         try:
-            stmt = delete(Disciplina).where(Disciplina.school_id == school_id)
+            # 1. Encontrar os IDs de todas as turmas que pertencem à escola.
+            turmas_da_escola_ids = db.session.scalars(
+                select(Turma.id).where(Turma.school_id == school_id)
+            ).all()
+
+            if not turmas_da_escola_ids:
+                return True, "Nenhuma turma (e, portanto, nenhuma disciplina) encontrada para excluir."
+
+            # 2. Deletar todas as disciplinas cujo turma_id está na lista de turmas da escola.
+            # A exclusão em cascata (configurada no modelo Disciplina) cuidará dos registros
+            # em historico_disciplinas, horarios e disciplina_turmas.
+            stmt = delete(Disciplina).where(Disciplina.turma_id.in_(turmas_da_escola_ids))
             result = db.session.execute(stmt)
             
             db.session.commit()
