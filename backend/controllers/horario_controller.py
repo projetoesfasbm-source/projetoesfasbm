@@ -8,8 +8,8 @@ from datetime import date
 from flask_wtf import FlaskForm
 from wtforms import HiddenField, SubmitField
 from wtforms.validators import DataRequired
-from weasyprint import HTML # Importa o WeasyPrint
-from urllib.parse import quote # Para nomes de arquivo
+from weasyprint import HTML
+from urllib.parse import quote
 
 from ..models.database import db
 from ..models.horario import Horario
@@ -32,7 +32,6 @@ class AprovarHorarioForm(FlaskForm):
     action = HiddenField('Ação', validators=[DataRequired()])
     submit = SubmitField('Enviar')
 
-
 def _get_horario_context_data():
     """
     Busca e prepara os dados de horários e intervalos usando o método
@@ -42,7 +41,6 @@ def _get_horario_context_data():
     for i in range(1, 16):
         key = f"horario_periodo_{i:02d}"
         periodo_str = f"{i}º"
-        # Chama get_config para cada um, garantindo o fallback para o valor padrão
         time_str = SiteConfigService.get_config(key, 'N/D')
         tempos.append((periodo_str, time_str))
     
@@ -61,7 +59,6 @@ def index():
         if not current_user.aluno_profile or not current_user.aluno_profile.turma:
             flash("Você não está matriculado em nenhuma turma. Contate a administração.", 'warning')
             return redirect(url_for('main.dashboard'))
-        
         turma_do_aluno = current_user.aluno_profile.turma
         school_id = turma_do_aluno.school_id
         turma_selecionada_nome = turma_do_aluno.nome
@@ -107,21 +104,9 @@ def index():
         can_schedule_in_this_turma = True
     elif current_user.role == 'instrutor' and current_user.instrutor_profile:
         instrutor_id = current_user.instrutor_profile.id
-        
-        pelotao_names = db.session.scalars(
-            select(DisciplinaTurma.pelotao).where(
-                or_(
-                    DisciplinaTurma.instrutor_id_1 == instrutor_id,
-                    DisciplinaTurma.instrutor_id_2 == instrutor_id
-                )
-            ).distinct()
-        ).all()
-        
+        pelotao_names = db.session.scalars(select(DisciplinaTurma.pelotao).where(or_(DisciplinaTurma.instrutor_id_1 == instrutor_id, DisciplinaTurma.instrutor_id_2 == instrutor_id)).distinct()).all()
         if pelotao_names:
-            instrutor_turmas_vinculadas = db.session.scalars(
-                select(Turma).where(Turma.nome.in_(pelotao_names)).order_by(Turma.nome)
-            ).all()
-        
+            instrutor_turmas_vinculadas = db.session.scalars(select(Turma).where(Turma.nome.in_(pelotao_names)).order_by(Turma.nome)).all()
         if turma_selecionada_nome in pelotao_names:
             can_schedule_in_this_turma = True
 
@@ -147,38 +132,21 @@ def index():
 def exportar_pdf():
     pelotao = request.args.get('pelotao')
     semana_id = request.args.get('semana_id', type=int)
-
     if not pelotao or not semana_id:
         flash('Parâmetros inválidos para gerar o PDF.', 'danger')
         return redirect(url_for('horario.index'))
-
     semana = db.session.get(Semana, semana_id)
     if not semana:
         flash('Semana não encontrada.', 'danger')
         return redirect(url_for('horario.index'))
-
     horario_matrix = HorarioService.construir_matriz_horario(pelotao, semana_id, current_user)
     datas_semana = HorarioService.get_datas_da_semana(semana)
-
-    rendered_html = render_template(
-        'horario_pdf.html',
-        pelotao_selecionado=pelotao,
-        semana_selecionada=semana,
-        horario_matrix=horario_matrix,
-        datas_semana=datas_semana
-    )
-
+    rendered_html = render_template('horario_pdf.html', pelotao_selecionado=pelotao, semana_selecionada=semana, horario_matrix=horario_matrix, datas_semana=datas_semana)
     try:
         pdf_content = HTML(string=rendered_html, base_url=request.url_root).write_pdf()
         filename_utf8 = f'horario_{pelotao}_{semana.nome}.pdf'.replace(' ', '_')
         filename_ascii = 'quadro_horario.pdf'
-        return Response(
-            pdf_content,
-            mimetype='application/pdf',
-            headers={
-                'Content-Disposition': f'attachment; filename="{filename_ascii}"; filename*=UTF-8\'\'{quote(filename_utf8)}'
-            }
-        )
+        return Response(pdf_content, mimetype='application/pdf', headers={'Content-Disposition': f'attachment; filename="{filename_ascii}"; filename*=UTF-8\'\'{quote(filename_utf8)}'})
     except Exception as e:
         flash(f'Erro ao gerar PDF: {e}', 'danger')
         return redirect(url_for('horario.index', pelotao=pelotao, semana_id=semana_id))
@@ -195,11 +163,9 @@ def editar_horario_grid(pelotao, semana_id, ciclo_id):
     if not context_data.get('success'):
         flash(context_data.get('message', 'Erro ao carregar dados.'), 'danger')
         return redirect(url_for('horario.index'))
-    
     tempos, intervalos = _get_horario_context_data()
     context_data['tempos'] = tempos
     context_data['intervalos'] = intervalos
-
     return render_template('editar_quadro_horario.html', **context_data)
 
 @horario_bp.route('/get-aula/<int:horario_id>')
@@ -213,18 +179,8 @@ def get_aula_details(horario_id):
 @horario_bp.route('/api/instrutores-vinculados/<pelotao>/<int:disciplina_id>')
 @login_required
 def get_instrutores_vinculados(pelotao, disciplina_id):
-    vinculo = db.session.scalar(
-        select(DisciplinaTurma).options(
-            joinedload(DisciplinaTurma.instrutor_1).joinedload(Instrutor.user),
-            joinedload(DisciplinaTurma.instrutor_2).joinedload(Instrutor.user)
-        ).where(
-            DisciplinaTurma.pelotao == pelotao,
-            DisciplinaTurma.disciplina_id == disciplina_id
-        )
-    )
-    if not vinculo:
-        return jsonify([])
-    
+    vinculo = db.session.scalar(select(DisciplinaTurma).options(joinedload(DisciplinaTurma.instrutor_1).joinedload(Instrutor.user), joinedload(DisciplinaTurma.instrutor_2).joinedload(Instrutor.user)).where(DisciplinaTurma.pelotao == pelotao, DisciplinaTurma.disciplina_id == disciplina_id))
+    if not vinculo: return jsonify([])
     opcoes = []
     if vinculo.instrutor_1:
         posto = vinculo.instrutor_1.user.posto_graduacao or ''
@@ -236,16 +192,10 @@ def get_instrutores_vinculados(pelotao, disciplina_id):
         opcoes.append({'id': vinculo.instrutor_2.id, 'nome': f"{posto} {nome_guerra}"})
     if vinculo.instrutor_1 and vinculo.instrutor_2:
         id_combinado = f"{vinculo.instrutor_1.id}-{vinculo.instrutor_2.id}"
-        
-        posto1 = vinculo.instrutor_1.user.posto_graduacao or ''
-        nome1 = vinculo.instrutor_1.user.nome_de_guerra or vinculo.instrutor_1.user.username
-        
-        posto2 = vinculo.instrutor_2.user.posto_graduacao or ''
-        nome2 = vinculo.instrutor_2.user.nome_de_guerra or vinculo.instrutor_2.user.username
-        
+        posto1, nome1 = (vinculo.instrutor_1.user.posto_graduacao or ''), (vinculo.instrutor_1.user.nome_de_guerra or vinculo.instrutor_1.user.username)
+        posto2, nome2 = (vinculo.instrutor_2.user.posto_graduacao or ''), (vinculo.instrutor_2.user.nome_de_guerra or vinculo.instrutor_2.user.username)
         nome_combinado = f"{posto1} {nome1} e {posto2} {nome2}"
         opcoes.append({'id': id_combinado, 'nome': nome_combinado})
-        
     return jsonify(opcoes)
 
 @horario_bp.route('/salvar-aula', methods=['POST'])
@@ -261,10 +211,8 @@ def remover_aula():
     data = request.json
     horario_id = data.get('horario_id')
     success, message = HorarioService.remove_aula(horario_id, current_user)
-    if success:
-        return jsonify({'success': True, 'message': message})
-    else:
-        return jsonify({'success': False, 'message': message}), 403
+    if success: return jsonify({'success': True, 'message': message})
+    else: return jsonify({'success': False, 'message': message}), 403
 
 @horario_bp.route('/aprovar', methods=['GET', 'POST'])
 @login_required
@@ -277,6 +225,5 @@ def aprovar_horarios():
         success, message = HorarioService.aprovar_horario(horario_id, action)
         flash(message, 'success' if success else 'danger')
         return redirect(url_for('horario.aprovar_horarios'))
-        
     aulas_pendentes = HorarioService.get_aulas_pendentes()
     return render_template('aprovar_horarios.html', aulas_pendentes=aulas_pendentes, form=form)

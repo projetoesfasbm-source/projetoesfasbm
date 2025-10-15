@@ -125,68 +125,35 @@ class SiteConfigService:
                 )
                 db.session.add(config)
     
-    # --- O restante do ficheiro permanece igual ---
-
     @staticmethod
     def _parse_number_ptbr(value: str):
-        if value is None or (isinstance(value, str) and value.strip() == ""):
-            return None
+        if value is None or (isinstance(value, str) and value.strip() == ""): return None
         s = str(value).strip()
-        if ',' in s and '.' in s:
-            s = s.replace('.', '').replace(',', '.')
-        elif ',' in s:
-            s = s.replace(',', '.')
-        try:
-            return float(s)
-        except Exception:
-            raise ValueError(f"Não foi possível interpretar '{value}' como número.")
-
-    @staticmethod
-    def set_config(key: str, value: str, config_type: str = 'text', 
-                   description: str = None, category: str = 'general', 
-                   updated_by: int = None):
-        if key not in SiteConfigService._CONFIG_KEYS:
-            raise ValueError(f"Chave de configuração inválida: {key}")
+        if ',' in s and '.' in s: s = s.replace('.', '').replace(',', '.')
+        elif ',' in s: s = s.replace(',', '.')
+        try: return float(s)
+        except Exception: raise ValueError(f"Não foi possível interpretar '{value}' como número.")
         
+    @staticmethod
+    def set_config(key: str, value: str, config_type: str = 'text', description: str = None, category: str = 'general', updated_by: int = None):
+        if key not in SiteConfigService._CONFIG_KEYS: raise ValueError(f"Chave de configuração inválida: {key}")
         expected_type = SiteConfigService._CONFIG_KEYS[key]['type']
-        if config_type != expected_type:
-            raise ValueError(f"Tipo inválido para a chave {key}. Esperado: {expected_type}, Recebido: {config_type}")
-
+        if config_type != expected_type: raise ValueError(f"Tipo inválido para a chave {key}. Esperado: {expected_type}, Recebido: {config_type}")
         if expected_type == 'image':
-            if value and not (value.startswith('/static/uploads/') or value.startswith('http://') or value.startswith('https://')):
-                raise ValueError(f"Valor inválido para configuração de imagem: {value}.")
+            if value and not (value.startswith('/static/uploads/') or value.startswith('http://') or value.startswith('https://')): raise ValueError(f"Valor inválido para configuração de imagem: {value}.")
         elif expected_type == 'color':
-            if value and not re.match(r'^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$', value):
-                raise ValueError(f"Valor inválido para cor: {value}. Esperado formato hexadecimal (#RRGGBB).")
+            if value and not re.match(r'^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$', value): raise ValueError(f"Valor inválido para cor: {value}. Esperado formato hexadecimal (#RRGGBB).")
         elif expected_type == 'number':
             num = SiteConfigService._parse_number_ptbr(value)
             value = f"{num:.2f}" if num is not None else ""
-        elif expected_type == 'text':
-            pass
-
-        config = db.session.execute(
-            select(SiteConfig).where(SiteConfig.config_key == key)
-        ).scalar_one_or_none()
-        
+        config = db.session.execute(select(SiteConfig).where(SiteConfig.config_key == key)).scalar_one_or_none()
         if config:
-            config.config_value = value
-            config.config_type = config_type
-            config.description = description
-            config.category = category
-            config.updated_by = updated_by
+            config.config_value, config.config_type, config.description, config.category, config.updated_by = value, config_type, description, category, updated_by
         else:
-            config = SiteConfig(
-                config_key=key,
-                config_value=value,
-                config_type=config_type,
-                description=description,
-                category=category,
-                updated_by=updated_by
-            )
+            config = SiteConfig(config_key=key, config_value=value, config_type=config_type, description=description, category=category, updated_by=updated_by)
             db.session.add(config)
-        
         return config
-    
+
     @staticmethod
     def delete_all_configs():
         db.session.query(SiteConfig).delete()
@@ -194,23 +161,12 @@ class SiteConfigService:
     @staticmethod
     def get_valor_hora_aula(default: float = 55.19) -> float:
         raw = SiteConfigService.get_config('report_valor_hora_aula', None)
-        if raw is None or str(raw).strip() == "":
-            return float(default)
-        try:
-            return float(SiteConfigService._parse_number_ptbr(raw))
-        except Exception:
-            return float(default)
+        if raw is None or str(raw).strip() == "": return float(default)
+        try: return float(SiteConfigService._parse_number_ptbr(raw))
+        except Exception: return float(default)
 
     @staticmethod
     def set_valor_hora_aula(value: float | str, updated_by: int = None):
         num = SiteConfigService._parse_number_ptbr(str(value))
-        if num is None:
-            raise ValueError("Valor da hora-aula não pode ser vazio.")
-        return SiteConfigService.set_config(
-            key='report_valor_hora_aula',
-            value=f"{num:.2f}",
-            config_type='number',
-            description='Valor da hora-aula padrão usado em relatórios',
-            category='reports',
-            updated_by=updated_by
-        )
+        if num is None: raise ValueError("Valor da hora-aula não pode ser vazio.")
+        return SiteConfigService.set_config(key='report_valor_hora_aula', value=f"{num:.2f}", config_type='number', description='Valor da hora-aula padrão usado em relatórios', category='reports', updated_by=updated_by)

@@ -1,3 +1,5 @@
+# backend/controllers/customizer_controller.py
+
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
 
@@ -5,7 +7,6 @@ from ..models.database import db
 from ..models.image_asset import ImageAsset
 from ..models.site_config import SiteConfig
 from ..services.site_config_service import SiteConfigService
-# --- PERMISSÃO ALTERADA AQUI ---
 from utils.decorators import admin_or_programmer_required
 from ..services.asset_service import AssetService
 
@@ -17,7 +18,7 @@ customizer_bp = Blueprint('customizer', __name__, url_prefix='/customizer')
 def index():
     """Painel principal de customização"""
     SiteConfigService.init_default_configs()
-    db.session.commit() # <-- LINHA ADICIONADA PARA SALVAR AS CONFIGURAÇÕES
+    db.session.commit()
     
     configs = SiteConfigService.get_all_configs()
     assets = AssetService.get_all_assets()
