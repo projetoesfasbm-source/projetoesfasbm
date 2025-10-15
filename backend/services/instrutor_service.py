@@ -1,6 +1,9 @@
 # backend/services/instrutor_service.py
 
+import os
+import uuid
 from flask import current_app, session
+from werkzeug.utils import secure_filename
 from sqlalchemy import select, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
@@ -9,11 +12,38 @@ from backend.models.database import db
 from backend.models.instrutor import Instrutor
 from backend.models.user import User
 from backend.models.user_school import UserSchool
+from utils.image_utils import allowed_file
 from utils.normalizer import normalize_matricula, normalize_name
 
-class InstrutorService:
-    # ... (outras funções do serviço sem alteração) ...
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 
+def _save_profile_picture(file):
+    """Valida e salva a imagem de perfil; retorna o nome do arquivo salvo ou uma mensagem de erro."""
+    if not file:
+        return None, "Nenhum arquivo enviado."
+    
+    file.stream.seek(0)
+    if not allowed_file(file.filename, file.stream, ALLOWED_EXTENSIONS):
+        return None, "Tipo de arquivo de imagem não permitido."
+    
+    try:
+        filename = secure_filename(file.filename)
+        ext = filename.rsplit('.', 1)[1].lower()
+        unique_filename = f"{uuid.uuid4()}.{ext}"
+        upload_folder = os.path.join(current_app.static_folder, 'uploads', 'profile_pics')
+        os.makedirs(upload_folder, exist_ok=True)
+        file_path = os.path.join(upload_folder, unique_filename)
+        
+        file.stream.seek(0)
+        file.save(file_path)
+        
+        return unique_filename, "Arquivo salvo com sucesso"
+    except Exception as e:
+        current_app.logger.error(f"Erro ao salvar foto de perfil: {e}")
+        return None, "Erro ao salvar o arquivo de imagem."
+
+
+class InstrutorService:
     @staticmethod
     def get_all_instrutores(user=None, search_term=None, page=1, per_page=15):
         """
@@ -48,7 +78,32 @@ class InstrutorService:
 
         return db.paginate(stmt, page=page, per_page=per_page, error_out=False)
     
-    # ... (resto do arquivo sem alterações) ...
+    @staticmethod
+    def update_profile_picture(instrutor_id: int, file):
+        """Atualiza a foto de perfil de um instrutor."""
+        instrutor = db.session.get(Instrutor, instrutor_id)
+        if not instrutor:
+            return False, "Instrutor não encontrado."
+
+        if file:
+            # Remove a foto antiga se não for a padrão
+            if instrutor.foto_perfil and instrutor.foto_perfil != 'default.png':
+                old_path = os.path.join(current_app.static_folder, 'uploads', 'profile_pics', instrutor.foto_perfil)
+                if os.path.exists(old_path):
+                    try:
+                        os.remove(old_path)
+                    except Exception as e:
+                        current_app.logger.error(f"Não foi possível remover a foto antiga do instrutor: {e}")
+
+            # Salva a nova foto
+            filename, msg = _save_profile_picture(file)
+            if filename:
+                instrutor.foto_perfil = filename
+                return True, "Foto de perfil atualizada com sucesso."
+            else:
+                return False, msg
+        return False, "Nenhum arquivo de imagem fornecido."
+
     @staticmethod
     def _find_user_by_email_or_username(email: str):
         email = (email or '').strip()

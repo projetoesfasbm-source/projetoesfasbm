@@ -24,30 +24,36 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 
 
 def _save_profile_picture(file):
-    """Valida e salva a imagem de perfil; retorna o nome do arquivo salvo ou None."""
-    if file:
+    """Valida e salva a imagem de perfil; retorna o nome do arquivo salvo ou uma mensagem de erro."""
+    if not file:
+        return None, "Nenhum arquivo enviado."
+    
+    # Garante que o stream está no início antes de validar
+    file.stream.seek(0)
+    if not allowed_file(file.filename, file.stream, ALLOWED_EXTENSIONS):
+        return None, "Tipo de arquivo de imagem não permitido."
+    
+    try:
+        filename = secure_filename(file.filename)
+        ext = filename.rsplit('.', 1)[1].lower()
+        unique_filename = f"{uuid.uuid4()}.{ext}"
+        upload_folder = os.path.join(current_app.static_folder, 'uploads', 'profile_pics')
+        os.makedirs(upload_folder, exist_ok=True)
+        file_path = os.path.join(upload_folder, unique_filename)
+        
+        # Garante que o stream está no início antes de salvar
         file.stream.seek(0)
-        if allowed_file(file.filename, file.stream, ALLOWED_EXTENSIONS):
-            filename = secure_filename(file.filename)
-            ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else 'jpg'
-            unique_filename = f"{uuid.uuid4()}.{ext}"
-
-            upload_folder = os.path.join(current_app.static_folder, 'uploads', 'profile_pics')
-            os.makedirs(upload_folder, exist_ok=True)
-            file_path = os.path.join(upload_folder, unique_filename)
-            file.save(file_path)
-
-            return unique_filename
-    return None
+        file.save(file_path)
+        
+        return unique_filename, "Arquivo salvo com sucesso"
+    except Exception as e:
+        current_app.logger.error(f"Erro ao salvar foto de perfil: {e}")
+        return None, "Erro ao salvar o arquivo de imagem."
 
 
 class AlunoService:
-    # ... (outras funções do serviço sem alteração) ...
     @staticmethod
     def get_all_alunos(user, nome_turma=None, search_term=None, page=1, per_page=15):
-        """
-        Retorna uma paginação de alunos, com filtros opcionais de turma e busca.
-        """
         stmt = (
             select(Aluno)
             .join(User, Aluno.user_id == User.id)
@@ -91,84 +97,35 @@ class AlunoService:
         alunos_paginados = db.paginate(stmt, page=page, per_page=per_page, error_out=False)
         return alunos_paginados
 
-    # ... (resto do arquivo sem alterações) ...
-    # -----------------------------------------------------------
-    # CREATE
-    # -----------------------------------------------------------
-    @staticmethod
-    def save_aluno(user_id, data, foto_perfil=None):
-        existing_aluno = db.session.execute(
-            select(Aluno).where(Aluno.user_id == user_id)
-        ).scalar_one_or_none()
-        if existing_aluno:
-            return False, "Este usuário já possui um perfil de aluno cadastrado."
-
-        user = db.session.get(User, user_id)
-        if not user:
-            return False, "Usuário não encontrado."
-
-        opm = (data.get('opm') or '').strip()
-        turma_id = data.get('turma_id')
-        if turma_id == 0:
-            turma_id = None
-        funcao_atual = (data.get('funcao_atual') or '').strip()
-
-        if not opm:
-            return False, "O campo OPM é obrigatório."
-
-        try:
-            foto_filename = _save_profile_picture(foto_perfil)
-
-            novo_aluno = Aluno(
-                user_id=user_id,
-                opm=opm,
-                turma_id=int(turma_id) if turma_id else None,
-                funcao_atual=funcao_atual or None,
-                foto_perfil=foto_filename if foto_filename else 'default.png',
-            )
-            db.session.add(novo_aluno)
-            db.session.flush()
-
-            if turma_id:
-                turma = db.session.get(Turma, int(turma_id))
-                if turma and turma.school:
-                    disciplinas_da_escola = db.session.execute(
-                        select(Disciplina).where(Disciplina.school_id == turma.school_id)
-                    ).scalars().all()
-
-                    for disciplina in disciplinas_da_escola:
-                        existe = db.session.execute(
-                            select(HistoricoDisciplina).where(
-                                HistoricoDisciplina.aluno_id == novo_aluno.id,
-                                HistoricoDisciplina.disciplina_id == disciplina.id
-                            )
-                        ).scalar_one_or_none()
-                        if not existe:
-                            db.session.add(HistoricoDisciplina(
-                                aluno_id=novo_aluno.id,
-                                disciplina_id=disciplina.id
-                            ))
-
-            db.session.commit()
-            return True, "Perfil de aluno cadastrado e matriculado nas disciplinas da escola (se aplicável)!"
-        except IntegrityError:
-            db.session.rollback()
-            return False, "Erro de integridade dos dados."
-        except Exception as e:
-            db.session.rollback()
-            current_app.logger.error(f"Erro inesperado ao cadastrar aluno: {e}")
-            return False, f"Erro ao cadastrar aluno: {str(e)}"
-            
-    # -----------------------------------------------------------
-    # READ (ONE)
-    # -----------------------------------------------------------
     @staticmethod
     def get_aluno_by_id(aluno_id: int):
         return db.session.get(Aluno, aluno_id)
+        
+    @staticmethod
+    def update_profile_picture(aluno_id: int, file):
+        aluno = db.session.get(Aluno, aluno_id)
+        if not aluno:
+            return False, "Aluno não encontrado."
 
-    # -----------------------------------------------------------
-    # UPDATE
-    # -----------------------------------------------------------
+        if file:
+            # Remove a foto antiga se não for a padrão
+            if aluno.foto_perfil and aluno.foto_perfil != 'default.png':
+                old_path = os.path.join(current_app.static_folder, 'uploads', 'profile_pics', aluno.foto_perfil)
+                if os.path.exists(old_path):
+                    try:
+                        os.remove(old_path)
+                    except Exception as e:
+                        current_app.logger.error(f"Não foi possível remover a foto antiga: {e}")
+
+            # Salva a nova foto
+            filename, msg = _save_profile_picture(file)
+            if filename:
+                aluno.foto_perfil = filename
+                return True, "Foto de perfil atualizada com sucesso."
+            else:
+                return False, msg
+        return False, "Nenhum arquivo de imagem fornecido."
+
     @staticmethod
     def update_aluno(aluno_id: int, data: dict):
         aluno = db.session.get(Aluno, aluno_id)
@@ -191,7 +148,11 @@ class AlunoService:
             if aluno.user:
                 aluno.user.nome_completo = nome_completo
                 aluno.user.email = email_novo
-                aluno.user.posto_graduacao = data.get('posto_graduacao')
+                posto_selecionado = data.get('posto_graduacao')
+                if posto_selecionado == 'Outro':
+                    aluno.user.posto_graduacao = data.get('posto_graduacao_outro')
+                else:
+                    aluno.user.posto_graduacao = posto_selecionado
 
             aluno.opm = opm
             aluno.turma_id = int(turma_id_val)
@@ -245,9 +206,6 @@ class AlunoService:
             current_app.logger.error(f"Erro ao atualizar função do aluno: {e}")
             return False, "Ocorreu um erro ao atualizar a função."
 
-    # -----------------------------------------------------------
-    # DELETE
-    # -----------------------------------------------------------
     @staticmethod
     def delete_aluno(aluno_id: int):
         aluno = db.session.get(Aluno, aluno_id)

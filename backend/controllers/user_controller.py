@@ -16,6 +16,7 @@ from flask import (
     render_template,
     request,
     url_for,
+    jsonify
 )
 from flask_login import current_user, login_required
 from sqlalchemy import text, select
@@ -24,42 +25,15 @@ from werkzeug.security import generate_password_hash
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField, SelectField, RadioField
 from wtforms.validators import DataRequired, Email, EqualTo, Optional
+from flask_wtf.file import FileField, FileAllowed
 
-# ===== DB =====
-try:
-    from app import db
-except Exception:  # pragma: no cover
-    from backend.app import db  # type: ignore
-
-def _import_first(paths):
-    for p in paths:
-        try:
-            module_path, name = p.split(":")
-            mod = __import__(module_path, fromlist=[name])
-            return getattr(mod, name)
-        except Exception:
-            continue
-    return None
-
-User = _import_first([
-    "backend.models.user:User",
-    "app.models.user:User",
-])
-
-Turma = _import_first([
-    "backend.models.turma:Turma",
-    "app.models.turma:Turma",
-])
-
-Escola = _import_first([
-    "backend.models.escola:Escola",
-    "app.models.escola:Escola",
-])
-
-UserSchool = _import_first([
-    "backend.models.user_school:UserSchool",
-    "app.models.user_school:UserSchool",
-])
+from ..models.database import db
+from ..services.aluno_service import AlunoService
+from ..services.instrutor_service import InstrutorService
+from ..models.user import User
+from ..models.turma import Turma
+from ..models.school import School
+from ..models.user_school import UserSchool
 
 user_bp = Blueprint("user", __name__, url_prefix="/user")
 
@@ -82,6 +56,8 @@ class MeuPerfilForm(FlaskForm):
 
     turma_id = SelectField('Turma', coerce=int, validators=[Optional()])
     is_rr = RadioField("Efetivo da Reserva Remunerada (RR)", choices=[('True', 'Sim'), ('False', 'Não')], coerce=lambda x: x == 'True', default=False)
+    
+    foto_perfil = FileField('Alterar Foto de Perfil', validators=[FileAllowed(['jpg', 'jpeg', 'png', 'gif', 'webp'], 'Apenas imagens!')])
 
     current_password = PasswordField('Senha Atual', validators=[Optional()])
     new_password = PasswordField('Nova Senha', validators=[Optional(), EqualTo('confirm_new_password', message='As senhas não correspondem.')])
@@ -105,7 +81,8 @@ def set_password_hash_on_user(user_obj, plain: str):
         user_obj.password_hash = generate_password_hash(plain)
 
 def exists_in_users_by(column: str, value: str) -> bool:
-    return db.session.scalar(select(User).where(getattr(User, column) == value)) is not None
+    # Ignora o usuário atual na verificação para permitir que ele salve seu próprio perfil
+    return db.session.scalar(select(User).where(getattr(User, column) == value, User.id != current_user.id)) is not None
 
 def generate_unique_username(base: str, max_tries: int = 50) -> str:
     base = re.sub(r"[^a-z0-9._-]+", "-", base.lower())
@@ -133,23 +110,18 @@ def meu_perfil():
     # Lógica para popular dinamicamente as escolhas de Posto/Graduação
     if request.method == 'GET':
         posto_atual = current_user.posto_graduacao
-        categoria_encontrada = None
+        categoria_encontrada = 'Outros' # Padrão
         for categoria, postos in posto_graduacao_structured.items():
             if posto_atual in postos:
                 categoria_encontrada = categoria
                 break
-        
-        if categoria_encontrada:
-            form.posto_categoria.data = categoria_encontrada
-            form.posto_graduacao.choices = [(p, p) for p in posto_graduacao_structured[categoria_encontrada]]
-            form.posto_graduacao.data = posto_atual
+        form.posto_categoria.data = categoria_encontrada
     
-    if form.is_submitted():
-         categoria_selecionada = form.posto_categoria.data
-         if categoria_selecionada in posto_graduacao_structured:
-              form.posto_graduacao.choices = [(p, p) for p in posto_graduacao_structured[categoria_selecionada]]
-    
-    # Lógica para turmas (alunos) e RR (instrutores)
+    categoria_selecionada = form.posto_categoria.data or 'Praças'
+    form.posto_graduacao.choices = [(p, p) for p in posto_graduacao_structured.get(categoria_selecionada, [])]
+    if request.method == 'GET':
+        form.posto_graduacao.data = current_user.posto_graduacao
+
     if current_user.role == 'aluno' and current_user.aluno_profile:
         school_id = current_user.aluno_profile.turma.school_id if current_user.aluno_profile.turma else None
         if school_id:
@@ -160,24 +132,15 @@ def meu_perfil():
     elif current_user.role == 'instrutor' and hasattr(current_user, 'instrutor_profile') and current_user.instrutor_profile:
         if request.method == 'GET':
             form.is_rr.data = current_user.instrutor_profile.is_rr
-    else:
-        form.turma_id.choices = []
-
+    
     if form.validate_on_submit():
         try:
             current_user.nome_completo = form.nome_completo.data
             current_user.posto_graduacao = form.posto_graduacao.data
             
-            if current_user.role == 'aluno' and current_user.aluno_profile:
-                current_user.aluno_profile.turma_id = form.turma_id.data
-            
-            if current_user.role == 'instrutor' and hasattr(current_user, 'instrutor_profile') and current_user.instrutor_profile:
-                current_user.instrutor_profile.is_rr = form.is_rr.data
-
-            if form.email.data != current_user.email:
-                if exists_in_users_by("email", form.email.data):
-                    flash("Este e-mail já está em uso.", "warning")
-                    return redirect(url_for("user.meu_perfil"))
+            if form.email.data != current_user.email and exists_in_users_by("email", form.email.data):
+                flash("Este e-mail já está em uso por outro usuário.", "warning")
+            else:
                 current_user.email = form.email.data
 
             if form.new_password.data:
@@ -187,6 +150,18 @@ def meu_perfil():
                     set_password_hash_on_user(current_user, form.new_password.data)
                     current_user.must_change_password = False
                     flash("Senha alterada com sucesso.", "success")
+            
+            if current_user.role == 'aluno' and current_user.aluno_profile:
+                current_user.aluno_profile.turma_id = form.turma_id.data
+                if form.foto_perfil.data:
+                    success, message = AlunoService.update_profile_picture(current_user.aluno_profile.id, form.foto_perfil.data)
+                    flash(message, 'success' if success else 'danger')
+
+            if current_user.role == 'instrutor' and hasattr(current_user, 'instrutor_profile') and current_user.instrutor_profile:
+                current_user.instrutor_profile.is_rr = form.is_rr.data
+                if form.foto_perfil.data:
+                    success, message = InstrutorService.update_profile_picture(current_user.instrutor_profile.id, form.foto_perfil.data)
+                    flash(message, 'success' if success else 'danger')
 
             db.session.commit()
             flash("Perfil atualizado com sucesso.", "success")
@@ -198,7 +173,39 @@ def meu_perfil():
 
     return render_template("meu_perfil.html", user=current_user, form=form, postos_data=posto_graduacao_structured)
 
-# ===== Rotas de Admin =====
+
+@user_bp.route("/change-password-ajax", methods=["POST"])
+@login_required
+def change_password_ajax():
+    data = request.json
+    current_password = data.get('current_password')
+    new_password = data.get('new_password')
+    confirm_new_password = data.get('confirm_new_password')
+
+    if not all([current_password, new_password, confirm_new_password]):
+        return jsonify({'success': False, 'message': 'Todos os campos são obrigatórios.'}), 400
+
+    if not current_user.check_password(current_password):
+        return jsonify({'success': False, 'message': 'A senha atual está incorreta.'}), 400
+    
+    if new_password != confirm_new_password:
+        return jsonify({'success': False, 'message': 'As novas senhas não correspondem.'}), 400
+    
+    if len(new_password) < 8:
+        return jsonify({'success': False, 'message': 'A nova senha deve ter pelo menos 8 caracteres.'}), 400
+        
+    try:
+        set_password_hash_on_user(current_user, new_password)
+        current_user.must_change_password = False
+        db.session.commit()
+        return jsonify({'success': True, 'message': 'Senha alterada com sucesso!'})
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Erro ao alterar senha via AJAX: {e}")
+        return jsonify({'success': False, 'message': 'Ocorreu um erro interno ao alterar a senha.'}), 500
+
+
+# ===== Rotas de Admin (sem alterações, mantidas como estavam) =====
 @user_bp.route("/criar-admin", methods=["GET", "POST"])
 @login_required
 def criar_admin_escola():
@@ -228,17 +235,17 @@ def criar_admin_escola():
             base_username = (email.split("@")[0] if "@" in email else email)
             username = generate_unique_username(base_username)
 
-            if exists_in_users_by("email", email):
+            if db.session.scalar(select(User).where(User.email == email)):
                 flash("E-mail já está em uso na tabela de usuários.", "warning")
                 return redirect(url_for("user.criar_admin_escola"))
-            if exists_in_users_by("id_func", id_func):
-                flash("ID Func já está em uso na tabela de usuários.", "warning")
+            if db.session.scalar(select(User).where(User.matricula == id_func)):
+                flash("Matrícula (ID Func) já está em uso na tabela de usuários.", "warning")
                 return redirect(url_for("user.criar_admin_escola"))
 
             temp_pass = secrets.token_urlsafe(8)
             
             user = User(
-                id_func=id_func,
+                matricula=id_func,
                 username=username,
                 email=email,
                 nome_completo=nome,
@@ -261,8 +268,8 @@ def criar_admin_escola():
             msg = str(getattr(ie, "orig", ie))
             if "email" in msg.lower():
                 flash("Conflito: e-mail já cadastrado.", "danger")
-            elif "id_func" in msg.lower():
-                flash("Conflito: ID Func já cadastrada.", "danger")
+            elif "matricula" in msg.lower():
+                flash("Conflito: Matrícula (ID Func) já cadastrada.", "danger")
             else:
                 flash(f"Não foi possível criar (Erro de Integridade). Detalhe: {msg}", "danger")
         except Exception:
