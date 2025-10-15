@@ -14,7 +14,7 @@
         <button class="btn btn-warning justice-option-btn" data-target="finalizadosContent">Finalizados</button>
         {% if current_user.role != 'aluno' %}
         <button class="btn btn-success justice-option-btn" data-target="newTransgressionContent">Nova Transgressão</button>
-        <a href="{{ url_for('justica.exportar_selecao') }}" class="btn btn-info">Exportar para BI</a>
+        <a href="{{ url_for('justica.exportar_selecao') }}" class="btn btn-info">Exportar para Aditamento Interno</a>
         {% endif %}
     </div>
 
