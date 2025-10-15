@@ -69,7 +69,12 @@ class HorarioService:
                     
                     if duracao_bloco <= 0: break 
 
-                    can_see_details = HorarioService.can_edit_horario(aula, user) or user.role == 'aluno'
+                    # --- CORREÇÃO APLICADA AQUI ---
+                    # Define quem pode ver os detalhes de uma aula pendente (apenas admins e o próprio instrutor)
+                    can_see_pending_details = HorarioService.can_edit_horario(aula, user)
+                    
+                    # A regra final: os detalhes são visíveis se a aula estiver confirmada OU se o usuário tiver permissão para ver aulas pendentes.
+                    show_details = aula.status == 'confirmado' or can_see_pending_details
                     
                     instrutores_display_list = []
                     if aula.instrutor and aula.instrutor.user:
@@ -87,8 +92,8 @@ class HorarioService:
 
                     aula_info = {
                         'id': aula.id,
-                        'materia': aula.disciplina.materia if aula.status == 'confirmado' or can_see_details else 'Aguardando Aprovação',
-                        'instrutor': instrutor_display if aula.status == 'confirmado' or can_see_details else None,
+                        'materia': aula.disciplina.materia if show_details else 'Aguardando Aprovação',
+                        'instrutor': instrutor_display if show_details else None,
                         'observacao': aula.observacao,
                         'duracao': duracao_bloco,
                         'status': aula.status,
@@ -96,6 +101,7 @@ class HorarioService:
                         'can_edit': HorarioService.can_edit_horario(aula, user),
                         'is_continuation': is_continuation
                     }
+                    # --- FIM DA CORREÇÃO ---
                     
                     if 0 <= periodo_atual_idx < 15:
                         horario_matrix[periodo_atual_idx][dia_idx] = aula_info

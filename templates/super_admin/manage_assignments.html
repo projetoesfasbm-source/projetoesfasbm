@@ -6,13 +6,13 @@
 <div class="container mt-4">
     <h1 class="mb-4">Gerenciar Atribuições de Papéis</h1>
 
-    {# Formulário de Atribuição (Layout Corrigido) #}
+    {# Formulário de Atribuição #}
     <div class="card mb-4">
         <div class="card-header">
             Atribuir Papel a Usuário em uma Escola
         </div>
         <div class="card-body">
-            <form method="POST" action="{{ url_for('super_admin.manage_assignments') }}">
+            <form method="POST" action="{{ url_for('super_admin.manage_assignments', school_id=selected_school_id, filter=selected_filter) }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                 <input type="hidden" name="action" value="assign">
                 
@@ -51,93 +51,48 @@
         </div>
     </div>
 
-    {# Resetar Senha #}
-    <div class="card mb-4">
-        <div class="card-header bg-warning">
-            Resetar Senha de Usuário
+    {# Tabela Unificada de Gerenciamento de Usuários #}
+    <div class="card">
+        <div class="card-header">
+            Atribuições e Gerenciamento de Usuários
         </div>
         <div class="card-body">
-            <form method="POST" action="{{ url_for('super_admin.reset_user_password') }}" onsubmit="return confirm('Tem certeza que deseja resetar a senha deste usuário? Uma nova senha temporária será gerada.');">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                <p class="text-muted">Selecione um usuário para gerar uma nova senha temporária. A nova senha será exibida em uma mensagem no topo da tela.</p>
+            
+            <div class="card bg-light p-3 mb-4 border">
                 <div class="row g-3 align-items-end">
-                    <div class="col-md">
-                        <label for="reset_user_id" class="form-label">Usuário (Pesquisável)</label>
-                        <input type="text" id="user-search-input" class="form-control mb-2" placeholder="Digite um nome ou matrícula para pesquisar...">
-                        <select id="reset_user_id" name="user_id" class="form-control" required size="8">
-                            <option value="" disabled selected>-- Selecione um Usuário --</option>
-                            {% for user in users %}
-                                <option value="{{ user.id }}">{{ user.nome_completo or user.username }} (Matrícula: {{ user.matricula }})</option>
+                    <div class="col-md-4">
+                        <label for="school-filter" class="form-label fw-bold">Filtrar por Escola:</label>
+                        <select id="school-filter" class="form-select" onchange="window.location.href = '{{ url_for('super_admin.manage_assignments') }}?school_id=' + this.value + '&filter={{ selected_filter or '' }}';">
+                            <option value="">-- Todas as Escolas --</option>
+                            {% for school in schools %}
+                                <option value="{{ school.id }}" {% if school.id == selected_school_id %}selected{% endif %}>
+                                    {{ school.nome }}
+                                </option>
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="col-md-auto">
-                        <button type="submit" class="btn btn-danger w-100">Resetar Senha</button>
+                    <div class="col-md-8">
+                        <label class="form-label fw-bold">Filtrar por Status/Papel:</label>
+                        <div class="btn-group w-100">
+                            <a href="{{ url_for('super_admin.manage_assignments', school_id=selected_school_id) }}" class="btn {% if not selected_filter %}btn-primary{% else %}btn-outline-primary{% endif %}">Todos</a>
+                            <a href="{{ url_for('super_admin.manage_assignments', school_id=selected_school_id, filter='admin_escola') }}" class="btn {% if selected_filter == 'admin_escola' %}btn-primary{% else %}btn-outline-primary{% endif %}">Admins</a>
+                            <a href="{{ url_for('super_admin.manage_assignments', school_id=selected_school_id, filter='instrutor') }}" class="btn {% if selected_filter == 'instrutor' %}btn-primary{% else %}btn-outline-primary{% endif %}">Instrutores</a>
+                            <a href="{{ url_for('super_admin.manage_assignments', school_id=selected_school_id, filter='aluno') }}" class="btn {% if selected_filter == 'aluno' %}btn-primary{% else %}btn-outline-primary{% endif %}">Alunos</a>
+                            <a href="{{ url_for('super_admin.manage_assignments', school_id=selected_school_id, filter='preregistered') }}" class="btn {% if selected_filter == 'preregistered' %}btn-warning{% else %}btn-outline-warning{% endif %}">Pré-Cadastrados</a>
+                            <a href="{{ url_for('super_admin.manage_assignments', school_id=selected_school_id, filter='orphans') }}" class="btn {% if selected_filter == 'orphans' %}btn-danger{% else %}btn-outline-danger{% endif %}">Órfãos</a>
+                        </div>
                     </div>
                 </div>
-            </form>
-        </div>
-    </div>
+            </div>
+            
+            <div class="mb-3">
+                <input type="text" id="user-search-input" class="form-control" placeholder="Digite um nome ou matrícula para refinar a busca na lista atual...">
+            </div>
 
-    {# Tabela de Atribuições Existentes #}
-    <div class="card">
-        <div class="card-header">
-            Atribuições Atuais
-        </div>
-        <div class="card-body">
-            {% if assignments %}
-                <table class="table table-striped">
-                    <thead>
-                        <tr>
-                            <th scope="col">Usuário</th>
-                            <th scope="col">Escola</th>
-                            <th scope="col">Papel</th>
-                            <th scope="col">Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for assignment in assignments %}
-                        {% set u = assignment.user %}
-                        {% set s = assignment.school %}
-                        {% set is_protected = (u.role in ['super_admin','programador']) or ((u.username or '') in ['super_admin','programador']) %}
-                        <tr>
-                            <td>{{ u.nome_completo or u.username or u.matricula }}</td>
-                            <td>{{ s.nome }}</td>
-                            <td>{{ assignment.role }}</td>
-                            <td class="d-flex gap-2">
-                                {# Remover vínculo #}
-                                <form method="POST"
-                                      action="{{ url_for('super_admin.manage_assignments') }}"
-                                      onsubmit="return confirm('Tem certeza que deseja remover este vínculo?');">
-                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                                    <input type="hidden" name="action" value="remove">
-                                    <input type="hidden" name="user_id" value="{{ assignment.user_id }}">
-                                    <input type="hidden" name="school_id" value="{{ assignment.school_id }}">
-                                    <button type="submit"
-                                            class="btn btn-warning btn-sm"
-                                            {% if is_protected %}disabled title="Não permitido para usuários privilegiados"{% endif %}>
-                                        Remover
-                                    </button>
-                                </form>
-
-                                {# Excluir usuário (permanente) #}
-                                <form method="POST"
-                                      action="{{ url_for('super_admin.delete_user', user_id=u.id) }}"
-                                      onsubmit="return confirm('EXCLUIR o usuário {{ u.nome_completo or u.username or u.matricula }}? Esta ação é permanente.');">
-                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                                    <button type="submit"
-                                            class="btn btn-danger btn-sm"
-                                            {% if is_protected %}disabled title="Não permitido para usuários privilegiados"{% endif %}>
-                                        Excluir usuário
-                                    </button>
-                                </form>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+            {% if selected_filter == 'orphans' %}
+                {% include 'super_admin/partials/_orphans_table.html' %}
             {% else %}
-                <p class="text-center">Nenhum papel atribuído ainda.</p>
+                {% include 'super_admin/partials/_assignments_table.html' %}
             {% endif %}
         </div>
     </div>
@@ -146,22 +101,20 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const searchInput = document.getElementById('user-search-input');
-    const userSelect = document.getElementById('reset_user_id');
-    if (!searchInput || !userSelect) return;
+    const table = document.getElementById('assignments-table') || document.getElementById('orphans-table');
+    if (!searchInput || !table) return;
 
-    const options = Array.from(userSelect.options);
+    const tableRows = table.querySelectorAll('tbody tr');
 
     searchInput.addEventListener('input', function() {
-        const searchTerm = this.value.toLowerCase();
+        const searchTerm = this.value.toLowerCase().trim();
 
-        // preserva o placeholder
-        const placeholder = options.find(o => o.value === "");
-        userSelect.innerHTML = '';
-        if (placeholder) userSelect.appendChild(placeholder);
-
-        options.forEach(option => {
-            if (option.value !== "" && option.text.toLowerCase().includes(searchTerm)) {
-                userSelect.appendChild(option);
+        tableRows.forEach(function(row) {
+            const rowText = row.textContent.toLowerCase();
+            if (rowText.includes(searchTerm)) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
             }
         });
     });

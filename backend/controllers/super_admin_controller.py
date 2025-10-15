@@ -11,7 +11,7 @@ from ..models.user import User
 from ..models.user_school import UserSchool
 from ..services.school_service import SchoolService
 from ..services.user_service import UserService
-from sqlalchemy import not_
+from sqlalchemy import not_, select
 
 super_admin_bp = Blueprint('super_admin', __name__, url_prefix='/super-admin')
 
@@ -62,30 +62,52 @@ def delete_school(school_id):
 @login_required
 @super_admin_required
 def manage_assignments():
+    school_id_filter = request.args.get('school_id', type=int)
+    role_filter = request.args.get('filter')
+
     if request.method == 'POST':
         action = request.form.get('action')
         user_id = request.form.get('user_id')
-        school_id = request.form.get('school_id')
+        school_id_form = request.form.get('school_id')
         
         if action == 'assign':
             role = request.form.get('role')
-            success, message = UserService.assign_school_role(int(user_id), int(school_id), role)
+            success, message = UserService.assign_school_role(int(user_id), int(school_id_form), role)
             flash(message, 'success' if success else 'danger')
         elif action == 'remove':
-            success, message = UserService.remove_school_role(int(user_id), int(school_id))
+            success, message = UserService.remove_school_role(int(user_id), int(school_id_form))
             flash(message, 'success' if success else 'danger')
         
-        return redirect(url_for('super_admin.manage_assignments'))
+        return redirect(url_for('super_admin.manage_assignments', school_id=school_id_filter, filter=role_filter))
 
+    # Query base para todos os usuários gerenciáveis
     all_manageable_users_query = db.select(User).filter(
         User.role.notin_(['programador', 'super_admin'])
     ).order_by(User.nome_completo)
     all_manageable_users = db.session.scalars(all_manageable_users_query).all()
 
-    assignments = db.session.scalars(db.select(UserSchool).join(User).join(School)).all()
-    assigned_user_ids = {a.user_id for a in assignments}
+    # Queries de atribuição e órfãos
+    assignments = []
+    orphans = []
 
-    unassigned_users = [user for user in all_manageable_users if user.id not in assigned_user_ids]
+    if role_filter == 'orphans':
+        assigned_user_ids = db.session.scalars(db.select(UserSchool.user_id).distinct()).all()
+        orphans_query = db.select(User).where(
+            User.id.notin_(assigned_user_ids),
+            User.role.notin_(['programador', 'super_admin'])
+        )
+        orphans = db.session.scalars(orphans_query).all()
+    else:
+        assignments_query = db.select(UserSchool).join(User).join(School)
+        if school_id_filter:
+            assignments_query = assignments_query.where(UserSchool.school_id == school_id_filter)
+        
+        if role_filter in ['admin_escola', 'instrutor', 'aluno']:
+            assignments_query = assignments_query.where(UserSchool.role == role_filter)
+        elif role_filter == 'preregistered':
+            assignments_query = assignments_query.where(User.is_active == False)
+        
+        assignments = db.session.scalars(assignments_query.order_by(User.nome_completo)).all()
     
     schools = db.session.scalars(db.select(School).order_by(School.nome)).all()
 
@@ -94,8 +116,11 @@ def manage_assignments():
         users=all_manageable_users, 
         schools=schools, 
         assignments=assignments,
-        unassigned_users=unassigned_users
+        orphans=orphans,
+        selected_school_id=school_id_filter,
+        selected_filter=role_filter
     )
+
 
 @super_admin_bp.route('/create-administrator', methods=['POST'])
 @login_required
@@ -151,30 +176,32 @@ def create_administrator():
 @login_required
 @super_admin_required
 def delete_user(user_id):
+    school_id_filter = request.args.get('school_id', type=int)
+    role_filter = request.args.get('filter')
     success, message = UserService.delete_user_by_id(user_id)
     flash(message, 'success' if success else 'danger')
-    return redirect(url_for('super_admin.manage_assignments'))
+    return redirect(url_for('super_admin.manage_assignments', school_id=school_id_filter, filter=role_filter))
 
-# --- NOVA ROTA PARA RESETAR SENHA ---
 @super_admin_bp.route('/reset-user-password', methods=['POST'])
 @login_required
 @super_admin_required
 def reset_user_password():
+    school_id_filter = request.args.get('school_id', type=int)
+    role_filter = request.args.get('filter')
     user_id = request.form.get('user_id')
     if not user_id:
         flash('Nenhum usuário selecionado.', 'danger')
-        return redirect(url_for('super_admin.manage_assignments'))
+        return redirect(url_for('super_admin.manage_assignments', school_id=school_id_filter, filter=role_filter))
 
     user = db.session.get(User, int(user_id))
     if not user:
         flash('Usuário não encontrado.', 'danger')
-        return redirect(url_for('super_admin.manage_assignments'))
+        return redirect(url_for('super_admin.manage_assignments', school_id=school_id_filter, filter=role_filter))
     
     if user.role in ['super_admin', 'programador']:
         flash('Não é permitido resetar a senha de um Super Admin ou Programador por este método.', 'warning')
-        return redirect(url_for('super_admin.manage_assignments'))
+        return redirect(url_for('super_admin.manage_assignments', school_id=school_id_filter, filter=role_filter))
 
-    # Gera senha temporária segura
     alphabet = string.ascii_letters + string.digits + '!@#$%^&*'
     temp_password = ''.join(secrets.choice(alphabet) for i in range(12))
 
@@ -187,4 +214,4 @@ def reset_user_password():
         db.session.rollback()
         flash(f'Ocorreu um erro ao resetar a senha: {e}', 'danger')
 
-    return redirect(url_for('super_admin.manage_assignments'))
+    return redirect(url_for('super_admin.manage_assignments', school_id=school_id_filter, filter=role_filter))

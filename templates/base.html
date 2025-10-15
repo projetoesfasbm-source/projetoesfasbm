@@ -9,7 +9,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='1.1') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='1.3') }}">
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
@@ -70,7 +70,35 @@
     </style>
 </head>
 <body>
-    <button class="sidebar-toggle" id="sidebarToggle">☰</button>
+    
+    {% if current_user.is_authenticated %}
+    <header class="top-navbar">
+        <div class="top-navbar-content">
+            <button class="sidebar-toggle" id="sidebarToggle">☰</button>
+            
+            <div class="top-navbar-user-menu ms-auto">
+                 <div class="dropdown">
+                    <a href="#" class="d-flex align-items-center text-decoration-none dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                        <div class="user-info">
+                            <strong>{{ current_user.nome_de_guerra or current_user.nome_completo }}</strong>
+                            <small>{{ current_user.matricula }}</small>
+                        </div>
+                        <div class="user-avatar">
+                            <span>{{ (current_user.nome_de_guerra or current_user.username)[0] }}</span>
+                        </div>
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="{{ url_for('user.meu_perfil') }}">Meu Perfil</a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('user.meu_perfil') }}">Alterar Senha</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item text-danger" href="{{ url_for('auth.logout') }}">Sair do Sistema</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </header>
+    {% endif %}
+
     <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
     <div class="page-container {% if not current_user.is_authenticated %}no-sidebar{% endif %}">
@@ -165,14 +193,7 @@
             </nav>
 
             <div class="sidebar-footer">
-                {% if current_user.is_authenticated %}
-                    <a href="{{ url_for('user.meu_perfil') }}" class="nav-link">
-                        <div class="nav-icon">👤</div> Meu Perfil
-                    </a>
-                {% endif %}
-                <a href="{{ url_for('auth.logout') }}" class="nav-link logout-link">
-                    <div class="nav-icon">🚪</div> Sair do Sistema
-                </a>
+                
             </div>
         </aside>
         {% endif %}
