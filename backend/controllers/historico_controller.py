@@ -48,7 +48,6 @@ def historico_funcional(aluno_id):
         flash("Aluno não encontrado.", "danger")
         return redirect(url_for('main.dashboard'))
     
-    # Garante que um aluno só possa ver seu próprio histórico
     if current_user.role == 'aluno' and current_user.aluno_profile.id != aluno_id:
         flash("Você não tem permissão para ver o histórico de outro aluno.", "danger")
         return redirect(url_for('main.dashboard'))
@@ -70,13 +69,26 @@ def minhas_notas():
 
     if aluno.turma and aluno.turma.school:
         school_id = aluno.turma.school.id
-        disciplinas_da_escola = db.session.scalars(select(Disciplina).where(Disciplina.school_id == school_id)).all()
-        matriculas_existentes = db.session.scalars(select(HistoricoDisciplina.disciplina_id).where(HistoricoDisciplina.aluno_id == aluno_id)).all()
+        
+        # --- CORREÇÃO APLICADA AQUI ---
+        # A query agora junta com a tabela Turma para filtrar pelo school_id.
+        disciplinas_da_escola = db.session.scalars(
+            select(Disciplina).join(Turma).where(Turma.school_id == school_id)
+        ).all()
+        # --- FIM DA CORREÇÃO ---
+
+        matriculas_existentes_ids = {h.disciplina_id for h in aluno.historico_disciplinas}
+        
+        novas_matriculas = False
         for disciplina in disciplinas_da_escola:
-            if disciplina.id not in matriculas_existentes:
+            # Garante que a disciplina pertence à mesma turma do aluno
+            if disciplina.turma_id == aluno.turma_id and disciplina.id not in matriculas_existentes_ids:
                 nova_matricula = HistoricoDisciplina(aluno_id=aluno.id, disciplina_id=disciplina.id)
                 db.session.add(nova_matricula)
-        db.session.commit()
+                novas_matriculas = True
+        
+        if novas_matriculas:
+            db.session.commit()
 
     historico_disciplinas = HistoricoService.get_historico_disciplinas_for_aluno(aluno_id)
     notas_finais = [h.nota for h in historico_disciplinas if h.nota is not None]
