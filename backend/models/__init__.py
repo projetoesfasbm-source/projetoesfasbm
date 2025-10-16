@@ -24,7 +24,8 @@ from .pergunta import Pergunta
 from .opcao_resposta import OpcaoResposta
 from .resposta import Resposta
 from .processo_disciplina import ProcessoDisciplina
-from .notification import Notification # <-- ADICIONE ESTA LINHA
+from .notification import Notification
+from .push_subscription import PushSubscription # <-- ADICIONE ESTA LINHA
 
 
 __all__ = [
@@ -51,5 +52,6 @@ __all__ = [
     'OpcaoResposta',
     'Resposta',
     'ProcessoDisciplina',
-    'Notification' # <-- ADICIONE ESTA LINHA
+    'Notification',
+    'PushSubscription' # <-- ADICIONE ESTA LINHA
 ]

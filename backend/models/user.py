@@ -13,7 +13,8 @@ if t.TYPE_CHECKING:
     from .user_school import UserSchool
     from .aluno import Aluno
     from .instrutor import Instrutor
-    from .notification import Notification # <-- ADICIONE ESTA LINHA
+    from .notification import Notification
+    from .push_subscription import PushSubscription # <-- ADICIONE ESTA LINHA
 
 class User(UserMixin, db.Model):
     __tablename__ = 'users'
@@ -34,8 +35,10 @@ class User(UserMixin, db.Model):
     instrutor_profile: Mapped['Instrutor'] = relationship('Instrutor', back_populates='user', uselist=False, cascade="all, delete-orphan")
     user_schools: Mapped[list['UserSchool']] = relationship('UserSchool', back_populates='user', cascade="all, delete-orphan")
 
-    # <-- ADICIONE ESTA NOVA RELAÇÃO -->
     notifications: Mapped[list['Notification']] = relationship('Notification', back_populates='user', cascade="all, delete-orphan")
+
+    # <-- ADICIONE ESTA NOVA RELAÇÃO -->
+    push_subscriptions: Mapped[list['PushSubscription']] = relationship('PushSubscription', back_populates='user', cascade="all, delete-orphan")
 
     @property
     def schools(self) -> list['School']:

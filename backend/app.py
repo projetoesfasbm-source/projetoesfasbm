@@ -8,6 +8,8 @@ from flask_migrate import Migrate
 from flask_wtf.csrf import CSRFProtect
 from flask_babel import Babel
 from backend.extensions import limiter
+import firebase_admin
+from firebase_admin import credentials
 
 from backend.config import Config
 from backend.models.database import db
@@ -34,14 +36,14 @@ from backend.models.pergunta import Pergunta
 from backend.models.opcao_resposta import OpcaoResposta
 from backend.models.resposta import Resposta
 from backend.models.processo_disciplina import ProcessoDisciplina
-from backend.models.notification import Notification # <-- ADICIONE ESTA LINHA
+from backend.models.notification import Notification
+from backend.models.push_subscription import PushSubscription
 
 
 def create_app(config_class=Config):
     """
     Fábrica de aplicação: cria e configura a instância do Flask.
     """
-    # ... (código existente sem alterações) ...
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
     template_dir = os.path.join(project_root, 'templates')
     static_dir = os.path.join(project_root, 'static')
@@ -50,6 +52,17 @@ def create_app(config_class=Config):
     app.config.from_object(config_class)
 
     config_class.init_app(app)
+
+    # --- INICIALIZAÇÃO DO FIREBASE ---
+    try:
+        cred_path = os.path.join(os.path.dirname(__file__), 'credentials.json')
+        cred = credentials.Certificate(cred_path)
+        firebase_admin.initialize_app(cred)
+        app.logger.info("Firebase Admin SDK inicializado com sucesso.")
+    except Exception as e:
+        app.logger.error(f"ERRO ao inicializar o Firebase Admin SDK: {e}")
+        app.logger.error("Verifique se o arquivo 'credentials.json' está na pasta 'backend/'.")
+    # --- FIM DA INICIALIZAÇÃO ---
 
     db.init_app(app)
     Migrate(app, db)
@@ -94,7 +107,8 @@ def register_blueprints(app):
     from backend.controllers.questionario_controller import questionario_bp
     from backend.controllers.admin_tools_controller import tools_bp
     from backend.controllers.justica_controller import justica_bp
-    from backend.controllers.notification_controller import notification_bp # <-- ADICIONE ESTA LINHA
+    from backend.controllers.notification_controller import notification_bp
+    from backend.controllers.push_controller import push_bp # <-- ADICIONE ESTA LINHA
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(aluno_bp)
@@ -115,7 +129,8 @@ def register_blueprints(app):
     app.register_blueprint(questionario_bp)
     app.register_blueprint(tools_bp)
     app.register_blueprint(justica_bp)
-    app.register_blueprint(notification_bp) # <-- ADICIONE ESTA LINHA
+    app.register_blueprint(notification_bp)
+    app.register_blueprint(push_bp) # <-- ADICIONE ESTA LINHA
 
 def register_handlers_and_processors(app):
     # ... (código existente sem alterações) ...
