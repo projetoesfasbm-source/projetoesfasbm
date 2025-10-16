@@ -214,16 +214,49 @@ def remover_aula():
     if success: return jsonify({'success': True, 'message': message})
     else: return jsonify({'success': False, 'message': message}), 403
 
-@horario_bp.route('/aprovar', methods=['GET', 'POST'])
+@horario_bp.route('/aprovar', methods=['POST'])
 @login_required
 @admin_or_programmer_required
 def aprovar_horarios():
-    form = AprovarHorarioForm()
-    if form.validate_on_submit():
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+    
+    # Lógica para ambos os tipos de requisição
+    if request.is_json:
+        data = request.get_json()
+        horario_id = data.get('horario_id')
+        action = data.get('action')
+    else: # Formulário tradicional
+        form = AprovarHorarioForm()
+        if not form.validate_on_submit():
+            if is_ajax:
+                return jsonify({'success': False, 'message': 'Dados inválidos.'}), 400
+            flash('Dados do formulário inválidos.', 'danger')
+            return redirect(url_for('horario.get_aprovar_horarios'))
         horario_id = form.horario_id.data
         action = form.action.data
-        success, message = HorarioService.aprovar_horario(horario_id, action)
+
+    if not horario_id or not action:
+        message = 'ID do horário ou ação não fornecidos.'
+        if is_ajax: return jsonify({'success': False, 'message': message}), 400
+        flash(message, 'danger')
+        return redirect(url_for('horario.get_aprovar_horarios'))
+        
+    success, message = HorarioService.aprovar_horario(horario_id, action)
+
+    if is_ajax:
+        if success:
+            return jsonify({'success': True, 'message': message})
+        else:
+            return jsonify({'success': False, 'message': message}), 400
+    else: # Requisição de formulário normal
         flash(message, 'success' if success else 'danger')
-        return redirect(url_for('horario.aprovar_horarios'))
+        return redirect(url_for('horario.get_aprovar_horarios'))
+
+
+@horario_bp.route('/aprovar', methods=['GET'])
+@login_required
+@admin_or_programmer_required
+def get_aprovar_horarios():
+    form = AprovarHorarioForm()
     aulas_pendentes = HorarioService.get_aulas_pendentes()
     return render_template('aprovar_horarios.html', aulas_pendentes=aulas_pendentes, form=form)

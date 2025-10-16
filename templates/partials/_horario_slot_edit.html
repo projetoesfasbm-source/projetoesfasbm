@@ -8,13 +8,26 @@
             <button type="button" class="slot-button disponivel" data-action="add">Adicionar</button>
         {% else %}
             <div class="slot-content {% if aula.status == 'pendente' %}pendente{% endif %}">
+                
+                {# Bloco para aulas pendentes visíveis ao Admin #}
+                {% if aula.status == 'pendente' and is_admin %}
+                <div class="pending-approval-box">
+                    <div class="pending-info">
+                        <div class="disciplina-title">{{ aula.materia }}</div>
+                        <div class="instrutor-name">{{ aula.instrutor }}</div>
+                    </div>
+                    <div class="pending-actions">
+                        <button class="btn btn-sm btn-success" data-action="approve" data-id="{{ aula.id }}" title="Aprovar Aula">✔</button>
+                        <button class="btn btn-sm btn-danger" data-action="deny" data-id="{{ aula.id }}" title="Negar Aula">✖</button>
+                    </div>
+                </div>
+
+                {% else %} {# Visualização normal para aulas confirmadas ou para instrutores #}
                 <div class="slot-info">
                     <div class="disciplina-title">{{ aula.materia }}</div>
                     {% if aula.instrutor %}
                     <div class="instrutor-name">{{ aula.instrutor }}</div>
                     {% endif %}
-
-                    {# --- OBSERVAÇÃO EXIBIDA AQUI --- #}
                     {% if aula.observacao %}
                     <div class="slot-observacao">{{ aula.observacao }}</div>
                     {% endif %}
@@ -33,6 +46,8 @@
 
                 {% if aula.status == 'pendente' %}
                     <span class="status-icon" title="Aguardando confirmação">🕐</span>
+                {% endif %}
+
                 {% endif %}
             </div>
         {% endif %}

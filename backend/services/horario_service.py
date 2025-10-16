@@ -1,6 +1,6 @@
 # backend/services/horario_service.py
 
-from flask import current_app, url_for # <-- ADICIONE url_for
+from flask import current_app, url_for
 from flask_login import current_user
 from sqlalchemy import select, func, or_, and_
 from sqlalchemy.orm import joinedload
@@ -14,14 +14,13 @@ from ..models.disciplina_turma import DisciplinaTurma
 from ..models.semana import Semana
 from ..models.turma import Turma
 from ..models.user import User
-from .notification_service import NotificationService # <-- ADICIONE ESTA LINHA
+from .notification_service import NotificationService
 
 
 class HorarioService:
 
     @staticmethod
     def can_edit_horario(horario, user):
-        # ... (código existente sem alterações) ...
         if not horario or not user:
             return False
         if user.role in ['super_admin', 'programador', 'admin_escola']:
@@ -33,7 +32,6 @@ class HorarioService:
 
     @staticmethod
     def construir_matriz_horario(pelotao, semana_id, user):
-        # ... (código existente sem alterações) ...
         a_disposicao = {'materia': 'A disposição do C Al /S Ens', 'instrutor': None, 'duracao': 1, 'is_disposicao': True, 'id': None, 'status': 'confirmado'}
         horario_matrix = [[dict(a_disposicao) for _ in range(7)] for _ in range(15)]
         dias = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo']
@@ -115,7 +113,6 @@ class HorarioService:
 
     @staticmethod
     def get_semana_selecionada(semana_id_str, ciclo_id):
-        # ... (código existente sem alterações) ...
         if semana_id_str and semana_id_str.isdigit():
             return db.session.get(Semana, int(semana_id_str))
         
@@ -136,7 +133,6 @@ class HorarioService:
 
     @staticmethod
     def get_datas_da_semana(semana):
-        # ... (código existente sem alterações) ...
         if not semana:
             return {}
         datas = {}
@@ -148,7 +144,6 @@ class HorarioService:
 
     @staticmethod
     def get_edit_grid_context(pelotao, semana_id, ciclo_id, user):
-        # ... (código existente sem alterações) ...
         horario_matrix = HorarioService.construir_matriz_horario(pelotao, semana_id, user)
         semana = db.session.get(Semana, semana_id)
         is_admin = user.role in ['super_admin', 'programador', 'admin_escola']
@@ -209,7 +204,6 @@ class HorarioService:
 
     @staticmethod
     def get_aula_details(horario_id, user):
-        # ... (código existente sem alterações) ...
         aula = db.session.get(Horario, horario_id)
         if not aula or not HorarioService.can_edit_horario(aula, user):
             return None
@@ -228,7 +222,6 @@ class HorarioService:
     @staticmethod
     def save_aula(data, user):
         """Salva uma nova aula ou atualiza uma existente, com validação robusta de conflitos."""
-        # ... (código de validação existente sem alterações) ...
         try:
             horario_id_raw = data.get('horario_id')
             horario_id = int(horario_id_raw) if horario_id_raw else None
@@ -325,14 +318,27 @@ class HorarioService:
         try:
             db.session.commit()
 
-            # --- LÓGICA DE NOTIFICAÇÃO ADICIONADA ---
+            # --- LÓGICA DE NOTIFICAÇÃO (MARCAÇÃO) ---
+            # Se a aula é nova e foi criada por um instrutor (não admin), ela fica pendente.
             if not is_admin and is_new_aula:
                 turma = db.session.scalar(select(Turma).where(Turma.nome == pelotao))
                 if turma and turma.school_id:
                     message = f"O instrutor {user.nome_de_guerra} agendou uma nova aula de {disciplina.materia} que precisa de aprovação."
-                    notification_url = url_for('horario.aprovar_horarios', _external=True)
+                    notification_url = url_for('horario.get_aprovar_horarios', _external=True)
                     NotificationService.create_notification_for_roles(turma.school_id, ['admin_escola', 'super_admin', 'programador'], message, notification_url)
-            # --- FIM DA LÓGICA DE NOTIFICAÇÃO ---
+            # Se a aula já foi confirmada diretamente por um admin, notifica alunos e instrutor.
+            elif is_admin and is_new_aula:
+                 turma = db.session.scalar(select(Turma).where(Turma.nome == aula.pelotao))
+                 if turma:
+                    notif_url = url_for('horario.index', pelotao=turma.nome, semana_id=aula.semana_id, _external=True)
+                    if aula.instrutor.user_id != user.id: # Notifica instrutor se não for ele mesmo
+                        notif_msg_instrutor = f"Uma aula de {aula.disciplina.materia} para a turma {turma.nome} foi agendada para você."
+                        NotificationService.create_notification(aula.instrutor.user_id, notif_msg_instrutor, notif_url)
+                    
+                    notif_msg_alunos = f"Nova aula de {aula.disciplina.materia} agendada para sua turma."
+                    for aluno in turma.alunos:
+                        NotificationService.create_notification(aluno.user_id, notif_msg_alunos, notif_url)
+
 
             return True, 'Aula salva com sucesso!', 200
         except Exception as e:
@@ -342,18 +348,47 @@ class HorarioService:
             
     @staticmethod
     def remove_aula(horario_id, user):
-        # ... (código existente sem alterações) ...
         aula = db.session.get(Horario, int(horario_id))
         if not aula: return False, 'Aula não encontrada.'
         if not HorarioService.can_edit_horario(aula, user): return False, 'Sem permissão para remover esta aula.'
         
-        db.session.delete(aula)
-        db.session.commit()
-        return True, 'Aula removida com sucesso!'
+        try:
+            instrutor_user = aula.instrutor.user if aula.instrutor else None
+            
+            # Captura informações antes de deletar para usar nas notificações
+            disciplina_materia = aula.disciplina.materia
+            pelotao_nome = aula.pelotao
+            semana_id_aula = aula.semana_id
+            is_pending = aula.status == 'pendente'
+
+            db.session.delete(aula)
+            db.session.commit()
+
+            # --- LÓGICA DE NOTIFICAÇÃO (CANCELAMENTO) ---
+            notification_url = url_for('horario.index', pelotao=pelotao_nome, semana_id=semana_id_aula, _external=True)
+            
+            # Se um admin cancela, notifica o instrutor.
+            if user.role != 'instrutor' and instrutor_user:
+                message = f"Sua aula de {disciplina_materia} para a turma {pelotao_nome} foi cancelada por um administrador."
+                NotificationService.create_notification(instrutor_user.id, message, notification_url)
+            
+            # Se um instrutor cancela uma aula pendente, notifica os admins.
+            elif user.role == 'instrutor' and is_pending:
+                 turma = db.session.scalar(select(Turma).where(Turma.nome == pelotao_nome))
+                 if turma and turma.school_id:
+                    message = f"O instrutor {user.nome_de_guerra} cancelou a solicitação de aula de {disciplina_materia}."
+                    admin_notification_url = url_for('horario.get_aprovar_horarios', _external=True)
+                    NotificationService.create_notification_for_roles(turma.school_id, ['admin_escola', 'super_admin', 'programador'], message, admin_notification_url)
+
+            return True, 'Aula removida com sucesso!'
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Erro ao remover aula: {e}")
+            return False, "Erro ao remover a aula."
+
 
     @staticmethod
     def get_aulas_pendentes():
-        # ... (código existente sem alterações) ...
         return db.session.scalars(
             select(Horario).options(
                 joinedload(Horario.disciplina).joinedload(Disciplina.ciclo),
@@ -374,24 +409,35 @@ class HorarioService:
             aula.status = 'confirmado'
             message = f'Aula de {aula.disciplina.materia} aprovada.'
             
-            # --- LÓGICA DE NOTIFICAÇÃO ADICIONADA ---
+            # --- LÓGICA DE NOTIFICAÇÃO (APROVAÇÃO) ---
             turma = db.session.scalar(select(Turma).where(Turma.nome == aula.pelotao))
             if turma:
-                # Notificar o instrutor
+                notif_url = url_for('horario.index', pelotao=turma.nome, semana_id=aula.semana_id, _external=True)
+                # Notifica o instrutor que agendou
                 if instrutor_user_id:
-                    notif_msg_instrutor = f"Sua aula de {aula.disciplina.materia} para a turma {turma.nome} foi aprovada."
-                    notif_url = url_for('horario.index', pelotao=turma.nome, semana_id=aula.semana_id, _external=True)
+                    notif_msg_instrutor = f"Sua aula de {aula.disciplina.materia} para a turma {turma.nome} foi APROVADA."
                     NotificationService.create_notification(instrutor_user_id, notif_msg_instrutor, notif_url)
                 
-                # Notificar todos os alunos da turma
+                # Notifica todos os alunos da turma
                 notif_msg_alunos = f"Nova aula de {aula.disciplina.materia} agendada para sua turma."
                 for aluno in turma.alunos:
                     NotificationService.create_notification(aluno.user_id, notif_msg_alunos, notif_url)
-            # --- FIM DA LÓGICA DE NOTIFICAÇÃO ---
-
+        
         elif action == 'negar':
+            # Captura informações antes de deletar
+            disciplina_materia = aula.disciplina.materia
+            turma_nome = aula.pelotao
+            semana_id_aula = aula.semana_id
+
             db.session.delete(aula)
-            message = f'Solicitação de aula de {aula.disciplina.materia} foi negada e removida.'
+            message = f'Solicitação de aula de {disciplina_materia} foi negada e removida.'
+            
+            # --- LÓGICA DE NOTIFICAÇÃO (NEGAR) ---
+            # Notifica apenas o instrutor que a solicitação foi negada
+            if instrutor_user_id:
+                notif_msg_instrutor = f"Sua solicitação de aula de {disciplina_materia} para a turma {turma_nome} foi NEGADA."
+                notif_url = url_for('horario.index', pelotao=turma_nome, semana_id=semana_id_aula, _external=True)
+                NotificationService.create_notification(instrutor_user_id, notif_msg_instrutor, notif_url)
         else:
             return False, 'Ação inválida.'
             

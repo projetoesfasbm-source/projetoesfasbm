@@ -102,6 +102,27 @@
     border-left: none;
     border-right: none;
 }
+.pending-approval-box {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    gap: 0.5rem;
+}
+.pending-info .disciplina-title {
+    font-size: 0.8rem;
+}
+.pending-info .instrutor-name {
+    font-size: 0.75rem;
+}
+.pending-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 5px;
+}
 </style>
 
 <div class="modal-overlay" id="horario-modal-overlay">
@@ -314,8 +335,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (action === 'add') {
             openModal({ dia: slot.dataset.dia, periodo: slot.dataset.periodo });
         } else if (action === 'edit') {
-            // --- CORREÇÃO APLICADA AQUI ---
-            // Agora, também passamos o dia e o período para a função openModal
             openModal({
                 horario_id: id,
                 dia: slot.dataset.dia,
@@ -336,9 +355,49 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     }
+    
+    function handleApprovalAction(horarioId, action) {
+        const confirmationText = action === 'approve' 
+            ? 'Aprovar esta aula?'
+            : 'Negar e excluir esta solicitação de aula?';
+        
+        if (!confirm(confirmationText)) return;
 
-    if (weekdayTable) weekdayTable.addEventListener('click', handleTableClick);
-    if (weekendTable) weekendTable.addEventListener('click', handleTableClick);
+        fetch('/horario/aprovar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ horario_id: horarioId, action: action })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+                window.location.reload();
+            } else {
+                alert('Erro: ' + data.message);
+            }
+        });
+    }
+
+    if (weekdayTable) {
+        weekdayTable.addEventListener('click', handleTableClick);
+        weekdayTable.addEventListener('click', function(e) {
+            const approveBtn = e.target.closest('button[data-action="approve"]');
+            const denyBtn = e.target.closest('button[data-action="deny"]');
+            if (approveBtn) handleApprovalAction(approveBtn.dataset.id, 'aprovar');
+            if (denyBtn) handleApprovalAction(denyBtn.dataset.id, 'negar');
+        });
+    }
+
+    if (weekendTable) {
+       weekendTable.addEventListener('click', handleTableClick);
+       weekendTable.addEventListener('click', function(e) {
+            const approveBtn = e.target.closest('button[data-action="approve"]');
+            const denyBtn = e.target.closest('button[data-action="deny"]');
+            if (approveBtn) handleApprovalAction(approveBtn.dataset.id, 'aprovar');
+            if (denyBtn) handleApprovalAction(denyBtn.dataset.id, 'negar');
+        });
+    }
 
     modalForm.addEventListener('submit', function(e) {
         e.preventDefault();

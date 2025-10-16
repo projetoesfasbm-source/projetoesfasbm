@@ -15,13 +15,13 @@
 
     <div class="table-responsive">
         {% if aulas_pendentes %}
-            <table class="table-styled">
+            <table class="table-styled" id="pending-classes-table">
                 <thead>
                     <tr>
                         <th>Semana</th>
                         <th>Pelotão</th>
                         <th>Dia</th>
-                        <th>Período</th>
+                        <th>Período(s)</th>
                         <th>Disciplina</th>
                         <th>Ciclo</th>
                         <th>Instrutor</th>
@@ -30,42 +30,113 @@
                 </thead>
                 <tbody>
                     {% for aula in aulas_pendentes %}
-                    <tr>
+                    <tr id="aula-row-{{ aula.id }}">
                         <td data-label="Semana">{{ aula.semana.nome }}</td>
                         <td data-label="Pelotão">{{ aula.pelotao }}</td>
-                        <td data-label="Dia">{{ aula.dia_semana }}</td>
-                        <td data-label="Período">{{ aula.periodo }}º</td>
+                        <td data-label="Dia">{{ aula.dia_semana|capitalize }}</td>
+                        <td data-label="Período(s)">
+                            {% if aula.duracao > 1 %}
+                                {{ aula.periodo }}º ao {{ aula.periodo + aula.duracao - 1 }}º
+                            {% else %}
+                                {{ aula.periodo }}º
+                            {% endif %}
+                        </td>
                         <td data-label="Disciplina">{{ aula.disciplina.materia }}</td>
                         <td data-label="Ciclo">{{ aula.disciplina.ciclo.nome if aula.disciplina.ciclo else 'N/A' }}</td>
                         <td data-label="Instrutor">{{ aula.instrutor.user.nome_completo or aula.instrutor.user.username }}</td>
                         <td data-label="Ações" class="text-right">
                             <div class="btn-group" style="display: flex; gap: 0.5rem; justify-content: flex-end;">
-                                {# --- CORREÇÃO APLICADA AQUI: Adicionado csrf_token() diretamente --- #}
-                                <form method="POST" action="{{ url_for('horario.aprovar_horarios') }}" style="margin: 0;">
-                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                    <input type="hidden" name="horario_id" value="{{ aula.id }}">
-                                    <input type="hidden" name="action" value="aprovar">
-                                    <button type="submit" class="btn btn-sm btn-success">Aprovar</button>
-                                </form>
-                                <form method="POST" action="{{ url_for('horario.aprovar_horarios') }}" style="margin: 0;">
-                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                    <input type="hidden" name="horario_id" value="{{ aula.id }}">
-                                    <input type="hidden" name="action" value="negar">
-                                    <button type="submit" class="btn btn-sm btn-danger">Negar</button>
-                                </form>
+                                <button class="btn btn-sm btn-success" onclick="handleApproval({{ aula.id }}, 'aprovar')">Aprovar</button>
+                                <button class="btn btn-sm btn-danger" onclick="handleApproval({{ aula.id }}, 'negar')">Negar</button>
                             </div>
                         </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
-        {% else %}
-            <div class="empty-state">
-                <div class="empty-icon">✅</div>
-                <h2>Nenhuma Aula Pendente</h2>
-                <p>Não há nenhuma solicitação de agendamento de aula pendente no momento.</p>
-            </div>
         {% endif %}
+        <div class="empty-state" id="empty-state-message" {% if aulas_pendentes %}style="display: none;"{% endif %}>
+            <div class="empty-icon">✅</div>
+            <h2>Nenhuma Aula Pendente</h2>
+            <p>Não há nenhuma solicitação de agendamento de aula pendente no momento.</p>
+        </div>
     </div>
 </div>
+
+<script>
+function handleApproval(horarioId, action) {
+    const confirmationText = action === 'aprovar' 
+        ? 'Tem certeza que deseja APROVAR esta aula?' 
+        : 'Tem certeza que deseja NEGAR e EXCLUIR esta solicitação de aula?';
+
+    if (!confirm(confirmationText)) {
+        return;
+    }
+
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    const isAjax = true; // Flag para o backend
+
+    fetch("{{ url_for('horario.aprovar_horarios') }}", {
+        method: 'POST',
+        body: JSON.stringify({
+            'horario_id': horarioId,
+            'action': action,
+            'csrf_token': csrfToken
+        }),
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const row = document.getElementById(`aula-row-${horarioId}`);
+            if (row) {
+                row.style.transition = 'opacity 0.5s ease';
+                row.style.opacity = '0';
+                setTimeout(() => {
+                    row.remove();
+                    const tableBody = document.querySelector('#pending-classes-table tbody');
+                    if (tableBody && tableBody.rows.length === 0) {
+                        const table = document.getElementById('pending-classes-table');
+                        const emptyMessage = document.getElementById('empty-state-message');
+                        if(table) table.style.display = 'none';
+                        if(emptyMessage) emptyMessage.style.display = 'block';
+                    }
+                }, 500);
+            }
+            showAjaxFlash(data.message, 'success');
+        } else {
+            showAjaxFlash(data.message, 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        showAjaxFlash('Ocorreu um erro de comunicação com o servidor.', 'danger');
+    });
+}
+
+function showAjaxFlash(message, category) {
+    const container = document.getElementById('ajax-flash-container');
+    const alertId = `flash-msg-${Date.now()}`;
+    const alert = `
+        <div id="${alertId}" class="alert alert-${category} alert-dismissible fade show" role="alert">
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    `;
+    container.innerHTML += alert;
+    
+    setTimeout(() => {
+        const alertElement = document.getElementById(alertId);
+        if (alertElement) {
+            const bootstrapAlert = bootstrap.Alert.getOrCreateInstance(alertElement);
+            if (bootstrapAlert) {
+                bootstrapAlert.close();
+            }
+        }
+    }, 5000);
+}
+</script>
 {% endblock %}
