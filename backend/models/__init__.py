@@ -23,7 +23,8 @@ from .questionario import Questionario
 from .pergunta import Pergunta
 from .opcao_resposta import OpcaoResposta
 from .resposta import Resposta
-from .processo_disciplina import ProcessoDisciplina # <-- NOVA IMPORTAÇÃO
+from .processo_disciplina import ProcessoDisciplina
+from .notification import Notification # <-- ADICIONE ESTA LINHA
 
 
 __all__ = [
@@ -49,5 +50,6 @@ __all__ = [
     'Pergunta',
     'OpcaoResposta',
     'Resposta',
-    'ProcessoDisciplina' # <-- NOVA EXPORTAÇÃO
+    'ProcessoDisciplina',
+    'Notification' # <-- ADICIONE ESTA LINHA
 ]

@@ -1,6 +1,6 @@
 # backend/services/horario_service.py
 
-from flask import current_app
+from flask import current_app, url_for # <-- ADICIONE url_for
 from flask_login import current_user
 from sqlalchemy import select, func, or_, and_
 from sqlalchemy.orm import joinedload
@@ -14,13 +14,14 @@ from ..models.disciplina_turma import DisciplinaTurma
 from ..models.semana import Semana
 from ..models.turma import Turma
 from ..models.user import User
+from .notification_service import NotificationService # <-- ADICIONE ESTA LINHA
 
 
 class HorarioService:
 
     @staticmethod
     def can_edit_horario(horario, user):
-        """Verifica se um usuário pode editar um horário específico."""
+        # ... (código existente sem alterações) ...
         if not horario or not user:
             return False
         if user.role in ['super_admin', 'programador', 'admin_escola']:
@@ -32,7 +33,7 @@ class HorarioService:
 
     @staticmethod
     def construir_matriz_horario(pelotao, semana_id, user):
-        """Constrói a matriz 15x7 para exibir o quadro de horários, pulando os intervalos."""
+        # ... (código existente sem alterações) ...
         a_disposicao = {'materia': 'A disposição do C Al /S Ens', 'instrutor': None, 'duracao': 1, 'is_disposicao': True, 'id': None, 'status': 'confirmado'}
         horario_matrix = [[dict(a_disposicao) for _ in range(7)] for _ in range(15)]
         dias = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo']
@@ -69,11 +70,7 @@ class HorarioService:
                     
                     if duracao_bloco <= 0: break 
 
-                    # --- CORREÇÃO APLICADA AQUI ---
-                    # Define quem pode ver os detalhes de uma aula pendente (apenas admins e o próprio instrutor)
                     can_see_pending_details = HorarioService.can_edit_horario(aula, user)
-                    
-                    # A regra final: os detalhes são visíveis se a aula estiver confirmada OU se o usuário tiver permissão para ver aulas pendentes.
                     show_details = aula.status == 'confirmado' or can_see_pending_details
                     
                     instrutores_display_list = []
@@ -101,7 +98,6 @@ class HorarioService:
                         'can_edit': HorarioService.can_edit_horario(aula, user),
                         'is_continuation': is_continuation
                     }
-                    # --- FIM DA CORREÇÃO ---
                     
                     if 0 <= periodo_atual_idx < 15:
                         horario_matrix[periodo_atual_idx][dia_idx] = aula_info
@@ -119,6 +115,7 @@ class HorarioService:
 
     @staticmethod
     def get_semana_selecionada(semana_id_str, ciclo_id):
+        # ... (código existente sem alterações) ...
         if semana_id_str and semana_id_str.isdigit():
             return db.session.get(Semana, int(semana_id_str))
         
@@ -139,6 +136,7 @@ class HorarioService:
 
     @staticmethod
     def get_datas_da_semana(semana):
+        # ... (código existente sem alterações) ...
         if not semana:
             return {}
         datas = {}
@@ -150,6 +148,7 @@ class HorarioService:
 
     @staticmethod
     def get_edit_grid_context(pelotao, semana_id, ciclo_id, user):
+        # ... (código existente sem alterações) ...
         horario_matrix = HorarioService.construir_matriz_horario(pelotao, semana_id, user)
         semana = db.session.get(Semana, semana_id)
         is_admin = user.role in ['super_admin', 'programador', 'admin_escola']
@@ -210,6 +209,7 @@ class HorarioService:
 
     @staticmethod
     def get_aula_details(horario_id, user):
+        # ... (código existente sem alterações) ...
         aula = db.session.get(Horario, horario_id)
         if not aula or not HorarioService.can_edit_horario(aula, user):
             return None
@@ -228,6 +228,7 @@ class HorarioService:
     @staticmethod
     def save_aula(data, user):
         """Salva uma nova aula ou atualiza uma existente, com validação robusta de conflitos."""
+        # ... (código de validação existente sem alterações) ...
         try:
             horario_id_raw = data.get('horario_id')
             horario_id = int(horario_id_raw) if horario_id_raw else None
@@ -308,6 +309,7 @@ class HorarioService:
         except (KeyError, ValueError, TypeError):
             return False, 'Dados inválidos ou incompletos.', 400
 
+        is_new_aula = not horario_id
         if horario_id:
             aula = db.session.get(Horario, horario_id)
             if not aula: return False, 'Aula não encontrada.', 404
@@ -322,6 +324,16 @@ class HorarioService:
 
         try:
             db.session.commit()
+
+            # --- LÓGICA DE NOTIFICAÇÃO ADICIONADA ---
+            if not is_admin and is_new_aula:
+                turma = db.session.scalar(select(Turma).where(Turma.nome == pelotao))
+                if turma and turma.school_id:
+                    message = f"O instrutor {user.nome_de_guerra} agendou uma nova aula de {disciplina.materia} que precisa de aprovação."
+                    notification_url = url_for('horario.aprovar_horarios', _external=True)
+                    NotificationService.create_notification_for_roles(turma.school_id, ['admin_escola', 'super_admin', 'programador'], message, notification_url)
+            # --- FIM DA LÓGICA DE NOTIFICAÇÃO ---
+
             return True, 'Aula salva com sucesso!', 200
         except Exception as e:
             db.session.rollback()
@@ -330,6 +342,7 @@ class HorarioService:
             
     @staticmethod
     def remove_aula(horario_id, user):
+        # ... (código existente sem alterações) ...
         aula = db.session.get(Horario, int(horario_id))
         if not aula: return False, 'Aula não encontrada.'
         if not HorarioService.can_edit_horario(aula, user): return False, 'Sem permissão para remover esta aula.'
@@ -340,6 +353,7 @@ class HorarioService:
 
     @staticmethod
     def get_aulas_pendentes():
+        # ... (código existente sem alterações) ...
         return db.session.scalars(
             select(Horario).options(
                 joinedload(Horario.disciplina).joinedload(Disciplina.ciclo),
@@ -350,12 +364,31 @@ class HorarioService:
         
     @staticmethod
     def aprovar_horario(horario_id, action):
+        """Aprova ou nega uma solicitação de aula."""
         aula = db.session.get(Horario, int(horario_id))
         if not aula: return False, 'Aula não encontrada.'
 
+        instrutor_user_id = aula.instrutor.user_id if aula.instrutor else None
+        
         if action == 'aprovar':
             aula.status = 'confirmado'
             message = f'Aula de {aula.disciplina.materia} aprovada.'
+            
+            # --- LÓGICA DE NOTIFICAÇÃO ADICIONADA ---
+            turma = db.session.scalar(select(Turma).where(Turma.nome == aula.pelotao))
+            if turma:
+                # Notificar o instrutor
+                if instrutor_user_id:
+                    notif_msg_instrutor = f"Sua aula de {aula.disciplina.materia} para a turma {turma.nome} foi aprovada."
+                    notif_url = url_for('horario.index', pelotao=turma.nome, semana_id=aula.semana_id, _external=True)
+                    NotificationService.create_notification(instrutor_user_id, notif_msg_instrutor, notif_url)
+                
+                # Notificar todos os alunos da turma
+                notif_msg_alunos = f"Nova aula de {aula.disciplina.materia} agendada para sua turma."
+                for aluno in turma.alunos:
+                    NotificationService.create_notification(aluno.user_id, notif_msg_alunos, notif_url)
+            # --- FIM DA LÓGICA DE NOTIFICAÇÃO ---
+
         elif action == 'negar':
             db.session.delete(aula)
             message = f'Solicitação de aula de {aula.disciplina.materia} foi negada e removida.'

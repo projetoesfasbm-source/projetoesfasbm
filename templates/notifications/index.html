@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}Minhas Notificações{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <h1>Minhas Notificações</h1>
+    <p>Histórico de todas as suas notificações.</p>
+</div>
+
+<div class="table-container">
+    {% if notifications.items %}
+        <ul class="notification-list">
+            {% for notification in notifications.items %}
+                <li class="notification-item {% if not notification.is_read %}unread{% endif %}">
+                    <a href="{{ notification.url or '#' }}" class="notification-link">
+                        <div class="notification-content">
+                            <p class="notification-message">{{ notification.message }}</p>
+                            <span class="notification-date">{{ notification.created_at.strftime('%d/%m/%Y às %H:%M') }}</span>
+                        </div>
+                    </a>
+                </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <div class="empty-state">
+            <div class="empty-icon">🔕</div>
+            <h2>Nenhuma Notificação</h2>
+            <p>Você não possui nenhuma notificação no momento.</p>
+        </div>
+    {% endif %}
+
+    {% if notifications.pages > 1 %}
+    <div class="pagination-container" style="margin-top: 2rem;">
+        {% with pagination_object=notifications %}
+            {% include 'partials/_pagination.html' %}
+        {% endwith %}
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.notification-list {
+    list-style: none;
+    padding: 0;
+}
+.notification-item {
+    border-bottom: 1px solid var(--color-border);
+}
+.notification-item.unread {
+    background-color: #eff6ff;
+}
+.notification-link {
+    display: block;
+    padding: 1rem 1.5rem;
+    text-decoration: none;
+    color: inherit;
+    transition: background-color 0.2s;
+}
+.notification-link:hover {
+    background-color: #f8fafc;
+}
+.notification-message {
+    margin: 0;
+    font-weight: 500;
+}
+.notification-date {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+}
+</style>
+{% endblock %}

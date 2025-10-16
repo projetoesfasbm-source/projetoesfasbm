@@ -34,12 +34,14 @@ from backend.models.pergunta import Pergunta
 from backend.models.opcao_resposta import OpcaoResposta
 from backend.models.resposta import Resposta
 from backend.models.processo_disciplina import ProcessoDisciplina
+from backend.models.notification import Notification # <-- ADICIONE ESTA LINHA
 
 
 def create_app(config_class=Config):
     """
     Fábrica de aplicação: cria e configura a instância do Flask.
     """
+    # ... (código existente sem alterações) ...
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
     template_dir = os.path.join(project_root, 'templates')
     static_dir = os.path.join(project_root, 'static')
@@ -49,7 +51,6 @@ def create_app(config_class=Config):
 
     config_class.init_app(app)
 
-    # Inicializa as extensões com a app
     db.init_app(app)
     Migrate(app, db)
     CSRFProtect(app)
@@ -92,7 +93,8 @@ def register_blueprints(app):
     from backend.controllers.admin_controller import admin_escola_bp
     from backend.controllers.questionario_controller import questionario_bp
     from backend.controllers.admin_tools_controller import tools_bp
-    from backend.controllers.justica_controller import justica_bp # <-- NOVA IMPORTAÇÃO
+    from backend.controllers.justica_controller import justica_bp
+    from backend.controllers.notification_controller import notification_bp # <-- ADICIONE ESTA LINHA
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(aluno_bp)
@@ -112,10 +114,11 @@ def register_blueprints(app):
     app.register_blueprint(admin_escola_bp)
     app.register_blueprint(questionario_bp)
     app.register_blueprint(tools_bp)
-    app.register_blueprint(justica_bp) # <-- NOVO REGISTRO
+    app.register_blueprint(justica_bp)
+    app.register_blueprint(notification_bp) # <-- ADICIONE ESTA LINHA
 
 def register_handlers_and_processors(app):
-    """Registra hooks, context processors e error handlers."""
+    # ... (código existente sem alterações) ...
     @app.context_processor
     def inject_site_configs():
         from backend.services.site_config_service import SiteConfigService
@@ -145,7 +148,7 @@ def register_handlers_and_processors(app):
         return render_template('500.html'), 500
 
 def register_cli_commands(app):
-    """Registra os comandos de linha de comando."""
+    # ... (código existente sem alterações) ...
     @app.cli.command("create-super-admin")
     def create_super_admin():
         with app.app_context():
