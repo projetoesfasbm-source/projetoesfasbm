@@ -1,5 +1,5 @@
 # backend/services/notification_service.py
-from sqlalchemy import select
+from sqlalchemy import select, func, update
 from ..models.database import db
 from ..models.notification import Notification
 from ..models.user import User
@@ -32,17 +32,28 @@ class NotificationService:
 
         for user_id in user_ids:
             NotificationService.create_notification(user_id, message, url)
+        
+        db.session.flush()
 
     @staticmethod
-    def get_unread_notifications(user_id: int, limit: int = 5):
-        """Busca as notificações não lidas de um usuário."""
-        stmt = (
-            select(Notification)
+    def get_notifications_for_dropdown(user_id: int, limit: int = 7):
+        """Busca as notificações mais recentes e a contagem de não lidas."""
+        unread_count_query = (
+            select(func.count())
+            .select_from(Notification)
             .where(Notification.user_id == user_id, Notification.is_read == False)
+        )
+        unread_count = db.session.scalar(unread_count_query)
+
+        recent_notifications_query = (
+            select(Notification)
+            .where(Notification.user_id == user_id)
             .order_by(Notification.created_at.desc())
             .limit(limit)
         )
-        return db.session.scalars(stmt).all()
+        recent_notifications = db.session.scalars(recent_notifications_query).all()
+        
+        return unread_count, recent_notifications
 
     @staticmethod
     def get_all_notifications(user_id: int, page: int = 1, per_page: int = 20):
@@ -54,7 +65,6 @@ class NotificationService:
         )
         return db.paginate(stmt, page=page, per_page=per_page, error_out=False)
 
-
     @staticmethod
     def mark_as_read(notification_id: int, user_id: int):
         """Marca uma notificação específica como lida, verificando a propriedade."""
@@ -63,3 +73,14 @@ class NotificationService:
             notification.is_read = True
             return True
         return False
+
+    @staticmethod
+    def mark_all_as_read(user_id: int):
+        """Marca todas as notificações não lidas de um usuário como lidas."""
+        stmt = (
+            update(Notification)
+            .where(Notification.user_id == user_id, Notification.is_read == False)
+            .values(is_read=True)
+        )
+        result = db.session.execute(stmt)
+        return result.rowcount > 0

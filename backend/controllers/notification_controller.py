@@ -14,20 +14,20 @@ def index():
     notifications = NotificationService.get_all_notifications(current_user.id, page=page)
     return render_template('notifications/index.html', notifications=notifications)
 
-@notification_bp.route('/api/unread')
+@notification_bp.route('/api/dropdown-data')
 @login_required
-def get_unread():
-    """Endpoint da API para buscar notificações não lidas."""
-    notifications = NotificationService.get_unread_notifications(current_user.id)
-    count = len(notifications)
+def get_dropdown_data():
+    """Endpoint da API para buscar dados para o dropdown de notificações."""
+    unread_count, notifications = NotificationService.get_notifications_for_dropdown(current_user.id)
     
     return jsonify({
-        'count': count,
+        'unread_count': unread_count,
         'notifications': [{
             'id': n.id,
             'message': n.message,
             'url': n.url or '#',
-            'created_at': n.created_at.strftime('%d/%m/%Y %H:%M')
+            'created_at': n.created_at.strftime('%d/%m %H:%M'),
+            'is_read': n.is_read
         } for n in notifications]
     })
 
@@ -40,3 +40,12 @@ def mark_as_read(notification_id):
         db.session.commit()
         return jsonify({'success': True})
     return jsonify({'success': False}), 404
+
+@notification_bp.route('/api/mark-all-as-read', methods=['POST'])
+@login_required
+def mark_all_as_read():
+    """Endpoint da API para marcar todas as notificações como lidas."""
+    success = NotificationService.mark_all_as_read(current_user.id)
+    if success:
+        db.session.commit()
+    return jsonify({'success': success})
