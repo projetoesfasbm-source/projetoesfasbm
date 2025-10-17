@@ -107,6 +107,11 @@ def insert_user_school(user_id: int, school_id: int, role: str):
 def meu_perfil():
     form = MeuPerfilForm(obj=current_user)
     
+    # --- CORREÇÃO APLICADA AQUI ---
+    # Garante que a lista de turmas seja sempre uma lista, mesmo que vazia,
+    # para evitar o erro em perfis que não são de alunos.
+    form.turma_id.choices = []
+    
     # Lógica para popular dinamicamente as escolhas de Posto/Graduação
     if request.method == 'GET':
         posto_atual = current_user.posto_graduacao
@@ -137,6 +142,11 @@ def meu_perfil():
         try:
             current_user.nome_completo = form.nome_completo.data
             current_user.posto_graduacao = form.posto_graduacao.data
+            
+            # --- Adicionado para salvar o nome de guerra ---
+            nome_de_guerra = request.form.get('nome_de_guerra')
+            if nome_de_guerra:
+                current_user.nome_de_guerra = nome_de_guerra
             
             if form.email.data != current_user.email and exists_in_users_by("email", form.email.data):
                 flash("Este e-mail já está em uso por outro usuário.", "warning")

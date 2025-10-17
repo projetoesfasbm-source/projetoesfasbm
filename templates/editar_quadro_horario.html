@@ -35,7 +35,7 @@
                       (periodo_num == 14 and semana_selecionada.mostrar_periodo_14) or
                       (periodo_num == 15 and semana_selecionada.mostrar_periodo_15) %}
                 
-                <tr class="{% if periodo_num in [3, 6, 9] %}break-after{% endif %}">
+                <tr>
                     <td class="cell-tempo">
                         <strong>{{ tempos[row_idx][0] }}</strong>
                         <span>{{ tempos[row_idx][1] }}</span>
@@ -104,12 +104,6 @@
     cursor: pointer;
 }
 /* --- FIM DA CORREÇÃO DE ALINHAMENTO DO MODAL --- */
-
-/* --- NOVO ESTILO PARA OS INTERVALOS --- */
-tr.break-after > td {
-    border-bottom: 3px solid #fcd34d; /* Cor amarelada para o intervalo */
-}
-/* --- FIM DOS NOVOS ESTILOS --- */
 
 .no-permission { color: #94a3b8; font-size: 1rem; cursor: not-allowed; }
 .weekend-slot.disabled { background-color: #f1f5f9; cursor: not-allowed; }
@@ -201,37 +195,42 @@ document.addEventListener('DOMContentLoaded', function() {
             alert("Não foi possível carregar os detalhes da aula para aprovação.");
         }
     }
-    
-    // --- FUNÇÃO CORRIGIDA/ADICIONADA ---
+
+    // --- NOVA FUNÇÃO PARA SUBMISSÃO ROBUSTA ---
     function sendFullApprovalAction(horarioId, action) {
         const confirmMessage = action === 'negar' ? 'Tem certeza que deseja NEGAR (remover) esta solicitação de aula?' : null;
         if (confirmMessage && !confirm(confirmMessage)) {
             return;
         }
 
-        fetch('/horario/aprovar', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'X-CSRFToken': csrfToken
-            },
-            body: new URLSearchParams({
-                'horario_id': horarioId,
-                'action': action,
-                'csrf_token': csrfToken
-            })
-        }).then(res => {
-            if (res.ok) {
-                window.location.reload();
-            } else {
-                alert('Ocorreu um erro ao processar a solicitação.');
-            }
-        }).catch(error => {
-            console.error('Fetch error:', error);
-            alert('Erro de comunicação ao processar a solicitação.');
-        });
+        // Cria um formulário dinâmico para simular uma submissão tradicional
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/horario/aprovar';
+
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = 'csrf_token';
+        csrfInput.value = csrfToken;
+
+        const idInput = document.createElement('input');
+        idInput.type = 'hidden';
+        idInput.name = 'horario_id';
+        idInput.value = horarioId;
+
+        const actionInput = document.createElement('input');
+        actionInput.type = 'hidden';
+        actionInput.name = 'action';
+        actionInput.value = action;
+
+        form.appendChild(csrfInput);
+        form.appendChild(idInput);
+        form.appendChild(actionInput);
+        document.body.appendChild(form);
+        form.submit();
     }
 
+    // --- FUNÇÃO DE CLIQUE ATUALIZADA ---
     function handleTableClick(e) {
         const target = e.target.closest('button');
         if (!target) return;

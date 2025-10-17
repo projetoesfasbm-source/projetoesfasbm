@@ -1,11 +1,11 @@
 # backend/controllers/relatorios_controller.py
 
-from flask import Blueprint, render_template, request, flash, Response, redirect, url_for
+from flask import Blueprint, render_template, request, flash, Response, redirect, url_for, send_file
 from flask_login import login_required, current_user
 from datetime import datetime
 from urllib.parse import quote
-# O import de 'locale' não é mais necessário para esta função
-# import locale
+import io
+import pandas as pd  # requer pandas (e xlsxwriter como engine)
 
 from weasyprint import HTML
 
@@ -58,9 +58,20 @@ def gerar_relatorio_horas_aula():
         is_rr_filter = report_type == 'efetivo_rr'
         instrutor_ids_filter = None
         if report_type == 'por_instrutor':
-            instrutor_ids_filter = [int(id) for id in request.form.getlist('instrutor_ids')]
-            if not instrutor_ids_filter:
+            # Se o campo não vier, getlist() retorna []
+            instrutor_ids_raw = request.form.getlist('instrutor_ids')
+            if not instrutor_ids_raw:
                 flash('Por favor, selecione pelo menos um instrutor.', 'warning')
+                return redirect(url_for('relatorios.gerar_relatorio_horas_aula', tipo=report_type))
+            # Converte mantendo apenas inteiros válidos
+            instrutor_ids_filter = []
+            for _id in instrutor_ids_raw:
+                try:
+                    instrutor_ids_filter.append(int(_id))
+                except (TypeError, ValueError):
+                    pass
+            if not instrutor_ids_filter:
+                flash('Seleção de instrutores inválida.', 'warning')
                 return redirect(url_for('relatorios.gerar_relatorio_horas_aula', tipo=report_type))
 
         dados_relatorio = RelatorioService.get_horas_aula_por_instrutor(
@@ -70,7 +81,8 @@ def gerar_relatorio_horas_aula():
         valor_hora_aula = SiteConfigService.get_valor_hora_aula()
         
         # --- LÓGICA DE TRADUÇÃO DO MÊS ---
-        meses = ("Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro")
+        meses = ("Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+                 "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro")
         nome_mes_ano_pt = f"{meses[data_inicio.month - 1]} de {data_inicio.year}"
         data_assinatura_pt = f"{data_fim.day} de {meses[data_fim.month - 1]} de {data_fim.year}"
         
@@ -103,11 +115,50 @@ def gerar_relatorio_horas_aula():
                 flash(f'Erro ao gerar PDF: {str(e)}', 'danger')
                 return redirect(url_for('relatorios.gerar_relatorio_horas_aula', tipo=report_type))
 
-            filename_utf8 = f'relatorio_horas_aula_{contexto["nome_mes_ano"].replace(" ", "_")}.pdf'
+            filename_utf8 = f'relatorio_horas_aula_{contexto["nome_mes_ao"].replace(" ", "_")}.pdf' if "nome_mes_ao" in contexto else f'relatorio_horas_aula_{contexto["nome_mes_ano"].replace(" ", "_")}.pdf'
             return Response(
                 pdf_content,
                 mimetype='application/pdf',
-                headers={'Content-Disposition': f'attachment; filename="{quote(filename_utf8)}'}
+                headers={'Content-Disposition': f'attachment; filename="{quote(filename_utf8)}"'}
+            )
+
+        elif action == 'xlsx':
+            """
+            Exporta os dados para XLSX.
+            Pressupõe que `dados_relatorio` seja lista de dicts ou algo facilmente
+            transformável em DataFrame. Se for uma estrutura mais complexa,
+            ajuste o mapeamento abaixo.
+            """
+            try:
+                # Tenta converter diretamente
+                df = pd.DataFrame(dados_relatorio)
+                # Se vier vazio ou com objetos não-serializáveis, cria um fallback simples
+                if df.empty:
+                    df = pd.DataFrame([{
+                        "Periodo": f"{data_inicio} a {data_fim}",
+                        "Observacao": "Sem dados para o período/seleção."
+                    }])
+            except Exception:
+                # Fallback genérico: conta registros
+                df = pd.DataFrame([{
+                    "Periodo": f"{data_inicio} a {data_fim}",
+                    "Registros": len(dados_relatorio) if dados_relatorio else 0
+                }])
+
+            buf = io.BytesIO()
+            with pd.ExcelWriter(buf, engine='xlsxwriter') as writer:
+                df.to_excel(writer, index=False, sheet_name='Relatorio')
+                # Se quiser, você pode adicionar mais abas aqui, ex:
+                # pd.DataFrame([...]).to_excel(writer, index=False, sheet_name='Resumo')
+
+            buf.seek(0)
+            xlsx_name = f'relatorio_horas_aula_{contexto["nome_mes_ano"].replace(" ", "_")}.xlsx'
+            return send_file(
+                buf,
+                as_attachment=True,
+                download_name=xlsx_name,
+                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                max_age=0
             )
 
         flash('Ação inválida.', 'warning')

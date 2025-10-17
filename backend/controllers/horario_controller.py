@@ -10,7 +10,7 @@ from wtforms import HiddenField, SubmitField
 from wtforms.validators import DataRequired
 from weasyprint import HTML
 from urllib.parse import quote
-from collections import defaultdict # <-- Adicionado
+from collections import defaultdict
 
 from ..models.database import db
 from ..models.horario import Horario
@@ -225,53 +225,10 @@ def aprovar_horarios():
         action = form.action.data
         success, message = HorarioService.aprovar_horario(horario_id, action)
         flash(message, 'success' if success else 'danger')
-        return redirect(url_for('horario.aprovar_horarios'))
+        return redirect(request.referrer or url_for('horario.aprovar_horarios'))
     
-    # --- LÓGICA DE AGRUPAMENTO DE AULAS ---
-    aulas_pendentes_flat = HorarioService.get_aulas_pendentes()
-    grouped_aulas = defaultdict(list)
-    single_aulas = []
-
-    for aula in aulas_pendentes_flat:
-        if aula.group_id:
-            grouped_aulas[aula.group_id].append(aula)
-        else:
-            single_aulas.append(aula)
-
-    aulas_para_template = []
-    
-    # Processa aulas de período único
-    for aula in single_aulas:
-        aulas_para_template.append({
-            'aula': aula,
-            'periodo_str': f"{aula.periodo}º ({aula.duracao}h)",
-            'id_para_acao': aula.id
-        })
-        
-    # Processa aulas agrupadas
-    for group_id, aulas_no_grupo in grouped_aulas.items():
-        if not aulas_no_grupo:
-            continue
-        
-        aulas_no_grupo.sort(key=lambda a: a.periodo)
-        primeira_aula = aulas_no_grupo[0]
-        
-        total_duracao = sum(a.duracao for a in aulas_no_grupo)
-        periodo_min = min(a.periodo for a in aulas_no_grupo)
-        periodo_max = max(a.periodo + a.duracao - 1 for a in aulas_no_grupo)
-        
-        periodo_str = f"{periodo_min}º ao {periodo_max}º ({total_duracao}h)" if periodo_min != periodo_max else f"{periodo_min}º ({total_duracao}h)"
-            
-        aulas_para_template.append({
-            'aula': primeira_aula,
-            'periodo_str': periodo_str,
-            'id_para_acao': primeira_aula.id
-        })
-
-    # Ordena a lista final para exibição consistente
-    aulas_para_template.sort(key=lambda x: x['aula'].id, reverse=True)
-
-    return render_template('aprovar_horarios.html', aulas_pendentes=aulas_para_template, form=form)
+    aulas_pendentes = HorarioService.get_aulas_pendentes_agrupadas()
+    return render_template('aprovar_horarios.html', aulas_pendentes=aulas_pendentes, form=form)
 
 
 @horario_bp.route('/aprovar-parcial', methods=['POST'])
