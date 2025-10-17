@@ -73,4 +73,5 @@ dist/
 *.sql
 *.dump
 
+backend/credentials.json
 backend/credentials.json.json

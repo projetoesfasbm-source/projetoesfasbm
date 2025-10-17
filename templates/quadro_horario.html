@@ -82,13 +82,7 @@
                 </tr>
             </thead>
             <tbody>
-                {% for row_idx in range(15) %}
-                    {% set periodo_num = row_idx + 1 %}
-                    {% if (periodo_num <= 12) or 
-                          (periodo_num == 13 and semana_selecionada.mostrar_periodo_13) or
-                          (periodo_num == 14 and semana_selecionada.mostrar_periodo_14) or
-                          (periodo_num == 15 and semana_selecionada.mostrar_periodo_15) %}
-                    
+                {% for row_idx in range(3) %}
                     <tr class="periodo-row">
                         <td class="cell-tempo"><strong>{{ tempos[row_idx][0] }}</strong><span>{{ tempos[row_idx][1] }}</span></td>
                         {% for col_idx in range(5) %}
@@ -96,28 +90,72 @@
                             {% include 'partials/_horario_slot_view.html' %}
                         {% endfor %}
                     </tr>
-
-                    {% if periodo_num == 3 %}
-                    <tr class="intervalo-row">
-                        <td class="cell-tempo"><strong>INTERVALO</strong><span>{{ intervalos.intervalo_1 }}</span></td>
-                        <td colspan="5">INTERVALO</td>
+                {% endfor %}
+            </tbody>
+            <tbody>
+                <tr class="intervalo-row">
+                    <td class="cell-tempo"><strong>INTERVALO</strong><span>{{ intervalos.intervalo_1 }}</span></td>
+                    <td colspan="5">INTERVALO</td>
+                </tr>
+            </tbody>
+            <tbody>
+                {% for row_idx in range(3, 6) %}
+                    <tr class="periodo-row">
+                        <td class="cell-tempo"><strong>{{ tempos[row_idx][0] }}</strong><span>{{ tempos[row_idx][1] }}</span></td>
+                        {% for col_idx in range(5) %}
+                            {% set aula = horario_matrix[row_idx][col_idx] %}
+                            {% include 'partials/_horario_slot_view.html' %}
+                        {% endfor %}
                     </tr>
-                    {% endif %}
-                    
-                    {% if periodo_num == 6 %}
-                    <tr class="intervalo-row">
-                        <td class="cell-tempo"><strong>ALMOÇO</strong><span>{{ intervalos.almoco }}</span></td>
-                        <td colspan="5">INTERVALO DE ALMOÇO</td>
+                {% endfor %}
+            </tbody>
+            <tbody>
+                <tr class="intervalo-row">
+                    <td class="cell-tempo"><strong>ALMOÇO</strong><span>{{ intervalos.almoco }}</span></td>
+                    <td colspan="5">INTERVALO DE ALMOÇO</td>
+                </tr>
+            </tbody>
+            <tbody>
+                {% for row_idx in range(6, 9) %}
+                    <tr class="periodo-row">
+                        <td class="cell-tempo"><strong>{{ tempos[row_idx][0] }}</strong><span>{{ tempos[row_idx][1] }}</span></td>
+                        {% for col_idx in range(5) %}
+                            {% set aula = horario_matrix[row_idx][col_idx] %}
+                            {% include 'partials/_horario_slot_view.html' %}
+                        {% endfor %}
                     </tr>
-                    {% endif %}
-
-                    {% if periodo_num == 9 %}
-                    <tr class="intervalo-row">
-                        <td class="cell-tempo"><strong>INTERVALO</strong><span>{{ intervalos.intervalo_2 }}</span></td>
-                        <td colspan="5">INTERVALO</td>
+                {% endfor %}
+            </tbody>
+            <tbody>
+                <tr class="intervalo-row">
+                    <td class="cell-tempo"><strong>INTERVALO</strong><span>{{ intervalos.intervalo_2 }}</span></td>
+                    <td colspan="5">INTERVALO</td>
+                </tr>
+            </tbody>
+            <tbody>
+                {% for row_idx in range(9, 12) %}
+                    <tr class="periodo-row">
+                        <td class="cell-tempo"><strong>{{ tempos[row_idx][0] }}</strong><span>{{ tempos[row_idx][1] }}</span></td>
+                        {% for col_idx in range(5) %}
+                            {% set aula = horario_matrix[row_idx][col_idx] %}
+                            {% include 'partials/_horario_slot_view.html' %}
+                        {% endfor %}
                     </tr>
-                    {% endif %}
-                    
+                {% endfor %}
+            </tbody>
+            <tbody>
+                {% for row_idx in range(12, 15) %}
+                    {% set periodo_num = row_idx + 1 %}
+                    {% if (periodo_num == 13 and semana_selecionada.mostrar_periodo_13) or
+                          (periodo_num == 14 and semana_selecionada.mostrar_periodo_14) or
+                          (periodo_num == 15 and semana_selecionada.mostrar_periodo_15) %}
+                    <tr class="periodo-row">
+                        <td class="cell-tempo"><strong>{{ tempos[row_idx][0] }}</strong><span>{{ tempos[row_idx][1] }}</span></td>
+                        {% for col_idx in range(5) %}
+                            {% set aula = horario_matrix[row_idx][col_idx] %}
+                            {% include 'partials/_horario_slot_view.html' %}
+                        {% endfor %}
+                    </tr>
                     {% endif %}
                 {% endfor %}
             </tbody>

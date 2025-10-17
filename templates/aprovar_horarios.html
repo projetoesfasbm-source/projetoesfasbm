@@ -32,15 +32,17 @@
                     <tr>
                         <td data-label="Semana">{{ aula.semana.nome }}</td>
                         <td data-label="Pelotão">{{ aula.pelotao }}</td>
-                        <td data-label="Dia">{{ aula.dia_semana }}</td>
-                        <td data-label="Período">{{ aula.periodo }}º ({{ aula.duracao }}h)</td>
+                        <td data-label="Dia">{{ aula.dia_semana|capitalize }}</td>
+                        <td data-label="Período(s)">{{ aula.periodo }}º ({{ aula.duracao }}h)</td>
                         <td data-label="Disciplina">{{ aula.disciplina.materia }}</td>
                         <td data-label="Instrutor">{{ aula.instrutor.user.nome_de_guerra or aula.instrutor.user.username }}</td>
                         <td data-label="Ações" class="text-right">
                             <div class="btn-group">
-                                <button type="button" class="btn btn-sm btn-success" onclick="sendApprovalRequest('{{ aula.id }}', Array.from({length: {{ aula.duracao }}}, (_, i) => {{ aula.periodo }} + i))">Aprovar</button>
-                                <button type="button" class="btn btn-sm btn-warning" onclick="openApprovalModal('{{ aula.id }}')">Gerenciar</button>
-                                <button type="button" class="btn btn-sm btn-danger" onclick="sendApprovalRequest('{{ aula.id }}', [])">Negar</button>
+                                <button type="button" class="btn btn-sm btn-success" onclick="sendSimpleApproval('{{ aula.id }}', 'aprovar')">Aprovar</button>
+                                <button type="button" class="btn btn-sm btn-warning" 
+                                        data-modal-target="#approval-modal-overlay"
+                                        data-horario-id="{{ aula.id }}">Gerenciar</button>
+                                <button type="button" class="btn btn-sm btn-danger" onclick="sendSimpleApproval('{{ aula.id }}', 'negar')">Negar</button>
                             </div>
                         </td>
                     </tr>
@@ -56,7 +58,9 @@
         {% endif %}
     </div>
 </div>
+{% endblock %}
 
+{% block modals %}
 <div class="modal-overlay" id="approval-modal-overlay">
     <div class="modal-content">
         <h3 id="approval-modal-title">Gerenciar Aula Pendente</h3>
@@ -65,7 +69,7 @@
             <input type="hidden" id="approval-horario-id">
             <div id="approval-periodos-container" class="form-group"></div>
             <div class="form-actions">
-                <button type="button" class="btn btn-secondary" onclick="closeModal(approvalModalOverlay)">Cancelar</button>
+                <button type="button" class="btn btn-secondary" data-modal-close>Cancelar</button>
                 <button type="submit" class="btn btn-primary">Confirmar Aprovação</button>
             </div>
         </form>
@@ -74,13 +78,21 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const approvalModalOverlay = document.getElementById('approval-modal-overlay');
     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
-    window.openApprovalModal = async function(horarioId) {
+    // Escuta o evento global para abrir o modal
+    document.addEventListener('modal:open', function(event) {
+        if (event.detail.modal.id === 'approval-modal-overlay') {
+            const horarioId = event.detail.trigger.dataset.horarioId;
+            populateApprovalModal(horarioId);
+        }
+    });
+
+    async function populateApprovalModal(horarioId) {
         const form = document.getElementById('approval-modal-form');
         form.reset();
         document.getElementById('approval-horario-id').value = horarioId;
+        const modalTitle = document.getElementById('approval-modal-title');
         const infoP = document.getElementById('approval-modal-info');
         const periodosContainer = document.getElementById('approval-periodos-container');
         periodosContainer.innerHTML = 'Carregando...';
@@ -90,8 +102,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const data = await res.json();
             
             if (data.success) {
-                document.getElementById('approval-modal-title').textContent = `Gerenciar Aula de ${data.disciplina_id}`; // Simples para exemplo
-                infoP.textContent = `Duração de ${data.duracao} período(s), começando no ${data.periodo}º.`;
+                modalTitle.textContent = `Gerenciar Aula de ${data.materia}`;
+                infoP.textContent = `Solicitada por ${data.instrutor_nome}, com duração de ${data.duracao}h.`;
                 periodosContainer.innerHTML = '<label class="form-label">Selecione os períodos para aprovar:</label>';
                 for (let i = 0; i < data.duracao; i++) {
                     const periodo = data.periodo + i;
@@ -101,26 +113,28 @@ document.addEventListener('DOMContentLoaded', function() {
                             <label class="form-check-label" for="periodo-${periodo}">${periodo}º Período</label>
                         </div>`;
                 }
-                openModal(approvalModalOverlay);
             } else {
-                alert('Erro: ' + data.message);
+                infoP.textContent = `Erro: ${data.message}`;
             }
         } catch (error) {
-            alert("Não foi possível carregar os detalhes da aula.");
+            infoP.textContent = "Não foi possível carregar os detalhes da aula.";
         }
-    };
+    }
     
-    window.sendApprovalRequest = function(horarioId, periodos) {
-        if (!Array.isArray(periodos)) return;
-        if (periodos.length === 0 && !confirm('Tem certeza que deseja NEGAR esta aula?')) return;
+    window.sendSimpleApproval = function(horarioId, action) {
+        if (action === 'negar' && !confirm('Tem certeza que deseja NEGAR esta aula? A solicitação será removida.')) return;
         
-        fetch('/horario/aprovar-parcial', {
+        fetch(`{{ url_for('horario.aprovar_horarios') }}`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-            body: JSON.stringify({ horario_id: horarioId, periodos: periodos })
-        }).then(res => res.json()).then(data => {
-            if (data.success) window.location.reload(); 
-            else alert('Erro: ' + data.message);
+            headers: {'Content-Type':'application/x-www-form-urlencoded', 'X-CSRFToken': csrfToken},
+            body: new URLSearchParams({
+                'horario_id': horarioId,
+                'action': action,
+                'csrf_token': csrfToken
+            })
+        }).then(res => {
+            if(res.ok) window.location.reload();
+            else alert('Ocorreu um erro ao processar a solicitação.');
         });
     };
 
@@ -128,24 +142,19 @@ document.addEventListener('DOMContentLoaded', function() {
         e.preventDefault();
         const horarioId = document.getElementById('approval-horario-id').value;
         const selectedPeriodos = Array.from(document.querySelectorAll('#approval-periodos-container input:checked')).map(cb => cb.value);
-        sendApprovalRequest(horarioId, selectedPeriodos);
+        
+        fetch('/horario/aprovar-parcial', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ horario_id: horarioId, periodos: selectedPeriodos })
+        }).then(res => res.json()).then(data => {
+            if (data.success) {
+                window.location.reload();
+            } else {
+                alert('Erro: ' + data.message);
+            }
+        });
     });
-    
-    window.openModal = function(modalOverlay) {
-        if(modalOverlay) {
-            modalOverlay.classList.add('visible');
-            document.body.style.overflow = 'hidden';
-        }
-    };
-
-    window.closeModal = function(modalOverlay) {
-        if(modalOverlay) {
-            modalOverlay.classList.remove('visible');
-            document.body.style.overflow = '';
-        }
-    };
-    
-    approvalModalOverlay.addEventListener('click', (e) => { if (e.target === approvalModalOverlay) closeModal(approvalModalOverlay); });
 });
 </script>
 {% endblock %}

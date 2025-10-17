@@ -16,8 +16,8 @@
             <a href="{{ url_for('turma.cadastrar_turma') }}" class="btn btn-primary">
                 <span>+</span> Cadastrar Nova Turma
             </a>
-            <button type="button" class="btn btn-warning" onclick="openModal('editModal')">Editar Turma</button>
-            <button type="button" class="btn btn-danger" onclick="openModal('deleteModal')">Excluir Turma</button>
+            <button type="button" class="btn btn-warning" data-modal-target="#editModal">Editar Turma</button>
+            <button type="button" class="btn btn-danger" data-modal-target="#deleteModal">Excluir Turma</button>
         </div>
         {% endif %}
     </div>
@@ -140,7 +140,7 @@
             </select>
         </div>
         <div class="form-actions">
-            <button type="button" class="btn btn-secondary" onclick="closeModal('editModal')">Cancelar</button>
+            <button type="button" class="btn btn-secondary" data-modal-close>Cancelar</button>
             <button type="button" class="btn btn-primary" onclick="confirmEdit()">Confirmar</button>
         </div>
     </div>
@@ -161,7 +161,7 @@
                 </select>
             </div>
             <div class="form-actions">
-                <button type="button" class="btn btn-secondary" onclick="closeModal('deleteModal')">Cancelar</button>
+                <button type="button" class="btn btn-secondary" data-modal-close>Cancelar</button>
                 <button type="submit" class="btn btn-danger">Excluir Turma</button>
             </div>
         </form>
@@ -169,47 +169,28 @@
 </div>
 
 <script>
-function openModal(modalId) {
-    const modal = document.getElementById(modalId);
-    if (modal) {
-        modal.classList.add('visible');
-        document.body.style.overflow = 'hidden';
+document.addEventListener('DOMContentLoaded', function() {
+    function confirmEdit() {
+        const select = document.getElementById('turmaEditSelect');
+        const turmaId = select.value;
+        if (turmaId) {
+            window.location.href = `/turma/editar/${turmaId}`;
+        } else {
+            alert('Por favor, selecione uma turma para editar.');
+        }
     }
-}
+    
+    document.querySelector('#editModal .btn-primary').addEventListener('click', confirmEdit);
 
-function closeModal(modalId) {
-    const modal = document.getElementById(modalId);
-    if (modal) {
-        modal.classList.remove('visible');
-        document.body.style.overflow = '';
-    }
-}
-
-function confirmEdit() {
-    const select = document.getElementById('turmaEditSelect');
-    const turmaId = select.value;
-    if (turmaId) {
-        window.location.href = `/turma/editar/${turmaId}`;
-    } else {
-        alert('Por favor, selecione uma turma para editar.');
-    }
-}
-
-document.getElementById('turmaDeleteSelect').addEventListener('change', function() {
-    const turmaId = this.value;
-    const form = document.getElementById('deleteForm');
-    if (turmaId) {
-        form.action = `/turma/excluir/${turmaId}`;
-    } else {
-        form.action = '#';
-    }
+    document.getElementById('turmaDeleteSelect').addEventListener('change', function() {
+        const turmaId = this.value;
+        const form = document.getElementById('deleteForm');
+        if (turmaId) {
+            form.action = `/turma/excluir/${turmaId}`;
+        } else {
+            form.action = '#';
+        }
+    });
 });
-
-window.onclick = function(event) {
-    if (event.target.classList.contains('modal-overlay')) {
-        event.target.classList.remove('visible');
-        document.body.style.overflow = '';
-    }
-}
 </script>
 {% endblock %}

@@ -84,7 +84,9 @@
                     <span class="text-muted">-- Nenhuma --</span>
                 {% endif %}
             </div>
-            <button class="btn btn-sm btn-secondary" onclick="openFuncaoModal('{{ aluno.funcao_atual or '' }}')">Gerenciar</button>
+            <button class="btn btn-sm btn-secondary" 
+                    data-modal-target="#funcaoModal"
+                    data-funcao-atual="{{ aluno.funcao_atual or '' }}">Gerenciar</button>
         </div>
     </div>
 </div>
@@ -108,7 +110,7 @@
             <h3>Gerenciar Função de Escola</h3>
             <div class="form-group">
                 <label for="modalFuncaoSelect">Selecione a Função</label>
-                <select id="modalFuncaoSelect" name="funcao_atual" class="form-control" onchange="updateDateLabelFuncao(this)">
+                <select id="modalFuncaoSelect" name="funcao_atual" class="form-control">
                     <option value="">-- Remover da Função (Nenhuma) --</option>
                     {% for choice in form.funcao_atual.choices %}
                         {% if choice[0] %}
@@ -122,7 +124,7 @@
                 <input type="date" id="modalDataEventoFuncao" name="data_evento" class="form-control" required>
             </div>
             <div class="form-actions">
-                <button type="button" class="btn btn-secondary" onclick="closeFuncaoModal()">Cancelar</button>
+                <button type="button" class="btn btn-secondary" data-modal-close>Cancelar</button>
                 <button type="submit" class="btn btn-primary">Salvar Alteração</button>
             </div>
         </form>
@@ -151,40 +153,32 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    categoriaSelect.addEventListener('change', updatePostoOptions);
-    updatePostoOptions(); // Run on page load
+    if (categoriaSelect) {
+        categoriaSelect.addEventListener('change', updatePostoOptions);
+        updatePostoOptions(); // Run on page load
+    }
+
+    const modalFuncaoSelect = document.getElementById('modalFuncaoSelect');
+    const modalDataLabelFuncao = document.getElementById('modalDataLabelFuncao');
+
+    function updateDateLabelFuncao() {
+        if (modalDataLabelFuncao) {
+            modalDataLabelFuncao.textContent = (modalFuncaoSelect.value === "") ? "Data de Fim da Função" : "Data de Início da Função";
+        }
+    }
+    
+    if (modalFuncaoSelect) {
+        modalFuncaoSelect.addEventListener('change', updateDateLabelFuncao);
+    }
+
+    document.addEventListener('modal:open', function(event) {
+        if (event.detail.modal.id === 'funcaoModal') {
+            const trigger = event.detail.trigger;
+            modalFuncaoSelect.value = trigger.dataset.funcaoAtual;
+            document.getElementById('modalDataEventoFuncao').valueAsDate = new Date();
+            updateDateLabelFuncao();
+        }
+    });
 });
-
-const funcaoModal = document.getElementById('funcaoModal');
-const modalFuncaoSelect = document.getElementById('modalFuncaoSelect');
-const modalDataLabelFuncao = document.getElementById('modalDataLabelFuncao');
-const modalDataEventoFuncao = document.getElementById('modalDataEventoFuncao');
-
-function updateDateLabelFuncao(selectElement) {
-    if (selectElement.value === "") {
-        modalDataLabelFuncao.textContent = "Data de Fim da Função";
-    } else {
-        modalDataLabelFuncao.textContent = "Data de Início da Função";
-    }
-}
-
-function openFuncaoModal(funcaoAtual) {
-    modalFuncaoSelect.value = funcaoAtual;
-    modalDataEventoFuncao.valueAsDate = new Date();
-    updateDateLabelFuncao(modalFuncaoSelect);
-    funcaoModal.classList.add('visible');
-    document.body.style.overflow = 'hidden';
-}
-
-function closeFuncaoModal() {
-    funcaoModal.classList.remove('visible');
-    document.body.style.overflow = '';
-}
-
-window.onclick = function(event) {
-    if (event.target == funcaoModal) {
-        closeFuncaoModal();
-    }
-}
 </script>
 {% endblock %}

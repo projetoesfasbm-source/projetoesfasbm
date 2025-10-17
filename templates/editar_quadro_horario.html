@@ -76,11 +76,11 @@
 </div>
 
 <style>
-/* --- NOVOS ESTILOS PARA CORREÇÃO --- */
+/* --- ESTILOS DOS BOTÕES DE AÇÃO --- */
 .slot-content {
     display: flex;
     flex-direction: column;
-    justify-content: space-between; /* Empurra o conteúdo para as extremidades */
+    justify-content: space-between;
     height: 100%;
     text-align: center;
     padding: 0.5rem;
@@ -92,8 +92,8 @@
     justify-content: center;
 }
 .slot-actions {
-    flex-shrink: 0; /* Impede que os botões encolham */
-    margin: 4px auto 0 auto; /* Margem superior e centralização horizontal */
+    flex-shrink: 0;
+    margin: 4px auto 0 auto;
 }
 .slot-actions.approval {
     display: flex;
@@ -123,8 +123,10 @@
 .slot-actions .btn-icon.approve:hover { background-color: #0f9b6b; }
 .slot-actions .btn-icon.deny { background-color: var(--color-danger); }
 .slot-actions .btn-icon.deny:hover { background-color: #d93b3b; }
+.slot-actions .btn-icon.manage { background-color: var(--color-warning); }
+.slot-actions .btn-icon.manage:hover { background-color: #d97706; }
 
-/* Estilos aprimorados para o Modal de Aprovação */
+/* --- INÍCIO DA CORREÇÃO DE ALINHAMENTO --- */
 #approval-modal-form .form-actions {
     justify-content: space-between;
     border-top: 1px solid var(--color-border);
@@ -143,8 +145,17 @@
     border-radius: 8px;
     margin-bottom: 0.5rem;
     cursor: pointer;
+    /* Novas propriedades para alinhamento */
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
 }
 #approval-periodos-container .form-check:hover { background-color: #eef5ff; }
+#approval-periodos-container .form-check label {
+    margin-bottom: 0; /* Remove margem padrão */
+    cursor: pointer;
+}
+/* --- FIM DA CORREÇÃO DE ALINHAMENTO --- */
 
 /* --- ESTILOS EXISTENTES --- */
 .no-permission { color: #94a3b8; font-size: 1rem; cursor: not-allowed; }
@@ -172,7 +183,7 @@
                 </div>
             <div class="form-actions">
                 <button type="button" class="btn btn-secondary" id="approval-modal-cancel">Cancelar</button>
-                <div>
+                <div class="btn-group">
                     <button type="button" class="btn btn-danger" id="approval-negar">Negar Aula</button>
                     <button type="submit" class="btn btn-primary">Confirmar Aprovação</button>
                 </div>
@@ -253,23 +264,20 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Gerenciador de cliques na tabela
+    // --- LÓGICA DO GERENCIADOR DE CLIQUES ATUALIZADA ---
     function handleTableClick(e) {
         const target = e.target.closest('button');
         if (!target) return;
+
         const action = target.dataset.action;
         const id = target.dataset.id;
         const slot = target.closest('.schedule-slot');
-        if (!slot) return;
-        
+
+        if (!action || !id || !slot) return;
+
+        // Ações de edição
         if (action === 'add') openHorarioModal({ dia: slot.dataset.dia, periodo: slot.dataset.periodo });
         if (action === 'edit') openHorarioModal({ horario_id: id, dia: slot.dataset.dia, periodo: slot.dataset.periodo });
-        if (action === 'approve_partial') openApprovalModal(id);
-        if (action === 'deny_aula') {
-            if (confirm('Tem certeza que deseja negar (remover) esta solicitação de aula?')) {
-                sendApprovalRequest(id, []);
-            }
-        }
         if (action === 'delete') {
             if (confirm('Tem certeza que deseja remover esta aula?')) {
                 fetch('/horario/remover-aula', {
@@ -280,7 +288,24 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
             }
         }
+
+        // Novas Ações de Aprovação
+        if (action === 'approve_all') {
+            const startPeriod = parseInt(target.dataset.periodo, 10);
+            const duration = parseInt(target.dataset.duracao, 10);
+            const allPeriods = Array.from({ length: duration }, (_, i) => startPeriod + i);
+            sendApprovalRequest(id, allPeriods);
+        }
+        if (action === 'manage_approval') {
+            openApprovalModal(id);
+        }
+        if (action === 'deny_aula') {
+            if (confirm('Tem certeza que deseja negar (remover) esta solicitação de aula?')) {
+                sendApprovalRequest(id, []);
+            }
+        }
     }
+
     document.querySelectorAll('.editable').forEach(table => table.addEventListener('click', handleTableClick));
     
     // Submissão do formulário de aprovação
@@ -301,7 +326,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('approval-modal-form').addEventListener('submit', function(e) {
         e.preventDefault();
         const horarioId = document.getElementById('approval-horario-id').value;
-        const selectedPeriodos = Array.from(document.querySelectorAll('#approval-periodos-container input:checked')).map(cb => cb.value);
+        const selectedPeriodos = Array.from(document.querySelectorAll('#approval-periodos-container input:checked')).map(cb => parseInt(cb.value, 10));
         sendApprovalRequest(horarioId, selectedPeriodos);
     });
 
@@ -311,12 +336,16 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Fechar modais
-    document.getElementById('modal-cancel').addEventListener('click', () => closeModal(horarioModalOverlay));
+    if (document.getElementById('modal-cancel')) {
+        document.getElementById('modal-cancel').addEventListener('click', () => closeModal(horarioModalOverlay));
+    }
     document.getElementById('approval-modal-cancel').addEventListener('click', () => closeModal(approvalModalOverlay));
-    horarioModalOverlay.addEventListener('click', (e) => { if (e.target === horarioModalOverlay) closeModal(horarioModalOverlay); });
-    approvalModalOverlay.addEventListener('click', (e) => { if (e.target === approvalModalOverlay) closeModal(approvalModalOverlay); });
-    
-    // (O restante do seu script para o modal de agendamento pode continuar aqui)
+    if (horarioModalOverlay) {
+        horarioModalOverlay.addEventListener('click', (e) => { if (e.target === horarioModalOverlay) closeModal(horarioModalOverlay); });
+    }
+    if (approvalModalOverlay) {
+        approvalModalOverlay.addEventListener('click', (e) => { if (e.target === approvalModalOverlay) closeModal(approvalModalOverlay); });
+    }
 });
 </script>
 {% endblock %}

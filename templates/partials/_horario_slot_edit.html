@@ -20,7 +20,8 @@
 
                 {% if aula.status == 'pendente' and is_admin %}
                     <div class="slot-actions approval">
-                        <button class="btn-icon approve" data-action="approve_partial" data-id="{{ aula.id }}" title="Gerenciar Aprovação">✓</button>
+                        <button class="btn-icon approve" data-action="approve_all" data-id="{{ aula.id }}" data-periodo="{{ aula.periodo }}" data-duracao="{{ aula.duracao }}" title="Aprovar Todos os Períodos">✓</button>
+                        <button class="btn-icon manage" data-action="manage_approval" data-id="{{ aula.id }}" title="Gerenciar Aprovação Parcial">✏️</button>
                         <button class="btn-icon deny" data-action="deny_aula" data-id="{{ aula.id }}" title="Negar Aula">×</button>
                     </div>
                 {% elif aula.can_edit and not aula.is_continuation %}

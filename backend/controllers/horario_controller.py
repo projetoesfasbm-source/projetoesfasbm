@@ -179,7 +179,7 @@ def get_aula_details(horario_id):
 @horario_bp.route('/api/instrutores-vinculados/<pelotao>/<int:disciplina_id>')
 @login_required
 def get_instrutores_vinculados(pelotao, disciplina_id):
-    vinculo = db.session.scalar(select(DisciplinaTurma).options(joinedload(DisciplinaTurma.instrutor_1).joinedload(Instrutor.user), joinedload(DisciplinaTurma.instrutor_2).joinedload(Instrutor.user)).where(DisciplinaTurma.pelotao == pelotao, DisciplinaTurma.disciplina_id == disciplina_id))
+    vinculo = db.session.scalar(select(DisciplinaTurma).options(joinedload(DisciplinaTurma.instrutor_1).joinedload(Instrutor.user), joinedload(DisciplinaTurma.instrutor_id_2).joinedload(Instrutor.user)).where(DisciplinaTurma.pelotao == pelotao, DisciplinaTurma.disciplina_id == disciplina_id))
     if not vinculo: return jsonify([])
     opcoes = []
     if vinculo.instrutor_1:

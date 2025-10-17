@@ -56,7 +56,10 @@
                     {% endif %}
                 </div>
                 {% if current_user.role in ['programador', 'admin_escola'] %}
-                <button class="btn btn-sm btn-secondary" onclick="openCargoModal('{{ cargo }}', '{{ aluno_id or '' }}')">Gerenciar</button>
+                <button class="btn btn-sm btn-secondary" 
+                        data-modal-target="#cargoModal"
+                        data-cargo="{{ cargo }}"
+                        data-aluno-id="{{ aluno_id or '' }}">Gerenciar</button>
                 {% endif %}
             </div>
             {% endfor %}
@@ -89,7 +92,7 @@
             <h3 id="modalTitle">Gerenciar Cargo</h3>
             <div class="form-group">
                 <label for="modalAlunoSelect">Aluno</label>
-                <select id="modalAlunoSelect" name="aluno_id" class="form-control" onchange="updateDateLabel(this)">
+                <select id="modalAlunoSelect" name="aluno_id" class="form-control">
                     <option value="">-- Remover do Cargo (Vago) --</option>
                     {% for aluno in turma.alunos | sort(attribute='user.nome_completo') %}
                         <option value="{{ aluno.id }}">{{ aluno.user.nome_completo }}</option>
@@ -101,7 +104,7 @@
                 <input type="date" id="modalDataEvento" name="data_evento" class="form-control" required>
             </div>
             <div class="form-actions">
-                <button type="button" class="btn btn-secondary" onclick="closeCargoModal()">Cancelar</button>
+                <button type="button" class="btn btn-secondary" data-modal-close>Cancelar</button>
                 <button type="submit" class="btn btn-primary">Salvar Alteração</button>
             </div>
         </form>
@@ -109,40 +112,29 @@
 </div>
 
 <script>
-    const cargoModal = document.getElementById('cargoModal');
-    const modalTitle = document.getElementById('modalTitle');
-    const modalCargoNome = document.getElementById('modalCargoNome');
+document.addEventListener('DOMContentLoaded', function() {
     const modalAlunoSelect = document.getElementById('modalAlunoSelect');
-    const modalDataEvento = document.getElementById('modalDataEvento');
     const modalDataLabel = document.getElementById('modalDataLabel');
 
-    function updateDateLabel(selectElement) {
-        if (selectElement.value === "") {
-            modalDataLabel.textContent = "Data de Fim da Função";
-        } else {
-            modalDataLabel.textContent = "Data de Início da Função";
+    function updateDateLabel() {
+        modalDataLabel.textContent = (modalAlunoSelect.value === "") ? "Data de Fim da Função" : "Data de Início da Função";
+    }
+    
+    modalAlunoSelect.addEventListener('change', updateDateLabel);
+
+    document.addEventListener('modal:open', function(event) {
+        if (event.detail.modal.id === 'cargoModal') {
+            const trigger = event.detail.trigger;
+            const cargo = trigger.dataset.cargo;
+            const alunoId = trigger.dataset.alunoId;
+
+            document.getElementById('modalTitle').textContent = `Gerenciar Cargo: ${cargo}`;
+            document.getElementById('modalCargoNome').value = cargo;
+            modalAlunoSelect.value = alunoId;
+            document.getElementById('modalDataEvento').valueAsDate = new Date();
+            updateDateLabel();
         }
-    }
-
-    function openCargoModal(cargo, alunoId) {
-        modalTitle.textContent = `Gerenciar Cargo: ${cargo}`;
-        modalCargoNome.value = cargo;
-        modalAlunoSelect.value = alunoId;
-        modalDataEvento.valueAsDate = new Date();
-        updateDateLabel(modalAlunoSelect);
-        cargoModal.classList.add('visible');
-        document.body.style.overflow = 'hidden';
-    }
-
-    function closeCargoModal() {
-        cargoModal.classList.remove('visible');
-        document.body.style.overflow = '';
-    }
-
-    window.onclick = function(event) {
-        if (event.target == cargoModal) {
-            closeCargoModal();
-        }
-    }
+    });
+});
 </script>
 {% endblock %}

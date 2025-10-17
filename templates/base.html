@@ -202,19 +202,63 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            // Script da Sidebar
             const sidebar = document.getElementById('sidebar');
             const sidebarToggle = document.getElementById('sidebarToggle');
             const sidebarOverlay = document.getElementById('sidebarOverlay');
-
             function toggleSidebar() {
                 if (sidebar) sidebar.classList.toggle('open');
                 if (sidebarOverlay) sidebarOverlay.classList.toggle('active');
             }
-
             if (sidebarToggle) sidebarToggle.addEventListener('click', toggleSidebar);
             if (sidebarOverlay) sidebarOverlay.addEventListener('click', toggleSidebar);
 
-            // --- SCRIPT DE NOTIFICAÇÕES COM NOVAS FUNÇÕES ---
+            // --- NOVO SCRIPT GLOBAL DE MODAL ---
+            function openModal(modal) {
+                if (modal) {
+                    modal.classList.add('visible');
+                    document.body.style.overflow = 'hidden';
+                }
+            }
+
+            function closeModal(modal) {
+                if (modal) {
+                    modal.classList.remove('visible');
+                    document.body.style.overflow = '';
+                }
+            }
+
+            document.addEventListener('click', function (e) {
+                // Abrir modal
+                const openTrigger = e.target.closest('[data-modal-target]');
+                if (openTrigger) {
+                    const modal = document.querySelector(openTrigger.dataset.modalTarget);
+                    // Dispara um evento customizado para que a página possa popular o modal
+                    const event = new CustomEvent('modal:open', { detail: { modal: modal, trigger: openTrigger } });
+                    document.dispatchEvent(event);
+                    openModal(modal);
+                }
+
+                // Fechar modal com botão
+                const closeTrigger = e.target.closest('[data-modal-close]');
+                if (closeTrigger) {
+                    const modal = closeTrigger.closest('.modal-overlay');
+                    closeModal(modal);
+                }
+            });
+
+            // Fechar modal clicando no overlay
+            document.querySelectorAll('.modal-overlay').forEach(overlay => {
+                overlay.addEventListener('click', (e) => {
+                    if (e.target === overlay) {
+                        closeModal(overlay);
+                    }
+                });
+            });
+            // --- FIM DO SCRIPT GLOBAL DE MODAL ---
+
+
+            // --- SCRIPT DE NOTIFICAÇÕES (sem alterações) ---
             const badge = document.getElementById('notification-badge');
             const list = document.getElementById('notification-list');
             const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
@@ -278,13 +322,13 @@
                     fetch(`/notifications/mark-as-read/${notificationId}`, {
                         method: 'POST',
                         headers: { 'X-CSRFToken': csrfToken }
-                    }).then(() => fetchNotifications()); // Refresca a lista
+                    }).then(() => fetchNotifications());
                 } else if (markAllBtn) {
                     e.preventDefault();
                     fetch("{{ url_for('notification.mark_all_as_read') }}", {
                         method: 'POST',
                         headers: { 'X-CSRFToken': csrfToken }
-                    }).then(() => fetchNotifications()); // Refresca a lista
+                    }).then(() => fetchNotifications());
                 } else if (link) {
                     const parentItem = link.closest('.notification-item');
                     if (parentItem && parentItem.classList.contains('unread')) {
