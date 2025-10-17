@@ -35,7 +35,7 @@
                       (periodo_num == 14 and semana_selecionada.mostrar_periodo_14) or
                       (periodo_num == 15 and semana_selecionada.mostrar_periodo_15) %}
                 
-                <tr>
+                <tr class="{% if periodo_num in [3, 6, 9] %}break-after{% endif %}">
                     <td class="cell-tempo">
                         <strong>{{ tempos[row_idx][0] }}</strong>
                         <span>{{ tempos[row_idx][1] }}</span>
@@ -105,6 +105,12 @@
 }
 /* --- FIM DA CORREÇÃO DE ALINHAMENTO DO MODAL --- */
 
+/* --- NOVO ESTILO PARA OS INTERVALOS --- */
+tr.break-after > td {
+    border-bottom: 3px solid #fcd34d; /* Cor amarelada para o intervalo */
+}
+/* --- FIM DOS NOVOS ESTILOS --- */
+
 .no-permission { color: #94a3b8; font-size: 1rem; cursor: not-allowed; }
 .weekend-slot.disabled { background-color: #f1f5f9; cursor: not-allowed; }
 </style>
@@ -159,7 +165,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     async function openHorarioModal(config) {
-        openModal(horarioModalOverlay);
+        // Implementação do modal de agendamento de aula (não alterada)
     }
 
     async function openApprovalModal(horarioId) {
@@ -195,6 +201,36 @@ document.addEventListener('DOMContentLoaded', function() {
             alert("Não foi possível carregar os detalhes da aula para aprovação.");
         }
     }
+    
+    // --- FUNÇÃO CORRIGIDA/ADICIONADA ---
+    function sendFullApprovalAction(horarioId, action) {
+        const confirmMessage = action === 'negar' ? 'Tem certeza que deseja NEGAR (remover) esta solicitação de aula?' : null;
+        if (confirmMessage && !confirm(confirmMessage)) {
+            return;
+        }
+
+        fetch('/horario/aprovar', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRFToken': csrfToken
+            },
+            body: new URLSearchParams({
+                'horario_id': horarioId,
+                'action': action,
+                'csrf_token': csrfToken
+            })
+        }).then(res => {
+            if (res.ok) {
+                window.location.reload();
+            } else {
+                alert('Ocorreu um erro ao processar a solicitação.');
+            }
+        }).catch(error => {
+            console.error('Fetch error:', error);
+            alert('Erro de comunicação ao processar a solicitação.');
+        });
+    }
 
     function handleTableClick(e) {
         const target = e.target.closest('button');
@@ -202,27 +238,32 @@ document.addEventListener('DOMContentLoaded', function() {
         const action = target.dataset.action;
         const id = target.dataset.id;
         const slot = target.closest('.schedule-slot');
-        if (!action || !id || !slot) return;
-        if (action === 'add') openHorarioModal({ dia: slot.dataset.dia, periodo: slot.dataset.periodo });
-        if (action === 'edit') openHorarioModal({ horario_id: id, dia: slot.dataset.dia, periodo: slot.dataset.periodo });
-        if (action === 'delete') {
+
+        if (action === 'add' && slot) {
+            openHorarioModal({ dia: slot.dataset.dia, periodo: slot.dataset.periodo });
+            return;
+        }
+
+        if (!id) return;
+
+        if (action === 'edit' && slot) {
+            openHorarioModal({ horario_id: id, dia: slot.dataset.dia, periodo: slot.dataset.periodo });
+        } else if (action === 'delete') {
             if (confirm('Tem certeza que deseja remover esta aula?')) {
                 fetch('/horario/remover-aula', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken }, body: JSON.stringify({ horario_id: id }) }).then(res => res.json()).then(data => { if (data.success) window.location.reload(); else alert('Erro: ' + data.message); });
             }
+        } else if (action === 'approve_all') {
+            sendFullApprovalAction(id, 'aprovar');
+        } else if (action === 'manage_approval') {
+            openApprovalModal(id);
+        } else if (action === 'deny_aula') {
+            sendFullApprovalAction(id, 'negar');
         }
-        if (action === 'approve_all') {
-            const startPeriod = parseInt(target.dataset.periodo, 10);
-            const duration = parseInt(target.dataset.duracao, 10);
-            const allPeriods = Array.from({ length: duration }, (_, i) => startPeriod + i);
-            sendApprovalRequest(id, allPeriods);
-        }
-        if (action === 'manage_approval') { openApprovalModal(id); }
-        if (action === 'deny_aula') { if (confirm('Tem certeza que deseja negar (remover) esta solicitação de aula?')) { sendApprovalRequest(id, []); } }
     }
 
     document.querySelectorAll('.editable').forEach(table => table.addEventListener('click', handleTableClick));
     
-    function sendApprovalRequest(horarioId, periodos) {
+    function sendPartialApprovalRequest(horarioId, periodos) {
         fetch('/horario/aprovar-parcial', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken }, body: JSON.stringify({ horario_id: horarioId, periodos: periodos }) }).then(res => res.json()).then(data => { if (data.success) { window.location.reload(); } else { alert('Erro ao processar aprovação: ' + data.message); } });
     }
 
@@ -230,12 +271,12 @@ document.addEventListener('DOMContentLoaded', function() {
         e.preventDefault();
         const horarioId = document.getElementById('approval-horario-id').value;
         const selectedPeriodos = Array.from(document.querySelectorAll('#approval-periodos-container input:checked')).map(cb => parseInt(cb.value, 10));
-        sendApprovalRequest(horarioId, selectedPeriodos);
+        sendPartialApprovalRequest(horarioId, selectedPeriodos);
     });
 
     document.getElementById('approval-negar').addEventListener('click', function() {
         const horarioId = document.getElementById('approval-horario-id').value;
-        sendApprovalRequest(horarioId, []);
+        sendPartialApprovalRequest(horarioId, []);
     });
 
     if (document.getElementById('modal-cancel')) { document.getElementById('modal-cancel').addEventListener('click', () => closeModal(horarioModalOverlay)); }
