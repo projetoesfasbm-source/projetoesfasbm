@@ -6,70 +6,30 @@
     <style>
         @page {
             size: A4 landscape;
-            /* --- AJUSTE: Margens reduzidas para dar mais espaço à tabela --- */
             margin: 0.7cm;
         }
         body {
             font-family: 'Inter', sans-serif;
-            /* --- AJUSTE: Tamanho da fonte ligeiramente reduzido --- */
             font-size: 8pt;
             color: #333;
         }
-        .header {
-            text-align: center;
-            margin-bottom: 15px;
-            border-bottom: 1px solid #ccc;
-            padding-bottom: 8px;
-        }
-        .header h1 {
-            margin: 0;
-            font-size: 15pt;
-        }
-        .header p {
-            margin: 0;
-            font-size: 10pt;
-            color: #555;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            table-layout: fixed;
-        }
-        th, td {
-            border: 1px solid #ccc;
-            /* --- AJUSTE: Preenchimento das células reduzido --- */
-            padding: 4px;
-            text-align: center;
-            word-wrap: break-word;
-            vertical-align: middle;
-        }
-        th {
-            background-color: #f2f2f2;
-            font-weight: bold;
-        }
+        .header { text-align: center; margin-bottom: 15px; border-bottom: 1px solid #ccc; padding-bottom: 8px; }
+        .header h1 { margin: 0; font-size: 15pt; }
+        .header p { margin: 0; font-size: 10pt; color: #555; }
+        table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        th, td { border: 1px solid #ccc; padding: 4px; text-align: center; word-wrap: break-word; vertical-align: middle; }
+        th { background-color: #f2f2f2; font-weight: bold; }
         .header-tempo { width: 8%; }
         .cell-tempo { font-weight: bold; }
         .cell-tempo span { display: block; font-weight: normal; font-size: 0.8em; }
-        .slot-content {
-            padding: 2px;
-        }
-        .disciplina-title {
-            font-weight: bold;
-            font-size: 1.1em;
-            display: block;
-        }
-        .instrutor-name, .slot-observacao {
-            font-size: 0.9em;
-            color: #444;
-            display: block;
-        }
+        .disciplina-title { font-weight: bold; font-size: 1.1em; display: block; }
+        .instrutor-name, .slot-observacao { font-size: 0.9em; color: #444; display: block; }
         .slot-observacao { font-style: italic; }
-        .intervalo-row td {
-            background-color: #e9ecef;
-            font-weight: bold;
-            color: #495057;
-        }
         .weekend-table { margin-top: 20px; }
+        /* Novo estilo para o intervalo no PDF */
+        tr.break-after > td {
+            border-bottom: 2px solid #333;
+        }
     </style>
 </head>
 <body>
@@ -103,7 +63,7 @@
                       (periodo_num == 13 and semana_selecionada.mostrar_periodo_13) or
                       (periodo_num == 14 and semana_selecionada.mostrar_periodo_14) or
                       (periodo_num == 15 and semana_selecionada.mostrar_periodo_15) %}
-                <tr>
+                <tr class="{% if periodo_num in [3, 6, 9] %}break-after{% endif %}">
                     <td class="cell-tempo"><strong>{{ tempos[row_idx][0] }}</strong><span>{{ tempos[row_idx][1] }}</span></td>
                     {% for col_idx in range(5) %}
                         {% set aula = horario_matrix[row_idx][col_idx] %}
@@ -118,9 +78,6 @@
                         {% endif %}
                     {% endfor %}
                 </tr>
-                {% if periodo_num == 3 or periodo_num == 9 %}
-                <tr class="intervalo-row"><td class="cell-tempo">Intervalo</td><td colspan="5">INTERVALO</td></tr>
-                {% endif %}
                 {% endif %}
             {% endfor %}
         </tbody>

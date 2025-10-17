@@ -29,13 +29,17 @@
             {% for row_idx in range(15) %}
                 {% set periodo_num = row_idx + 1 %}
 
-                {% if (current_user.role in ['admin', 'programador']) or
+                {% if (current_user.role in ['admin', 'programador', 'super_admin']) or
                       (periodo_num <= 12) or
                       (periodo_num == 13 and semana_selecionada.mostrar_periodo_13) or
                       (periodo_num == 14 and semana_selecionada.mostrar_periodo_14) or
                       (periodo_num == 15 and semana_selecionada.mostrar_periodo_15) %}
-                <tr>
-                    <td class="cell-tempo"><strong>{{ tempos[row_idx][0] }}</strong><span>{{ tempos[row_idx][1] }}</span></td>
+                
+                <tr class="{% if periodo_num in [3, 6, 9] %}break-after{% endif %}">
+                    <td class="cell-tempo">
+                        <strong>{{ tempos[row_idx][0] }}</strong>
+                        <span>{{ tempos[row_idx][1] }}</span>
+                    </td>
                     {% for col_idx in range(5) %}
                         {% set aula = horario_matrix[row_idx][col_idx] %}
                         {% set dia = dias[col_idx] %}
@@ -43,27 +47,6 @@
                         {% include 'partials/_horario_slot_edit.html' %}
                     {% endfor %}
                 </tr>
-
-                {% if periodo_num == 3 %}
-                <tr class="intervalo-row">
-                    <td class="cell-tempo"><strong>INTERVALO</strong><span>{{ intervalos.intervalo_1 }}</span></td>
-                    <td colspan="5">INTERVALO</td>
-                </tr>
-                {% endif %}
-
-                {% if periodo_num == 6 %}
-                <tr class="intervalo-row">
-                    <td class="cell-tempo"><strong>ALMOÇO</strong><span>{{ intervalos.almoco }}</span></td>
-                    <td colspan="5">INTERVALO DE ALMOÇO</td>
-                </tr>
-                {% endif %}
-
-                {% if periodo_num == 9 %}
-                <tr class="intervalo-row">
-                    <td class="cell-tempo"><strong>INTERVALO</strong><span>{{ intervalos.intervalo_2 }}</span></td>
-                    <td colspan="5">INTERVALO</td>
-                </tr>
-                {% endif %}
 
                 {% endif %}
             {% endfor %}
@@ -77,48 +60,12 @@
 
 <style>
 /* --- ESTILOS DOS BOTÕES DE AÇÃO --- */
-.slot-content {
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    height: 100%;
-    text-align: center;
-    padding: 0.5rem;
-}
-.slot-info {
-    flex-grow: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-}
-.slot-actions {
-    flex-shrink: 0;
-    margin: 4px auto 0 auto;
-}
-.slot-actions.approval {
-    display: flex;
-    gap: 0.75rem;
-    padding: 4px;
-    border-radius: 20px;
-}
-.slot-actions .btn-icon {
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    font-size: 1.3rem;
-    font-weight: bold;
-    color: white;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    line-height: 1;
-    border: none;
-    cursor: pointer;
-    transition: transform 0.2s ease, background-color 0.2s ease;
-}
-.slot-actions .btn-icon:hover {
-    transform: scale(1.1);
-}
+.slot-content { display: flex; flex-direction: column; justify-content: space-between; height: 100%; text-align: center; padding: 0.5rem; }
+.slot-info { flex-grow: 1; display: flex; flex-direction: column; justify-content: center; }
+.slot-actions { flex-shrink: 0; margin: 4px auto 0 auto; }
+.slot-actions.approval { display: flex; gap: 0.75rem; padding: 4px; border-radius: 20px; }
+.slot-actions .btn-icon { width: 30px; height: 30px; border-radius: 50%; font-size: 1.3rem; font-weight: bold; color: white; display: flex; align-items: center; justify-content: center; line-height: 1; border: none; cursor: pointer; transition: transform 0.2s ease, background-color 0.2s ease; }
+.slot-actions .btn-icon:hover { transform: scale(1.1); }
 .slot-actions .btn-icon.approve { background-color: var(--color-success); }
 .slot-actions .btn-icon.approve:hover { background-color: #0f9b6b; }
 .slot-actions .btn-icon.deny { background-color: var(--color-danger); }
@@ -126,7 +73,7 @@
 .slot-actions .btn-icon.manage { background-color: var(--color-warning); }
 .slot-actions .btn-icon.manage:hover { background-color: #d97706; }
 
-/* --- INÍCIO DA CORREÇÃO DE ALINHAMENTO --- */
+/* --- CORREÇÃO DE ALINHAMENTO DO MODAL --- */
 #approval-modal-form .form-actions {
     justify-content: space-between;
     border-top: 1px solid var(--color-border);
@@ -145,33 +92,31 @@
     border-radius: 8px;
     margin-bottom: 0.5rem;
     cursor: pointer;
-    /* Novas propriedades para alinhamento */
     display: flex;
     align-items: center;
-    gap: 0.75rem;
 }
 #approval-periodos-container .form-check:hover { background-color: #eef5ff; }
+#approval-periodos-container .form-check input[type="checkbox"] {
+    margin-right: 0.75rem; /* Adiciona espaço entre o checkbox e o texto */
+}
 #approval-periodos-container .form-check label {
-    margin-bottom: 0; /* Remove margem padrão */
+    margin-bottom: 0; 
     cursor: pointer;
 }
-/* --- FIM DA CORREÇÃO DE ALINHAMENTO --- */
+/* --- FIM DA CORREÇÃO DE ALINHAMENTO DO MODAL --- */
 
-/* --- ESTILOS EXISTENTES --- */
+/* --- NOVO ESTILO PARA OS INTERVALOS --- */
+tr.break-after > td {
+    border-bottom: 3px solid #fcd34d; /* Cor amarelada para o intervalo */
+}
+/* --- FIM DOS NOVOS ESTILOS --- */
+
 .no-permission { color: #94a3b8; font-size: 1rem; cursor: not-allowed; }
 .weekend-slot.disabled { background-color: #f1f5f9; cursor: not-allowed; }
-.intervalo-row td {
-    background-color: #fffbeb;
-    color: #b45309;
-    font-weight: bold;
-    text-align: center;
-    border-left: none;
-    border-right: none;
-}
 </style>
 
 <div class="modal-overlay" id="horario-modal-overlay">
-    </div>
+</div>
 
 <div class="modal-overlay" id="approval-modal-overlay">
     <div class="modal-content">
@@ -180,7 +125,7 @@
         <form id="approval-modal-form">
             <input type="hidden" id="approval-horario-id" name="horario_id">
             <div id="approval-periodos-container" class="form-group">
-                </div>
+            </div>
             <div class="form-actions">
                 <button type="button" class="btn btn-secondary" id="approval-modal-cancel">Cancelar</button>
                 <div class="btn-group">
@@ -191,9 +136,6 @@
         </form>
     </div>
 </div>
-
-{% if semana_selecionada.mostrar_sabado or semana_selecionada.mostrar_domingo %}
-{% endif %}
 
 <script>
     const PELOTAO_SELECIONADO = "{{ pelotao_selecionado }}";
@@ -208,28 +150,24 @@ document.addEventListener('DOMContentLoaded', function() {
     const approvalModalOverlay = document.getElementById('approval-modal-overlay');
     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
-    // Funções para controlar a visibilidade dos modais e o scroll da página
     function openModal(modalOverlay) {
         if (modalOverlay) {
             modalOverlay.classList.add('visible');
-            document.body.style.overflow = 'hidden'; // Impede o scroll da página
+            document.body.style.overflow = 'hidden';
         }
     }
 
     function closeModal(modalOverlay) {
         if (modalOverlay) {
             modalOverlay.classList.remove('visible');
-            document.body.style.overflow = ''; // Libera o scroll
+            document.body.style.overflow = '';
         }
     }
 
-    // Lógica do Modal de Agendamento (sem alterações funcionais)
     async function openHorarioModal(config) {
-        // ... (código que abre o modal de agendamento)
         openModal(horarioModalOverlay);
     }
 
-    // Lógica do Modal de Aprovação (aprimorada)
     async function openApprovalModal(horarioId) {
         const form = document.getElementById('approval-modal-form');
         form.reset();
@@ -264,63 +202,34 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // --- LÓGICA DO GERENCIADOR DE CLIQUES ATUALIZADA ---
     function handleTableClick(e) {
         const target = e.target.closest('button');
         if (!target) return;
-
         const action = target.dataset.action;
         const id = target.dataset.id;
         const slot = target.closest('.schedule-slot');
-
         if (!action || !id || !slot) return;
-
-        // Ações de edição
         if (action === 'add') openHorarioModal({ dia: slot.dataset.dia, periodo: slot.dataset.periodo });
         if (action === 'edit') openHorarioModal({ horario_id: id, dia: slot.dataset.dia, periodo: slot.dataset.periodo });
         if (action === 'delete') {
             if (confirm('Tem certeza que deseja remover esta aula?')) {
-                fetch('/horario/remover-aula', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-                    body: JSON.stringify({ horario_id: id })
-                }).then(res => res.json()).then(data => {
-                    if (data.success) window.location.reload(); else alert('Erro: ' + data.message);
-                });
+                fetch('/horario/remover-aula', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken }, body: JSON.stringify({ horario_id: id }) }).then(res => res.json()).then(data => { if (data.success) window.location.reload(); else alert('Erro: ' + data.message); });
             }
         }
-
-        // Novas Ações de Aprovação
         if (action === 'approve_all') {
             const startPeriod = parseInt(target.dataset.periodo, 10);
             const duration = parseInt(target.dataset.duracao, 10);
             const allPeriods = Array.from({ length: duration }, (_, i) => startPeriod + i);
             sendApprovalRequest(id, allPeriods);
         }
-        if (action === 'manage_approval') {
-            openApprovalModal(id);
-        }
-        if (action === 'deny_aula') {
-            if (confirm('Tem certeza que deseja negar (remover) esta solicitação de aula?')) {
-                sendApprovalRequest(id, []);
-            }
-        }
+        if (action === 'manage_approval') { openApprovalModal(id); }
+        if (action === 'deny_aula') { if (confirm('Tem certeza que deseja negar (remover) esta solicitação de aula?')) { sendApprovalRequest(id, []); } }
     }
 
     document.querySelectorAll('.editable').forEach(table => table.addEventListener('click', handleTableClick));
     
-    // Submissão do formulário de aprovação
     function sendApprovalRequest(horarioId, periodos) {
-        fetch('/horario/aprovar-parcial', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-            body: JSON.stringify({ horario_id: horarioId, periodos: periodos })
-        }).then(res => res.json()).then(data => {
-            if (data.success) {
-                window.location.reload();
-            } else {
-                alert('Erro ao processar aprovação: ' + data.message);
-            }
-        });
+        fetch('/horario/aprovar-parcial', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken }, body: JSON.stringify({ horario_id: horarioId, periodos: periodos }) }).then(res => res.json()).then(data => { if (data.success) { window.location.reload(); } else { alert('Erro ao processar aprovação: ' + data.message); } });
     }
 
     document.getElementById('approval-modal-form').addEventListener('submit', function(e) {
@@ -335,17 +244,10 @@ document.addEventListener('DOMContentLoaded', function() {
         sendApprovalRequest(horarioId, []);
     });
 
-    // Fechar modais
-    if (document.getElementById('modal-cancel')) {
-        document.getElementById('modal-cancel').addEventListener('click', () => closeModal(horarioModalOverlay));
-    }
+    if (document.getElementById('modal-cancel')) { document.getElementById('modal-cancel').addEventListener('click', () => closeModal(horarioModalOverlay)); }
     document.getElementById('approval-modal-cancel').addEventListener('click', () => closeModal(approvalModalOverlay));
-    if (horarioModalOverlay) {
-        horarioModalOverlay.addEventListener('click', (e) => { if (e.target === horarioModalOverlay) closeModal(horarioModalOverlay); });
-    }
-    if (approvalModalOverlay) {
-        approvalModalOverlay.addEventListener('click', (e) => { if (e.target === approvalModalOverlay) closeModal(approvalModalOverlay); });
-    }
+    if (horarioModalOverlay) { horarioModalOverlay.addEventListener('click', (e) => { if (e.target === horarioModalOverlay) closeModal(horarioModalOverlay); }); }
+    if (approvalModalOverlay) { approvalModalOverlay.addEventListener('click', (e) => { if (e.target === approvalModalOverlay) closeModal(approvalModalOverlay); }); }
 });
 </script>
 {% endblock %}

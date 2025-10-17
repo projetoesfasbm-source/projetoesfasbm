@@ -25,17 +25,18 @@ class Horario(db.Model):
     disciplina_id: Mapped[int] = mapped_column(db.ForeignKey('disciplinas.id'), nullable=False)
     instrutor_id: Mapped[int] = mapped_column(db.ForeignKey('instrutores.id'), nullable=False)
     
-    # --- CAMPO NOVO ADICIONADO ---
     instrutor_id_2: Mapped[t.Optional[int]] = mapped_column(db.ForeignKey('instrutores.id'), nullable=True)
 
     status: Mapped[str] = mapped_column(db.String(20), default='pendente', nullable=False)
+    
+    # Campo para agrupar aulas divididas
+    group_id: Mapped[t.Optional[str]] = mapped_column(db.String(36), nullable=True, index=True)
 
     # Relacionamentos
     semana: Mapped["Semana"] = relationship()
     disciplina: Mapped["Disciplina"] = relationship()
     instrutor: Mapped["Instrutor"] = relationship(foreign_keys=[instrutor_id])
     
-    # --- NOVA RELAÇÃO ADICIONADA ---
     instrutor_2: Mapped[t.Optional["Instrutor"]] = relationship(foreign_keys=[instrutor_id_2])
 
 
