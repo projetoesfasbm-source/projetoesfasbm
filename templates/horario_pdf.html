@@ -26,10 +26,6 @@
         .instrutor-name, .slot-observacao { font-size: 0.9em; color: #444; display: block; }
         .slot-observacao { font-style: italic; }
         .weekend-table { margin-top: 20px; }
-        /* Novo estilo para o intervalo no PDF */
-        tr.break-after > td {
-            border-bottom: 2px solid #333;
-        }
     </style>
 </head>
 <body>
@@ -63,7 +59,7 @@
                       (periodo_num == 13 and semana_selecionada.mostrar_periodo_13) or
                       (periodo_num == 14 and semana_selecionada.mostrar_periodo_14) or
                       (periodo_num == 15 and semana_selecionada.mostrar_periodo_15) %}
-                <tr class="{% if periodo_num in [3, 6, 9] %}break-after{% endif %}">
+                <tr>
                     <td class="cell-tempo"><strong>{{ tempos[row_idx][0] }}</strong><span>{{ tempos[row_idx][1] }}</span></td>
                     {% for col_idx in range(5) %}
                         {% set aula = horario_matrix[row_idx][col_idx] %}

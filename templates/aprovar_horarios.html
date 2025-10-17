@@ -28,21 +28,21 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for aula in aulas_pendentes %}
+                    {% for item in aulas_pendentes %}
                     <tr>
-                        <td data-label="Semana">{{ aula.semana.nome }}</td>
-                        <td data-label="Pelotão">{{ aula.pelotao }}</td>
-                        <td data-label="Dia">{{ aula.dia_semana|capitalize }}</td>
-                        <td data-label="Período(s)">{{ aula.periodo }}º ({{ aula.duracao }}h)</td>
-                        <td data-label="Disciplina">{{ aula.disciplina.materia }}</td>
-                        <td data-label="Instrutor">{{ aula.instrutor.user.nome_de_guerra or aula.instrutor.user.username }}</td>
+                        <td data-label="Semana">{{ item.aula.semana.nome }}</td>
+                        <td data-label="Pelotão">{{ item.aula.pelotao }}</td>
+                        <td data-label="Dia">{{ item.aula.dia_semana|capitalize }}</td>
+                        <td data-label="Período(s)">{{ item.periodo_str }}</td>
+                        <td data-label="Disciplina">{{ item.aula.disciplina.materia }}</td>
+                        <td data-label="Instrutor">{{ item.aula.instrutor.user.nome_de_guerra or item.aula.instrutor.user.username }}</td>
                         <td data-label="Ações" class="text-right">
                             <div class="btn-group">
-                                <button type="button" class="btn btn-sm btn-success" onclick="sendSimpleApproval('{{ aula.id }}', 'aprovar')">Aprovar</button>
+                                <button type="button" class="btn btn-sm btn-success" onclick="sendSimpleApproval('{{ item.id_para_acao }}', 'aprovar')">Aprovar</button>
                                 <button type="button" class="btn btn-sm btn-warning" 
                                         data-modal-target="#approval-modal-overlay"
-                                        data-horario-id="{{ aula.id }}">Gerenciar</button>
-                                <button type="button" class="btn btn-sm btn-danger" onclick="sendSimpleApproval('{{ aula.id }}', 'negar')">Negar</button>
+                                        data-horario-id="{{ item.id_para_acao }}">Gerenciar</button>
+                                <button type="button" class="btn btn-sm btn-danger" onclick="sendSimpleApproval('{{ item.id_para_acao }}', 'negar')">Negar</button>
                             </div>
                         </td>
                     </tr>
@@ -75,6 +75,45 @@
         </form>
     </div>
 </div>
+
+<style>
+    /* --- ESTILOS PARA ALINHAMENTO DO MODAL DE APROVAÇÃO --- */
+    #approval-modal-overlay .modal-content {
+        text-align: center;
+    }
+    #approval-modal-form {
+        text-align: left;
+        margin-top: 1.5rem;
+    }
+    #approval-periodos-container {
+        background-color: #f8fafc;
+        border: 1px solid var(--color-border);
+        border-radius: 8px;
+        padding: 1rem;
+        max-height: 200px;
+        overflow-y: auto;
+    }
+    #approval-periodos-container .form-check {
+        padding: 0.75rem 1.25rem;
+        border-radius: 8px;
+        margin-bottom: 0.5rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+    }
+    #approval-periodos-container .form-check:hover { background-color: #eef5ff; }
+    #approval-periodos-container .form-check input[type="checkbox"] {
+        margin-right: 0.75rem;
+    }
+    #approval-periodos-container .form-check label {
+        margin-bottom: 0; 
+        cursor: pointer;
+    }
+    #approval-modal-form .form-actions {
+        justify-content: space-between;
+        align-items: center;
+    }
+</style>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {

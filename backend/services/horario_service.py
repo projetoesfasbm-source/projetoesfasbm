@@ -237,29 +237,49 @@ class HorarioService:
         db.session.commit()
         return True, 'Aula removida com sucesso!'
 
-    # ... (Restante do serviço sem alterações) ...
     @staticmethod
     def get_aulas_pendentes():
         return db.session.scalars(select(Horario).options(joinedload(Horario.disciplina).joinedload(Disciplina.ciclo), joinedload(Horario.instrutor).joinedload(Instrutor.user), joinedload(Horario.semana)).where(Horario.status == 'pendente').order_by(Horario.id.desc())).all()
         
     @staticmethod
     def aprovar_horario(horario_id, action):
-        aula = db.session.get(Horario, int(horario_id))
-        if not aula: return False, 'Aula não encontrada.'
-        instrutor_user_id = aula.instrutor.user_id if aula.instrutor else None
+        aula_representativa = db.session.get(Horario, int(horario_id))
+        if not aula_representativa:
+            return False, 'Aula não encontrada.'
+
+        aulas_para_alterar = []
+        if aula_representativa.group_id:
+            aulas_para_alterar = db.session.scalars(
+                select(Horario).where(Horario.group_id == aula_representativa.group_id)
+            ).all()
+        else:
+            aulas_para_alterar = [aula_representativa]
         
+        if not aulas_para_alterar:
+            return False, 'Nenhuma aula encontrada para a ação.'
+
+        instrutor_user_id = aulas_para_alterar[0].instrutor.user_id if aulas_para_alterar[0].instrutor else None
+        disciplina_materia = aulas_para_alterar[0].disciplina.materia
+        turma_nome = aulas_para_alterar[0].pelotao
+
         if action == 'aprovar':
-            aula.status = 'confirmado'
-            message = f'Aula de {aula.disciplina.materia} aprovada.'
-            turma = db.session.scalar(select(Turma).where(Turma.nome == aula.pelotao))
+            for aula in aulas_para_alterar:
+                aula.status = 'confirmado'
+            message = f'Agendamento de {disciplina_materia} aprovado.'
+            
+            turma = db.session.scalar(select(Turma).where(Turma.nome == turma_nome))
             if turma:
-                notif_url = url_for('horario.index', pelotao=turma.nome, semana_id=aula.semana_id, _external=True)
-                if instrutor_user_id: NotificationService.create_notification(instrutor_user_id, f"Sua aula de {aula.disciplina.materia} para a turma {turma.nome} foi aprovada.", notif_url)
-                for aluno in turma.alunos: NotificationService.create_notification(aluno.user_id, f"Nova aula de {aula.disciplina.materia} agendada para sua turma.", notif_url)
+                notif_url = url_for('horario.index', pelotao=turma.nome, semana_id=aulas_para_alterar[0].semana_id, _external=True)
+                if instrutor_user_id: NotificationService.create_notification(instrutor_user_id, f"Sua aula de {disciplina_materia} para a turma {turma.nome} foi aprovada.", notif_url)
+                for aluno in turma.alunos: NotificationService.create_notification(aluno.user_id, f"Nova aula de {disciplina_materia} agendada para sua turma.", notif_url)
+                
         elif action == 'negar':
-            db.session.delete(aula)
-            message = f'Solicitação de aula de {aula.disciplina.materia} foi negada e removida.'
-        else: return False, 'Ação inválida.'
+            for aula in aulas_para_alterar:
+                db.session.delete(aula)
+            message = f'Solicitação de aula de {disciplina_materia} foi negada e removida.'
+        else:
+            return False, 'Ação inválida.'
+
         db.session.commit()
         return True, message
 

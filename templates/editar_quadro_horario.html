@@ -35,7 +35,7 @@
                       (periodo_num == 14 and semana_selecionada.mostrar_periodo_14) or
                       (periodo_num == 15 and semana_selecionada.mostrar_periodo_15) %}
                 
-                <tr class="{% if periodo_num in [3, 6, 9] %}break-after{% endif %}">
+                <tr>
                     <td class="cell-tempo">
                         <strong>{{ tempos[row_idx][0] }}</strong>
                         <span>{{ tempos[row_idx][1] }}</span>
@@ -104,12 +104,6 @@
     cursor: pointer;
 }
 /* --- FIM DA CORREÇÃO DE ALINHAMENTO DO MODAL --- */
-
-/* --- NOVO ESTILO PARA OS INTERVALOS --- */
-tr.break-after > td {
-    border-bottom: 3px solid #fcd34d; /* Cor amarelada para o intervalo */
-}
-/* --- FIM DOS NOVOS ESTILOS --- */
 
 .no-permission { color: #94a3b8; font-size: 1rem; cursor: not-allowed; }
 .weekend-slot.disabled { background-color: #f1f5f9; cursor: not-allowed; }
