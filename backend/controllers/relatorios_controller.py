@@ -26,7 +26,7 @@ relatorios_bp = Blueprint("relatorios", __name__, url_prefix="/relatorios")
 @relatorios_bp.get("/")
 def index():
     # Página simples com link para o XLSX
-    from flask import Markup, url_for
+    from flask import url_for
     link = url_for("relatorios.mapa_gratificacao_xlsx")
     html = f"""<!doctype html>
 <html lang="pt-br">
