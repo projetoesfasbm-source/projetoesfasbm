@@ -63,48 +63,6 @@
     </div>
 </div>
 
-<div class="modal-overlay" id="editModal">
-    <div class="modal-content">
-        <h3>Selecione a turma para editar</h3>
-        <div class="form-group">
-            <label for="turmaEditSelect">Turma</label>
-            <select id="turmaEditSelect" class="form-control">
-                <option value="">-- Selecione uma turma --</option>
-                {% for turma in turmas %}
-                <option value="{{ turma.id }}">{{ turma.nome }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="form-actions">
-            <button type="button" class="btn btn-secondary" onclick="closeModal('editModal')">Cancelar</button>
-            <button type="button" class="btn btn-primary" onclick="confirmEdit()">Confirmar</button>
-        </div>
-    </div>
-</div>
-
-<div class="modal-overlay" id="deleteModal">
-    <div class="modal-content">
-        <h3>Selecione a turma para excluir</h3>
-        <form id="deleteForm" method="POST" action="#" onsubmit="return confirm('ATENÇÃO: Excluir esta turma irá desvincular todos os alunos e remover todos os vínculos de disciplinas e cargos associados a ela. Esta ação não pode ser desfeita. Deseja continuar?');">
-            {{ delete_form.hidden_tag() }}
-            <div class="form-group">
-                <label for="turmaDeleteSelect">Turma</label>
-                <select id="turmaDeleteSelect" class="form-control" name="turma_id" required>
-                    <option value="">-- Selecione uma turma --</option>
-                    {% for turma in turmas %}
-                    <option value="{{ turma.id }}">{{ turma.nome }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="form-actions">
-                <button type="button" class="btn btn-secondary" onclick="closeModal('deleteModal')">Cancelar</button>
-                <button type="submit" class="btn btn-danger">Excluir Turma</button>
-            </div>
-        </form>
-    </div>
-</div>
-
-
 <style>
 .header-actions { display: flex; gap: 0.5rem; }
 .turmas-grid {
@@ -147,19 +105,17 @@
 }
 .empty-state .empty-icon { font-size: 4rem; margin-bottom: 1rem; }
 .empty-state h2 { font-size: 1.8rem; margin-bottom: 0.5rem; color: var(--color-text-dark); }
-
-/* --- ESTILOS DE DESTAQUE CORRIGIDOS --- */
 .turma-card.my-turma {
     border: 2px solid var(--color-primary);
     background-color: #eff6ff;
 }
 .my-turma-badge {
     position: absolute;
-    top: 18px;          /* Move um pouco para baixo */
-    right: -40px;       /* Move mais para a direita (para fora) */
+    top: 18px;
+    right: -40px;
     background-color: var(--color-primary);
     color: white;
-    padding: 5px 40px;  /* Aumenta o espaço lateral */
+    padding: 5px 40px;
     font-size: 0.7rem;
     font-weight: bold;
     text-transform: uppercase;
@@ -168,14 +124,65 @@
     z-index: 1;
 }
 </style>
+{% endblock %}
+
+{% block modals %}
+<div class="modal-overlay" id="editModal">
+    <div class="modal-content">
+        <h3>Selecione a turma para editar</h3>
+        <div class="form-group">
+            <label for="turmaEditSelect">Turma</label>
+            <select id="turmaEditSelect" class="form-control">
+                <option value="">-- Selecione uma turma --</option>
+                {% for turma in turmas %}
+                <option value="{{ turma.id }}">{{ turma.nome }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-actions">
+            <button type="button" class="btn btn-secondary" onclick="closeModal('editModal')">Cancelar</button>
+            <button type="button" class="btn btn-primary" onclick="confirmEdit()">Confirmar</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="deleteModal">
+    <div class="modal-content">
+        <h3>Selecione a turma para excluir</h3>
+        <form id="deleteForm" method="POST" action="#" onsubmit="return confirm('ATENÇÃO: Excluir esta turma irá desvincular todos os alunos e remover todos os vínculos de disciplinas e cargos associados a ela. Esta ação não pode ser desfeita. Deseja continuar?');">
+            {{ delete_form.hidden_tag() }}
+            <div class="form-group">
+                <label for="turmaDeleteSelect">Turma</label>
+                <select id="turmaDeleteSelect" class="form-control" name="turma_id" required>
+                    <option value="">-- Selecione uma turma --</option>
+                    {% for turma in turmas %}
+                    <option value="{{ turma.id }}">{{ turma.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('deleteModal')">Cancelar</button>
+                <button type="submit" class="btn btn-danger">Excluir Turma</button>
+            </div>
+        </form>
+    </div>
+</div>
 
 <script>
 function openModal(modalId) {
-    document.getElementById(modalId).classList.add('visible');
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        modal.classList.add('visible');
+        document.body.style.overflow = 'hidden';
+    }
 }
 
 function closeModal(modalId) {
-    document.getElementById(modalId).classList.remove('visible');
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        modal.classList.remove('visible');
+        document.body.style.overflow = '';
+    }
 }
 
 function confirmEdit() {
@@ -201,6 +208,7 @@ document.getElementById('turmaDeleteSelect').addEventListener('change', function
 window.onclick = function(event) {
     if (event.target.classList.contains('modal-overlay')) {
         event.target.classList.remove('visible');
+        document.body.style.overflow = '';
     }
 }
 </script>

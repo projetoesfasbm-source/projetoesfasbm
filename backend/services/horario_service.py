@@ -5,6 +5,7 @@ from flask_login import current_user
 from sqlalchemy import select, func, or_, and_
 from sqlalchemy.orm import joinedload
 from datetime import date, timedelta
+from collections import defaultdict
 
 from ..models.database import db
 from ..models.horario import Horario
@@ -14,7 +15,7 @@ from ..models.disciplina_turma import DisciplinaTurma
 from ..models.semana import Semana
 from ..models.turma import Turma
 from ..models.user import User
-from .notification_service import NotificationService
+from .notification_service import NotificationService 
 
 
 class HorarioService:
@@ -31,81 +32,110 @@ class HorarioService:
         return False
 
     @staticmethod
+    def _group_consecutive_periods(periods):
+        if not periods:
+            return []
+        sorted_periods = sorted(periods)
+        groups = []
+        current_group_start = sorted_periods[0]
+        for i in range(1, len(sorted_periods)):
+            if sorted_periods[i] != sorted_periods[i-1] + 1:
+                groups.append((current_group_start, sorted_periods[i-1]))
+                current_group_start = sorted_periods[i]
+        groups.append((current_group_start, sorted_periods[-1]))
+        return groups
+
+    @staticmethod
     def construir_matriz_horario(pelotao, semana_id, user):
         a_disposicao = {'materia': 'A disposição do C Al /S Ens', 'instrutor': None, 'duracao': 1, 'is_disposicao': True, 'id': None, 'status': 'confirmado'}
         horario_matrix = [[dict(a_disposicao) for _ in range(7)] for _ in range(15)]
         dias = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo']
         
-        aulas = db.session.scalars(
-            select(Horario).options(
-                joinedload(Horario.disciplina),
-                joinedload(Horario.instrutor).joinedload(Instrutor.user),
-                joinedload(Horario.instrutor_2).joinedload(Instrutor.user)
-            ).where(Horario.pelotao == pelotao, Horario.semana_id == semana_id)
-        ).all()
+        aulas_query = select(Horario).options(
+            joinedload(Horario.disciplina),
+            joinedload(Horario.instrutor).joinedload(Instrutor.user),
+            joinedload(Horario.instrutor_2).joinedload(Instrutor.user)
+        ).where(Horario.pelotao == pelotao, Horario.semana_id == semana_id).order_by(Horario.dia_semana, Horario.periodo)
+        
+        all_aulas_originais = db.session.scalars(aulas_query).all()
 
-        for aula in aulas:
+        # --- NOVA LÓGICA DE MESCLAGEM DE AULAS SEQUENCIAIS ---
+        aulas_processadas = []
+        if all_aulas_originais:
+            # Dicionário para agrupar aulas por dia
+            aulas_por_dia = defaultdict(list)
+            for aula in all_aulas_originais:
+                aulas_por_dia[aula.dia_semana].append(aula)
+
+            merged_aulas_final = []
+            for dia in dias:
+                if dia in aulas_por_dia:
+                    aulas_do_dia = sorted(aulas_por_dia[dia], key=lambda a: a.periodo)
+                    
+                    if not aulas_do_dia: continue
+
+                    bloco_mesclado = aulas_do_dia[0]
+                    for i in range(1, len(aulas_do_dia)):
+                        aula_atual = aulas_do_dia[i]
+                        
+                        # Condições para mesclar
+                        e_sequencial = (aula_atual.periodo == (bloco_mesclado.periodo + bloco_mesclado.duracao))
+                        e_identica = (
+                            aula_atual.disciplina_id == bloco_mesclado.disciplina_id and
+                            aula_atual.instrutor_id == bloco_mesclado.instrutor_id and
+                            aula_atual.instrutor_id_2 == bloco_mesclado.instrutor_id_2 and
+                            aula_atual.status == bloco_mesclado.status and
+                            aula_atual.observacao == bloco_mesclado.observacao
+                        )
+
+                        if e_sequencial and e_identica:
+                            # Mescla a aula atual no bloco, somando a duração
+                            bloco_mesclado.duracao += aula_atual.duracao
+                        else:
+                            # Finaliza o bloco anterior e começa um novo
+                            merged_aulas_final.append(bloco_mesclado)
+                            bloco_mesclado = aula_atual
+                    
+                    # Adiciona o último bloco processado
+                    merged_aulas_final.append(bloco_mesclado)
+            aulas_processadas = merged_aulas_final
+        # --- FIM DA LÓGICA DE MESCLAGEM ---
+
+        for aula in aulas_processadas: # <-- Usa a lista de aulas já mescladas
             try:
                 dia_idx = dias.index(aula.dia_semana)
                 
-                periodos_processados = 0
-                periodo_inicial_bloco = aula.periodo
-                is_continuation = False
+                can_see_pending_details = HorarioService.can_edit_horario(aula, user)
+                show_details = aula.status == 'confirmado' or can_see_pending_details
+                
+                instrutores_display_list = []
+                if aula.instrutor and aula.instrutor.user:
+                    nome = aula.instrutor.user.nome_de_guerra or aula.instrutor.user.username
+                    instrutores_display_list.append(nome)
+                if aula.instrutor_2 and aula.instrutor_2.user:
+                    nome = aula.instrutor_2.user.nome_de_guerra or aula.instrutor_2.user.username
+                    instrutores_display_list.append(nome)
+                
+                instrutor_display = " / ".join(instrutores_display_list) if instrutores_display_list else "N/D"
 
-                while periodos_processados < aula.duracao:
-                    periodo_atual_idx = periodo_inicial_bloco - 1
-                    periodos_restantes = aula.duracao - periodos_processados
-
-                    duracao_bloco = 0
-                    if periodo_inicial_bloco <= 3:
-                        max_periodos_neste_bloco = 3 - periodo_inicial_bloco + 1
-                        duracao_bloco = min(periodos_restantes, max_periodos_neste_bloco)
-                    elif periodo_inicial_bloco <= 9:
-                        max_periodos_neste_bloco = 9 - periodo_inicial_bloco + 1
-                        duracao_bloco = min(periodos_restantes, max_periodos_neste_bloco)
-                    else:
-                        duracao_bloco = periodos_restantes
-                    
-                    if duracao_bloco <= 0: break 
-
-                    can_see_pending_details = HorarioService.can_edit_horario(aula, user)
-                    show_details = aula.status == 'confirmado' or can_see_pending_details
-                    
-                    instrutores_display_list = []
-                    if aula.instrutor and aula.instrutor.user:
-                        nome = aula.instrutor.user.nome_de_guerra or aula.instrutor.user.username
-                        posto = aula.instrutor.user.posto_graduacao
-                        display_text = f"{nome} - {posto}" if posto else nome
-                        instrutores_display_list.append(display_text)
-                    if aula.instrutor_2 and aula.instrutor_2.user:
-                        nome = aula.instrutor_2.user.nome_de_guerra or aula.instrutor_2.user.username
-                        posto = aula.instrutor_2.user.posto_graduacao
-                        display_text = f"{nome} - {posto}" if posto else nome
-                        instrutores_display_list.append(display_text)
-                    
-                    instrutor_display = " / ".join(instrutores_display_list) if instrutores_display_list else "N/D"
-
-                    aula_info = {
-                        'id': aula.id,
-                        'materia': aula.disciplina.materia if show_details else 'Aguardando Aprovação',
-                        'instrutor': instrutor_display if show_details else None,
-                        'observacao': aula.observacao,
-                        'duracao': duracao_bloco,
-                        'status': aula.status,
-                        'is_disposicao': False,
-                        'can_edit': HorarioService.can_edit_horario(aula, user),
-                        'is_continuation': is_continuation
-                    }
-                    
-                    if 0 <= periodo_atual_idx < 15:
-                        horario_matrix[periodo_atual_idx][dia_idx] = aula_info
-                        for i in range(1, duracao_bloco):
-                            if (periodo_atual_idx + i) < 15:
-                                horario_matrix[periodo_atual_idx + i][dia_idx] = 'SKIP'
-
-                    periodos_processados += duracao_bloco
-                    periodo_inicial_bloco += duracao_bloco
-                    is_continuation = True
+                aula_info = {
+                    'id': aula.id,
+                    'materia': aula.disciplina.materia if show_details else 'Aguardando Aprovação',
+                    'instrutor': instrutor_display if show_details else None,
+                    'observacao': aula.observacao,
+                    'duracao': aula.duracao,
+                    'status': aula.status,
+                    'is_disposicao': False,
+                    'can_edit': HorarioService.can_edit_horario(aula, user),
+                    'is_continuation': False # Esta lógica de continuação não é mais necessária com a mesclagem
+                }
+                
+                periodo_idx = aula.periodo - 1
+                if 0 <= periodo_idx < 15:
+                    horario_matrix[periodo_idx][dia_idx] = aula_info
+                    for i in range(1, aula.duracao):
+                        if (periodo_idx + i) < 15:
+                            horario_matrix[periodo_idx + i][dia_idx] = 'SKIP'
 
             except (ValueError, IndexError):
                 continue
@@ -216,12 +246,14 @@ class HorarioService:
             'disciplina_id': aula.disciplina_id,
             'instrutor_value': instrutor_value,
             'duracao': aula.duracao,
-            'observacao': aula.observacao
+            'observacao': aula.observacao,
+            'periodo': aula.periodo,
+            'materia': aula.disciplina.materia,
+            'instrutor_nome': (aula.instrutor.user.nome_de_guerra if aula.instrutor and aula.instrutor.user else '')
         }
 
     @staticmethod
     def save_aula(data, user):
-        """Salva uma nova aula ou atualiza uma existente, com validação robusta de conflitos."""
         try:
             horario_id_raw = data.get('horario_id')
             horario_id = int(horario_id_raw) if horario_id_raw else None
@@ -318,27 +350,12 @@ class HorarioService:
         try:
             db.session.commit()
 
-            # --- LÓGICA DE NOTIFICAÇÃO (MARCAÇÃO) ---
-            # Se a aula é nova e foi criada por um instrutor (não admin), ela fica pendente.
             if not is_admin and is_new_aula:
                 turma = db.session.scalar(select(Turma).where(Turma.nome == pelotao))
                 if turma and turma.school_id:
                     message = f"O instrutor {user.nome_de_guerra} agendou uma nova aula de {disciplina.materia} que precisa de aprovação."
-                    notification_url = url_for('horario.get_aprovar_horarios', _external=True)
+                    notification_url = url_for('horario.aprovar_horarios', _external=True)
                     NotificationService.create_notification_for_roles(turma.school_id, ['admin_escola', 'super_admin', 'programador'], message, notification_url)
-            # Se a aula já foi confirmada diretamente por um admin, notifica alunos e instrutor.
-            elif is_admin and is_new_aula:
-                 turma = db.session.scalar(select(Turma).where(Turma.nome == aula.pelotao))
-                 if turma:
-                    notif_url = url_for('horario.index', pelotao=turma.nome, semana_id=aula.semana_id, _external=True)
-                    if aula.instrutor.user_id != user.id: # Notifica instrutor se não for ele mesmo
-                        notif_msg_instrutor = f"Uma aula de {aula.disciplina.materia} para a turma {turma.nome} foi agendada para você."
-                        NotificationService.create_notification(aula.instrutor.user_id, notif_msg_instrutor, notif_url)
-                    
-                    notif_msg_alunos = f"Nova aula de {aula.disciplina.materia} agendada para sua turma."
-                    for aluno in turma.alunos:
-                        NotificationService.create_notification(aluno.user_id, notif_msg_alunos, notif_url)
-
 
             return True, 'Aula salva com sucesso!', 200
         except Exception as e:
@@ -352,40 +369,9 @@ class HorarioService:
         if not aula: return False, 'Aula não encontrada.'
         if not HorarioService.can_edit_horario(aula, user): return False, 'Sem permissão para remover esta aula.'
         
-        try:
-            instrutor_user = aula.instrutor.user if aula.instrutor else None
-            
-            # Captura informações antes de deletar para usar nas notificações
-            disciplina_materia = aula.disciplina.materia
-            pelotao_nome = aula.pelotao
-            semana_id_aula = aula.semana_id
-            is_pending = aula.status == 'pendente'
-
-            db.session.delete(aula)
-            db.session.commit()
-
-            # --- LÓGICA DE NOTIFICAÇÃO (CANCELAMENTO) ---
-            notification_url = url_for('horario.index', pelotao=pelotao_nome, semana_id=semana_id_aula, _external=True)
-            
-            # Se um admin cancela, notifica o instrutor.
-            if user.role != 'instrutor' and instrutor_user:
-                message = f"Sua aula de {disciplina_materia} para a turma {pelotao_nome} foi cancelada por um administrador."
-                NotificationService.create_notification(instrutor_user.id, message, notification_url)
-            
-            # Se um instrutor cancela uma aula pendente, notifica os admins.
-            elif user.role == 'instrutor' and is_pending:
-                 turma = db.session.scalar(select(Turma).where(Turma.nome == pelotao_nome))
-                 if turma and turma.school_id:
-                    message = f"O instrutor {user.nome_de_guerra} cancelou a solicitação de aula de {disciplina_materia}."
-                    admin_notification_url = url_for('horario.get_aprovar_horarios', _external=True)
-                    NotificationService.create_notification_for_roles(turma.school_id, ['admin_escola', 'super_admin', 'programador'], message, admin_notification_url)
-
-            return True, 'Aula removida com sucesso!'
-        except Exception as e:
-            db.session.rollback()
-            current_app.logger.error(f"Erro ao remover aula: {e}")
-            return False, "Erro ao remover a aula."
-
+        db.session.delete(aula)
+        db.session.commit()
+        return True, 'Aula removida com sucesso!'
 
     @staticmethod
     def get_aulas_pendentes():
@@ -399,7 +385,6 @@ class HorarioService:
         
     @staticmethod
     def aprovar_horario(horario_id, action):
-        """Aprova ou nega uma solicitação de aula."""
         aula = db.session.get(Horario, int(horario_id))
         if not aula: return False, 'Aula não encontrada.'
 
@@ -409,37 +394,83 @@ class HorarioService:
             aula.status = 'confirmado'
             message = f'Aula de {aula.disciplina.materia} aprovada.'
             
-            # --- LÓGICA DE NOTIFICAÇÃO (APROVAÇÃO) ---
             turma = db.session.scalar(select(Turma).where(Turma.nome == aula.pelotao))
             if turma:
-                notif_url = url_for('horario.index', pelotao=turma.nome, semana_id=aula.semana_id, _external=True)
-                # Notifica o instrutor que agendou
                 if instrutor_user_id:
-                    notif_msg_instrutor = f"Sua aula de {aula.disciplina.materia} para a turma {turma.nome} foi APROVADA."
+                    notif_msg_instrutor = f"Sua aula de {aula.disciplina.materia} para a turma {turma.nome} foi aprovada."
+                    notif_url = url_for('horario.index', pelotao=turma.nome, semana_id=aula.semana_id, _external=True)
                     NotificationService.create_notification(instrutor_user_id, notif_msg_instrutor, notif_url)
                 
-                # Notifica todos os alunos da turma
                 notif_msg_alunos = f"Nova aula de {aula.disciplina.materia} agendada para sua turma."
                 for aluno in turma.alunos:
                     NotificationService.create_notification(aluno.user_id, notif_msg_alunos, notif_url)
-        
-        elif action == 'negar':
-            # Captura informações antes de deletar
-            disciplina_materia = aula.disciplina.materia
-            turma_nome = aula.pelotao
-            semana_id_aula = aula.semana_id
 
+        elif action == 'negar':
             db.session.delete(aula)
-            message = f'Solicitação de aula de {disciplina_materia} foi negada e removida.'
-            
-            # --- LÓGICA DE NOTIFICAÇÃO (NEGAR) ---
-            # Notifica apenas o instrutor que a solicitação foi negada
-            if instrutor_user_id:
-                notif_msg_instrutor = f"Sua solicitação de aula de {disciplina_materia} para a turma {turma_nome} foi NEGADA."
-                notif_url = url_for('horario.index', pelotao=turma_nome, semana_id=semana_id_aula, _external=True)
-                NotificationService.create_notification(instrutor_user_id, notif_msg_instrutor, notif_url)
+            message = f'Solicitação de aula de {aula.disciplina.materia} foi negada e removida.'
         else:
             return False, 'Ação inválida.'
             
         db.session.commit()
         return True, message
+
+    @staticmethod
+    def aprovar_horario_parcialmente(horario_id, periodos_para_aprovar):
+        aula_pendente = db.session.get(Horario, horario_id)
+        if not aula_pendente or aula_pendente.status != 'pendente':
+            return False, "Aula pendente não encontrada."
+
+        instrutor_user_id = aula_pendente.instrutor.user_id if aula_pendente.instrutor else None
+        turma = db.session.scalar(select(Turma).where(Turma.nome == aula_pendente.pelotao))
+        notif_url = url_for('horario.index', pelotao=aula_pendente.pelotao, semana_id=aula_pendente.semana_id, _external=True)
+        
+        try:
+            if not periodos_para_aprovar:
+                db.session.delete(aula_pendente)
+                if instrutor_user_id:
+                    notif_msg = f"Sua solicitação de aula de {aula_pendente.disciplina.materia} foi negada."
+                    NotificationService.create_notification(instrutor_user_id, notif_msg, notif_url)
+                db.session.commit()
+                return True, "Aula negada com sucesso."
+
+            todos_periodos_originais = set(range(aula_pendente.periodo, aula_pendente.periodo + aula_pendente.duracao))
+            if set(periodos_para_aprovar) == todos_periodos_originais:
+                aula_pendente.status = 'confirmado'
+                message = "Aula aprovada com sucesso."
+                if instrutor_user_id:
+                    notif_msg = f"Sua aula de {aula_pendente.disciplina.materia} foi aprovada."
+                    NotificationService.create_notification(instrutor_user_id, notif_msg, notif_url)
+                if turma:
+                    notif_msg_alunos = f"Nova aula de {aula_pendente.disciplina.materia} agendada."
+                    for aluno in turma.alunos:
+                        NotificationService.create_notification(aluno.user_id, notif_msg_alunos, notif_url)
+            else:
+                db.session.delete(aula_pendente)
+                grupos_de_periodos = HorarioService._group_consecutive_periods(periodos_para_aprovar)
+                
+                for grupo_inicio, grupo_fim in grupos_de_periodos:
+                    nova_duracao = grupo_fim - grupo_inicio + 1
+                    nova_aula = Horario(
+                        pelotao=aula_pendente.pelotao, dia_semana=aula_pendente.dia_semana, periodo=grupo_inicio,
+                        duracao=nova_duracao, semana_id=aula_pendente.semana_id, disciplina_id=aula_pendente.disciplina_id,
+                        instrutor_id=aula_pendente.instrutor_id, instrutor_id_2=aula_pendente.instrutor_id_2,
+                        observacao=aula_pendente.observacao, status='confirmado'
+                    )
+                    db.session.add(nova_aula)
+
+                message = "Aula parcialmente aprovada com sucesso."
+                if instrutor_user_id:
+                    notif_msg = f"Sua aula de {aula_pendente.disciplina.materia} foi aprovada parcialmente."
+                    NotificationService.create_notification(instrutor_user_id, notif_msg, notif_url)
+                if turma:
+                    notif_msg_alunos = f"Nova aula de {aula_pendente.disciplina.materia} agendada (parcialmente)."
+                    for aluno in turma.alunos:
+                        NotificationService.create_notification(aluno.user_id, notif_msg_alunos, notif_url)
+            
+            db.session.commit()
+            return True, message
+
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Erro na aprovação parcial: {e}")
+            return False, "Ocorreu um erro ao processar a aprovação."

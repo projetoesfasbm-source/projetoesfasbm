@@ -162,46 +162,6 @@
     </div>
     {% endif %}
 
-    {% if pelotao_selecionado and semana_selecionada %}
-    <div class="modal-overlay" id="confirmation-modal-overlay">
-        <div class="modal-content" style="max-width: 600px;">
-            {% if current_user.role == 'instrutor' %}
-                <h3 id="modal-title">Selecionar Turma para Edição</h3>
-                <p style="margin-top: 1rem; margin-bottom: 1.5rem;">
-                    Você possui vínculos com as seguintes turmas. Selecione qual quadro horário deseja editar:
-                </p>
-                <div class="turma-selection-buttons">
-                    {% for turma in instrutor_turmas_vinculadas %}
-                        <a href="{{ url_for('horario.editar_horario_grid', pelotao=turma.nome, semana_id=semana_selecionada.id, ciclo_id=ciclo_selecionado) }}" class="btn btn-primary btn-turma">
-                            {{ turma.nome }}
-                        </a>
-                    {% else %}
-                        <p class="text-muted">Nenhum vínculo encontrado.</p>
-                    {% endfor %}
-                </div>
-            {% else %} {# Para admins #}
-                <h3 id="modal-title">Confirmar Edição de Horário</h3>
-                <p style="margin-top: 1rem; margin-bottom: 1.5rem; font-size: 1.1rem;">
-                    Você está prestes a entrar no modo de edição do quadro horário para a turma:
-                </p>
-                <div style="background-color: #f1f5f9; border: 1px solid #e2e8f0; padding: 1rem; border-radius: 8px; text-align: center; margin-bottom: 2rem;">
-                    <strong style="font-size: 1.5rem; color: #1e3a8a;">{{ pelotao_selecionado }}</strong>
-                </div>
-                <p>Deseja continuar?</p>
-            {% endif %}
-
-            <div class="form-actions" style="justify-content: flex-end; margin-top: 2rem;">
-                <button type="button" class="btn btn-secondary" onclick="closeConfirmationModal()">Cancelar</button>
-                {% if current_user.role != 'instrutor' %}
-                    <a href="{{ url_for('horario.editar_horario_grid', pelotao=pelotao_selecionado, semana_id=semana_selecionada.id, ciclo_id=ciclo_selecionado) }}" class="btn btn-primary">
-                        Confirmar e Continuar
-                    </a>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-    {% endif %}
-
 {% else %}
     <div class="empty-state" style="margin-top: 2rem;">
         <div class="empty-icon">📅</div>
@@ -269,47 +229,91 @@
     border-right: none;
 }
 </style>
+{% endblock %}
 
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const semanaSelector = document.getElementById('semana_selector');
-        if (semanaSelector) {
-            semanaSelector.addEventListener('change', function() {
-                const semanaId = this.value;
-                const pelotao = "{{ pelotao_selecionado or (todas_as_turmas[0].nome if todas_as_turmas else '') }}";
-                const ciclo = "{{ ciclo_selecionado }}";
-                window.location.href = `{{ url_for('horario.index') }}?pelotao=${pelotao}&semana_id=${semanaId}&ciclo=${ciclo}`;
-            });
-        }
+{% block modals %}
+    {% if pelotao_selecionado and semana_selecionada %}
+    <div class="modal-overlay" id="confirmation-modal-overlay">
+        <div class="modal-content" style="max-width: 600px;">
+            {% if current_user.role == 'instrutor' %}
+                <h3 id="modal-title">Selecionar Turma para Edição</h3>
+                <p style="margin-top: 1rem; margin-bottom: 1.5rem;">
+                    Você possui vínculos com as seguintes turmas. Selecione qual quadro horário deseja editar:
+                </p>
+                <div class="turma-selection-buttons">
+                    {% for turma in instrutor_turmas_vinculadas %}
+                        <a href="{{ url_for('horario.editar_horario_grid', pelotao=turma.nome, semana_id=semana_selecionada.id, ciclo_id=ciclo_selecionado) }}" class="btn btn-primary btn-turma">
+                            {{ turma.nome }}
+                        </a>
+                    {% else %}
+                        <p class="text-muted">Nenhum vínculo encontrado.</p>
+                    {% endfor %}
+                </div>
+            {% else %} {# Para admins #}
+                <h3 id="modal-title">Confirmar Edição de Horário</h3>
+                <p style="margin-top: 1rem; margin-bottom: 1.5rem; font-size: 1.1rem;">
+                    Você está prestes a entrar no modo de edição do quadro horário para a turma:
+                </p>
+                <div style="background-color: #f1f5f9; border: 1px solid #e2e8f0; padding: 1rem; border-radius: 8px; text-align: center; margin-bottom: 2rem;">
+                    <strong style="font-size: 1.5rem; color: #1e3a8a;">{{ pelotao_selecionado }}</strong>
+                </div>
+                <p>Deseja continuar?</p>
+            {% endif %}
 
-        const toggleBtn = document.getElementById('weekend-toggle');
-        if (toggleBtn) {
-            toggleBtn.addEventListener('click', function() {
-                document.body.classList.toggle('weekend-panel-open');
-            });
-        }
-    });
+            <div class="form-actions" style="justify-content: flex-end; margin-top: 2rem;">
+                <button type="button" class="btn btn-secondary" onclick="closeConfirmationModal()">Cancelar</button>
+                {% if current_user.role != 'instrutor' %}
+                    <a href="{{ url_for('horario.editar_horario_grid', pelotao=pelotao_selecionado, semana_id=semana_selecionada.id, ciclo_id=ciclo_selecionado) }}" class="btn btn-primary">
+                        Confirmar e Continuar
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const semanaSelector = document.getElementById('semana_selector');
+            if (semanaSelector) {
+                semanaSelector.addEventListener('change', function() {
+                    const semanaId = this.value;
+                    const pelotao = "{{ pelotao_selecionado or (todas_as_turmas[0].nome if todas_as_turmas else '') }}";
+                    const ciclo = "{{ ciclo_selecionado }}";
+                    window.location.href = `{{ url_for('horario.index') }}?pelotao=${pelotao}&semana_id=${semanaId}&ciclo=${ciclo}`;
+                });
+            }
 
-    const confirmationModal = document.getElementById('confirmation-modal-overlay');
-
-    function openConfirmationModal() {
-        if (confirmationModal) {
-            confirmationModal.classList.add('visible');
-        }
-    }
-
-    function closeConfirmationModal() {
-        if (confirmationModal) {
-            confirmationModal.classList.remove('visible');
-        }
-    }
-
-    if (confirmationModal) {
-        confirmationModal.addEventListener('click', (e) => {
-            if (e.target === confirmationModal) {
-                closeConfirmationModal();
+            const toggleBtn = document.getElementById('weekend-toggle');
+            if (toggleBtn) {
+                toggleBtn.addEventListener('click', function() {
+                    document.body.classList.toggle('weekend-panel-open');
+                });
             }
         });
-    }
-</script>
+
+        const confirmationModal = document.getElementById('confirmation-modal-overlay');
+
+        function openConfirmationModal() {
+            if (confirmationModal) {
+                confirmationModal.classList.add('visible');
+                document.body.style.overflow = 'hidden';
+            }
+        }
+
+        function closeConfirmationModal() {
+            if (confirmationModal) {
+                confirmationModal.classList.remove('visible');
+                document.body.style.overflow = '';
+            }
+        }
+
+        if (confirmationModal) {
+            confirmationModal.addEventListener('click', (e) => {
+                if (e.target === confirmationModal) {
+                    closeConfirmationModal();
+                }
+            });
+        }
+    </script>
 {% endblock %}

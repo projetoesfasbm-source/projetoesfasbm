@@ -67,6 +67,20 @@
     </div>
 </div>
 
+<style>
+.turma-details-grid { display: grid; grid-template-columns: 1fr; gap: 2rem; }
+@media (min-width: 992px) { .turma-details-grid { grid-template-columns: 2fr 1fr; } }
+.details-section { background: var(--color-white); border-radius: var(--border-radius); padding: 2rem; box-shadow: var(--shadow-soft); border: 1px solid var(--color-border); }
+.section-header { padding-bottom: 1rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--color-border); }
+.section-header h3 { font-size: 1.5rem; font-weight: 700; margin: 0; }
+.cargos-grid { display: flex; flex-direction: column; gap: 1rem; }
+.cargo-item { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 1rem; padding: 0.75rem; border-radius: 8px; background-color: #f8fafc; border: 1px solid #e2e8f0; }
+.cargo-item label { font-weight: 600; }
+.cargo-assignee { text-align: right; font-size: 0.9rem; color: #333; }
+</style>
+{% endblock %}
+
+{% block modals %}
 <div class="modal-overlay" id="cargoModal">
     <div class="modal-content">
         <form id="cargoForm" method="POST" action="{{ url_for('turma.salvar_cargos_turma', turma_id=turma.id) }}">
@@ -94,18 +108,6 @@
     </div>
 </div>
 
-<style>
-.turma-details-grid { display: grid; grid-template-columns: 1fr; gap: 2rem; }
-@media (min-width: 992px) { .turma-details-grid { grid-template-columns: 2fr 1fr; } }
-.details-section { background: var(--color-white); border-radius: var(--border-radius); padding: 2rem; box-shadow: var(--shadow-soft); border: 1px solid var(--color-border); }
-.section-header { padding-bottom: 1rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--color-border); }
-.section-header h3 { font-size: 1.5rem; font-weight: 700; margin: 0; }
-.cargos-grid { display: flex; flex-direction: column; gap: 1rem; }
-.cargo-item { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 1rem; padding: 0.75rem; border-radius: 8px; background-color: #f8fafc; border: 1px solid #e2e8f0; }
-.cargo-item label { font-weight: 600; }
-.cargo-assignee { text-align: right; font-size: 0.9rem; color: #333; }
-</style>
-
 <script>
     const cargoModal = document.getElementById('cargoModal');
     const modalTitle = document.getElementById('modalTitle');
@@ -127,15 +129,14 @@
         modalCargoNome.value = cargo;
         modalAlunoSelect.value = alunoId;
         modalDataEvento.valueAsDate = new Date();
-        
-        // Chama a função para definir a label correta ao abrir
         updateDateLabel(modalAlunoSelect);
-
         cargoModal.classList.add('visible');
+        document.body.style.overflow = 'hidden';
     }
 
     function closeCargoModal() {
         cargoModal.classList.remove('visible');
+        document.body.style.overflow = '';
     }
 
     window.onclick = function(event) {
