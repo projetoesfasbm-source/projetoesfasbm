@@ -7,7 +7,7 @@ from typing import Any, Dict, List
 
 from flask import Blueprint, jsonify, request, send_file, render_template
 
-from backend.services.xlsx_service import gerar_mapa_gratificacao_xlsx
+from backend.services import xlsx_service as xlsx_srv
 
 # (Opcional) utilitários de diagnóstico; cai para fallback se não existir
 try:
@@ -47,7 +47,7 @@ def _as_date_or_none(value: str | None) -> date | None:
 def _coletar_dados_mapa() -> List[Dict[str, Any]]:
     """
     TODO: substitua por sua coleta real (banco/serviços).
-    Estrutura esperada pelo gerar_mapa_gratificacao_xlsx():
+    Estrutura esperada pelo xlsx_srv.make_xlsx():
     [
       {
         "info": {"user": {"posto_graduacao": "...", "matricula": "...", "nome_completo": "..."}},
@@ -116,7 +116,7 @@ def mapa_gratificacao_xlsx():
             print(f"[DIAG] Caracteres ilegais detectados no dataset: {rep['hits_count']}")
 
         # ---- Geração do XLSX ----
-        content = gerar_mapa_gratificacao_xlsx(
+        content = xlsx_srv.make_xlsx(
             dados=dados,
             valor_hora_aula=valor_hora_aula,
             nome_mes_ano=nome_mes_ano,
