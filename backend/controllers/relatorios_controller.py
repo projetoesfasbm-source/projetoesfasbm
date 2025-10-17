@@ -5,7 +5,7 @@ from datetime import date, datetime
 from io import BytesIO
 from typing import Any, Dict, List
 
-from flask import Blueprint, jsonify, request, send_file
+from flask import Blueprint, jsonify, request, send_file, render_template
 
 from backend.services.xlsx_service import gerar_mapa_gratificacao_xlsx
 
@@ -25,19 +25,7 @@ relatorios_bp = Blueprint("relatorios", __name__, url_prefix="/relatorios")
 
 @relatorios_bp.get("/")
 def index():
-    # Página simples com link para o XLSX
-    from flask import url_for
-    link = url_for("relatorios.mapa_gratificacao_xlsx")
-    html = f"""<!doctype html>
-<html lang="pt-br">
-<head><meta charset="utf-8"><title>Relatórios</title></head>
-<body style="font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; padding: 24px;">
-  <h1>Relatórios</h1>
-  <p>Use o link abaixo para gerar/baixar o mapa em XLSX.</p>
-  <p><a href="{link}">Baixar Mapa de Gratificação (XLSX)</a></p>
-</body>
-</html>"""
-    return html
+    return render_template("relatorios/index.html")
 
 
 
