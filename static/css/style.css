@@ -252,29 +252,29 @@ body.weekend-panel-open .weekend-toggle-btn { right: 450px; }
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.7); /* Fundo mais escuro para foco */
+    background-color: rgba(0, 0, 0, 0.7);
     z-index: 2000;
     opacity: 0;
     visibility: hidden;
+    display: flex;
+    justify-content: center; /* Centraliza horizontalmente */
     transition: opacity 0.3s ease, visibility 0.3s ease;
-    overflow-y: auto; /* Permite rolagem se o conteúdo for maior que a tela */
-    padding: 1rem; /* Adiciona um respiro nas bordas da tela */
+    padding: 2rem 1rem; /* Adiciona espaçamento vertical para rolagem */
+    overflow-y: auto; /* Permite rolagem apenas no eixo Y */
 }
 .modal-overlay.visible {
     opacity: 1;
     visibility: visible;
 }
 .modal-content {
-    /* Novo método de centralização: Posição absoluta e transform */
-    position: relative; /* Mudado para relative para funcionar com o novo método */
-    margin: auto; /* Garante o centramento dentro do overlay */
+    margin: 0; /* Remove margem automática para alinhar ao topo quando necessário */
     transform: scale(0.95);
     transition: transform 0.3s ease;
     background-color: white;
     padding: 2rem;
     border-radius: var(--border-radius);
     width: 100%;
-    max-width: 550px; /* Aumentado um pouco a largura máxima */
+    max-width: 550px;
     box-shadow: var(--shadow-large);
 }
 .modal-overlay.visible .modal-content {

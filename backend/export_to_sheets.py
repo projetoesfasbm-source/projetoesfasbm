@@ -1,22 +1,43 @@
 # backend/export_to_sheets.py
 
-import gspread
-from google.oauth2.service_account import Credentials
-import pandas as pd
-from sqlalchemy import create_engine
+from __future__ import annotations
 import os
+import json
+import pandas as pd
+from typing import Dict
+from sqlalchemy import create_engine, text
+from google.oauth2.service_account import Credentials
+import gspread
 
-# --- CONFIGURAÇÕES ---
+# Opcional, mas recomendado: escrita performática
+try:
+    from gspread_dataframe import set_with_dataframe
+    HAS_DF_HELPER = True
+except Exception:
+    HAS_DF_HELPER = False
 
-# 1. Caminho para o seu arquivo de credenciais do Google
-PATH_CREDENCIAS_GOOGLE = '/home/esfasBM/sistema_escolar_deepseak_1/backend/credentials.json'
+# -----------------------------------------------------------------------------
+# Configurações via variáveis de ambiente (evita segredos no código)
+# Defina no PythonAnywhere:
+#   export GA_SHEETS_ID="..."            (ID da planilha)
+#   export GA_CREDENTIALS_JSON="..."     (conteúdo do credentials.json inteiro)
+#   export DB_USER="..."
+#   export DB_PASSWORD="..."
+#   export DB_HOST="esfasBM.mysql.pythonanywhere-services.com"
+#   export DB_NAME="esfasBM$default"
+# -----------------------------------------------------------------------------
 
-# 2. ID da sua Planilha Google
-ID_PLANILHA = '16X3qOihCsB-pSnqi7ZUYD0r3_MwV1toKWuP30xYtSoQ'
+ID_PLANILHA = os.environ.get("GA_SHEETS_ID") or "COLOQUE_AQUI_SEM_ENV"
+GA_CREDENTIALS_JSON = os.environ.get("GA_CREDENTIALS_JSON")  # conteúdo do JSON
+PATH_CREDENCIAS_GOOGLE = os.environ.get("GA_CREDENTIALS_PATH")  # caminho opcional
 
-# 3. Nomes de todas as tabelas que você quer exportar.
-#    A lista foi atualizada para incluir todas as tabelas do seu banco de dados.
-TABELAS_PARA_EXPORTAR = {
+DB_USER = os.environ.get("DB_USER", "esfasBM")
+DB_PASSWORD = os.environ.get("DB_PASSWORD", "")
+DB_HOST = os.environ.get("DB_HOST", "esfasBM.mysql.pythonanywhere-services.com")
+DB_NAME = os.environ.get("DB_NAME", "esfasBM$default")
+
+# Tabelas -> Abas
+TABELAS_PARA_EXPORTAR: Dict[str, str] = {
     'alembic_version': 'Alembic_Version',
     'alunos': 'Alunos',
     'ciclos': 'Ciclos',
@@ -41,60 +62,99 @@ TABELAS_PARA_EXPORTAR = {
     'users': 'Usuarios'
 }
 
-# 4. Dados de conexão com o seu banco MySQL
-DB_USER = 'esfasBM'
-DB_PASSWORD = '#a!hndtbztUD7Mi'  # <-- ATENÇÃO: COLOQUE SUA NOVA SENHA AQUI
-DB_HOST = 'esfasBM.mysql.pythonanywhere-services.com'
-DB_NAME = 'esfasBM$default'
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
-# --- FIM DAS CONFIGURAÇÕES ---
+def _load_google_credentials() -> Credentials:
+    """
+    Carrega credenciais do Google a partir de:
+      - GA_CREDENTIALS_JSON (conteúdo do JSON em string) OU
+      - GA_CREDENTIALS_PATH (caminho do arquivo) OU
+      - PATH_CREDENCIAS_GOOGLE legado
+    """
+    if GA_CREDENTIALS_JSON:
+        info = json.loads(GA_CREDENTIALS_JSON)
+        return Credentials.from_service_account_info(info, scopes=SCOPES)
+
+    path = PATH_CREDENCIAS_GOOGLE or os.environ.get("PATH_CREDENCIAS_GOOGLE")
+    if not path:
+        raise RuntimeError("Credenciais não configuradas. Defina GA_CREDENTIALS_JSON ou GA_CREDENTIALS_PATH.")
+
+    return Credentials.from_service_account_file(path, scopes=SCOPES)
+
+
+def _get_engine():
+    # Use PyMySQL (garanta pip install pymysql)
+    conn_str = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}"
+    return create_engine(conn_str, pool_pre_ping=True)
+
+
+def _open_spreadsheet(creds: Credentials, spreadsheet_id: str):
+    client = gspread.authorize(creds)
+    return client.open_by_key(spreadsheet_id)
+
+
+def _upsert_worksheet(spreadsheet, title: str, rows: int = 1, cols: int = 1):
+    try:
+        ws = spreadsheet.worksheet(title)
+        ws.clear()
+        return ws
+    except gspread.WorksheetNotFound:
+        return spreadsheet.add_worksheet(title=title, rows=str(rows), cols=str(cols))
+
 
 def exportar_dados():
-    """Conecta ao banco, lê as tabelas e as envia para o Google Sheets."""
-    print("Iniciando a exportação de TODAS as tabelas...")
+    print("Iniciando a exportação de TODAS as tabelas para Google Sheets...")
 
-    # Conectar ao Google Sheets
+    # Valida ID da planilha
+    if not ID_PLANILHA or ID_PLANILHA == "COLOQUE_AQUI_SEM_ENV":
+        print("ERRO: GA_SHEETS_ID não configurada. Defina a variável de ambiente GA_SHEETS_ID.")
+        return
+
+    # Conecta ao Google
     try:
-        scopes = ["https://www.googleapis.com/auth/spreadsheets"]
-        creds = Credentials.from_service_account_file(PATH_CREDENCIAS_GOOGLE, scopes=scopes)
-        client = gspread.authorize(creds)
-        spreadsheet = client.open_by_key(ID_PLANILHA)
-        print("Conectado ao Google Sheets com sucesso.")
+        creds = _load_google_credentials()
+        spreadsheet = _open_spreadsheet(creds, ID_PLANILHA)
+        print("Conectado ao Google Sheets.")
     except Exception as e:
         print(f"ERRO ao conectar ao Google Sheets: {repr(e)}")
         return
 
-    # Conectar ao Banco de Dados
+    # Conecta ao banco
     try:
-        db_connection_str = f'mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}'
-        engine = create_engine(db_connection_str)
-        print("Conectado ao banco de dados MySQL com sucesso.")
+        engine = _get_engine()
+        with engine.connect() as conn:
+            # sanity check
+            conn.execute(text("SELECT 1"))
+        print("Conectado ao MySQL.")
     except Exception as e:
-        print(f"ERRO ao conectar ao banco de dados: {repr(e)}")
+        print(f"ERRO ao conectar ao MySQL: {repr(e)}")
         return
 
-    # Processar cada tabela
+    # Exporta cada tabela
     for nome_tabela, nome_aba in TABELAS_PARA_EXPORTAR.items():
         try:
-            print(f"Processando tabela '{nome_tabela}' para a aba '{nome_aba}'...")
-            df = pd.read_sql(f"SELECT * FROM {nome_tabela}", engine)
+            print(f"-> Exportando '{nome_tabela}' para aba '{nome_aba}'...")
+            with engine.connect() as conn:
+                df = pd.read_sql(text(f"SELECT * FROM `{nome_tabela}`"), conn)
 
-            try:
-                worksheet = spreadsheet.worksheet(nome_aba)
-                worksheet.clear()
-                print(f"Aba '{nome_aba}' limpa.")
-            except gspread.WorksheetNotFound:
-                worksheet = spreadsheet.add_worksheet(title=nome_aba, rows=1, cols=1)
-                print(f"Aba '{nome_aba}' criada.")
+            # Normaliza NaN/None
+            df = df.fillna("")
 
-            df = df.fillna('')
-            worksheet.update([df.columns.values.tolist()] + df.values.tolist())
-            print(f"Tabela '{nome_tabela}' exportada com sucesso!")
+            ws = _upsert_worksheet(spreadsheet, nome_aba, rows=max(1, len(df) + 1), cols=max(1, len(df.columns)))
 
+            if HAS_DF_HELPER:
+                # Escreve cabeçalho + dados de forma otimizada
+                set_with_dataframe(ws, df, include_index=False, include_column_header=True, resize=True)
+            else:
+                # Fallback: update em uma chamada (pode ser pesado para datasets grandes)
+                ws.update([df.columns.tolist()] + df.values.tolist())
+
+            print(f"OK: '{nome_tabela}' exportada.")
         except Exception as e:
-            print(f"ERRO ao processar a tabela '{nome_tabela}': {repr(e)}")
+            print(f"ERRO na tabela '{nome_tabela}': {repr(e)}")
 
-    print("\nExportação concluída!")
+    print("Exportação concluída.")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     exportar_dados()

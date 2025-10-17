@@ -180,8 +180,16 @@ def get_aula_details(horario_id):
 @horario_bp.route('/api/instrutores-vinculados/<pelotao>/<int:disciplina_id>')
 @login_required
 def get_instrutores_vinculados(pelotao, disciplina_id):
-    vinculo = db.session.scalar(select(DisciplinaTurma).options(joinedload(DisciplinaTurma.instrutor_1).joinedload(Instrutor.user), joinedload(DisciplinaTurma.instrutor_id_2).joinedload(Instrutor.user)).where(DisciplinaTurma.pelotao == pelotao, DisciplinaTurma.disciplina_id == disciplina_id))
+    # --- CORREÇÃO APLICADA AQUI ---
+    # Corrigido o joinedload para usar o nome do relacionamento ('instrutor_2') em vez do campo ('instrutor_id_2')
+    vinculo = db.session.scalar(
+        select(DisciplinaTurma).options(
+            joinedload(DisciplinaTurma.instrutor_1).joinedload(Instrutor.user), 
+            joinedload(DisciplinaTurma.instrutor_2).joinedload(Instrutor.user)
+        ).where(DisciplinaTurma.pelotao == pelotao, DisciplinaTurma.disciplina_id == disciplina_id)
+    )
     if not vinculo: return jsonify([])
+    
     opcoes = []
     if vinculo.instrutor_1:
         posto = vinculo.instrutor_1.user.posto_graduacao or ''
@@ -197,6 +205,7 @@ def get_instrutores_vinculados(pelotao, disciplina_id):
         posto2, nome2 = (vinculo.instrutor_2.user.posto_graduacao or ''), (vinculo.instrutor_2.user.nome_de_guerra or vinculo.instrutor_2.user.username)
         nome_combinado = f"{posto1} {nome1} e {posto2} {nome2}"
         opcoes.append({'id': id_combinado, 'nome': nome_combinado})
+        
     return jsonify(opcoes)
 
 @horario_bp.route('/salvar-aula', methods=['POST'])

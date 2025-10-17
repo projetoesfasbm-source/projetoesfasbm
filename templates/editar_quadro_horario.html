@@ -35,7 +35,7 @@
                       (periodo_num == 14 and semana_selecionada.mostrar_periodo_14) or
                       (periodo_num == 15 and semana_selecionada.mostrar_periodo_15) %}
                 
-                <tr>
+                <tr class="{% if periodo_num in [3, 6, 9] %}break-after{% endif %}">
                     <td class="cell-tempo">
                         <strong>{{ tempos[row_idx][0] }}</strong>
                         <span>{{ tempos[row_idx][1] }}</span>
@@ -105,11 +105,54 @@
 }
 /* --- FIM DA CORREÇÃO DE ALINHAMENTO DO MODAL --- */
 
+/* --- NOVO ESTILO PARA OS INTERVALOS --- */
+tr.break-after > td {
+    border-bottom: 3px solid #fcd34d; /* Cor amarelada para o intervalo */
+}
+/* --- FIM DOS NOVOS ESTILOS --- */
+
 .no-permission { color: #94a3b8; font-size: 1rem; cursor: not-allowed; }
 .weekend-slot.disabled { background-color: #f1f5f9; cursor: not-allowed; }
 </style>
 
 <div class="modal-overlay" id="horario-modal-overlay">
+    <div class="modal-content">
+        <h3 id="modal-title">Agendar Aula</h3>
+        <form id="modal-form">
+            <input type="hidden" id="modal-horario-id" name="horario_id">
+            <input type="hidden" id="modal-dia" name="dia">
+            <input type="hidden" id="modal-periodo" name="periodo">
+
+            <div class="form-group">
+                <label for="modal-disciplina">Disciplina</label>
+                <select id="modal-disciplina" name="disciplina_id" class="form-control" required>
+                    <option value="">Selecione a disciplina</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="modal-instrutor">Instrutor</label>
+                <select id="modal-instrutor" name="instrutor_id" class="form-control" required>
+                    <option value="">Selecione primeiro a disciplina</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="modal-duracao">Duração (períodos)</label>
+                <input type="number" id="modal-duracao" name="duracao" class="form-control" value="1" min="1" max="8">
+            </div>
+
+            <div class="form-group">
+                <label for="modal-observacao">Observação (Opcional)</label>
+                <textarea id="modal-observacao" name="observacao" class="form-control" rows="2" placeholder="Ex: Avaliação, Aula Inaugural..."></textarea>
+            </div>
+
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" id="modal-cancel">Cancelar</button>
+                <button type="submit" class="btn btn-primary" id="modal-confirm">Confirmar</button>
+            </div>
+        </form>
+    </div>
 </div>
 
 <div class="modal-overlay" id="approval-modal-overlay">
@@ -144,6 +187,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const approvalModalOverlay = document.getElementById('approval-modal-overlay');
     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
+    const modalForm = document.getElementById('modal-form');
+    const disciplinaSelect = document.getElementById('modal-disciplina');
+    const instrutorSelect = document.getElementById('modal-instrutor');
+    const disciplinasDisponiveis = {{ disciplinas_disponiveis | tojson }};
+
     function openModal(modalOverlay) {
         if (modalOverlay) {
             modalOverlay.classList.add('visible');
@@ -159,7 +207,37 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     async function openHorarioModal(config) {
-        // Implementação do modal de agendamento de aula (não alterada)
+        modalForm.reset();
+        document.getElementById('modal-horario-id').value = config.horario_id || '';
+        document.getElementById('modal-dia').value = config.dia;
+        document.getElementById('modal-periodo').value = config.periodo;
+
+        disciplinaSelect.innerHTML = '<option value="">Selecione a disciplina</option>';
+        disciplinasDisponiveis.forEach(d => {
+            const option = new Option(`${d.nome} (${d.restantes}h restantes)`, d.id);
+            disciplinaSelect.add(option);
+        });
+        
+        instrutorSelect.innerHTML = '<option value="">Selecione primeiro a disciplina</option>';
+        instrutorSelect.disabled = true;
+
+        if (config.horario_id) {
+            document.getElementById('modal-title').textContent = 'Editar Aula';
+            try {
+                const res = await fetch(`/horario/get-aula/${config.horario_id}`);
+                const data = await res.json();
+                if(data.success) {
+                    disciplinaSelect.value = data.disciplina_id;
+                    await disciplinaSelect.dispatchEvent(new Event('change')); 
+                    instrutorSelect.value = data.instrutor_value;
+                    document.getElementById('modal-duracao').value = data.duracao;
+                    document.getElementById('modal-observacao').value = data.observacao || '';
+                }
+            } catch (e) { console.error("Erro ao buscar detalhes da aula:", e); }
+        } else {
+            document.getElementById('modal-title').textContent = 'Agendar Aula';
+        }
+        openModal(horarioModalOverlay);
     }
 
     async function openApprovalModal(horarioId) {
@@ -196,33 +274,26 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // --- NOVA FUNÇÃO PARA SUBMISSÃO ROBUSTA ---
     function sendFullApprovalAction(horarioId, action) {
         const confirmMessage = action === 'negar' ? 'Tem certeza que deseja NEGAR (remover) esta solicitação de aula?' : null;
         if (confirmMessage && !confirm(confirmMessage)) {
             return;
         }
-
-        // Cria um formulário dinâmico para simular uma submissão tradicional
         const form = document.createElement('form');
         form.method = 'POST';
         form.action = '/horario/aprovar';
-
         const csrfInput = document.createElement('input');
         csrfInput.type = 'hidden';
         csrfInput.name = 'csrf_token';
         csrfInput.value = csrfToken;
-
         const idInput = document.createElement('input');
         idInput.type = 'hidden';
         idInput.name = 'horario_id';
         idInput.value = horarioId;
-
         const actionInput = document.createElement('input');
         actionInput.type = 'hidden';
         actionInput.name = 'action';
         actionInput.value = action;
-
         form.appendChild(csrfInput);
         form.appendChild(idInput);
         form.appendChild(actionInput);
@@ -230,7 +301,6 @@ document.addEventListener('DOMContentLoaded', function() {
         form.submit();
     }
 
-    // --- FUNÇÃO DE CLIQUE ATUALIZADA ---
     function handleTableClick(e) {
         const target = e.target.closest('button');
         if (!target) return;
@@ -242,7 +312,6 @@ document.addEventListener('DOMContentLoaded', function() {
             openHorarioModal({ dia: slot.dataset.dia, periodo: slot.dataset.periodo });
             return;
         }
-
         if (!id) return;
 
         if (action === 'edit' && slot) {
@@ -262,23 +331,68 @@ document.addEventListener('DOMContentLoaded', function() {
 
     document.querySelectorAll('.editable').forEach(table => table.addEventListener('click', handleTableClick));
     
-    function sendPartialApprovalRequest(horarioId, periodos) {
-        fetch('/horario/aprovar-parcial', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken }, body: JSON.stringify({ horario_id: horarioId, periodos: periodos }) }).then(res => res.json()).then(data => { if (data.success) { window.location.reload(); } else { alert('Erro ao processar aprovação: ' + data.message); } });
-    }
+    disciplinaSelect.addEventListener('change', async function() {
+        const disciplinaId = this.value;
+        instrutorSelect.innerHTML = '<option value="">Carregando...</option>';
+        if (!disciplinaId) {
+            instrutorSelect.innerHTML = '<option value="">Selecione primeiro a disciplina</option>';
+            instrutorSelect.disabled = true;
+            return;
+        }
+        try {
+            const res = await fetch(`/horario/api/instrutores-vinculados/${PELOTAO_SELECIONADO}/${disciplinaId}`);
+            const instrutores = await res.json();
+            instrutorSelect.innerHTML = '';
+            if (instrutores.length > 0) {
+                instrutores.forEach(i => {
+                    const option = new Option(i.nome, i.id);
+                    instrutorSelect.add(option);
+                });
+                instrutorSelect.disabled = false;
+            } else {
+                 instrutorSelect.innerHTML = '<option value="">Nenhum instrutor vinculado</option>';
+                 instrutorSelect.disabled = true;
+            }
+        } catch(e) {
+            console.error("Erro ao buscar instrutores:", e);
+            instrutorSelect.innerHTML = '<option value="">Erro ao carregar</option>';
+            instrutorSelect.disabled = true;
+        }
+    });
 
-    document.getElementById('approval-modal-form').addEventListener('submit', function(e) {
+    modalForm.addEventListener('submit', function(e) {
         e.preventDefault();
-        const horarioId = document.getElementById('approval-horario-id').value;
-        const selectedPeriodos = Array.from(document.querySelectorAll('#approval-periodos-container input:checked')).map(cb => parseInt(cb.value, 10));
-        sendPartialApprovalRequest(horarioId, selectedPeriodos);
+        const formData = {
+            horario_id: document.getElementById('modal-horario-id').value,
+            pelotao: PELOTAO_SELECIONADO,
+            semana_id: SEMANA_ID,
+            dia: document.getElementById('modal-dia').value,
+            periodo: document.getElementById('modal-periodo').value,
+            disciplina_id: disciplinaSelect.value,
+            instrutor_id: instrutorSelect.value,
+            duracao: document.getElementById('modal-duracao').value,
+            observacao: document.getElementById('modal-observacao').value
+        };
+        fetch('/horario/salvar-aula', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify(formData)
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                window.location.reload();
+            } else {
+                alert('Erro: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error("Erro ao salvar aula:", error);
+            alert('Erro de comunicação ao salvar a aula.');
+        });
     });
 
-    document.getElementById('approval-negar').addEventListener('click', function() {
-        const horarioId = document.getElementById('approval-horario-id').value;
-        sendPartialApprovalRequest(horarioId, []);
-    });
-
-    if (document.getElementById('modal-cancel')) { document.getElementById('modal-cancel').addEventListener('click', () => closeModal(horarioModalOverlay)); }
+    document.getElementById('modal-cancel').addEventListener('click', () => closeModal(horarioModalOverlay));
     document.getElementById('approval-modal-cancel').addEventListener('click', () => closeModal(approvalModalOverlay));
     if (horarioModalOverlay) { horarioModalOverlay.addEventListener('click', (e) => { if (e.target === horarioModalOverlay) closeModal(horarioModalOverlay); }); }
     if (approvalModalOverlay) { approvalModalOverlay.addEventListener('click', (e) => { if (e.target === approvalModalOverlay) closeModal(approvalModalOverlay); }); }
