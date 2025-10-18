@@ -24,7 +24,7 @@
         {% if tipo_relatorio == 'Por Instrutor' %}
         <div class="form-group">
             <label for="instrutor_ids"><strong>Selecione os Instrutores:</strong></label>
-            
+
             <div class="custom-multiselect">
                 <div class="select-button">
                     <span id="select-button-text">Nenhum instrutor selecionado</span>
@@ -36,7 +36,7 @@
                         {% for instrutor in todos_instrutores %}
                         <label class="dropdown-option">
                             <input type="checkbox" class="instrutor-checkbox" value="{{ instrutor.id }}">
-                            <span>{{ instrutor.user.nome_completo or instrutor.user.username }}</span>
+                            <span>{{ (instrutor.user.posto_graduacao + ' ' if instrutor.user.posto_graduacao else '') + (instrutor.user.nome_de_guerra or instrutor.user.username) }}</span>
                         </label>
                         {% endfor %}
                     </div>
@@ -45,7 +45,7 @@
 
             <select name="instrutor_ids" id="instrutor_ids" multiple required style="display: none;">
                 {% for instrutor in todos_instrutores %}
-                <option value="{{ instrutor.id }}">{{ instrutor.user.nome_completo or instrutor.user.username }}</option>
+                <option value="{{ instrutor.id }}">{{ (instrutor.user.posto_graduacao + ' ' if instrutor.user.posto_graduacao else '') + (instrutor.user.nome_de_guerra or instrutor.user.username) }}</option>
                 {% endfor %}
             </select>
 
@@ -54,40 +54,44 @@
 
         <hr style="margin: 2rem 0;">
         <h3>Dados do Cabeçalho e Assinaturas</h3>
-        
+
         <div class="form-group">
             <label for="curso_nome">Nome do Curso:</label>
-            <input type="text" name="curso_nome" id="curso_nome" class="form-control" value="Curso Técnico em Segurança Pública" required>
+            <input type="text" name="curso_nome" id="curso_nome" class="form-control" value="{{ form_defaults.get('curso_nome', '') }}" required>
         </div>
-        
+
         <div class="form-group">
             <label for="opm">OPM:</label>
-            <input type="text" name="opm" id="opm" class="form-control" value="Escola de Formação e Aperfeiçoamento de Sargentos">
+            <input type="text" name="opm" id="opm" class="form-control" value="{{ form_defaults.get('opm', '') }}">
+        </div>
+        <div class="form-group">
+            <label for="escola_nome">Nome da Escola:</label>
+            <input type="text" name="escola_nome" id="escola_nome" class="form-control" value="{{ form_defaults.get('escola_nome', '') }}">
         </div>
         <div class="form-group">
             <label for="telefone">Telefone:</label>
-            <input type="text" name="telefone" id="telefone" class="form-control" value="(55) 3220-6462">
+            <input type="text" name="telefone" id="telefone" class="form-control" value="{{ form_defaults.get('telefone', '') }}">
         </div>
         <div class="form-group">
             <label for="cidade">Cidade:</label>
-            <input type="text" name="cidade" id="cidade" class="form-control" value="Santa Maria">
+            <input type="text" name="cidade" id="cidade" class="form-control" value="{{ form_defaults.get('cidade', '') }}">
         </div>
         <div class="form-group">
-            <label for="comandante_nome">Nome Completo e Graduação do Comandante da Escola:</label>
+            <label for="comandante_nome">Nome Completo e Graduação do Comandante:</label>
             <input type="text" name="comandante_nome" id="comandante_nome" class="form-control" placeholder="Ex: NOME COMPLETO – Maj PM">
         </div>
-         <div class="form-group">
-            <label for="escola">Nome da Escola (para assinatura):</label>
-            <input type="text" name="escola" id="escola" class="form-control" value="Comandante da EsFAS">
-        </div>
         <div class="form-group">
-            <label for="auxiliar_nome">Nome Completo e Graduação do Auxiliar da Seção de Ensino:</label>
+            <label for="comandante_funcao">Função do Comandante:</label>␊
+            <input type="text" name="comandante_funcao" id="comandante_funcao" class="form-control" value="{{ form_defaults.get('comandante_funcao', '') }}">
+        </div>␊
+        <div class="form-group">
+            <label for="auxiliar_nome">Nome Completo e Graduação do Auxiliar:</label>
             <input type="text" name="auxiliar_nome" id="auxiliar_nome" class="form-control" placeholder="Ex: NOME COMPLETO - Posto/Grad">
         </div>
-        <div class="form-group">
-            <label for="digitador_nome">Nome do Digitador (opcional):</label>
-            <input type="text" name="digitador_nome" id="digitador_nome" class="form-control" placeholder="Ex: NOME COMPLETO - Posto/Grad">
-        </div>
+        <div class="form-group">␊
+            <label for="auxiliar_funcao">Função do Auxiliar:</label>␊
+            <input type="text" name="auxiliar_funcao" id="auxiliar_funcao" class="form-control" value="{{ form_defaults.get('auxiliar_funcao', '') }}">
+        </div>␊
 
         <div class="form-actions form-actions-aligned">
             <a href="{{ url_for('relatorios.index') }}" class="btn btn-secondary">Voltar</a>
@@ -137,7 +141,7 @@ document.addEventListener('DOMContentLoaded', function() {
             selectButton.classList.remove('open');
         }
     });
-    
+
     searchInput.addEventListener('input', () => {
         const filter = searchInput.value.toLowerCase();
         document.querySelectorAll('.dropdown-option').forEach(option => {
