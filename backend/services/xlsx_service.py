@@ -1,145 +1,240 @@
 # backend/services/xlsx_service.py
+
 from __future__ import annotations
 from io import BytesIO
-from typing import List, Sequence, Optional
+from typing import Any, Iterable, Optional
+from datetime import date
+from textwrap import dedent
 
 from openpyxl import Workbook
-from openpyxl.worksheet.worksheet import Worksheet
-from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side, NamedStyle
 from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.page import PageMargins
 
-# Texto do rodapé — fiel ao modelo enviado
-FOOTER_LINES: List[str] = [
-    "1.     Id. Func. em ordem crescente.",
-    "2.     Mapa deverá dar entrada no DE até o dia 05 de cada mês.",
-    "3.     Mapa atrasado do mês anterior ficará para o próximo mês, cumulativamente como do mês vigente.",
-    "4.     Mapas atrasados com mais de dois meses deverão ser devidamente fundamentados pelo comandante da escola, sob penada não aceitação e restituição.",
-    "5.     Nos termos do item anterior, após chegar fundamentado, será adotada a medida da letra “g”, nº 5 do Item nº 3",
-]
 
-THIN = Side(style="thin", color="000000")
-BORDER_THIN = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
+__all__ = ["gerar_mapa_gratificacao_xlsx"]
 
-HEADER_FILL = PatternFill("solid", fgColor="F2F2F2")
 
-def _set_col_widths(ws: Worksheet, widths: Sequence[float]) -> None:
-    for idx, width in enumerate(widths, start=1):
-        ws.column_dimensions[get_column_letter(idx)].width = width
+# -------------------------
+# Helpers
+# -------------------------
+def _safe(obj: Any, path: str, default: Any = None) -> Any:
+    cur = obj
+    for part in path.split("."):
+        if cur is None: return default
+        if isinstance(cur, dict): cur = cur.get(part, default)
+        else: cur = getattr(cur, part, default)
+    return default if cur is None else cur
 
-def _add_title(ws: Worksheet, title: str, cols: int) -> None:
-    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=cols)
-    cell = ws.cell(row=1, column=1, value=title)
-    cell.font = Font(bold=True, size=14)
-    cell.alignment = Alignment(horizontal="center", vertical="center")
 
-def _add_headers(ws: Worksheet, headers: Sequence[str], start_row: int = 3) -> int:
-    for col, h in enumerate(headers, start=1):
-        c = ws.cell(row=start_row, column=col, value=h)
-        c.font = Font(bold=True, size=11)
-        c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-        c.border = BORDER_THIN
-        c.fill = HEADER_FILL
-    return start_row + 1
+def _iter_disciplinas(instrutor: Any):
+    if isinstance(instrutor, dict): return instrutor.get("disciplinas") or []
+    return getattr(instrutor, "disciplinas", []) or []
 
-def _add_rows(ws: Worksheet, rows: Sequence[Sequence[object]], start_row: int) -> int:
-    r = start_row
-    for row in rows:
-        for col, val in enumerate(row, start=1):
-            c = ws.cell(row=r, column=col, value=val)
-            c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-            c.border = BORDER_THIN
-        r += 1
-    return r
 
-def _add_separator_line(ws: Worksheet, row: int, cols: int) -> None:
-    # Linha visual antes do rodapé
-    for col in range(1, cols + 1):
-        c = ws.cell(row=row, column=col, value=None)
-        c.border = Border(bottom=THIN)
-
-def _add_footer(ws: Worksheet, start_row: int, cols: int) -> int:
-    """
-    Adiciona o bloco de observações exatamente como no modelo.
-    - Uma linha divisória acima
-    - Texto com quebra de linha, alinhado à esquerda, fonte menor
-    """
-    _add_separator_line(ws, start_row, cols)
-    start_row += 1
-
-    text = "\n".join(FOOTER_LINES)
-
-    ws.merge_cells(start_row=start_row, start_column=1, end_row=start_row + 5, end_column=cols)
-    c = ws.cell(row=start_row, column=1, value=text)
-    c.font = Font(size=9)  # fonte menor
-    c.alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
-
-    # Borda em volta do bloco inteiro para “fechar” visualmente as observações
-    for r in range(start_row, start_row + 6):
-        for col in range(1, cols + 1):
-            ws.cell(row=r, column=col).border = BORDER_THIN
-
-    return start_row + 6
-
-def _setup_print(ws: Worksheet) -> None:
-    # Página: margens e ajuste para caber na largura
-    ws.page_setup.fitToWidth = 1
-    ws.page_setup.fitToHeight = 0
-    ws.sheet_properties.pageSetUpPr.fitToPage = True
-
-    # Margens agradáveis para impressão
-    ws.page_margins.left = 0.4
-    ws.page_margins.right = 0.4
-    ws.page_margins.top = 0.6
-    ws.page_margins.bottom = 0.6
-
-def make_xlsx(
-    headers: Sequence[str],
-    rows: Sequence[Sequence[object]],
+# -------------------------
+# Função principal
+# -------------------------
+def gerar_mapa_gratificacao_xlsx(
+    dados: Iterable[Any],
+    valor_hora_aula: float,
+    nome_mes_ano: str,
+    titulo_curso: str,
+    opm_nome: str,
+    escola_nome: str,
+    data_emissao: date,
+    telefone: Optional[str] = None,
+    auxiliar_nome: Optional[str] = None,
+    comandante_nome: Optional[str] = None,
+    digitador_nome: Optional[str] = None,
+    auxiliar_funcao: Optional[str] = None,
+    comandante_funcao: Optional[str] = None,
     *,
-    title: str = "MAPA DE GRATIFICAÇÃO MAGISTÉRIO",
-    column_widths: Optional[Sequence[float]] = None,
+    data_fim: Optional[date] = None,
+    cidade_assinatura: Optional[str] = "Santa Maria",
 ) -> bytes:
     """
-    Cria um XLSX com cabeçalho, tabela e rodapé de observações.
-    - headers: títulos das colunas
-    - rows: dados (lista de linhas)
-    - title: título centralizado
-    - column_widths: larguras opcionais; se None, aplica um padrão
-    Retorna bytes do arquivo XLSX.
+    Gera um arquivo .xlsx nativo (OpenPyXL) com o relatório de horas-aula,
+    com layout de 3 blocos conforme a imagem de referência.
     """
     wb = Workbook()
     ws = wb.active
-    ws.title = "Relatório"
+    ws.title = f"Mapa {nome_mes_ano}"
 
-    cols = len(headers)
-    if not column_widths:
-        # Sugestão de largura padrão (ajuste conforme seu layout)
-        column_widths = [12] + [18] * (cols - 1)
-    _set_col_widths(ws, column_widths)
+    # Configurações de página/visual
+    ws.page_setup.orientation = "landscape"
+    ws.page_setup.fitToWidth = 1
+    ws.page_margins = PageMargins(left=0.25, right=0.25, top=0.5, bottom=0.5)
+    ws.sheet_view.showGridLines = False
 
-    _add_title(ws, title, cols)
-    data_start = _add_headers(ws, headers, start_row=3)
-    data_end = _add_rows(ws, rows, data_start)
+    # Definições de Layout e Colunas
+    ws.column_dimensions['B'].width = 30
+    ws.column_dimensions['D'].width = 20
+    ws.column_dimensions['E'].width = 15
+    ws.column_dimensions['F'].width = 38
+    ws.column_dimensions['G'].width = 38
+    ws.column_dimensions['H'].width = 8
+    ws.column_dimensions['I'].width = 22
+    ws.column_dimensions['J'].width = 8
+    ws.column_dimensions['K'].width = 18
+    ws.column_dimensions['L'].width = 15
+    ws.column_dimensions['M'].width = 15
 
-    # Altura padrão das linhas (facilita leitura)
-    for r in range(3, data_end):
-        ws.row_dimensions[r].height = 20
+    # Estilos
+    gray_fill = PatternFill("solid", fgColor="D9D9D9")
+    thin_side = Side(style="thin", color="000000")
+    border_all = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
+    border_bottom = Border(bottom=thin_side)
+    center_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    left_align = Alignment(horizontal="left", vertical="center", wrap_text=True)
+    right_align = Alignment(horizontal="right", vertical="center", wrap_text=True)
 
-    footer_start_row = data_end + 1
-    end_row = _add_footer(ws, footer_start_row, cols)
+    h1_font = Font(bold=True, size=14)
+    h2_font = Font(size=11)
+    h2_bold_font = Font(bold=True, size=11)
+    th_font = Font(bold=True, size=10)
+    total_font = Font(bold=True)
+    brl_style_name = "BRL"
+    if brl_style_name not in wb.style_names:
+        brl_style = NamedStyle(name=brl_style_name, number_format='R$ #,##0.00')
+        wb.add_named_style(brl_style)
 
-    _setup_print(ws)
+    # --- CABEÇALHO SUPERIOR ---
+    # Bloco Esquerdo (Assinatura Comandante)
+    ws.cell(row=3, column=2, value=comandante_nome).font = h2_bold_font
+    ws.cell(row=3, column=2).alignment = center_align
+    ws.merge_cells(start_row=3, start_column=2, end_row=3, end_column=3)
+    
+    ws.cell(row=4, column=2, value=comandante_funcao).alignment = center_align
+    ws.merge_cells(start_row=4, start_column=2, end_row=4, end_column=3)
 
-    # Congelar painéis (cabeçalho sempre visível)
-    ws.freeze_panes = ws["A4"]
+    # Bloco Central (Título)
+    ws.cell(row=1, column=4, value="MAPA DE GRATIFICAÇÃO MAGISTÉRIO").font = h1_font
+    ws.cell(row=1, column=4).alignment = center_align
+    ws.merge_cells(start_row=1, start_column=4, end_row=1, end_column=11)
+    
+    texts = [f"OPM: {opm_nome}", f"Telefone: {telefone}", f"Horas aulas a pagar do Mês de {nome_mes_ano}", titulo_curso]
+    for i, text in enumerate(texts):
+        r = i + 2
+        cell = ws.cell(row=r, column=4, value=text)
+        cell.font = h2_bold_font if "Horas aulas" in text or titulo_curso in text else h2_font
+        cell.alignment = center_align
+        ws.merge_cells(start_row=r, start_column=4, end_row=r, end_column=11)
+    
+    # Bloco Direito (Lançar no RHE)
+    cell = ws.cell(row=1, column=12, value="LANÇAR NO RHE")
+    cell.border = border_all
+    cell.alignment = center_align
+    ws.merge_cells(start_row=1, start_column=12, end_row=1, end_column=13)
+    
+    ws.cell(row=3, column=12).border = border_bottom
+    ws.merge_cells(start_row=3, start_column=12, end_row=3, end_column=13)
 
-    # Salvar
-    buff = BytesIO()
-    wb.save(buff)
-    return buff.getvalue()
+    cell = ws.cell(row=4, column=12, value="Ch da SEÇÃO ADM/DE")
+    cell.alignment = center_align
+    ws.merge_cells(start_row=4, start_column=12, end_row=4, end_column=13)
 
+    # --- TABELA PRINCIPAL ---
+    r = 7 
+    headers = ["Posto / graduação", "Id. Func.", "Nome completo do servidor", "Disciplina", "CH total", "CH paga anteriormente", "CH a pagar", "Valor em R$"]
+    for c_offset, text in enumerate(headers):
+        cell = ws.cell(row=r, column=4 + c_offset, value=text)
+        cell.fill = gray_fill
+        cell.font = th_font
+        cell.alignment = center_align
+        cell.border = border_all
+    r += 1
+    
+    total_ch_a_pagar = 0
+    total_valor = 0.0
+    for instrutor in (dados or []):
+        user = _safe(instrutor, "info.user", {})
+        for disc in _iter_disciplinas(instrutor):
+            ch_a_pagar = float(_safe(disc, "ch_a_pagar", 0) or 0)
+            valor_a_pagar = ch_a_pagar * float(valor_hora_aula or 0)
+            row_data = [
+                _safe(user, "posto_graduacao", "N/D"), _safe(user, "matricula", ""),
+                _safe(user, "nome_completo", ""), _safe(disc, "nome", ""),
+                int(_safe(disc, "ch_total", 0) or 0), int(_safe(disc, "ch_paga_anteriormente", 0) or 0),
+                ch_a_pagar, valor_a_pagar,
+            ]
+            for c_offset, value in enumerate(row_data):
+                cell = ws.cell(r, 4 + c_offset, value)
+                cell.border = border_all
+                if c_offset in [0, 1, 4, 5, 6]: cell.alignment = center_align
+                elif c_offset in [2, 3]: cell.alignment = left_align
+                elif c_offset == 7:
+                    cell.style = brl_style_name
+                    cell.alignment = right_align
+            
+            total_ch_a_pagar += ch_a_pagar
+            total_valor += valor_a_pagar
+            r += 1
+    
+    # Linha de Totais
+    cell = ws.cell(row=r, column=4, value="CARGA HORARIA TOTAL")
+    cell.fill = gray_fill
+    cell.font = total_font
+    cell.alignment = right_align
+    ws.merge_cells(start_row=r, start_column=4, end_row=r, end_column=9)
+    
+    cell = ws.cell(row=r, column=10, value=total_ch_a_pagar)
+    cell.fill = gray_fill
+    cell.font = total_font
+    cell.alignment = center_align
+    
+    cell = ws.cell(row=r, column=11, value=total_valor)
+    cell.fill = gray_fill
+    cell.font = total_font
+    cell.alignment = right_align
+    cell.style = brl_style_name
+    
+    for c in range(4, 12):
+        ws.cell(r, c).border = border_all
+    r += 2
 
-# --- Compatibilidade retroativa ---
-def gerar_mapa_gratificacao_xlsx(headers, rows, **kwargs) -> bytes:
-    """Alias para manter compatibilidade com código legado."""
-    return make_xlsx(headers, rows, **kwargs)
+    # --- BLOCO INFERIOR ---
+    start_footer_row = r
+    # Bloco Esquerdo: ORIENTAÇÕES
+    ori_lines = ["1. Id. Func. em ordem crescente.", "2. Mapa deverá dar entrada no DE até o dia 05 de cada mês.", "3. Mapa atrasado do mês anterior ficará para o próximo mês, cumulativamente como do mês vigente.", "4. Mapas atrasados com mais de dois meses deverão ser devidamente fundamentados pelo comandante da escola, sob pena da não aceitação e restituição.", "5. Nos termos do item anterior, após chegar fundamentado, será adotada a medida da letra “g”, nº 5 do Item nº 3."]
+    left_text = "ORIENTAÇÕES:\n" + "\n".join(ori_lines)
+    cell = ws.cell(row=start_footer_row, column=1, value=left_text)
+    cell.alignment = Alignment(horizontal='left', vertical='top', wrap_text=True)
+    ws.merge_cells(start_row=start_footer_row, start_column=1, end_row=start_footer_row+9, end_column=8)
+
+    # Bloco Direito: Data e Assinaturas
+    data_fmt = data_fim.strftime("%d de %B de %Y") if data_fim else "____ de __________ de ____"
+    cell = ws.cell(row=start_footer_row, column=10, value=f"Quartel em {cidade_assinatura}, {data_fmt}.")
+    cell.alignment = center_align
+    ws.merge_cells(start_row=start_footer_row, start_column=10, end_row=start_footer_row, end_column=13)
+    
+    # Assinatura do Auxiliar
+    aux_sig_row = start_footer_row + 8
+    ws.cell(row=aux_sig_row, column=2).border = border_bottom
+    ws.merge_cells(start_row=aux_sig_row, start_column=2, end_row=aux_sig_row, end_column=5)
+    
+    cell = ws.cell(row=aux_sig_row + 1, column=2, value=auxiliar_nome)
+    cell.alignment = center_align
+    ws.merge_cells(start_row=aux_sig_row + 1, start_column=2, end_row=aux_sig_row + 1, end_column=5)
+
+    cell = ws.cell(row=aux_sig_row + 2, column=2, value=auxiliar_funcao)
+    cell.alignment = center_align
+    ws.merge_cells(start_row=aux_sig_row + 2, start_column=2, end_row=aux_sig_row + 2, end_column=5)
+
+    # Assinatura do Digitador
+    dig_sig_row = aux_sig_row - 1
+    cell = ws.cell(row=dig_sig_row, column=11, value="Em _____/_____/_____")
+    cell.alignment = center_align
+    ws.merge_cells(start_row=dig_sig_row, start_column=11, end_row=dig_sig_row, end_column=13)
+    
+    ws.cell(row=dig_sig_row + 1, column=11).border = border_bottom
+    ws.merge_cells(start_row=dig_sig_row + 1, start_column=11, end_row=dig_sig_row + 1, end_column=13)
+    
+    cell = ws.cell(row=dig_sig_row + 2, column=11, value=digitador_nome or "Digitador")
+    cell.alignment = center_align
+    ws.merge_cells(start_row=dig_sig_row + 2, start_column=11, end_row=dig_sig_row + 2, end_column=13)
+    
+    # Salvar em memória
+    out = BytesIO()
+    wb.save(out)
+    return out.getvalue()

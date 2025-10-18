@@ -1,154 +1,130 @@
 # backend/controllers/relatorios_controller.py
 
-from __future__ import annotations
-from datetime import date, datetime
-from io import BytesIO
-from typing import Any, Dict, List
+from flask import Blueprint, render_template, request, flash, Response, redirect, url_for
+from flask_login import login_required, current_user
+from datetime import datetime
+from urllib.parse import quote
+from weasyprint import HTML
 
-from flask import Blueprint, jsonify, request, send_file, render_template
+from ..services.relatorio_service import RelatorioService
+from ..services.instrutor_service import InstrutorService
+from ..services.site_config_service import SiteConfigService
+from ..services.xlsx_service import gerar_mapa_gratificacao_xlsx
+from utils.decorators import admin_or_programmer_required
 
-from backend.services import xlsx_service as xlsx_srv
-
-# (Opcional) utilitários de diagnóstico; cai para fallback se não existir
-try:
-    from backend.utils.diagnostics import log_exception, scan_dataset_for_illegal_chars
-except Exception:  # pragma: no cover
-    def log_exception(context: Dict[str, Any], exc: BaseException) -> str:
-        print("[relatorios_controller] EXCEPTION:", type(exc).__name__, str(exc))
-        return "no-log-id"
-
-    def scan_dataset_for_illegal_chars(dados: Any) -> Dict[str, Any]:
-        return {"total_fields_checked": 0, "hits_count": 0, "hits": []}
+relatorios_bp = Blueprint('relatorios', __name__, url_prefix='/relatorios')
 
 
-relatorios_bp = Blueprint("relatorios", __name__, url_prefix="/relatorios")
-
-@relatorios_bp.get("/")
+@relatorios_bp.route('/')
+@login_required
+@admin_or_programmer_required
 def index():
-    return render_template("relatorios/index.html")
+    """Página que exibe os tipos de relatório disponíveis."""
+    return render_template('relatorios/index.html')
 
 
+@relatorios_bp.route('/gerar', methods=['GET', 'POST'])
+@login_required
+@admin_or_programmer_required
+def gerar_relatorio_horas_aula():
+    report_type = request.args.get('tipo', 'mensal')
+    tipo_relatorio_titulo = report_type.replace("_", " ").title()
 
+    todos_instrutores = []
+    if report_type == 'por_instrutor':
+        paginated_instrutores = InstrutorService.get_all_instrutores(current_user, per_page=999)
+        if paginated_instrutores:
+            todos_instrutores = paginated_instrutores.items
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+    if request.method == 'POST':
+        data_inicio_str = request.form.get('data_inicio')
+        data_fim_str = request.form.get('data_fim')
+        action = request.form.get('action')
 
-def _as_date_or_none(value: str | None) -> date | None:
-    """Converte 'YYYY-MM-DD' em date. Retorna None se vazio/ inválido."""
-    if not value:
-        return None
-    try:
-        return datetime.strptime(value, "%Y-%m-%d").date()
-    except Exception:
-        return None
+        try:
+            data_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d').date()
+            data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date()
+        except (ValueError, TypeError):
+            flash('Formato de data inválido. Use AAAA-MM-DD.', 'danger')
+            return redirect(url_for('relatorios.gerar_relatorio_horas_aula', tipo=report_type))
 
+        if data_fim < data_inicio:
+            flash('A data de fim não pode ser anterior à data de início.', 'warning')
+            return redirect(url_for('relatorios.gerar_relatorio_horas_aula', tipo=report_type))
 
-def _coletar_dados_mapa() -> List[Dict[str, Any]]:
-    """
-    TODO: substitua por sua coleta real (banco/serviços).
-    Estrutura esperada pelo xlsx_srv.make_xlsx():
-    [
-      {
-        "info": {"user": {"posto_graduacao": "...", "matricula": "...", "nome_completo": "..."}},
-        "disciplinas": [
-            {"nome": "...", "ch_total": 0, "ch_paga_anteriormente": 0, "ch_a_pagar": 0},
-            ...
-        ],
-      },
-      ...
-    ]
-    """
-    # Exemplo mínimo para não quebrar:
-    return [
-        {
-            "info": {"user": {"posto_graduacao": "Sd PM", "matricula": "123456-7", "nome_completo": "Instrutor Exemplo"}},
-            "disciplinas": [
-                {"nome": "História", "ch_total": 12, "ch_paga_anteriormente": 0, "ch_a_pagar": 12},
-            ],
+        is_rr_filter = report_type == 'efetivo_rr'
+        instrutor_ids_filter = None
+        if report_type == 'por_instrutor':
+            instrutor_ids_filter = [int(id) for id in request.form.getlist('instrutor_ids')]
+            if not instrutor_ids_filter:
+                flash('Por favor, selecione pelo menos um instrutor.', 'warning')
+                return redirect(url_for('relatorios.gerar_relatorio_horas_aula', tipo=report_type))
+
+        dados_relatorio = RelatorioService.get_horas_aula_por_instrutor(
+            data_inicio, data_fim, is_rr_filter, instrutor_ids_filter
+        )
+
+        valor_hora_aula = SiteConfigService.get_valor_hora_aula()
+        meses = ("Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro")
+        nome_mes_ano_pt = f"{meses[data_inicio.month - 1]} de {data_inicio.year}"
+        data_assinatura_pt = f"{data_fim.day} de {meses[data_fim.month - 1]} de {data_fim.year}"
+        
+        contexto = {
+            "dados": dados_relatorio,
+            "valor_hora_aula": valor_hora_aula,
+            "nome_mes_ano": nome_mes_ano_pt,
+            "titulo_curso": request.form.get('curso_nome'),
+            "data_assinatura": data_assinatura_pt,
+            "comandante_nome": request.form.get('comandante_nome'),
+            "auxiliar_nome": request.form.get('auxiliar_nome'),
+            "opm": request.form.get('opm'),
+            "telefone": request.form.get('telefone'),
+            "cidade": request.form.get('cidade'),
+            "auxiliar_funcao": request.form.get('auxiliar_funcao'),
+            "comandante_funcao": request.form.get('comandante_funcao'),
         }
-    ]
 
+        if action == 'google_sheets':
+            success, result = RelatorioService.export_to_google_sheets(
+                dados=dados_relatorio,
+                valor_hora_aula=valor_hora_aula,
+                nome_mes_ano=nome_mes_ano_pt
+            )
+            if success:
+                return redirect(result)
+            else:
+                flash(f'Erro ao gerar link para o Google Planilhas: {result}', 'danger')
+                return redirect(url_for('relatorios.gerar_relatorio_horas_aula', tipo=report_type))
 
-# ---------------------------------------------------------------------------
-# XLSX via GET (não exige CSRF). Parâmetros via query string:
-#   valor_hora_aula (float)
-#   nome_mes_ano (str)
-#   titulo_curso (str)
-#   opm_nome (str)
-#   escola_nome (str)
-#   telefone (str)
-#   auxiliar_nome (str)
-#   comandante_nome (str)
-#   digitador_nome (str)
-#   auxiliar_funcao (str)
-#   comandante_funcao (str)
-#   data_emissao (YYYY-MM-DD)  [default: hoje]
-#   data_fim (YYYY-MM-DD)
-#   cidade_assinatura (str)
-# ---------------------------------------------------------------------------
-@relatorios_bp.get("/mapa-gratificacao.xlsx")
-def mapa_gratificacao_xlsx():
-    try:
-        # ---- Parâmetros com defaults seguros ----
-        valor_hora_aula = request.args.get("valor_hora_aula", type=float) or 0.0
-        nome_mes_ano = request.args.get("nome_mes_ano", default=datetime.now().strftime("%B de %Y").title())
-        titulo_curso = request.args.get("titulo_curso", default="Curso Técnico de Segurança Pública (CTSP)")
-        opm_nome = request.args.get("opm_nome", default="Brigada Militar do RS")
-        escola_nome = request.args.get("escola_nome", default="EsFAS")
-        telefone = request.args.get("telefone", default=None)
-        auxiliar_nome = request.args.get("auxiliar_nome", default=None)
-        comandante_nome = request.args.get("comandante_nome", default=None)
-        digitador_nome = request.args.get("digitador_nome", default=None)
-        auxiliar_funcao = request.args.get("auxiliar_funcao", default="Auxiliar da Seção de Ensino")
-        comandante_funcao = request.args.get("comandante_funcao", default="Comandante da EsFAS")
-        cidade_assinatura = request.args.get("cidade_assinatura", default="Santa Maria")
+        elif action == 'preview':
+            rendered_html = render_template('relatorios/pdf_template.html', **contexto)
+            return rendered_html
+        
+        elif action == 'download':
+            rendered_html = render_template('relatorios/pdf_template.html', **contexto)
+            try:
+                pdf_content = HTML(string=rendered_html, base_url=request.url_root).write_pdf()
+            except Exception as e:
+                flash(f'Erro ao gerar PDF: {str(e)}', 'danger')
+                return redirect(url_for('relatorios.gerar_relatorio_horas_aula', tipo=report_type))
 
-        data_emissao = _as_date_or_none(request.args.get("data_emissao")) or date.today()
-        data_fim = _as_date_or_none(request.args.get("data_fim"))
+            filename_utf8 = f'relatorio_horas_aula_{contexto["nome_mes_ano"].replace(" ", "_")}.pdf'
+            return Response(
+                pdf_content,
+                mimetype='application/pdf',
+                headers={'Content-Disposition': f'attachment; filename="{quote(filename_utf8)}'}
+            )
+        
+        # A ação de download_xlsx foi mantida no backend, mas o botão foi removido do frontend
+        elif action == 'download_xlsx':
+             flash('A exportação para XLSX foi descontinuada. Use a opção "Abrir no Google Planilhas".', 'info')
+             return redirect(url_for('relatorios.gerar_relatorio_horas_aula', tipo=report_type))
 
-        # ---- Coleta dos dados (substitua pela sua implementação) ----
-        dados = _coletar_dados_mapa()
+        flash('Ação inválida.', 'warning')
+        return redirect(url_for('relatorios.gerar_relatorio_horas_aula', tipo=report_type))
 
-        # (Opcional) diagnóstico de caracteres ilegais no dataset
-        rep = scan_dataset_for_illegal_chars(dados)
-        if rep.get("hits_count"):
-            print(f"[DIAG] Caracteres ilegais detectados no dataset: {rep['hits_count']}")
-
-        # ---- Geração do XLSX ----
-        content = xlsx_srv.make_xlsx(
-            dados=dados,
-            valor_hora_aula=valor_hora_aula,
-            nome_mes_ano=nome_mes_ano,
-            titulo_curso=titulo_curso,
-            opm_nome=opm_nome,
-            escola_nome=escola_nome,
-            data_emissao=data_emissao,
-            telefone=telefone,
-            auxiliar_nome=auxiliar_nome,
-            comandante_nome=comandante_nome,
-            digitador_nome=digitador_nome,
-            auxiliar_funcao=auxiliar_funcao,
-            comandante_funcao=comandante_funcao,
-            data_fim=data_fim,
-            cidade_assinatura=cidade_assinatura,
-        )
-
-        filename = f"Mapa_Gratificacao_{datetime.now():%Y_%m}.xlsx"
-        return send_file(
-            BytesIO(content),
-            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            as_attachment=True,
-            download_name=filename,
-        )
-
-    except Exception as e:
-        err_id = log_exception(
-            context={"route": "/relatorios/mapa-gratificacao.xlsx", "hint": "Falha ao gerar XLSX"},
-            exc=e,
-        )
-        return jsonify({
-            "ok": False,
-            "error_id": err_id,
-            "message": "Falha ao gerar planilha. Informe este código ao suporte.",
-        }), 500
+    return render_template(
+        'relatorios/horas_aula_form.html',
+        tipo_relatorio=tipo_relatorio_titulo,
+        todos_instrutores=todos_instrutores
+    )
