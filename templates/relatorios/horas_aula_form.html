@@ -88,6 +88,10 @@
             <label for="auxiliar_funcao">Função do Auxiliar:</label>
             <input type="text" name="auxiliar_funcao" id="auxiliar_funcao" class="form-control" value="Auxiliar da Seção de Ensino">
         </div>
+        <div class="form-group">
+            <label for="digitador_nome">Nome do Digitador:</label>
+            <input type="text" name="digitador_nome" id="digitador_nome" class="form-control" placeholder="Nome de quem está gerando o relatório" value="{{ current_user.nome_completo or '' }}">
+        </div>
 
         <div class="form-actions form-actions-aligned">
             <a href="{{ url_for('relatorios.index') }}" class="btn btn-secondary">Voltar</a>

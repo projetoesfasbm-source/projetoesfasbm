@@ -76,6 +76,7 @@ def gerar_relatorio_horas_aula():
             "data_assinatura": data_assinatura_pt,
             "comandante_nome": request.form.get('comandante_nome'),
             "auxiliar_nome": request.form.get('auxiliar_nome'),
+            "digitador_nome": request.form.get('digitador_nome'),
             "opm": request.form.get('opm'),
             "telefone": request.form.get('telefone'),
             "cidade": request.form.get('cidade'),
@@ -89,8 +90,6 @@ def gerar_relatorio_horas_aula():
         if action == 'google_sheets':
             success, result = RelatorioService.export_to_google_sheets(contexto)
             if success:
-                # --- CORREÇÃO APLICADA AQUI ---
-                # A resposta agora é um redirecionamento direto para o URL da planilha.
                 return redirect(result)
             else:
                 flash(f'Erro ao gerar link para o Google Planilhas: {result}', 'danger')

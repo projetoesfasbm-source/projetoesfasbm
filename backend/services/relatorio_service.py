@@ -1,221 +1,195 @@
 # backend/services/relatorio_service.py
 
-from ..models.database import db
-from ..models.horario import Horario
-from ..models.semana import Semana
-from ..models.instrutor import Instrutor
-from ..models.disciplina import Disciplina
-from ..models.user import User
-from sqlalchemy import select, func, and_, union_all
-from sqlalchemy.orm import joinedload
-from collections import defaultdict
-import gspread
+from __future__ import annotations
+import os
+import json
+from io import BytesIO
+from typing import Any, Dict, List, Tuple
+from datetime import date
+
+# As importações do Google são seguras para serem mantidas no topo
 from google.oauth2.service_account import Credentials
-from typing import Any, Dict
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
+from googleapiclient.errors import HttpError
 
-def _safe(obj: Any, path: str, default: Any = None) -> Any:
-    cur = obj
-    for part in path.split("."):
-        if cur is None: return default
-        if isinstance(cur, dict): cur = cur.get(part, default)
-        else: cur = getattr(cur, part, default)
-    return default if cur is None else cur
+# A importação do gerador de XLSX também é segura
+from .xlsx_service import gerar_mapa_gratificacao_xlsx
 
-def _iter_disciplinas(instrutor: Any):
-    if isinstance(instrutor, dict): return instrutor.get("disciplinas") or []
-    return getattr(instrutor, "disciplinas", []) or []
 
-class RelatorioService:
-    @staticmethod
-    def get_horas_aula_por_instrutor(data_inicio, data_fim, is_rr_filter=False, instrutor_ids_filter=None):
-        semanas_no_periodo_ids = db.session.scalars(
-            select(Semana.id).where(
-                Semana.data_inicio <= data_fim,
-                Semana.data_fim >= data_inicio
-            )
-        ).all()
+# --- Funções Auxiliares para o Google Drive ---
 
-        if not semanas_no_periodo_ids:
-            return []
+SCOPES = ["https://www.googleapis.com/auth/drive.file"]
+# A leitura de variáveis de ambiente no topo é segura
+GA_CREDENTIALS_JSON = os.environ.get("GA_CREDENTIALS_JSON")
 
-        query1 = (
-            select(
-                Horario.instrutor_id.label('instrutor_id'),
-                Horario.disciplina_id,
-                Horario.duracao
-            )
-            .join(Instrutor, Horario.instrutor_id == Instrutor.id)
-            .where(
-                Horario.semana_id.in_(semanas_no_periodo_ids),
-                Horario.status == 'confirmado'
-            )
+def _get_google_credentials() -> Credentials:
+    """Carrega as credenciais do Google a partir das variáveis de ambiente."""
+    if not GA_CREDENTIALS_JSON:
+        raise RuntimeError("A variável de ambiente GA_CREDENTIALS_JSON não foi configurada.")
+    
+    try:
+        info = json.loads(GA_CREDENTIALS_JSON)
+        return Credentials.from_service_account_info(info, scopes=SCOPES)
+    except json.JSONDecodeError:
+        raise RuntimeError("O conteúdo em GA_CREDENTIALS_JSON não é um JSON válido.")
+    except Exception as e:
+        raise RuntimeError(f"Erro ao carregar credenciais: {e}")
+
+def _upload_xlsx_and_convert_to_sheet(filename: str, xlsx_bytes: bytes) -> str | None:
+    """
+    Faz o upload de um arquivo .xlsx em bytes para o Google Drive e o converte
+    para o formato Google Sheets, retornando o link de visualização.
+    """
+    try:
+        creds = _get_google_credentials()
+        service = build('drive', 'v3', credentials=creds)
+
+        file_metadata = {
+            'name': filename,
+            'mimeType': 'application/vnd.google-apps.spreadsheet'
+        }
+        
+        media = MediaIoBaseUpload(
+            BytesIO(xlsx_bytes),
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            resumable=True
         )
 
-        query2 = (
-            select(
-                Horario.instrutor_id_2.label('instrutor_id'),
-                Horario.disciplina_id,
-                Horario.duracao
+        file = service.files().create(
+            body=file_metadata,
+            media_body=media,
+            fields='webViewLink'
+        ).execute()
+
+        # Garante que o arquivo seja publicamente acessível (qualquer pessoa com o link)
+        permission = {'type': 'anyone', 'role': 'reader'}
+        service.permissions().create(fileId=file.get('id'), body=permission).execute()
+
+        return file.get('webViewLink')
+
+    except HttpError as error:
+        print(f"Ocorreu um erro na API do Google Drive: {error}")
+        return None
+    except Exception as e:
+        print(f"Ocorreu um erro inesperado no upload para o Google Drive: {e}")
+        return None
+
+
+# --- Classe de Serviço ---
+
+class RelatorioService:
+    """
+    Serviços para geração e manipulação de relatórios.
+    """
+
+    @staticmethod
+    def get_horas_aula_por_instrutor(
+        data_inicio: date, 
+        data_fim: date, 
+        is_rr_filter: bool, 
+        instrutor_ids_filter: List[int] | None
+    ) -> List[Dict[str, Any]]:
+        """
+        Busca e formata os dados de horas-aula por instrutor.
+        """
+        # --- CORREÇÃO APLICADA AQUI ---
+        # Importamos os modelos do banco de dados DENTRO da função.
+        # Isso evita o erro de contexto do aplicativo Flask durante a inicialização.
+        from ..models import db, Horario, User, Instrutor, Disciplina
+        from sqlalchemy import func
+
+        query = (
+            db.session.query(
+                User.posto_graduacao,
+                User.matricula,
+                User.nome_completo,
+                Disciplina.nome.label('disciplina_nome'),
+                func.sum(Horario.carga_horaria).label('ch_a_pagar'),
+                Disciplina.carga_horaria.label('ch_total')
             )
-            .join(Instrutor, Horario.instrutor_id_2 == Instrutor.id)
-            .where(
-                Horario.semana_id.in_(semanas_no_periodo_ids),
-                Horario.status == 'confirmado',
-                Horario.instrutor_id_2.isnot(None)
+            .join(Instrutor, User.id == Instrutor.user_id)
+            .join(Horario, Instrutor.id == Horario.instrutor_id)
+            .join(Disciplina, Horario.disciplina_id == Disciplina.id)
+            .filter(Horario.data.between(data_inicio, data_fim))
+            .group_by(
+                User.posto_graduacao,
+                User.matricula,
+                User.nome_completo,
+                Disciplina.nome,
+                Disciplina.carga_horaria
             )
+            .order_by(User.nome_completo)
         )
         
         if is_rr_filter:
-            query1 = query1.where(Instrutor.is_rr == True)
-            query2 = query2.where(Instrutor.is_rr == True)
-        
+            # Assumindo que a coluna se chama `is_rr` no modelo User
+            query = query.filter(User.is_rr == True)
+
         if instrutor_ids_filter:
-            query1 = query1.where(Horario.instrutor_id.in_(instrutor_ids_filter))
-            query2 = query2.where(Horario.instrutor_id_2.in_(instrutor_ids_filter))
+            query = query.filter(Instrutor.id.in_(instrutor_ids_filter))
 
-        unioned_query = union_all(query1, query2).subquery()
+        resultados_db = query.all()
 
-        final_query = (
-            select(
-                unioned_query.c.instrutor_id,
-                unioned_query.c.disciplina_id,
-                func.sum(unioned_query.c.duracao).label('ch_a_pagar')
-            )
-            .group_by(unioned_query.c.instrutor_id, unioned_query.c.disciplina_id)
-        )
-
-        aulas_agrupadas = db.session.execute(final_query).all()
-
-        if not aulas_agrupadas:
-            return []
-            
-        instrutor_ids = {aula.instrutor_id for aula in aulas_agrupadas if aula.instrutor_id}
-        
-        instrutores_map = {
-            i.id: i for i in db.session.scalars(
-                select(Instrutor).options(joinedload(Instrutor.user)).where(Instrutor.id.in_(instrutor_ids))
-            ).all()
-        }
-        disciplinas_map = {
-            d.id: d for d in db.session.scalars(select(Disciplina)).all()
-        }
-
-        dados_formatados = defaultdict(lambda: {'info': None, 'disciplinas': []})
-        for aula in aulas_agrupadas:
-            instrutor = instrutores_map.get(aula.instrutor_id)
-            if instrutor:
-                dados_formatados[aula.instrutor_id]['info'] = instrutor
-                
-                disciplina_obj = disciplinas_map.get(aula.disciplina_id)
-                disciplina_info = {
-                    'nome': disciplina_obj.materia if disciplina_obj else "N/D",
-                    'ch_total': disciplina_obj.carga_horaria_prevista if disciplina_obj else 0,
-                    'ch_paga_anteriormente': disciplina_obj.carga_horaria_cumprida if disciplina_obj else 0,
-                    'ch_a_pagar': float(aula.ch_a_pagar or 0)
+        dados_agrupados = {}
+        for r in resultados_db:
+            matricula = r.matricula or r.nome_completo # Chave alternativa se a matrícula for nula
+            if matricula not in dados_agrupados:
+                dados_agrupados[matricula] = {
+                    "info": {
+                        "user": {
+                            "posto_graduacao": r.posto_graduacao,
+                            "matricula": r.matricula,
+                            "nome_completo": r.nome_completo,
+                        }
+                    },
+                    "disciplinas": []
                 }
-                dados_formatados[aula.instrutor_id]['disciplinas'].append(disciplina_info)
-        
-        resultado_final = sorted(
-            [v for v in dados_formatados.values() if v['info'] and v['info'].user],
-            key=lambda item: item['info'].user.nome_completo or ''
-        )
+            
+            dados_agrupados[matricula]["disciplinas"].append({
+                "nome": r.disciplina_nome,
+                "ch_total": r.ch_total or 0,
+                "ch_paga_anteriormente": 0,
+                "ch_a_pagar": r.ch_a_pagar or 0,
+            })
+            
+        return list(dados_agrupados.values())
 
-        return resultado_final
 
     @staticmethod
-    def export_to_google_sheets(contexto: Dict[str, Any]):
-        """Exporta os dados do relatório para uma Planilha Google, replicando o layout do PDF."""
+    def export_to_google_sheets(contexto: Dict[str, Any]) -> Tuple[bool, str]:
+        """
+        Gera o relatório .xlsx formatado e faz o upload para o Google Drive
+        como uma Planilha Google.
+        """
         try:
-            PATH_CREDENCIAS_GOOGLE = '/home/esfasBM/sistema_escolar_deepseak_1/backend/credentials.json'
-            ID_PLANILHA = '1ccX-mJaR109XAJg-Tykmvit6GYUaonlCkVPVPoZI3ro'
-            SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+            xlsx_bytes = gerar_mapa_gratificacao_xlsx(
+                dados=contexto.get("dados"),
+                valor_hora_aula=float(contexto.get("valor_hora_aula") or 0.0),
+                nome_mes_ano=contexto.get("nome_mes_ano"),
+                titulo_curso=contexto.get("titulo_curso"),
+                opm_nome=contexto.get("opm"),
+                escola_nome=contexto.get("escola_nome"),
+                data_emissao=contexto.get("data_emissao"),
+                telefone=contexto.get("telefone"),
+                auxiliar_nome=contexto.get("auxiliar_nome"),
+                comandante_nome=contexto.get("comandante_nome"),
+                digitador_nome=contexto.get("digitador_nome", "Digitador"),
+                auxiliar_funcao=contexto.get("auxiliar_funcao"),
+                comandante_funcao=contexto.get("comandante_funcao"),
+                data_fim=contexto.get("data_fim"),
+                cidade_assinatura=contexto.get("cidade"),
+            )
 
-            creds = Credentials.from_service_account_file(PATH_CREDENCIAS_GOOGLE, scopes=SCOPES)
-            client = gspread.authorize(creds)
-            spreadsheet = client.open_by_key(ID_PLANILHA)
+            nome_arquivo = f'Relatório Horas-Aula - {contexto.get("nome_mes_ano", "geral")}'
             
-            sheet_name = f"Mapa {contexto['nome_mes_ano']}"
-            try:
-                worksheet = spreadsheet.worksheet(sheet_name)
-                worksheet.clear()
-                worksheet.clear_basic_filter()
-                worksheet.unmerge_cells('A1:Z100')
-            except gspread.WorksheetNotFound:
-                worksheet = spreadsheet.add_worksheet(title=sheet_name, rows=200, cols=20)
-
-            # --- Início da Recriação do Layout ---
+            sheet_url = _upload_xlsx_and_convert_to_sheet(nome_arquivo, xlsx_bytes)
             
-            # Formatação de Células (dicionários para gspread)
-            bold_format = {"textFormat": {"bold": True}}
-            center_align = {"horizontalAlignment": "CENTER", "verticalAlignment": "MIDDLE"}
-            
-            # Cabeçalho Superior
-            worksheet.update('B3', [[contexto['comandante_nome']]])
-            worksheet.update('B4', [[contexto['comandante_funcao']]])
-            worksheet.merge_cells('B3:C3'); worksheet.merge_cells('B4:C4')
-            worksheet.format('B3:C4', {**center_align, "textFormat": {"bold": True, "fontSize": 11}})
-
-            center_header_texts = [
-                ["MAPA DE GRATIFICAÇÃO MAGISTÉRIO"],
-                [f"OPM: {contexto['opm']}"],
-                [f"Telefone: {contexto['telefone']}"],
-                [f"Horas aulas a pagar do Mês de {contexto['nome_mes_ano']}"],
-                [contexto['titulo_curso']]
-            ]
-            worksheet.update('D1', center_header_texts)
-            worksheet.merge_cells('D1:K1'); worksheet.format('D1', {"textFormat": {"bold": True, "fontSize": 14}, **center_align})
-            worksheet.merge_cells('D2:K2'); worksheet.format('D2', {**center_align})
-            worksheet.merge_cells('D3:K3'); worksheet.format('D3', {**center_align})
-            worksheet.merge_cells('D4:K4'); worksheet.format('D4', {"textFormat": {"bold": True}, **center_align})
-            worksheet.merge_cells('D5:K5'); worksheet.format('D5', {"textFormat": {"bold": True}, **center_align})
-            
-            worksheet.update('L1', [['LANÇAR NO RHE']])
-            worksheet.format('L1', {**center_align, "borders": {"top": {"style": "SOLID"}, "bottom": {"style": "SOLID"}, "left": {"style": "SOLID"}, "right": {"style": "SOLID"}}})
-            worksheet.merge_cells('L1:M1')
-
-            worksheet.update('L4', [['Ch da SEÇÃO ADM/DE']])
-            worksheet.format('L4', {**center_align})
-            worksheet.merge_cells('L4:M4')
-            
-            # Tabela Principal
-            r = 7
-            headers = ["Posto / Graduação", "Id. Func.", "Nome completo do servidor", "Disciplina", "CH total", "CH paga anteriormente", "CH a pagar", "Valor em R$"]
-            worksheet.update(f'D{r}', [headers])
-            worksheet.format(f'D{r}:K{r}', {**bold_format, **center_align, "backgroundColor": {"red": 0.85, "green": 0.85, "blue": 0.85}})
-
-            r += 1
-            table_rows = []
-            total_ch_a_pagar = 0
-            total_valor = 0.0
-            
-            for instrutor in contexto['dados']:
-                user = _safe(instrutor, "info.user", {})
-                for disc in _iter_disciplinas(instrutor):
-                    ch_a_pagar = float(_safe(disc, "ch_a_pagar", 0) or 0)
-                    valor = ch_a_pagar * float(contexto['valor_hora_aula'] or 0)
-                    table_rows.append([
-                        _safe(user, "posto_graduacao", ""), _safe(user, "matricula", ""), _safe(user, "nome_completo", ""),
-                        disc.get('nome', ''), int(_safe(disc, "ch_total", 0) or 0), int(_safe(disc, "ch_paga_anteriormente", 0) or 0),
-                        ch_a_pagar, valor
-                    ])
-                    total_ch_a_pagar += ch_a_pagar
-                    total_valor += valor
-            
-            if table_rows:
-                worksheet.update(f'D{r}', table_rows)
-                r += len(table_rows)
-
-            # Linha de Totais
-            worksheet.update(f'D{r}', [["CARGA HORARIA TOTAL", "", "", "", "", "", total_ch_a_pagar, total_valor]])
-            worksheet.merge_cells(f'D{r}:I{r}')
-            worksheet.format(f'D{r}:K{r}', {**bold_format, "backgroundColor": {"red": 0.85, "green": 0.85, "blue": 0.85}})
-            worksheet.format(f'D{r}', {"horizontalAlignment": "RIGHT"})
-            worksheet.format(f'J{r}', {**center_align})
-            worksheet.format(f'K{r}', {"numberFormat": {'type': 'CURRENCY', 'pattern': 'R$ #,##0.00'}, "horizontalAlignment": "RIGHT"})
-
-            return True, worksheet.url
+            if sheet_url:
+                return True, sheet_url
+            else:
+                return False, "Falha no upload para o Google Drive. Verifique as credenciais e as permissões da API."
 
         except Exception as e:
-            import traceback
-            traceback.print_exc()
-            return False, str(e)
+            print(f"ERRO CRÍTICO ao exportar para Google Sheets: {e}")
+            return False, f"Ocorreu um erro interno: {e}"
