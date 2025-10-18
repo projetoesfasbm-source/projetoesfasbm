@@ -36,7 +36,7 @@
                         {% for instrutor in todos_instrutores %}
                         <label class="dropdown-option">
                             <input type="checkbox" class="instrutor-checkbox" value="{{ instrutor.id }}">
-                            <span>{{ (instrutor.user.posto_graduacao + ' ' if instrutor.user.posto_graduacao else '') + (instrutor.user.nome_de_guerra or instrutor.user.username) }}</span>
+                            <span>{{ instrutor.user.nome_completo or instrutor.user.username }}</span>
                         </label>
                         {% endfor %}
                     </div>
@@ -45,7 +45,7 @@
 
             <select name="instrutor_ids" id="instrutor_ids" multiple required style="display: none;">
                 {% for instrutor in todos_instrutores %}
-                <option value="{{ instrutor.id }}">{{ (instrutor.user.posto_graduacao + ' ' if instrutor.user.posto_graduacao else '') + (instrutor.user.nome_de_guerra or instrutor.user.username) }}</option>
+                <option value="{{ instrutor.id }}">{{ instrutor.user.nome_completo or instrutor.user.username }}</option>
                 {% endfor %}
             </select>
 
@@ -73,31 +73,27 @@
             <input type="text" name="cidade" id="cidade" class="form-control" value="Santa Maria">
         </div>
         <div class="form-group">
-            <label for="comandante_nome">Nome Completo e Graduação do Comandante:</label>
+            <label for="comandante_nome">Nome Completo e Graduação do Comandante da Escola:</label>
             <input type="text" name="comandante_nome" id="comandante_nome" class="form-control" placeholder="Ex: NOME COMPLETO – Maj PM">
         </div>
          <div class="form-group">
-            <label for="comandante_funcao">Função do Comandante:</label>
-            <input type="text" name="comandante_funcao" id="comandante_funcao" class="form-control" value="Comandante da EsFAS">
+            <label for="escola">Nome da Escola (para assinatura):</label>
+            <input type="text" name="escola" id="escola" class="form-control" value="Comandante da EsFAS">
         </div>
         <div class="form-group">
-            <label for="auxiliar_nome">Nome Completo e Graduação do Auxiliar:</label>
+            <label for="auxiliar_nome">Nome Completo e Graduação do Auxiliar da Seção de Ensino:</label>
             <input type="text" name="auxiliar_nome" id="auxiliar_nome" class="form-control" placeholder="Ex: NOME COMPLETO - Posto/Grad">
         </div>
         <div class="form-group">
-            <label for="auxiliar_funcao">Função do Auxiliar:</label>
-            <input type="text" name="auxiliar_funcao" id="auxiliar_funcao" class="form-control" value="Auxiliar da Seção de Ensino">
-        </div>
-        <div class="form-group">
-            <label for="digitador_nome">Nome do Digitador:</label>
-            <input type="text" name="digitador_nome" id="digitador_nome" class="form-control" placeholder="Nome de quem está gerando o relatório" value="{{ current_user.nome_completo or '' }}">
+            <label for="digitador_nome">Nome do Digitador (opcional):</label>
+            <input type="text" name="digitador_nome" id="digitador_nome" class="form-control" placeholder="Ex: NOME COMPLETO - Posto/Grad">
         </div>
 
         <div class="form-actions form-actions-aligned">
             <a href="{{ url_for('relatorios.index') }}" class="btn btn-secondary">Voltar</a>
-            <button type="submit" name="action" value="preview" class="btn btn-info">Pré-Visualizar PDF</button>
-            <button type="submit" name="action" value="download" class="btn btn-danger">Baixar PDF</button>
-            <button type="submit" name="action" value="google_sheets" class="btn btn-primary">Abrir no Google Planilhas</button>
+            <button type="submit" name="action" value="preview" class="btn btn-info">Pré-Visualizar</button>
+            <button type="submit" name="action" value="download_xlsx" class="btn btn-primary">Baixar .XLSX (Excel)</button>
+            <button type="submit" name="action" value="download" class="btn btn-success">Baixar PDF</button>
         </div>
     </form>
 </div>

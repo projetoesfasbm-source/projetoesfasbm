@@ -6,6 +6,7 @@ from datetime import datetime
 from urllib.parse import quote
 from weasyprint import HTML
 
+# As importações aqui são seguras
 from ..services.relatorio_service import RelatorioService
 from ..services.instrutor_service import InstrutorService
 from ..services.site_config_service import SiteConfigService
@@ -31,7 +32,7 @@ def gerar_relatorio_horas_aula():
 
     todos_instrutores = []
     if report_type == 'por_instrutor':
-        paginated_instrutores = InstrutorService.get_all_instrutores(current_user, per_page=999) # Pega todos
+        paginated_instrutores = InstrutorService.get_all_instrutores(current_user, per_page=999)
         if paginated_instrutores:
             todos_instrutores = paginated_instrutores.items
 
@@ -59,6 +60,7 @@ def gerar_relatorio_horas_aula():
                 flash('Por favor, selecione pelo menos um instrutor.', 'warning')
                 return redirect(url_for('relatorios.gerar_relatorio_horas_aula', tipo=report_type))
 
+        # A chamada para o serviço agora é segura e funcionará
         dados_relatorio = RelatorioService.get_horas_aula_por_instrutor(
             data_inicio, data_fim, is_rr_filter, instrutor_ids_filter
         )
@@ -76,7 +78,7 @@ def gerar_relatorio_horas_aula():
             "data_assinatura": data_assinatura_pt,
             "comandante_nome": request.form.get('comandante_nome'),
             "auxiliar_nome": request.form.get('auxiliar_nome'),
-            "digitador_nome": request.form.get('digitador_nome'),
+            "digitador_nome": request.form.get('digitador_nome', current_user.nome_completo or "Digitador"),
             "opm": request.form.get('opm'),
             "telefone": request.form.get('telefone'),
             "cidade": request.form.get('cidade'),
@@ -111,7 +113,7 @@ def gerar_relatorio_horas_aula():
             return Response(
                 pdf_content,
                 mimetype='application/pdf',
-                headers={'Content-Disposition': f'attachment; filename="{quote(filename_utf8)}'}
+                headers={'Content-Disposition': f'attachment; filename="{quote(filename_utf8)}"'}
             )
 
         flash('Ação inválida.', 'warning')
