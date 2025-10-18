@@ -9,7 +9,6 @@ from weasyprint import HTML
 from ..services.relatorio_service import RelatorioService
 from ..services.instrutor_service import InstrutorService
 from ..services.site_config_service import SiteConfigService
-from ..services.xlsx_service import gerar_mapa_gratificacao_xlsx
 from utils.decorators import admin_or_programmer_required
 
 relatorios_bp = Blueprint('relatorios', __name__, url_prefix='/relatorios')
@@ -32,7 +31,7 @@ def gerar_relatorio_horas_aula():
 
     todos_instrutores = []
     if report_type == 'por_instrutor':
-        paginated_instrutores = InstrutorService.get_all_instrutores(current_user, per_page=999)
+        paginated_instrutores = InstrutorService.get_all_instrutores(current_user, per_page=999) # Pega todos
         if paginated_instrutores:
             todos_instrutores = paginated_instrutores.items
 
@@ -82,15 +81,16 @@ def gerar_relatorio_horas_aula():
             "cidade": request.form.get('cidade'),
             "auxiliar_funcao": request.form.get('auxiliar_funcao'),
             "comandante_funcao": request.form.get('comandante_funcao'),
+            "data_emissao": datetime.now().date(),
+            "escola_nome": "EsFAS-SM",
+            "data_fim": data_fim
         }
 
         if action == 'google_sheets':
-            success, result = RelatorioService.export_to_google_sheets(
-                dados=dados_relatorio,
-                valor_hora_aula=valor_hora_aula,
-                nome_mes_ano=nome_mes_ano_pt
-            )
+            success, result = RelatorioService.export_to_google_sheets(contexto)
             if success:
+                # --- CORREÇÃO APLICADA AQUI ---
+                # A resposta agora é um redirecionamento direto para o URL da planilha.
                 return redirect(result)
             else:
                 flash(f'Erro ao gerar link para o Google Planilhas: {result}', 'danger')
@@ -114,11 +114,6 @@ def gerar_relatorio_horas_aula():
                 mimetype='application/pdf',
                 headers={'Content-Disposition': f'attachment; filename="{quote(filename_utf8)}'}
             )
-        
-        # A ação de download_xlsx foi mantida no backend, mas o botão foi removido do frontend
-        elif action == 'download_xlsx':
-             flash('A exportação para XLSX foi descontinuada. Use a opção "Abrir no Google Planilhas".', 'info')
-             return redirect(url_for('relatorios.gerar_relatorio_horas_aula', tipo=report_type))
 
         flash('Ação inválida.', 'warning')
         return redirect(url_for('relatorios.gerar_relatorio_horas_aula', tipo=report_type))
