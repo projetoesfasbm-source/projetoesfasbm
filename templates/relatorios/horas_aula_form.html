@@ -81,17 +81,17 @@
             <input type="text" name="comandante_nome" id="comandante_nome" class="form-control" placeholder="Ex: NOME COMPLETO – Maj PM">
         </div>
         <div class="form-group">
-            <label for="comandante_funcao">Função do Comandante:</label>␊
+            <label for="comandante_funcao">Função do Comandante:</label>
             <input type="text" name="comandante_funcao" id="comandante_funcao" class="form-control" value="{{ form_defaults.get('comandante_funcao', '') }}">
-        </div>␊
+        </div>
         <div class="form-group">
             <label for="auxiliar_nome">Nome Completo e Graduação do Auxiliar:</label>
             <input type="text" name="auxiliar_nome" id="auxiliar_nome" class="form-control" placeholder="Ex: NOME COMPLETO - Posto/Grad">
         </div>
-        <div class="form-group">␊
-            <label for="auxiliar_funcao">Função do Auxiliar:</label>␊
+        <div class="form-group">
+            <label for="auxiliar_funcao">Função do Auxiliar:</label>
             <input type="text" name="auxiliar_funcao" id="auxiliar_funcao" class="form-control" value="{{ form_defaults.get('auxiliar_funcao', '') }}">
-        </div>␊
+        </div>
 
         <div class="form-actions form-actions-aligned">
             <a href="{{ url_for('relatorios.index') }}" class="btn btn-secondary">Voltar</a>
@@ -155,7 +155,10 @@ document.addEventListener('DOMContentLoaded', function() {
             let selectedCount = 0;
             checkboxes.forEach(cb => {
                 const option = originalSelect.querySelector(`option[value="${cb.value}"]`);
-                option.selected = cb.checked;
+                // Garante que a opção existe antes de tentar acessá-la
+                if (option) {
+                    option.selected = cb.checked;
+                }
                 if (cb.checked) selectedCount++;
             });
             if (selectedCount === 0) selectButtonText.textContent = 'Nenhum instrutor selecionado';

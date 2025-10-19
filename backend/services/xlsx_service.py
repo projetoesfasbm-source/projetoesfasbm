@@ -57,7 +57,7 @@ def gerar_mapa_gratificacao_xlsx(
     *,
     data_fim: Optional[date] = None,
     cidade_assinatura: Optional[str] = "Santa Maria",
-) -> bytes:␊
+) -> bytes: # <<< LINHA 60 CORRIGIDA
     """
     Gera um arquivo .xlsx nativo (OpenPyXL) com o relatório de horas-aula,
     com layout de 3 blocos conforme a imagem de referência.
@@ -80,7 +80,7 @@ def gerar_mapa_gratificacao_xlsx(
     main_start_col = 4
     main_end_col = main_start_col + 7
     table_widths = [18, 14, 35, 32, 10, 22, 12, 18]
-    for i, width in enumerate(table_widths):␊
+    for i, width in enumerate(table_widths):
         ws.column_dimensions[get_column_letter(main_start_col + i)].width = width
 
     # Estilos
@@ -107,7 +107,7 @@ def gerar_mapa_gratificacao_xlsx(
     # Blocos Superiores
     r = 1
     ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=3)
-    c_em = ws.cell(r, 1, f"Em {data_emissao.strftime('%d/%m/%Y')}")␊
+    c_em = ws.cell(r, 1, f"Em {data_emissao.strftime('%d/%m/%Y')}")
     c_em.alignment = center
     ws.merge_cells(start_row=r, start_column=12, end_row=r, end_column=14)
     c_rhe = ws.cell(r, 12, "LANÇAR NO RHE")
@@ -163,8 +163,8 @@ def gerar_mapa_gratificacao_xlsx(
         "Valor em R$ CH a Pagar",
     ]
     start_table_row = r
-    for c_offset, text in enumerate(headers):␊
-        cell = ws.cell(r, main_start_col + c_offset, text)␊
+    for c_offset, text in enumerate(headers):
+        cell = ws.cell(r, main_start_col + c_offset, text)
         cell.fill = gray
         cell.font = th_font
         cell.alignment = center
@@ -172,8 +172,8 @@ def gerar_mapa_gratificacao_xlsx(
     r += 1
 
     # Linhas de dados
-    total_ch_a_pagar = 0␊
-    total_valor = 0.0␊
+    total_ch_a_pagar = 0
+    total_valor = 0.0
     last_data_row = None
     for instrutor in (dados or []):
         user = _safe(instrutor, "info.user", {})
@@ -250,7 +250,7 @@ def gerar_mapa_gratificacao_xlsx(
     c_right = ws.cell(left_start_row, 9, right_text)
     c_right.alignment = center_top
     for row_idx in range(left_start_row, left_end_row + 1):
-        for col_idx in range(1, 15):␊
+        for col_idx in range(1, 15):
             ws.cell(row_idx, col_idx).border = border_outline
     r = left_end_row + 2
 
@@ -283,5 +283,5 @@ def gerar_mapa_gratificacao_xlsx(
 
     # Salvar em memória
     out = BytesIO()
-    wb.save(out)␊
+    wb.save(out)
     return out.getvalue()

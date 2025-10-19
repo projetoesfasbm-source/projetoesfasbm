@@ -6,7 +6,7 @@ import json
 from io import BytesIO
 from typing import Any, Dict, List, Tuple
 from datetime import date
-from sqlalchemy import func
+from sqlalchemy import func, select, union_all
 
 # Importações seguras que não dependem do banco de dados ou de outros serviços locais
 from google.oauth2.service_account import Credentials
@@ -53,48 +53,68 @@ class RelatorioService:
         instrutor_ids_filter: List[int] | None
     ) -> List[Dict[str, Any]]:
         """
-        Busca e formata os dados de horas-aula por instrutor.
+        Busca e formata os dados de horas-aula por instrutor, corrigindo a consulta
+        para usar as colunas corretas e somar horas de instrutores primários e secundários.
         """
-        # --- CORREÇÃO DEFINITIVA APLICADA AQUI ---
         # As importações são feitas DENTRO da função para garantir que o contexto do app Flask esteja pronto.
-        from ..models import db, Horario, User, Instrutor, Disciplina
+        from ..models import db, Horario, User, Instrutor, Disciplina, Semana
 
+        # Subquery para "desnormalizar" os instrutores, tratando instrutor_id e instrutor_id_2 como linhas separadas.
+        # Isso simplifica a agregação e garante que ambos sejam contabilizados.
+        s1 = select(Horario.instrutor_id.label("instrutor_id"), Horario.duracao, Horario.disciplina_id, Horario.semana_id).where(Horario.instrutor_id.isnot(None))
+        s2 = select(Horario.instrutor_id_2.label("instrutor_id"), Horario.duracao, Horario.disciplina_id, Horario.semana_id).where(Horario.instrutor_id_2.isnot(None))
+        unioned_horarios = union_all(s1, s2).alias("unioned_horarios")
+
+        # Query principal que agora utiliza a subquery.
         query = (
-            db.session.query(
-                User.posto_graduacao, User.matricula, User.nome_completo,
-                Disciplina.nome.label('disciplina_nome'),
-                func.sum(Horario.carga_horaria).label('ch_a_pagar'),
-                Disciplina.carga_horaria.label('ch_total')
+            select(
+                User.posto_graduacao,
+                User.matricula,
+                User.nome_completo,
+                Disciplina.materia.label('disciplina_nome'),
+                func.sum(unioned_horarios.c.duracao).label('ch_a_pagar'),
+                Disciplina.carga_horaria_prevista.label('ch_total')
             )
+            .select_from(User)
             .join(Instrutor, User.id == Instrutor.user_id)
-            .join(Horario, Instrutor.id == Horario.instrutor_id)
-            .join(Disciplina, Horario.disciplina_id == Disciplina.id)
-            .filter(Horario.data.between(data_inicio, data_fim))
+            .join(unioned_horarios, Instrutor.id == unioned_horarios.c.instrutor_id)
+            .join(Disciplina, unioned_horarios.c.disciplina_id == Disciplina.id)
+            .join(Semana, unioned_horarios.c.semana_id == Semana.id)
+            .filter(
+                Semana.data_inicio <= data_fim,
+                Semana.data_fim >= data_inicio
+            )
             .group_by(
                 User.posto_graduacao, User.matricula, User.nome_completo,
-                Disciplina.nome, Disciplina.carga_horaria
+                Disciplina.materia, Disciplina.carga_horaria_prevista
             )
             .order_by(User.nome_completo)
         )
-        if is_rr_filter:
-            query = query.filter(User.is_rr == True)
-        if instrutor_ids_filter:
-            query = query.filter(Instrutor.id.in_(instrutor_ids_filter))
 
-        resultados_db = query.all()
+        # Aplica filtros opcionais de forma correta
+        if is_rr_filter:
+            query = query.where(Instrutor.is_rr == True)
+        if instrutor_ids_filter:
+            query = query.where(Instrutor.id.in_(instrutor_ids_filter))
+
+        # Executa a query e obtém os resultados como dicionários
+        resultados_db = db.session.execute(query).mappings().all()
+        
+        # Agrupa os resultados em Python (lógica mantida, pois está correta)
         dados_agrupados = {}
         for r in resultados_db:
-            matricula = r.matricula or r.nome_completo
+            matricula = r['matricula'] or r['nome_completo']
             if matricula not in dados_agrupados:
                 dados_agrupados[matricula] = {
                     "info": {"user": {
-                        "posto_graduacao": r.posto_graduacao, "matricula": r.matricula, "nome_completo": r.nome_completo,
+                        "posto_graduacao": r['posto_graduacao'], "matricula": r['matricula'], "nome_completo": r['nome_completo'],
                     }},
                     "disciplinas": []
                 }
             dados_agrupados[matricula]["disciplinas"].append({
-                "nome": r.disciplina_nome, "ch_total": r.ch_total or 0,
-                "ch_paga_anteriormente": 0, "ch_a_pagar": r.ch_a_pagar or 0,
+                "nome": r['disciplina_nome'], "ch_total": r['ch_total'] or 0,
+                "ch_paga_anteriormente": 0,  # Este campo pode ser calculado no futuro se necessário
+                "ch_a_pagar": r['ch_a_pagar'] or 0,
             })
         return list(dados_agrupados.values())
 
