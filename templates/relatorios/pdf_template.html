@@ -83,7 +83,7 @@
 
             {% for instrutor_data in dados %}
                 {% for disciplina in instrutor_data.disciplinas %}
-                    {% set valor_a_pagar = (disciplina.ch_a_pagar or 0) * (valor_hora_aula or 0) %}
+                    {% set valor_a_pagar = (disciplina.ch_a_pagar|float or 0) * (valor_hora_aula|float or 0) %}
                     <tr>
                         <td>{{ instrutor_data.info.user.posto_graduacao or 'N/D' }}</td>
                         <td>{{ instrutor_data.info.user.matricula }}</td>

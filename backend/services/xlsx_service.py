@@ -63,7 +63,7 @@ def _style_merged_cell(ws, row, col, value, font=None, alignment=None, fill=None
     return cell
 
 # -------------------------
-# Função principal (REVISADA v10 - Remove largura fixa de B e G)
+# Função principal (REVISADA v11 - Replicando layout PDF)
 # -------------------------
 def gerar_mapa_gratificacao_xlsx(
     dados: Iterable[Any],
@@ -76,116 +76,150 @@ def gerar_mapa_gratificacao_xlsx(
     telefone: Optional[str] = None,
     auxiliar_nome: Optional[str] = None,
     comandante_nome: Optional[str] = None,
-    digitador_nome: Optional[str] = None,
+    digitador_nome: Optional[str] = None, # Não presente no PDF, mas pode ser útil
     auxiliar_funcao: Optional[str] = None,
     comandante_funcao: Optional[str] = None,
     *,
-    data_fim: Optional[date] = None,
+    data_fim: Optional[date] = None, # Usado para data de assinatura
     cidade_assinatura: Optional[str] = "Santa Maria",
 ) -> bytes:
     """
-    Gera arquivo .xlsx ajustado para layout A:H em A4 paisagem, com cabeçalho alinhado
-    e ajuste automático das colunas B e G.
+    Gera arquivo .xlsx ajustado para layout A:H em A4 paisagem,
+    replicando a estrutura do template PDF.
     """
 
-    data_emissao = data_emissao or date.today()
+    data_emissao = data_emissao or date.today() # Data de emissão geral (não usada no layout atual)
     valor_hora_aula = float(valor_hora_aula or 0)
 
     wb = Workbook()
     ws = wb.active
     ws.title = f"Mapa {nome_mes_ano.split(' ')[0][:3]}_{nome_mes_ano.split(' ')[-1]}"
 
-    # Configurações de página/visual
+    # Configurações de página/visual (mantidas)
     ws.page_setup.orientation = "landscape"
     ws.page_setup.paperSize = ws.PAPERSIZE_A4
     ws.page_setup.fitToWidth = 1
-    ws.page_setup.fitToHeight = 1
-    ws.page_margins = PageMargins(left=0.4, right=0.4, top=0.4, bottom=0.4)
+    ws.page_setup.fitToHeight = 0 # Permite altura variável
+    ws.page_margins = PageMargins(left=0.5, right=0.5, top=0.5, bottom=0.5) # Margens ligeiramente maiores
     ws.sheet_view.showGridLines = False
 
-    # Definições de Layout e Colunas (A-H)
-    num_cols = 8
-    # --- LARGURAS AJUSTADAS - Removida definição explícita para B e G ---
-    ws.column_dimensions['A'].width = 18 # Posto/Grad e Bloco Esq Cmdt
-    # ws.column_dimensions['B'].width = 1 # REMOVIDO
-    ws.column_dimensions['C'].width = 30 # Nome Servidor
-    ws.column_dimensions['D'].width = 28 # Disciplina
+    # Definições de Layout e Colunas (A-H) - Larguras revisadas
+    ws.column_dimensions['A'].width = 15 # Posto/Grad
+    ws.column_dimensions['B'].width = 12 # Id. Func.
+    ws.column_dimensions['C'].width = 35 # Nome Servidor
+    ws.column_dimensions['D'].width = 30 # Disciplina
     ws.column_dimensions['E'].width = 9  # CH Total
     ws.column_dimensions['F'].width = 14 # CH Paga Ant
-    # ws.column_dimensions['G'].width = 1 # REMOVIDO
-    ws.column_dimensions['H'].width = 18 # Valor R$ e Bloco Dir RHE
-    # As colunas Id Func (B), CH a Pagar (G) usarão largura padrão ou automática
+    ws.column_dimensions['G'].width = 9  # CH a pagar (Reintroduzido)
+    ws.column_dimensions['H'].width = 15 # Valor R$
 
-    # Estilos (mantidos)
-    gray_fill = PatternFill("solid", fgColor="D9D9D9")
+    # Estilos (revisados e adicionados)
+    gray_fill = PatternFill("solid", fgColor="E0E0E0") # Cinza do PDF
     thin_border_side = Side(style="thin", color="000000")
     border_all = Border(left=thin_border_side, right=thin_border_side, top=thin_border_side, bottom=thin_border_side)
+    border_no_top = Border(left=thin_border_side, right=thin_border_side, bottom=thin_border_side)
+    border_no_bottom = Border(left=thin_border_side, right=thin_border_side, top=thin_border_side)
+
+
     center_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
     center_top_align = Alignment(horizontal="center", vertical="top", wrap_text=True)
     left_align = Alignment(horizontal="left", vertical="center", wrap_text=True)
     left_top_align = Alignment(horizontal="left", vertical="top", wrap_text=True)
     right_align = Alignment(horizontal="right", vertical="center", wrap_text=True)
+    right_top_align = Alignment(horizontal="right", vertical="top", wrap_text=True)
+
+
     header_font = Font(name='Times New Roman', size=10)
     header_bold_font = Font(name='Times New Roman', bold=True, size=10)
-    main_title_font = Font(name='Times New Roman', bold=True, size=12)
+    main_title_font = Font(name='Times New Roman', bold=True, size=11) # Ligeiramente menor que 12pt
     table_header_font = Font(name='Times New Roman', bold=True, size=9)
     table_data_font = Font(name='Times New Roman', size=9)
     total_font = Font(name='Times New Roman', bold=True, size=9)
     signature_font = Font(name='Times New Roman', size=9)
+    signature_bold_font = Font(name='Times New Roman', bold=True, size=9)
+
     brl_style_name = "BRL"
     if brl_style_name not in wb.named_styles:
         brl_style = NamedStyle(name=brl_style_name, font=table_data_font, alignment=right_align)
-        brl_style.number_format = 'R$ #,##0.00;-R$ #,##0.00'
+        brl_style.number_format = 'R$ #,##0.00' # Formato sem negativo explícito
         wb.add_named_style(brl_style)
 
-    # --- BLOCOS SUPERIORES E CABEÇALHO CENTRAL (Linhas 1-7) ---
-    header_block_height = 7
+    ch_style_name = "CH_1_DECIMAL"
+    if ch_style_name not in wb.named_styles:
+        ch_style = NamedStyle(name=ch_style_name, font=table_data_font, alignment=center_align)
+        ch_style.number_format = '0.0'
+        wb.add_named_style(ch_style)
+
+    ch_total_style_name = "CH_TOTAL_1_DECIMAL"
+    if ch_total_style_name not in wb.named_styles:
+        ch_total_style = NamedStyle(name=ch_total_style_name, font=total_font, alignment=center_align, fill=gray_fill)
+        ch_total_style.number_format = '0.0'
+        wb.add_named_style(ch_total_style)
+
+    brl_total_style_name = "BRL_TOTAL"
+    if brl_total_style_name not in wb.named_styles:
+        brl_total_style = NamedStyle(name=brl_total_style_name, font=total_font, alignment=right_align, fill=gray_fill)
+        brl_total_style.number_format = 'R$ #,##0.00'
+        wb.add_named_style(brl_total_style)
+
+    # --- BLOCOS SUPERIORES E CABEÇALHO CENTRAL (Linhas 1-8) ---
+    header_block_height_lines = 8 # Aumentado para dar espaço
     current_row = 1
-    # Bloco Esquerdo (Comandante) - A1:A[header_block_height] (Ajustado para Coluna A apenas)
-    range_bloco_esq = f"A{current_row}:A{current_row + header_block_height - 1}"
+    # Definir altura para as linhas do cabeçalho
+    for i in range(current_row, current_row + header_block_height_lines):
+        ws.row_dimensions[i].height = 15 # Altura padrão um pouco maior
+
+
+    # Bloco Esquerdo (Comandante) - A1:B[header_block_height_lines] (Ocupa A e B)
+    range_bloco_esq = f"A{current_row}:B{current_row + header_block_height_lines - 1}"
     ws.merge_cells(range_bloco_esq)
-    assinatura_cmd_txt = f"*\n\n\n________________________\n{comandante_nome or 'Nome Comandante'}\n{comandante_funcao or 'Comandante da EsFAS-SM'}"
-    _style_merged_cell(ws, current_row, 1, assinatura_cmd_txt, font=signature_font, alignment=center_top_align)
-    _apply_border_to_range(ws, range_bloco_esq, border_all)
+    # Aumentar espaçamento para assinatura
+    assinatura_cmd_txt = f"\n\n\n\n\n________________________\n{comandante_nome or 'Nome Comandante'}\n{comandante_funcao or 'Comandante da EsFAS-SM'}"
+    # Aplica borda apenas neste bloco
+    _style_merged_cell(ws, current_row, 1, assinatura_cmd_txt, font=signature_bold_font, alignment=center_top_align, border=border_all)
 
-    # Bloco Direito (RHE) - H1:H[header_block_height] (Ajustado para Coluna H apenas)
-    range_bloco_dir = f"H{current_row}:H{current_row + header_block_height - 1}"
+
+    # Bloco Direito (RHE) - G1:H[header_block_height_lines] (Ocupa G e H)
+    range_bloco_dir = f"G{current_row}:H{current_row + header_block_height_lines - 1}"
     ws.merge_cells(range_bloco_dir)
-    rhe_txt = "LANÇAR NO RHE\n____/_____/_____\n\n\n____________________\nCh da SEÇÃO ADM DE"
-    _style_merged_cell(ws, current_row, 8, rhe_txt, font=signature_font, alignment=center_top_align)
-    _apply_border_to_range(ws, range_bloco_dir, border_all)
+    rhe_txt = "LANÇAR NO RHE\n____/_____/_____\n\n\n\n\n____________________\nCh da SEÇÃO ADM DE"
+     # Aplica borda apenas neste bloco
+    _style_merged_cell(ws, current_row, 7, rhe_txt, font=signature_font, alignment=center_top_align, border=border_all)
 
-    # Cabeçalho Central (Títulos) - B1:G[header_block_height-1] (Ajustado para B:G)
-    central_header_start_col = 2 # Coluna B
-    central_header_end_col = 7   # Coluna G
-    range_titulo = f"B{current_row}:G{current_row}"
-    ws.merge_cells(range_titulo)
+
+    # Cabeçalho Central (Títulos) - C1:F[header_block_height_lines-1] (Ocupa C a F)
+    # *** SEM BORDAS AQUI ***
+    central_header_start_col = 3 # Coluna C
+    central_header_end_col = 6   # Coluna F
+    central_col_span = f"{get_column_letter(central_header_start_col)}{current_row}:{get_column_letter(central_header_end_col)}{current_row}"
+    ws.merge_cells(central_col_span)
     _style_merged_cell(ws, current_row, central_header_start_col, "MAPA DE GRATIFICAÇÃO MAGISTÉRIO", font=main_title_font, alignment=center_align)
     current_row += 1
-    range_opm = f"B{current_row}:G{current_row}"
-    ws.merge_cells(range_opm)
-    _style_merged_cell(ws, current_row, central_header_start_col, f"OPM: {opm_nome}", font=header_font, alignment=center_align)
+    central_col_span = f"{get_column_letter(central_header_start_col)}{current_row}:{get_column_letter(central_header_end_col)}{current_row}"
+    ws.merge_cells(central_col_span)
+    _style_merged_cell(ws, current_row, central_header_start_col, f"OPM: {opm_nome}", font=header_bold_font, alignment=center_align) # OPM em negrito
     current_row += 1
-    range_tel = f"B{current_row}:G{current_row}"
-    ws.merge_cells(range_tel)
+    central_col_span = f"{get_column_letter(central_header_start_col)}{current_row}:{get_column_letter(central_header_end_col)}{current_row}"
+    ws.merge_cells(central_col_span)
     _style_merged_cell(ws, current_row, central_header_start_col, f"Telefone: {telefone or '(não informado)'}", font=header_font, alignment=center_align)
     current_row += 1
-    range_mes = f"B{current_row}:G{current_row}"
-    ws.merge_cells(range_mes)
-    _style_merged_cell(ws, current_row, central_header_start_col, f"Horas aulas a pagar do Mês de {nome_mes_ano}", font=header_bold_font, alignment=center_align)
+    central_col_span = f"{get_column_letter(central_header_start_col)}{current_row}:{get_column_letter(central_header_end_col)}{current_row}"
+    ws.merge_cells(central_col_span)
+    _style_merged_cell(ws, current_row, central_header_start_col, f"Horas aulas a pagar do Mês de {nome_mes_ano}", font=header_bold_font, alignment=center_align) # Mês em negrito
     current_row += 1
-    range_curso = f"B{current_row}:G{current_row}"
-    ws.merge_cells(range_curso)
-    _style_merged_cell(ws, current_row, central_header_start_col, titulo_curso, font=header_bold_font, alignment=center_align)
+    central_col_span = f"{get_column_letter(central_header_start_col)}{current_row}:{get_column_letter(central_header_end_col)}{current_row}"
+    ws.merge_cells(central_col_span)
+    _style_merged_cell(ws, current_row, central_header_start_col, titulo_curso, font=header_bold_font, alignment=center_align) # Curso em negrito
 
-    # A tabela começa depois dos blocos superiores
-    table_start_row = header_block_height + 1 # Linha 8
 
-    # --- CABEÇALHO DA TABELA PRINCIPAL --- A8:H8
+    table_start_row = header_block_height_lines + 1 # Linha 9
+
+    # --- CABEÇALHO DA TABELA PRINCIPAL --- A9:H9
     headers = [
         "Posto / graduação", "Id. Func.", "Nome completo do servidor", "Disciplina",
         "CH total", "CH paga anteriormente", "CH a pagar", "Valor em R$"
     ]
+    ws.row_dimensions[table_start_row].height = 25 # Altura maior para cabeçalho da tabela
     for c_offset, text in enumerate(headers):
         col_idx = 1 + c_offset
         cell = ws.cell(table_start_row, col_idx, text)
@@ -193,9 +227,9 @@ def gerar_mapa_gratificacao_xlsx(
         cell.font = table_header_font
         cell.alignment = center_align
         cell.border = border_all
-    current_row = table_start_row + 1 # Próxima linha para dados é a 9
+    current_row = table_start_row + 1 # Próxima linha para dados é a 10
 
-    # --- DADOS DA TABELA PRINCIPAL --- (Ajustado para colunas 1-8)
+    # --- DADOS DA TABELA PRINCIPAL ---
     total_ch_a_pagar_sum = 0
     total_valor_sum = 0.0
     data_row_start = current_row
@@ -211,19 +245,21 @@ def gerar_mapa_gratificacao_xlsx(
                     float(_safe(disc, "ch_total", 0) or 0), float(_safe(disc, "ch_paga_anteriormente", 0) or 0),
                     ch_a_pagar_val, round(valor_a_pagar, 2)
                 ]
+                ws.row_dimensions[current_row].height = 15 # Altura padrão para dados
                 for c_offset, v in enumerate(row_vals):
-                    col_idx = 1 + c_offset # Começa na coluna 1 (A)
+                    col_idx = 1 + c_offset
                     cell = ws.cell(current_row, col_idx, v)
                     cell.border = border_all
                     cell.font = table_data_font
-                    if c_offset in [0, 1, 4, 5, 6]: cell.alignment = center_align
-                    elif c_offset in [2, 3]: cell.alignment = left_align
-                    elif c_offset == 7: cell.style = brl_style_name
+                    if c_offset in [0, 1, 4, 5]: cell.alignment = center_align # Posto, IdFunc, CH Total, CH Paga Ant
+                    elif c_offset in [2, 3]: cell.alignment = left_align # Nome, Disciplina
+                    elif c_offset == 6: cell.style = "CH_1_DECIMAL" # CH a Pagar (com 1 decimal)
+                    elif c_offset == 7: cell.style = "BRL" # Valor R$
                 total_ch_a_pagar_sum += ch_a_pagar_val
                 total_valor_sum += valor_a_pagar
                 current_row += 1
     else:
-        # Linha de "Nenhum dado" (A:H)
+        # Linha de "Nenhum dado"
         range_nodata = f"A{current_row}:H{current_row}"
         ws.merge_cells(range_nodata)
         _style_merged_cell(ws, current_row, 1, "Nenhum dado encontrado para o período e filtros selecionados.", font=table_data_font, alignment=center_align)
@@ -232,26 +268,33 @@ def gerar_mapa_gratificacao_xlsx(
 
     data_row_end = current_row - 1
 
-    # --- LINHA DE TOTAIS --- (A:H)
-    range_total_label = f"A{current_row}:{get_column_letter(num_cols - 2)}{current_row}" # A até F
+    # --- LINHA DE TOTAIS ---
+    ws.row_dimensions[current_row].height = 18 # Altura um pouco maior para totais
+    range_total_label = f"A{current_row}:F{current_row}" # A até F
     ws.merge_cells(range_total_label)
-    _style_merged_cell(ws, current_row, 1, "CARGA HORÁRIA TOTAL",
+    _style_merged_cell(ws, current_row, 1, "CARGA HORARIA TOTAL",
                        font=total_font, alignment=right_align, fill=gray_fill)
-    _style_merged_cell(ws, current_row, num_cols - 1, total_ch_a_pagar_sum, # Coluna G
-                       font=total_font, alignment=center_align, fill=gray_fill, number_format='0.0')
-    _style_merged_cell(ws, current_row, num_cols, round(total_valor_sum, 2), # Coluna H
-                       font=total_font, fill=gray_fill, style_name=brl_style_name)
-    _apply_border_to_range(ws, f"A{current_row}:H{current_row}", border_all)
+    _style_merged_cell(ws, current_row, 7, total_ch_a_pagar_sum, # Coluna G
+                       fill=gray_fill, style_name="CH_TOTAL_1_DECIMAL")
+    _style_merged_cell(ws, current_row, 8, round(total_valor_sum, 2), # Coluna H
+                       fill=gray_fill, style_name="BRL_TOTAL")
+    # Aplica borda manualmente em cada célula da linha total
+    for col_idx in range(1, 9):
+         cell = ws.cell(row=current_row, column=col_idx)
+         cell.border = border_all
+         if col_idx >= 7: cell.fill = gray_fill # Garante preenchimento para G e H
 
-    current_row += 1
+    current_row += 2 # Pula uma linha
     bottom_block_start_row = current_row
 
-    # --- BLOCOS INFERIORES --- (Lado a lado A:D e E:H)
-    bottom_block_rows = 10
+    # --- BLOCOS INFERIORES --- (Lado a lado A:E e F:H)
+    bottom_block_rows = 10 # Número de linhas para os blocos inferiores
     bottom_block_end_row = bottom_block_start_row + bottom_block_rows - 1
+    for i in range(bottom_block_start_row, bottom_block_end_row + 1):
+        ws.row_dimensions[i].height = 15 # Altura para linhas do rodapé
 
-    # Bloco Esquerdo (Orientações) - A[start]:D[end]
-    range_orientacoes = f"A{bottom_block_start_row}:D{bottom_block_end_row}"
+    # Bloco Esquerdo (Orientações) - A[start]:E[end] (Ocupa 5 colunas)
+    range_orientacoes = f"A{bottom_block_start_row}:E{bottom_block_end_row}"
     ws.merge_cells(range_orientacoes)
     orientacoes_text = "ORIENTAÇÕES:\n\n" + "\n".join([
         "1. Id. Func. em ordem crescente.",
@@ -263,20 +306,21 @@ def gerar_mapa_gratificacao_xlsx(
     _style_merged_cell(ws, bottom_block_start_row, 1, orientacoes_text, font=signature_font, alignment=left_top_align)
     _apply_border_to_range(ws, range_orientacoes, border_all)
 
-    # Bloco Direito (Data e Assinaturas Aux/Digitador) - E[start]:H[end]
-    range_assin_dir = f"E{bottom_block_start_row}:H{bottom_block_end_row}"
+    # Bloco Direito (Data e Assinaturas Aux/Digitador) - F[start]:H[end] (Ocupa 3 colunas)
+    range_assin_dir = f"F{bottom_block_start_row}:H{bottom_block_end_row}"
     ws.merge_cells(range_assin_dir)
     data_assinatura_str = data_fim.strftime('%d de %B de %Y') if data_fim else "____ de __________ de ____"
-    # Ajuste do texto
-    assinaturas_direita_text = f"Quartel em {cidade_assinatura} - RS, {data_assinatura_str}.\n\n\n\n\n" # Ajuste o espaço
-    assinaturas_direita_text += "____________________\tEm ___/___/___\n"
-    assinaturas_direita_text += f"{auxiliar_nome or 'Nome Auxiliar'}\t____________\n"
-    assinaturas_direita_text += f"{auxiliar_funcao or 'Chefe da Seção de Ensino'}\tDigitador"
-    _style_merged_cell(ws, bottom_block_start_row, 5, assinaturas_direita_text, font=signature_font, alignment=center_top_align)
+
+    assinaturas_direita_text = f"Quartel em {cidade_assinatura} - RS, {data_assinatura_str}.\n\n\n\n\n\n" # Mais espaço vertical
+    assinaturas_direita_text += "____________________                Em ___/___/___\n"
+    assinaturas_direita_text += f"{auxiliar_nome or 'Nome Auxiliar'}                         ____________\n" # Ajustar espaços aqui
+    assinaturas_direita_text += f"{auxiliar_funcao or 'Chefe da Seção de Ensino'}                Digitador"    # Ajustar espaços aqui
+
+    _style_merged_cell(ws, bottom_block_start_row, 6, assinaturas_direita_text, font=signature_font, alignment=center_top_align) # Usar center_top para alinhar bloco
     _apply_border_to_range(ws, range_assin_dir, border_all)
 
     # --- FINALIZAÇÃO ---
-    ws.freeze_panes = f"A{table_start_row + 1}" # Congela abaixo do cabeçalho
+    ws.freeze_panes = f"A{table_start_row + 1}" # Congela abaixo do cabeçalho da tabela
     if data_row_end >= data_row_start:
       ws.auto_filter.ref = f"A{table_start_row}:H{data_row_end}" # Filtro na tabela A:H
 
