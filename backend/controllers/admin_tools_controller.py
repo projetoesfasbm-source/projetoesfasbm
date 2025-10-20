@@ -8,7 +8,7 @@ from datetime import datetime
 from utils.decorators import admin_or_programmer_required
 from ..services.user_service import UserService
 from ..services.admin_tools_service import AdminToolsService
-from ..services.mail_merge_service import MailMergeService # <-- NOVA IMPORTAÇÃO
+from ..services.mail_merge_service import MailMergeService
 
 tools_bp = Blueprint('tools', __name__, url_prefix='/ferramentas')
 
@@ -19,7 +19,6 @@ def index():
     """Exibe a página principal do módulo de Ferramentas do Administrador."""
     return render_template('ferramentas/index.html')
 
-# --- NOVA ROTA PARA MALA DIRETA ---
 @tools_bp.route('/mail-merge', methods=['GET', 'POST'])
 @login_required
 @admin_or_programmer_required
@@ -33,6 +32,7 @@ def mail_merge():
             flash('Ambos os arquivos (template e dados) são obrigatórios.', 'danger')
             return redirect(url_for('tools.mail_merge'))
 
+        # A função agora retorna um buffer de arquivo ZIP
         zip_buffer, error = MailMergeService.generate_documents(template_file, data_file, output_format)
 
         if error:
@@ -40,15 +40,16 @@ def mail_merge():
             return redirect(url_for('tools.mail_merge'))
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # Ajusta o send_file para enviar um arquivo .zip
         return send_file(
             zip_buffer,
             as_attachment=True,
-            download_name=f'documentos_gerados_{timestamp}.zip',
+            download_name=f'certificados_gerados_{timestamp}.zip',
             mimetype='application/zip'
         )
 
     return render_template('ferramentas/mail_merge.html')
-# --- FIM DA NOVA ROTA ---
 
 @tools_bp.route('/reset')
 @login_required
@@ -65,25 +66,22 @@ def clear_data():
     password = request.form.get('password')
     action = request.form.get('action')
     
-    # 1. Validação da senha
     if not password or not current_user.check_password(password):
         flash('Senha incorreta. Nenhuma ação foi executada.', 'danger')
         return redirect(url_for('tools.reset_escola'))
 
-    # 2. Identificação da escola do administrador
     school_id = UserService.get_current_school_id()
     if not school_id:
         flash('Não foi possível identificar a sua escola. Ação cancelada.', 'danger')
         return redirect(url_for('tools.reset_escola'))
 
-    # 3. Execução da ação
     success, message = False, "Ação desconhecida."
     if action == 'clear_students':
         success, message = AdminToolsService.clear_students(school_id)
     elif action == 'clear_instructors':
         success, message = AdminToolsService.clear_instructors(school_id)
     elif action == 'clear_disciplines':
-        success, message = AdminToolsService.clear_disciplines(school_id)
+        success, message = AdminToolsService.clear_disciplinines(school_id)
 
     flash(message, 'success' if success else 'danger')
     return redirect(url_for('tools.reset_escola'))

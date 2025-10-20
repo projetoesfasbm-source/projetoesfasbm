@@ -8,83 +8,87 @@ import re
 
 class MailMergeService:
     @staticmethod
-    def _find_placeholders(document):
-        """Encontra todos os placeholders no formato {{placeholder}} no documento."""
-        placeholders = set()
-        pattern = re.compile(r'\{\{([^}]+)\}\}')
+    def _replace_text_in_paragraph(paragraph, replacements):
+        """
+        Substitui múltiplos placeholders em um parágrafo, preservando a formatação dominante.
+        Esta função foi corrigida para ser mais robusta e eficiente.
+        """
+        # 1. Constrói o texto completo do parágrafo
+        full_text = "".join(run.text for run in paragraph.runs)
         
-        full_text = "\n".join([p.text for p in document.paragraphs])
-        for table in document.tables:
-            for row in table.rows:
-                for cell in row.cells:
-                    full_text += "\n" + cell.text
+        # 2. Verifica se há algo para substituir antes de fazer qualquer alteração
+        if not any(placeholder in full_text for placeholder in replacements.keys()):
+            return
 
-        for match in pattern.finditer(full_text):
-            placeholders.add(match.group(1).strip())
-                            
-        return list(placeholders)
+        # 3. Salva a formatação do primeiro 'run' (que geralmente define o estilo da linha)
+        # e a formatação do parágrafo (alinhamento)
+        original_run = paragraph.runs[0] if paragraph.runs else None
+        p_format = paragraph.paragraph_format
 
-    @staticmethod
-    def _replace_text_in_paragraph(paragraph, placeholders, data_row):
-        """Substitui todos os placeholders em um parágrafo."""
-        full_text = paragraph.text
+        # 4. Executa TODAS as substituições na string de texto
+        modified_text = full_text
+        for placeholder, value in replacements.items():
+            modified_text = modified_text.replace(placeholder, str(value))
+
+        # 5. Limpa os 'runs' antigos do parágrafo
+        for run in paragraph.runs:
+            p = run._element
+            p.getparent().remove(p)
+
+        # 6. Adiciona o texto modificado de volta em um novo 'run'
+        new_run = paragraph.add_run(modified_text)
         
-        # Realiza todas as substituições no texto do parágrafo
-        for key in placeholders:
-            placeholder_tag = f"{{{{{key}}}}}"
-            # Usa uma função lambda com re.sub para evitar problemas com caracteres especiais
-            full_text = re.sub(
-                re.escape(placeholder_tag), 
-                str(data_row.get(key, '')), 
-                full_text
-            )
-
-        # Se houveram mudanças, reescreve o parágrafo
-        if full_text != paragraph.text:
-            # Limpa o parágrafo mantendo a formatação
-            p_runs = paragraph.runs
-            for run in p_runs:
-                run.clear()
-            # Adiciona o novo texto em um único 'run', que herdará o estilo do parágrafo
-            paragraph.add_run(full_text)
+        # 7. Reaplica a formatação salva ao novo 'run' e ao parágrafo
+        if original_run:
+            new_run.style = original_run.style
+            font = original_run.font
+            new_run.font.name = font.name
+            new_run.font.size = font.size
+            new_run.font.bold = font.bold
+            new_run.font.italic = font.italic
+            new_run.font.underline = font.underline
+            new_run.font.color.rgb = font.color.rgb
+        
+        paragraph.paragraph_format.alignment = p_format.alignment
 
     @staticmethod
     def generate_documents(template_file, data_file, output_format='docx'):
         """
-        Gera documentos em massa a partir de um template docx e uma planilha de dados.
-        Retorna os bytes de um arquivo zip.
+        Gera documentos individuais, preservando formatação e orientação de página,
+        e os compacta em um arquivo ZIP.
         """
         try:
-            template_doc = Document(template_file)
+            template_buffer = BytesIO(template_file.read())
             df = pd.read_excel(data_file)
-            
-            df.columns = [str(col).strip() for col in df.columns]
+            records = df.astype(str).to_dict('records')
 
-            placeholders = MailMergeService._find_placeholders(template_doc)
-            
             zip_buffer = BytesIO()
             with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
-                for index, row in df.iterrows():
-                    doc = Document(template_file)
-                    data_row = row.to_dict()
+                for index, record in enumerate(records):
+                    # Recarrega o template do buffer para cada novo documento.
+                    # Isso é crucial para preservar a estrutura original, incluindo orientações de página.
+                    template_buffer.seek(0)
+                    doc = Document(template_buffer)
 
-                    # Itera e substitui em todos os parágrafos do corpo
+                    # Cria o dicionário de substituições para o registro atual
+                    replacements = {f"{{{{{key.strip()}}}}}": str(value) for key, value in record.items()}
+
+                    # Itera e substitui nos parágrafos e tabelas
                     for p in doc.paragraphs:
-                        MailMergeService._replace_text_in_paragraph(p, placeholders, data_row)
-
-                    # Itera e substitui em todas as tabelas
+                        MailMergeService._replace_text_in_paragraph(p, replacements)
+                    
                     for table in doc.tables:
-                        for r in table.rows:
-                            for cell in r.cells:
+                        for row in table.rows:
+                            for cell in row.cells:
                                 for p in cell.paragraphs:
-                                    MailMergeService._replace_text_in_paragraph(p, placeholders, data_row)
+                                    MailMergeService._replace_text_in_paragraph(p, replacements)
 
+                    # Salva o documento individual em memória
                     doc_buffer = BytesIO()
                     doc.save(doc_buffer)
                     doc_buffer.seek(0)
                     
-                    # Usa uma coluna específica para nomear o arquivo, se existir (ex: 'nome'), senão usa o índice
-                    file_name_base = str(data_row.get('nome', f"documento_{index + 1}")).strip()
+                    file_name_base = record.get('nome', f"documento_{index + 1}").strip().replace(" ", "_")
                     filename = f"Certificado_{file_name_base}.docx"
                     
                     zf.writestr(filename, doc_buffer.getvalue())
@@ -93,4 +97,5 @@ class MailMergeService:
             return zip_buffer, None
             
         except Exception as e:
-            return None, str(e)
+            error_message = f"Ocorreu um erro: {str(e)}. Verifique se os placeholders no seu template (ex: {{nome}}) correspondem às colunas da planilha."
+            return None, error_message
