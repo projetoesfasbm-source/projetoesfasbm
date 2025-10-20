@@ -63,7 +63,7 @@ def _style_merged_cell(ws, row, col, value, font=None, alignment=None, fill=None
     return cell
 
 # -------------------------
-# Função principal (REVISADA v9 - Alinha Cabeçalho Central com Blocos Laterais)
+# Função principal (REVISADA v10 - Remove largura fixa de B e G)
 # -------------------------
 def gerar_mapa_gratificacao_xlsx(
     dados: Iterable[Any],
@@ -84,7 +84,8 @@ def gerar_mapa_gratificacao_xlsx(
     cidade_assinatura: Optional[str] = "Santa Maria",
 ) -> bytes:
     """
-    Gera arquivo .xlsx ajustado para layout A:H em A4 paisagem, com cabeçalho alinhado.
+    Gera arquivo .xlsx ajustado para layout A:H em A4 paisagem, com cabeçalho alinhado
+    e ajuste automático das colunas B e G.
     """
 
     data_emissao = data_emissao or date.today()
@@ -104,16 +105,18 @@ def gerar_mapa_gratificacao_xlsx(
 
     # Definições de Layout e Colunas (A-H)
     num_cols = 8
-    ws.column_dimensions['A'].width = 18 # Colunas A e B para bloco esquerdo
-    ws.column_dimensions['B'].width = 1
-    ws.column_dimensions['C'].width = 25 # Colunas C, D, E, F para bloco central
-    ws.column_dimensions['D'].width = 25
-    ws.column_dimensions['E'].width = 15
-    ws.column_dimensions['F'].width = 15
-    ws.column_dimensions['G'].width = 1  # Colunas G e H para bloco direito
-    ws.column_dimensions['H'].width = 18
+    # --- LARGURAS AJUSTADAS - Removida definição explícita para B e G ---
+    ws.column_dimensions['A'].width = 18 # Posto/Grad e Bloco Esq Cmdt
+    # ws.column_dimensions['B'].width = 1 # REMOVIDO
+    ws.column_dimensions['C'].width = 30 # Nome Servidor
+    ws.column_dimensions['D'].width = 28 # Disciplina
+    ws.column_dimensions['E'].width = 9  # CH Total
+    ws.column_dimensions['F'].width = 14 # CH Paga Ant
+    # ws.column_dimensions['G'].width = 1 # REMOVIDO
+    ws.column_dimensions['H'].width = 18 # Valor R$ e Bloco Dir RHE
+    # As colunas Id Func (B), CH a Pagar (G) usarão largura padrão ou automática
 
-    # Estilos
+    # Estilos (mantidos)
     gray_fill = PatternFill("solid", fgColor="D9D9D9")
     thin_border_side = Side(style="thin", color="000000")
     border_all = Border(left=thin_border_side, right=thin_border_side, top=thin_border_side, bottom=thin_border_side)
@@ -122,7 +125,6 @@ def gerar_mapa_gratificacao_xlsx(
     left_align = Alignment(horizontal="left", vertical="center", wrap_text=True)
     left_top_align = Alignment(horizontal="left", vertical="top", wrap_text=True)
     right_align = Alignment(horizontal="right", vertical="center", wrap_text=True)
-
     header_font = Font(name='Times New Roman', size=10)
     header_bold_font = Font(name='Times New Roman', bold=True, size=10)
     main_title_font = Font(name='Times New Roman', bold=True, size=12)
@@ -130,7 +132,6 @@ def gerar_mapa_gratificacao_xlsx(
     table_data_font = Font(name='Times New Roman', size=9)
     total_font = Font(name='Times New Roman', bold=True, size=9)
     signature_font = Font(name='Times New Roman', size=9)
-
     brl_style_name = "BRL"
     if brl_style_name not in wb.named_styles:
         brl_style = NamedStyle(name=brl_style_name, font=table_data_font, alignment=right_align)
@@ -138,51 +139,44 @@ def gerar_mapa_gratificacao_xlsx(
         wb.add_named_style(brl_style)
 
     # --- BLOCOS SUPERIORES E CABEÇALHO CENTRAL (Linhas 1-7) ---
-    header_block_height = 7 # Define a altura dos blocos superiores
+    header_block_height = 7
     current_row = 1
-
-    # Bloco Esquerdo (Comandante) - A1:B[header_block_height]
-    range_bloco_esq = f"A{current_row}:B{current_row + header_block_height - 1}"
+    # Bloco Esquerdo (Comandante) - A1:A[header_block_height] (Ajustado para Coluna A apenas)
+    range_bloco_esq = f"A{current_row}:A{current_row + header_block_height - 1}"
     ws.merge_cells(range_bloco_esq)
-    # Adiciona mais quebras de linha para empurrar o conteúdo para baixo
-    assinatura_cmd_txt = f"\n\n\n________________________\n{comandante_nome or 'Nome Comandante'}\n{comandante_funcao or 'Comandante da EsFAS-SM'}"
-    _style_merged_cell(ws, current_row, 1, assinatura_cmd_txt, font=signature_font, alignment=center_top_align) # Center Top
+    assinatura_cmd_txt = f"*\n\n\n________________________\n{comandante_nome or 'Nome Comandante'}\n{comandante_funcao or 'Comandante da EsFAS-SM'}"
+    _style_merged_cell(ws, current_row, 1, assinatura_cmd_txt, font=signature_font, alignment=center_top_align)
     _apply_border_to_range(ws, range_bloco_esq, border_all)
 
-    # Bloco Direito (RHE) - G1:H[header_block_height]
-    range_bloco_dir = f"G{current_row}:H{current_row + header_block_height - 1}"
+    # Bloco Direito (RHE) - H1:H[header_block_height] (Ajustado para Coluna H apenas)
+    range_bloco_dir = f"H{current_row}:H{current_row + header_block_height - 1}"
     ws.merge_cells(range_bloco_dir)
-    # Adiciona mais quebras de linha
     rhe_txt = "LANÇAR NO RHE\n____/_____/_____\n\n\n____________________\nCh da SEÇÃO ADM DE"
-    _style_merged_cell(ws, current_row, 7, rhe_txt, font=signature_font, alignment=center_top_align) # Center Top
+    _style_merged_cell(ws, current_row, 8, rhe_txt, font=signature_font, alignment=center_top_align)
     _apply_border_to_range(ws, range_bloco_dir, border_all)
 
-    # Cabeçalho Central (Títulos) - C1:F[header_block_height-1] (Deixa a última linha livre se necessário)
-    central_header_last_row = current_row + header_block_height - 2 # Vai até a linha 6
-    # Título Principal (Linha 1 do bloco central)
-    range_titulo = f"C{current_row}:F{current_row}"
+    # Cabeçalho Central (Títulos) - B1:G[header_block_height-1] (Ajustado para B:G)
+    central_header_start_col = 2 # Coluna B
+    central_header_end_col = 7   # Coluna G
+    range_titulo = f"B{current_row}:G{current_row}"
     ws.merge_cells(range_titulo)
-    _style_merged_cell(ws, current_row, 3, "MAPA DE GRATIFICAÇÃO MAGISTÉRIO", font=main_title_font, alignment=center_align)
+    _style_merged_cell(ws, current_row, central_header_start_col, "MAPA DE GRATIFICAÇÃO MAGISTÉRIO", font=main_title_font, alignment=center_align)
     current_row += 1
-    # OPM (Linha 2)
-    range_opm = f"C{current_row}:F{current_row}"
+    range_opm = f"B{current_row}:G{current_row}"
     ws.merge_cells(range_opm)
-    _style_merged_cell(ws, current_row, 3, f"OPM: {opm_nome}", font=header_font, alignment=center_align)
+    _style_merged_cell(ws, current_row, central_header_start_col, f"OPM: {opm_nome}", font=header_font, alignment=center_align)
     current_row += 1
-    # Telefone (Linha 3)
-    range_tel = f"C{current_row}:F{current_row}"
+    range_tel = f"B{current_row}:G{current_row}"
     ws.merge_cells(range_tel)
-    _style_merged_cell(ws, current_row, 3, f"Telefone: {telefone or '(não informado)'}", font=header_font, alignment=center_align)
+    _style_merged_cell(ws, current_row, central_header_start_col, f"Telefone: {telefone or '(não informado)'}", font=header_font, alignment=center_align)
     current_row += 1
-    # Mês/Ano (Linha 4)
-    range_mes = f"C{current_row}:F{current_row}"
+    range_mes = f"B{current_row}:G{current_row}"
     ws.merge_cells(range_mes)
-    _style_merged_cell(ws, current_row, 3, f"Horas aulas a pagar do Mês de {nome_mes_ano}", font=header_bold_font, alignment=center_align)
+    _style_merged_cell(ws, current_row, central_header_start_col, f"Horas aulas a pagar do Mês de {nome_mes_ano}", font=header_bold_font, alignment=center_align)
     current_row += 1
-    # Curso (Linha 5)
-    range_curso = f"C{current_row}:F{current_row}"
+    range_curso = f"B{current_row}:G{current_row}"
     ws.merge_cells(range_curso)
-    _style_merged_cell(ws, current_row, 3, titulo_curso, font=header_bold_font, alignment=center_align)
+    _style_merged_cell(ws, current_row, central_header_start_col, titulo_curso, font=header_bold_font, alignment=center_align)
 
     # A tabela começa depois dos blocos superiores
     table_start_row = header_block_height + 1 # Linha 8
@@ -282,9 +276,9 @@ def gerar_mapa_gratificacao_xlsx(
     _apply_border_to_range(ws, range_assin_dir, border_all)
 
     # --- FINALIZAÇÃO ---
-    ws.freeze_panes = f"A{table_start_row + 1}"
+    ws.freeze_panes = f"A{table_start_row + 1}" # Congela abaixo do cabeçalho
     if data_row_end >= data_row_start:
-      ws.auto_filter.ref = f"A{table_start_row}:H{data_row_end}"
+      ws.auto_filter.ref = f"A{table_start_row}:H{data_row_end}" # Filtro na tabela A:H
 
     # Salvar em memória
     out = BytesIO()
