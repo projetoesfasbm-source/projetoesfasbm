@@ -60,7 +60,7 @@
 
     </style>
 </head>
-<body>
+<body class="{% if not current_user.is_authenticated %}no-sidebar{% endif %}">
     
     {% if current_user.is_authenticated %}
     <header class="top-navbar">
@@ -109,7 +109,7 @@
 
     <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
-    <div class="page-container {% if not current_user.is_authenticated %}no-sidebar{% endif %}">
+    <div class="page-container">
         {% if current_user.is_authenticated %}
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
@@ -192,10 +192,41 @@
         </main>
     </div>
 
+    {# --- INÍCIO DA CORREÇÃO DO MODAL --- #}
     {% if current_user.is_authenticated %}
-    <div class="modal fade" id="changePasswordModal" tabindex="-1">
+    <div class="modal fade" id="changePasswordModal" tabindex="-1" aria-labelledby="changePasswordModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="changePasswordModalLabel">Alterar Senha</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="password-change-alert" class="alert" style="display: none;"></div>
+                    <form id="changePasswordForm">
+                        <div class="mb-3">
+                            <label for="current_password" class="form-label">Senha Atual</label>
+                            <input type="password" class="form-control" id="current_password" name="current_password" required autocomplete="current-password">
+                        </div>
+                        <div class="mb-3">
+                            <label for="new_password" class="form-label">Nova Senha</label>
+                            <input type="password" class="form-control" id="new_password" name="new_password" required autocomplete="new-password">
+                        </div>
+                        <div class="mb-3">
+                            <label for="confirm_new_password" class="form-label">Confirmar Nova Senha</label>
+                            <input type="password" class="form-control" id="confirm_new_password" name="confirm_new_password" required autocomplete="new-password">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="savePasswordBtn">Salvar Alterações</button>
+                </div>
+            </div>
         </div>
+    </div>
     {% endif %}
+    {# --- FIM DA CORREÇÃO DO MODAL --- #}
 
     {% block modals %}{% endblock %}
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
@@ -213,52 +244,94 @@
             if (sidebarToggle) sidebarToggle.addEventListener('click', toggleSidebar);
             if (sidebarOverlay) sidebarOverlay.addEventListener('click', toggleSidebar);
 
-            // --- NOVO SCRIPT GLOBAL DE MODAL ---
+            // Script de Modal Customizado (para outras partes do sistema)
             function openModal(modal) {
                 if (modal) {
                     modal.classList.add('visible');
                     document.body.style.overflow = 'hidden';
                 }
             }
-
             function closeModal(modal) {
                 if (modal) {
                     modal.classList.remove('visible');
                     document.body.style.overflow = '';
                 }
             }
-
             document.addEventListener('click', function (e) {
-                // Abrir modal
                 const openTrigger = e.target.closest('[data-modal-target]');
                 if (openTrigger) {
                     const modal = document.querySelector(openTrigger.dataset.modalTarget);
-                    // Dispara um evento customizado para que a página possa popular o modal
                     const event = new CustomEvent('modal:open', { detail: { modal: modal, trigger: openTrigger } });
                     document.dispatchEvent(event);
                     openModal(modal);
                 }
-
-                // Fechar modal com botão
                 const closeTrigger = e.target.closest('[data-modal-close]');
                 if (closeTrigger) {
                     const modal = closeTrigger.closest('.modal-overlay');
                     closeModal(modal);
                 }
             });
-
-            // Fechar modal clicando no overlay
             document.querySelectorAll('.modal-overlay').forEach(overlay => {
                 overlay.addEventListener('click', (e) => {
-                    if (e.target === overlay) {
-                        closeModal(overlay);
-                    }
+                    if (e.target === overlay) closeModal(overlay);
                 });
             });
-            // --- FIM DO SCRIPT GLOBAL DE MODAL ---
 
+            // --- INÍCIO DO NOVO SCRIPT PARA O MODAL DE ALTERAR SENHA ---
+            const changePasswordModal = document.getElementById('changePasswordModal');
+            if (changePasswordModal) {
+                const savePasswordBtn = document.getElementById('savePasswordBtn');
+                const passwordForm = document.getElementById('changePasswordForm');
+                const alertBox = document.getElementById('password-change-alert');
 
-            // --- SCRIPT DE NOTIFICAÇÕES (sem alterações) ---
+                savePasswordBtn.addEventListener('click', function() {
+                    const formData = {
+                        current_password: passwordForm.current_password.value,
+                        new_password: passwordForm.new_password.value,
+                        confirm_new_password: passwordForm.confirm_new_password.value
+                    };
+                    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+                    fetch("{{ url_for('user.change_password_ajax') }}", {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrfToken
+                        },
+                        body: JSON.stringify(formData)
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        alertBox.textContent = data.message;
+                        alertBox.style.display = 'block';
+                        if (data.success) {
+                            alertBox.className = 'alert alert-success';
+                            setTimeout(() => {
+                                const modal = bootstrap.Modal.getInstance(changePasswordModal);
+                                modal.hide();
+                                location.reload(); 
+                            }, 2000);
+                        } else {
+                            alertBox.className = 'alert alert-danger';
+                        }
+                    })
+                    .catch(error => {
+                        alertBox.textContent = 'Erro de comunicação com o servidor.';
+                        alertBox.className = 'alert alert-danger';
+                        alertBox.style.display = 'block';
+                    });
+                });
+
+                // Limpa o formulário e o alerta quando o modal é fechado
+                changePasswordModal.addEventListener('hidden.bs.modal', function () {
+                    passwordForm.reset();
+                    alertBox.style.display = 'none';
+                    alertBox.className = 'alert';
+                });
+            }
+            // --- FIM DO NOVO SCRIPT ---
+
+            // Script de Notificações
             const badge = document.getElementById('notification-badge');
             const list = document.getElementById('notification-list');
             const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
@@ -279,70 +352,60 @@
             }
 
             function updateNotificationUI(unread_count, notifications) {
-                badge.textContent = unread_count;
-                badge.style.display = unread_count > 0 ? 'block' : 'none';
+                if (badge) badge.textContent = unread_count;
+                if (badge) badge.style.display = unread_count > 0 ? 'block' : 'none';
 
-                list.innerHTML = ''; 
-                if (notifications && notifications.length > 0) {
-                    notifications.forEach(n => {
-                        const item = document.createElement('li');
-                        const itemClass = n.is_read ? 'read' : 'unread';
-                        const markAsReadButton = n.is_read ? '' : `<button class="btn btn-sm btn-outline-primary mark-one-read-btn" data-id="${n.id}" title="Marcar como lida">✓</button>`;
-
-                        item.innerHTML = `
-                            <div class="dropdown-item notification-item ${itemClass}">
-                                <a href="${n.url}" class="notification-link-main">
-                                    <p class="notification-message">${n.message}</p>
-                                    <small class="notification-date">${n.created_at}</small>
-                                </a>
-                                ${markAsReadButton}
-                            </div>`;
-                        list.appendChild(item);
-                    });
-                    list.innerHTML += '<li><hr class="dropdown-divider" style="margin: 0;"></li>';
-                    
-                    if (unread_count > 0) {
-                        list.innerHTML += '<li><a class="dropdown-item text-center small" href="#" id="mark-all-read-btn">Marcar todas como lidas</a></li>';
+                if (list) {
+                    list.innerHTML = ''; 
+                    if (notifications && notifications.length > 0) {
+                        notifications.forEach(n => {
+                            const item = document.createElement('li');
+                            const itemClass = n.is_read ? 'read' : 'unread';
+                            const markAsReadButton = n.is_read ? '' : `<button class="btn btn-sm btn-outline-primary mark-one-read-btn" data-id="${n.id}" title="Marcar como lida">✓</button>`;
+                            item.innerHTML = `<div class="dropdown-item notification-item ${itemClass}"><a href="${n.url}" class="notification-link-main"><p class="notification-message">${n.message}</p><small class="notification-date">${n.created_at}</small></a>${markAsReadButton}</div>`;
+                            list.appendChild(item);
+                        });
+                        list.innerHTML += '<li><hr class="dropdown-divider" style="margin: 0;"></li>';
+                        if (unread_count > 0) {
+                            list.innerHTML += '<li><a class="dropdown-item text-center small" href="#" id="mark-all-read-btn">Marcar todas como lidas</a></li>';
+                        }
+                        list.innerHTML += `<li><a class="dropdown-item text-center" href="{{ url_for('notification.index') }}">Ver todas</a></li>`;
+                    } else {
+                        list.innerHTML = '<li><span class="dropdown-item-text text-center text-muted p-2">Nenhuma notificação recente</span></li>';
                     }
-                    list.innerHTML += `<li><a class="dropdown-item text-center" href="{{ url_for('notification.index') }}">Ver todas</a></li>`;
-
-                } else {
-                    list.innerHTML = '<li><span class="dropdown-item-text text-center text-muted p-2">Nenhuma notificação recente</span></li>';
                 }
             }
 
-            list.addEventListener('click', function(e) {
-                const markOneBtn = e.target.closest('.mark-one-read-btn');
-                const markAllBtn = e.target.closest('#mark-all-read-btn');
-                const link = e.target.closest('a.notification-link-main');
+            if (list) {
+                list.addEventListener('click', function(e) {
+                    const markOneBtn = e.target.closest('.mark-one-read-btn');
+                    const markAllBtn = e.target.closest('#mark-all-read-btn');
+                    const link = e.target.closest('a.notification-link-main');
 
-                if (markOneBtn) {
-                    e.stopPropagation();
-                    const notificationId = markOneBtn.dataset.id;
-                    fetch(`/notifications/mark-as-read/${notificationId}`, {
-                        method: 'POST',
-                        headers: { 'X-CSRFToken': csrfToken }
-                    }).then(() => fetchNotifications());
-                } else if (markAllBtn) {
-                    e.preventDefault();
-                    fetch("{{ url_for('notification.mark_all_as_read') }}", {
-                        method: 'POST',
-                        headers: { 'X-CSRFToken': csrfToken }
-                    }).then(() => fetchNotifications());
-                } else if (link) {
-                    const parentItem = link.closest('.notification-item');
-                    if (parentItem && parentItem.classList.contains('unread')) {
-                        const notificationId = parentItem.querySelector('.mark-one-read-btn').dataset.id;
-                        fetch(`/notifications/mark-as-read/${notificationId}`, {
-                            method: 'POST',
-                            headers: { 'X-CSRFToken': csrfToken }
-                        });
+                    if (markOneBtn) {
+                        e.stopPropagation();
+                        const notificationId = markOneBtn.dataset.id;
+                        fetch(`/notifications/mark-as-read/${notificationId}`, { method: 'POST', headers: { 'X-CSRFToken': csrfToken } }).then(() => fetchNotifications());
+                    } else if (markAllBtn) {
+                        e.preventDefault();
+                        fetch("{{ url_for('notification.mark_all_as_read') }}", { method: 'POST', headers: { 'X-CSRFToken': csrfToken } }).then(() => fetchNotifications());
+                    } else if (link) {
+                        const parentItem = link.closest('.notification-item');
+                        if (parentItem && parentItem.classList.contains('unread')) {
+                            const btn = parentItem.querySelector('.mark-one-read-btn');
+                            if(btn) {
+                                const notificationId = btn.dataset.id;
+                                fetch(`/notifications/mark-as-read/${notificationId}`, { method: 'POST', headers: { 'X-CSRFToken': csrfToken } });
+                            }
+                        }
                     }
-                }
-            });
+                });
+            }
 
-            fetchNotifications();
-            setInterval(fetchNotifications, 60000);
+            if (current_user.is_authenticated) {
+                fetchNotifications();
+                setInterval(fetchNotifications, 60000);
+            }
         });
     </script>
 </body>
