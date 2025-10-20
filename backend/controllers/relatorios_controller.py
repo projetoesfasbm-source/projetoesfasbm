@@ -1,10 +1,11 @@
 # backend/controllers/relatorios_controller.py
 
-from flask import Blueprint, render_template, request, flash, redirect, url_for, send_file
+from flask import Blueprint, render_template, request, flash, redirect, url_for, send_file, Response
 from flask_login import login_required, current_user
 from datetime import datetime
 from typing import Optional
 import io
+import locale
 
 from weasyprint import HTML
 from werkzeug.utils import secure_filename
@@ -158,7 +159,7 @@ def gerar_relatorio_horas_aula():
                 max_age=0,
             )
 
-        elif action in ('download_xlsx', 'xlsx'):
+        elif action == 'download_xlsx':
             try:
                 xlsx_bytes = gerar_mapa_gratificacao_xlsx(
                     dados=dados_relatorio,
@@ -192,6 +193,18 @@ def gerar_relatorio_horas_aula():
                 mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                 max_age=0
             )
+
+        # --- NOVA SEÇÃO PARA EXPORTAÇÃO HTML COMO XLS ---
+        elif action == 'download_xls':
+            rendered_html = render_template('relatorios/pdf_template.html', **contexto)
+            xls_name = _build_filename('relatorio_horas_aula', contexto.get("nome_mes_ano"), 'xls')
+            
+            return Response(
+                rendered_html,
+                mimetype="application/vnd.ms-excel",
+                headers={"Content-disposition": f"attachment; filename={xls_name}"}
+            )
+        # --- FIM DA NOVA SEÇÃO ---
 
         flash('Ação inválida.', 'warning')
         return redirect(url_for('relatorios.gerar_relatorio_horas_aula', tipo=report_type))
