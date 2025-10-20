@@ -1,11 +1,14 @@
 # backend/controllers/admin_tools_controller.py
 
-from flask import Blueprint, render_template, request, flash, redirect, url_for
+from flask import Blueprint, render_template, request, flash, redirect, url_for, send_file
 from flask_login import login_required, current_user
+import io
+from datetime import datetime
 
 from utils.decorators import admin_or_programmer_required
 from ..services.user_service import UserService
 from ..services.admin_tools_service import AdminToolsService
+from ..services.mail_merge_service import MailMergeService # <-- NOVA IMPORTAÇÃO
 
 tools_bp = Blueprint('tools', __name__, url_prefix='/ferramentas')
 
@@ -15,6 +18,37 @@ tools_bp = Blueprint('tools', __name__, url_prefix='/ferramentas')
 def index():
     """Exibe a página principal do módulo de Ferramentas do Administrador."""
     return render_template('ferramentas/index.html')
+
+# --- NOVA ROTA PARA MALA DIRETA ---
+@tools_bp.route('/mail-merge', methods=['GET', 'POST'])
+@login_required
+@admin_or_programmer_required
+def mail_merge():
+    if request.method == 'POST':
+        template_file = request.files.get('template_file')
+        data_file = request.files.get('data_file')
+        output_format = request.form.get('output_format', 'docx')
+
+        if not template_file or not data_file:
+            flash('Ambos os arquivos (template e dados) são obrigatórios.', 'danger')
+            return redirect(url_for('tools.mail_merge'))
+
+        zip_buffer, error = MailMergeService.generate_documents(template_file, data_file, output_format)
+
+        if error:
+            flash(f'Ocorreu um erro ao gerar os documentos: {error}', 'danger')
+            return redirect(url_for('tools.mail_merge'))
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        return send_file(
+            zip_buffer,
+            as_attachment=True,
+            download_name=f'documentos_gerados_{timestamp}.zip',
+            mimetype='application/zip'
+        )
+
+    return render_template('ferramentas/mail_merge.html')
+# --- FIM DA NOVA ROTA ---
 
 @tools_bp.route('/reset')
 @login_required
