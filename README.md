@@ -1,21 +1,33 @@
-# 📌 Projeto ESFASBM
+# 📌 Projeto ESFASBM – Sistema de Gestão Escolar
 
-Sistema web desenvolvido como projeto acadêmico, com foco em **aprendizado de desenvolvimento de software**, organização de código e uso de ferramentas modernas de deploy.  
+Este sistema foi desenvolvido a partir de uma **proposta do Comandante da Escola de Formação de Sargentos (Maj Humberto)**, que identificou a necessidade de uma solução digital para **gestão administrativa e acadêmica da escola**.  
+O projeto foi conduzido por alunos da ESFASBM, aplicando práticas modernas de desenvolvimento de software, integração de tecnologias e implantação em ambiente real.
 
-## 🚀 Funcionalidades
-- Interface web construída com **HTML/CSS** e templates dinâmicos.  
-- Backend em **Python**, estruturado em módulos.  
-- Integração com banco de dados e uso de **migrations** para versionamento.  
-- Geração de relatórios em PDF utilizando **WeasyPrint**.  
-- Estrutura de testes automatizados para validação do código.  
-- Configuração de ambiente com **Docker e docker-compose** para fácil implantação.  
+---
+
+## 🎯 Objetivo
+Criar uma plataforma web que auxilie na **organização de dados, relatórios e processos internos da escola**, oferecendo uma solução prática, escalável e de fácil manutenção.
+
+---
+
+## 🚀 Funcionalidades Principais
+- **Interface web responsiva** construída com HTML/CSS e templates dinâmicos.  
+- **Backend em Python**, estruturado em módulos e APIs.  
+- **Banco de dados versionado** com migrations.  
+- **Geração de relatórios em PDF** utilizando WeasyPrint.  
+- **Testes automatizados** para garantir qualidade e confiabilidade.  
+- **Implantação simplificada** com Docker e docker-compose.  
+
+---
 
 ## 🛠️ Tecnologias Utilizadas
-- **Python 3.x**  
-- **HTML5 / CSS3**  
-- **Docker & Docker Compose**  
-- **WeasyPrint**  
-- **Git/GitHub** para versionamento  
+- Python 3.x  
+- HTML5 / CSS3  
+- Docker & Docker Compose  
+- WeasyPrint  
+- Git/GitHub  
+
+---
 
 ## 📂 Estrutura do Projeto
 ```
@@ -32,35 +44,40 @@ projetoesfasbm/
 │── weasyprint_api.py
 ```
 
+---
+
 ## ⚙️ Como Executar
-1. **Clonar o repositório**
-   ```bash
-   git clone https://github.com/projetoesfasbm-source/projetoesfasbm.git
-   cd projetoesfasbm
-   ```
 
-2. **Criar ambiente virtual e instalar dependências**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate   # Linux/Mac
-   venv\Scripts\activate      # Windows
-   pip install -r requirements.txt
-   ```
+**Clonar o repositório**
+```bash
+git clone https://github.com/projetoesfasbm-source/projetoesfasbm.git
+cd projetoesfasbm
+```
 
-3. **Rodar com Docker (opcional)**
-   ```bash
-   docker-compose up --build
-   ```
+**Criar ambiente virtual e instalar dependências**
+```bash
+python -m venv venv
+source venv/bin/activate   # Linux/Mac
+venv\Scripts\activate      # Windows
+pip install -r requirements.txt
+```
 
-4. **Executar o projeto**
-   ```bash
-   python backend/app.py
-   ```
+**Rodar com Docker (opcional)**
+```bash
+docker-compose up --build
+```
 
-5. **Acessar no navegador**
-   ```
-   http://localhost:5000
-   ```
+**Executar o projeto**
+```bash
+python backend/app.py
+```
+
+**Acessar no navegador**
+```
+http://localhost:5000
+```
+
+---
 
 ## ✅ Testes
 Para rodar os testes automatizados:
@@ -68,12 +85,16 @@ Para rodar os testes automatizados:
 pytest
 ```
 
-## 📖 Contribuição
-- Fork o projeto  
-- Crie uma branch (`git checkout -b feature/nova-funcionalidade`)  
-- Commit suas alterações (`git commit -m 'Adiciona nova funcionalidade'`)  
-- Push para a branch (`git push origin feature/nova-funcionalidade`)  
-- Abra um Pull Request  
+---
 
-## 👥 Autores
-Projeto desenvolvido por alunos da **ESFASBM**, sendo Sd PM Toillier, Sd PM Werle e Sd PM Oliveira.  
+## 👥 Equipe e Contribuições Individuais
+O desenvolvimento foi realizado por alunos da **ESFASBM**, com divisão clara de responsabilidades:  
+
+- **Sd PM Toillier** → Desenvolvimento do **frontend** (HTML, CSS, templates).  
+- **Sd PM Oliveira** → Desenvolvimento do **backend** (Python, lógica de negócio, APIs, integrações).  
+- **Sd PM Werle** → Configuração de **servidor, banco de dados** e implantação do sistema.  
+
+---
+
+## 📌 Observação Final
+Este projeto não foi apenas acadêmico, mas sim uma **demanda institucional real**, atendendo a uma necessidade prática da Escola de Formação de Sargentos.  
