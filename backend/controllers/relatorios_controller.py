@@ -1,6 +1,6 @@
 # backend/controllers/relatorios_controller.py
 
-from flask import Blueprint, render_template, request, flash, redirect, url_for, send_file, Response
+from flask import Blueprint, render_template, request, flash, redirect, url_for, send_file
 from flask_login import login_required, current_user
 from datetime import datetime
 from typing import Optional
@@ -20,11 +20,9 @@ relatorios_bp = Blueprint('relatorios', __name__, url_prefix='/relatorios')
 
 
 def _build_filename(prefix: str, label: Optional[str], extension: str, fallback: Optional[str] = None) -> str:
-    """Generate a safe download filename while keeping it human friendly."""
     label_component = label.strip() if isinstance(label, str) else None
     default_stub = fallback or prefix or "relatorio"
     base_name = "_".join(filter(None, (prefix, label_component))) or default_stub
-    # secure_filename already strips dangerous characters and keeps the extension when present
     safe_with_ext = secure_filename(f"{base_name}.{extension}")
     if safe_with_ext:
         return safe_with_ext
@@ -35,7 +33,6 @@ def _build_filename(prefix: str, label: Optional[str], extension: str, fallback:
 @login_required
 @admin_or_programmer_required
 def index():
-    """Página que exibe os tipos de relatório disponíveis."""
     return render_template('relatorios/index.html')
 
 
@@ -47,7 +44,6 @@ def gerar_relatorio_horas_aula():
     tipo_relatorio_titulo = report_type.replace("_", " ").title()
 
     todos_instrutores = []
-    # Garante que a chamada de serviço só ocorra se necessário
     if report_type == 'por_instrutor':
         paginated_instrutores = InstrutorService.get_all_instrutores(current_user)
         if paginated_instrutores:
@@ -82,18 +78,11 @@ def gerar_relatorio_horas_aula():
         is_rr_filter = report_type == 'efetivo_rr'
         instrutor_ids_filter = None
         if report_type == 'por_instrutor':
-            # Se o campo não vier, getlist() retorna []
             instrutor_ids_raw = request.form.getlist('instrutor_ids')
             if not instrutor_ids_raw:
                 flash('Por favor, selecione pelo menos um instrutor.', 'warning')
                 return redirect(url_for('relatorios.gerar_relatorio_horas_aula', tipo=report_type))
-            # Converte mantendo apenas inteiros válidos
-            instrutor_ids_filter = []
-            for _id in instrutor_ids_raw:
-                try:
-                    instrutor_ids_filter.append(int(_id))
-                except (TypeError, ValueError):
-                    pass
+            instrutor_ids_filter = [int(_id) for _id in instrutor_ids_raw if _id.isdigit()]
             if not instrutor_ids_filter:
                 flash('Seleção de instrutores inválida.', 'warning')
                 return redirect(url_for('relatorios.gerar_relatorio_horas_aula', tipo=report_type))
@@ -101,10 +90,8 @@ def gerar_relatorio_horas_aula():
         dados_relatorio = RelatorioService.get_horas_aula_por_instrutor(
             data_inicio, data_fim, is_rr_filter, instrutor_ids_filter
         )
-
         valor_hora_aula = SiteConfigService.get_valor_hora_aula()
         
-        # --- LÓGICA DE TRADUÇÃO DO MÊS ---
         meses = ("Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
                  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro")
         nome_mes_ano_pt = f"{meses[data_inicio.month - 1]} de {data_inicio.year}"
@@ -119,27 +106,17 @@ def gerar_relatorio_horas_aula():
         auxiliar_funcao = (request.form.get('auxiliar_funcao') or '').strip() or report_defaults["auxiliar_funcao"]
 
         contexto = {
-            "dados": dados_relatorio,
-            "data_inicio": data_inicio,
-            "data_fim": data_fim,
-            "titulo_curso": curso_nome,
-            "nome_mes_ano": nome_mes_ano_pt,
-            "data_assinatura": data_assinatura_pt,
+            "dados": dados_relatorio, "data_inicio": data_inicio, "data_fim": data_fim, "titulo_curso": curso_nome,
+            "nome_mes_ano": nome_mes_ano_pt, "data_assinatura": data_assinatura_pt,
             "comandante_nome": (request.form.get('comandante_nome') or '').strip(),
             "auxiliar_nome": (request.form.get('auxiliar_nome') or '').strip(),
-            "valor_hora_aula": valor_hora_aula,
-            "opm": opm_nome,
-            "telefone": telefone,
-            "cidade": cidade,
-            "auxiliar_funcao": auxiliar_funcao,
-            "comandante_funcao": comandante_funcao,
-            "escola_nome": escola_nome,
+            "valor_hora_aula": valor_hora_aula, "opm": opm_nome, "telefone": telefone, "cidade": cidade,
+            "auxiliar_funcao": auxiliar_funcao, "comandante_funcao": comandante_funcao, "escola_nome": escola_nome,
         }
 
         if action == 'preview':
-            rendered_html = render_template('relatorios/pdf_template.html', **contexto)
-            return rendered_html
-
+            return render_template('relatorios/pdf_template.html', **contexto)
+        
         elif action == 'download':
             rendered_html = render_template('relatorios/pdf_template.html', **contexto)
             try:
@@ -147,64 +124,26 @@ def gerar_relatorio_horas_aula():
             except Exception as e:
                 flash(f'Erro ao gerar PDF: {str(e)}', 'danger')
                 return redirect(url_for('relatorios.gerar_relatorio_horas_aula', tipo=report_type))
-
             pdf_name = _build_filename('relatorio_horas_aula', contexto.get("nome_mes_ano"), 'pdf')
-            pdf_buffer = io.BytesIO(pdf_content)
-            pdf_buffer.seek(0)
-            return send_file(
-                pdf_buffer,
-                as_attachment=True,
-                download_name=pdf_name,
-                mimetype='application/pdf',
-                max_age=0,
-            )
+            return send_file(io.BytesIO(pdf_content), as_attachment=True, download_name=pdf_name, mimetype='application/pdf')
 
         elif action == 'download_xlsx':
             try:
                 xlsx_bytes = gerar_mapa_gratificacao_xlsx(
-                    dados=dados_relatorio,
-                    valor_hora_aula=valor_hora_aula,
-                    nome_mes_ano=contexto["nome_mes_ano"],
-                    titulo_curso=contexto.get("titulo_curso") or "",
-                    opm_nome=contexto.get("opm") or "",
-                    escola_nome=contexto.get("escola_nome") or escola_nome,
-                    data_emissao=data_fim,
-                    telefone=contexto.get("telefone"),
-                    auxiliar_nome=contexto.get("auxiliar_nome"),
-                    comandante_nome=contexto.get("comandante_nome"),
+                    dados=dados_relatorio, valor_hora_aula=valor_hora_aula, nome_mes_ano=contexto["nome_mes_ano"],
+                    titulo_curso=contexto.get("titulo_curso") or "", opm_nome=contexto.get("opm") or "",
+                    escola_nome=contexto.get("escola_nome") or escola_nome, data_emissao=data_fim, telefone=contexto.get("telefone"),
+                    auxiliar_nome=contexto.get("auxiliar_nome"), comandante_nome=contexto.get("comandante_nome"),
                     digitador_nome=(getattr(current_user, 'nome_completo', None) or getattr(current_user, 'username', None)),
-                    auxiliar_funcao=contexto.get("auxiliar_funcao"),
-                    comandante_funcao=contexto.get("comandante_funcao"),
-                    data_fim=data_fim,
-                    cidade_assinatura=contexto.get("cidade") or report_defaults["cidade"],
+                    auxiliar_funcao=contexto.get("auxiliar_funcao"), comandante_funcao=contexto.get("comandante_funcao"),
+                    data_fim=data_fim, cidade_assinatura=contexto.get("cidade") or report_defaults["cidade"],
                 )
             except Exception as e:
                 flash(f'Erro ao gerar XLSX: {str(e)}', 'danger')
                 return redirect(url_for('relatorios.gerar_relatorio_horas_aula', tipo=report_type))
 
             xlsx_name = _build_filename('relatorio_horas_aula', contexto.get("nome_mes_ano"), 'xlsx')
-            xlsx_buffer = io.BytesIO(xlsx_bytes)
-            xlsx_buffer.seek(0)
-
-            return send_file(
-                xlsx_buffer,
-                as_attachment=True,
-                download_name=xlsx_name,
-                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                max_age=0
-            )
-
-        # --- NOVA SEÇÃO PARA EXPORTAÇÃO HTML COMO XLS ---
-        elif action == 'download_xls':
-            rendered_html = render_template('relatorios/pdf_template.html', **contexto)
-            xls_name = _build_filename('relatorio_horas_aula', contexto.get("nome_mes_ano"), 'xls')
-            
-            return Response(
-                rendered_html,
-                mimetype="application/vnd.ms-excel",
-                headers={"Content-disposition": f"attachment; filename={xls_name}"}
-            )
-        # --- FIM DA NOVA SEÇÃO ---
+            return send_file(io.BytesIO(xlsx_bytes), as_attachment=True, download_name=xlsx_name, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
         flash('Ação inválida.', 'warning')
         return redirect(url_for('relatorios.gerar_relatorio_horas_aula', tipo=report_type))

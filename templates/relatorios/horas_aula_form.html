@@ -96,8 +96,7 @@
         <div class="form-actions form-actions-aligned">
             <a href="{{ url_for('relatorios.index') }}" class="btn btn-secondary">Voltar</a>
             <button type="submit" name="action" value="preview" class="btn btn-info">Pré-Visualizar</button>
-            <button type="submit" name="action" value="download_xlsx" class="btn btn-primary">Baixar .XLSX (Padrão)</button>
-            <button type="submit" name="action" value="download_xls" class="btn btn-warning">Baixar .XLS (Alternativo)</button>
+            <button type="submit" name="action" value="download_xlsx" class="btn btn-primary">Baixar .XLSX</button>
             <button type="submit" name="action" value="download" class="btn btn-success">Baixar PDF</button>
         </div>
     </form>
@@ -156,7 +155,6 @@ document.addEventListener('DOMContentLoaded', function() {
             let selectedCount = 0;
             checkboxes.forEach(cb => {
                 const option = originalSelect.querySelector(`option[value="${cb.value}"]`);
-                // Garante que a opção existe antes de tentar acessá-la
                 if (option) {
                     option.selected = cb.checked;
                 }
