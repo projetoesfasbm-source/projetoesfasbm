@@ -215,3 +215,27 @@ def reset_user_password():
         flash(f'Ocorreu um erro ao resetar a senha: {e}', 'danger')
 
     return redirect(url_for('super_admin.manage_assignments', school_id=school_id_filter, filter=role_filter))
+
+@super_admin_bp.route('/select-school')
+@login_required
+@super_admin_required
+def select_school():
+    """Página para o Super Admin selecionar a escola ativa."""
+    schools = db.session.scalars(select(School).order_by(School.nome)).all()
+    return render_template('select_school.html', schools=schools)
+
+
+@super_admin_bp.route('/set-active-school/<int:school_id>')
+@login_required
+@super_admin_required
+def set_active_school(school_id):
+    """Define a escola ativa para o Super Admin na sessão."""
+    school = db.session.get(School, school_id)
+    if school:
+        session['view_as_school_id'] = school.id
+        session['view_as_school_name'] = school.nome
+        flash(f'Visualizando como administrador da escola {school.nome}.', 'success')
+    else:
+        flash('Escola não encontrada.', 'danger')
+    
+    return redirect(url_for('main.dashboard'))

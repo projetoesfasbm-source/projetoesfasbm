@@ -1,7 +1,7 @@
 # backend/app.py
 
 import os
-from flask import Flask, render_template, g
+from flask import Flask, render_template, g, session
 import click
 from flask_login import LoginManager, current_user
 from flask_migrate import Migrate
@@ -147,11 +147,19 @@ def register_handlers_and_processors(app):
         # Injeção da escola ativa
         active_school = None
         if current_user.is_authenticated:
-            if hasattr(current_user, 'active_school_id') and current_user.active_school_id:
-                active_school = db.session.get(School, current_user.active_school_id)
-            elif hasattr(current_user, 'schools') and current_user.schools:
-                if current_user.role != 'super_admin':
-                    active_school = current_user.schools[0].school
+            school_id_to_load = None
+            
+            # Se for Super Admin ou Programador, a escola ativa é a que está na sessão
+            if current_user.role in ['super_admin', 'programador']:
+                school_id_to_load = session.get('view_as_school_id')
+            
+            # Se for outro tipo de usuário, pega a primeira escola da sua lista de vínculos
+            elif hasattr(current_user, 'user_schools') and current_user.user_schools:
+                school_id_to_load = current_user.user_schools[0].school_id
+
+            # Carrega o objeto da escola se um ID foi encontrado
+            if school_id_to_load:
+                active_school = db.session.get(School, school_id_to_load)
 
         return {
             'site_config': g.site_config,

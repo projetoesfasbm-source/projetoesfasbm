@@ -34,7 +34,7 @@ from backend.models.user import User
 from backend.models.turma import Turma
 from backend.models.school import School
 from backend.models.user_school import UserSchool
-from utils.decorators import super_admin_required # CORREÇÃO APLICADA AQUI
+from utils.decorators import super_admin_required
 
 user_bp = Blueprint("user", __name__, url_prefix="/user")
 
@@ -302,30 +302,3 @@ def lista_admins_escola():
     ).scalars().all()
 
     return render_template("listar_admins_escola.html", admins=rows)
-
-# --- NOVAS ROTAS PARA SUPER ADMIN ---
-@user_bp.route('/select-school')
-@login_required
-@super_admin_required
-def select_school():
-    """Página para o Super Admin selecionar a escola ativa."""
-    # A relação agora é 'schools' no modelo User, que é uma lista de UserSchool
-    schools = [user_school.school for user_school in current_user.schools]
-    return render_template('select_school.html', schools=schools)
-
-
-@user_bp.route('/set-active-school/<int:school_id>')
-@login_required
-@super_admin_required
-def set_active_school(school_id):
-    """Define a escola ativa para o Super Admin."""
-    # Verifica se o super admin tem permissão para acessar esta escola
-    if any(user_school.school_id == school_id for user_school in current_user.schools):
-        current_user.active_school_id = school_id
-        db.session.commit()
-        flash('Escola ativa alterada com sucesso!', 'success')
-    else:
-        flash('Você não tem permissão para acessar esta escola.', 'danger')
-    
-    return redirect(url_for('main.dashboard'))
-# --- FIM DAS NOVAS ROTAS ---

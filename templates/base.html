@@ -70,14 +70,17 @@
                 
                 <div class="top-navbar-title">
                     {% if active_school %}
-                        {{ active_school.name }}
+                        {{ active_school.nome }}
                     {% elif current_user.role == 'super_admin' %}
-                        <a href="{{ url_for('user.select_school') }}" class="text-white text-decoration-none">Selecione uma escola</a>
+                        <a href="{{ url_for('super_admin.dashboard') }}" style="color: var(--color-primary); text-decoration: none;">Selecione a Escola</a>
                     {% else %}
                         Sistema de Gerenciamento
                     {% endif %}
                 </div>
-                </div>
+                {% if current_user.role == 'super_admin' and active_school %}
+                    <a href="{{ url_for('super_admin.dashboard') }}" class="btn btn-sm btn-outline-dark ms-2" style="white-space: nowrap;">Alterar Escola</a>
+                {% endif %}
+            </div>
             
             <div class="top-navbar-right-items">
                 <div class="dropdown">
@@ -109,7 +112,7 @@
                         <li><a class="dropdown-item" href="{{ url_for('user.meu_perfil') }}">Meu Perfil</a></li>
                         
                         {% if current_user.role == 'super_admin' %}
-                        <li><a class="dropdown-item" href="{{ url_for('user.select_school') }}">Mudar Escola Ativa</a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('super_admin.select_school') }}">Mudar Escola Ativa</a></li>
                         {% endif %}
                         <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#changePasswordModal">Alterar Senha</a></li>
                     </ul>

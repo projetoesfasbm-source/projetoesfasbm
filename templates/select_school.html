@@ -11,11 +11,11 @@
 <div class="modules-grid">
     {% if schools %}
         {% for school in schools %}
-        <a href="{{ url_for('user.set_active_school', school_id=school.id) }}" class="module-card-link">
+        <a href="{{ url_for('super_admin.set_active_school', school_id=school.id) }}" class="module-card-link">
             <div class="module-card {% if active_school and active_school.id == school.id %}active-school{% endif %}">
                 <div class="card-content">
                     <div class="card-icon">🏫</div>
-                    <h3 class="card-title">{{ school.name }}</h3>
+                    <h3 class="card-title">{{ school.nome }}</h3>
                     <p class="card-description">{{ school.abbreviation or 'Sem abreviação' }}</p>
                     {% if active_school and active_school.id == school.id %}
                         <span class="badge bg-success">Ativa</span>
