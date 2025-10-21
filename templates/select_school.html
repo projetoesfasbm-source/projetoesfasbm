@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}Selecionar Escola Ativa{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <h1>Selecionar Escola Ativa</h1>
+    <p>Como Super Admin, você pode escolher qual escola gerenciar no momento.</p>
+</div>
+
+<div class="modules-grid">
+    {% if schools %}
+        {% for school in schools %}
+        <a href="{{ url_for('user.set_active_school', school_id=school.id) }}" class="module-card-link">
+            <div class="module-card {% if active_school and active_school.id == school.id %}active-school{% endif %}">
+                <div class="card-content">
+                    <div class="card-icon">🏫</div>
+                    <h3 class="card-title">{{ school.name }}</h3>
+                    <p class="card-description">{{ school.abbreviation or 'Sem abreviação' }}</p>
+                    {% if active_school and active_school.id == school.id %}
+                        <span class="badge bg-success">Ativa</span>
+                    {% endif %}
+                </div>
+            </div>
+        </a>
+        {% endfor %}
+    {% else %}
+        <div class="alert alert-warning">Você não está vinculado a nenhuma escola.</div>
+    {% endif %}
+</div>
+
+<style>
+.module-card-link {
+    text-decoration: none;
+    color: inherit;
+}
+.module-card.active-school {
+    border: 2px solid var(--primary-color);
+    box-shadow: 0 0 15px rgba(var(--primary-color-rgb), 0.3);
+}
+.card-content .badge {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+}
+</style>
+{% endblock %}

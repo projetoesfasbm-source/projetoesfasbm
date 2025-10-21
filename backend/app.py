@@ -1,9 +1,9 @@
 # backend/app.py
 
 import os
-from flask import Flask, render_template
+from flask import Flask, render_template, g
 import click
-from flask_login import LoginManager
+from flask_login import LoginManager, current_user
 from flask_migrate import Migrate
 from flask_wtf.csrf import CSRFProtect
 from flask_babel import Babel
@@ -108,7 +108,7 @@ def register_blueprints(app):
     from backend.controllers.admin_tools_controller import tools_bp
     from backend.controllers.justica_controller import justica_bp
     from backend.controllers.notification_controller import notification_bp
-    from backend.controllers.push_controller import push_bp # <-- ADICIONE ESTA LINHA
+    from backend.controllers.push_controller import push_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(aluno_bp)
@@ -130,17 +130,33 @@ def register_blueprints(app):
     app.register_blueprint(tools_bp)
     app.register_blueprint(justica_bp)
     app.register_blueprint(notification_bp)
-    app.register_blueprint(push_bp) # <-- ADICIONE ESTA LINHA
+    app.register_blueprint(push_bp)
 
 def register_handlers_and_processors(app):
-    # ... (código existente sem alterações) ...
     @app.context_processor
-    def inject_site_configs():
+    def inject_global_vars():
         from backend.services.site_config_service import SiteConfigService
-        if app.config.get("TESTING", False):
-            SiteConfigService.init_default_configs()
-        configs = SiteConfigService.get_all_configs()
-        return dict(site_config={c.config_key: c.config_value for c in configs})
+
+        # Injeção das configurações do site
+        if 'site_config' not in g:
+            if app.config.get("TESTING", False):
+                SiteConfigService.init_default_configs()
+            configs = SiteConfigService.get_all_configs()
+            g.site_config = {c.config_key: c.config_value for c in configs}
+
+        # Injeção da escola ativa
+        active_school = None
+        if current_user.is_authenticated:
+            if hasattr(current_user, 'active_school_id') and current_user.active_school_id:
+                active_school = db.session.get(School, current_user.active_school_id)
+            elif hasattr(current_user, 'schools') and current_user.schools:
+                if current_user.role != 'super_admin':
+                    active_school = current_user.schools[0].school
+
+        return {
+            'site_config': g.site_config,
+            'active_school': active_school
+        }
 
     @app.after_request
     def add_header(response):
@@ -163,7 +179,6 @@ def register_handlers_and_processors(app):
         return render_template('500.html'), 500
 
 def register_cli_commands(app):
-    # ... (código existente sem alterações) ...
     @app.cli.command("create-super-admin")
     def create_super_admin():
         with app.app_context():

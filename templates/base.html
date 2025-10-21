@@ -67,8 +67,17 @@
         <div class="top-navbar-content">
             <div class="top-navbar-left-items">
                 <button class="sidebar-toggle" id="sidebarToggle">☰</button>
-                <div class="top-navbar-title">Escola de Formação e Aperfeiçoamento de Sargentos - EsFAS-SM</div>
-            </div>
+                
+                <div class="top-navbar-title">
+                    {% if active_school %}
+                        {{ active_school.name }}
+                    {% elif current_user.role == 'super_admin' %}
+                        <a href="{{ url_for('user.select_school') }}" class="text-white text-decoration-none">Selecione uma escola</a>
+                    {% else %}
+                        Sistema de Gerenciamento
+                    {% endif %}
+                </div>
+                </div>
             
             <div class="top-navbar-right-items">
                 <div class="dropdown">
@@ -98,6 +107,10 @@
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end">
                         <li><a class="dropdown-item" href="{{ url_for('user.meu_perfil') }}">Meu Perfil</a></li>
+                        
+                        {% if current_user.role == 'super_admin' %}
+                        <li><a class="dropdown-item" href="{{ url_for('user.select_school') }}">Mudar Escola Ativa</a></li>
+                        {% endif %}
                         <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#changePasswordModal">Alterar Senha</a></li>
                     </ul>
                 </div>

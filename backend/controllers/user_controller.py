@@ -24,16 +24,17 @@ from sqlalchemy.exc import IntegrityError
 from werkzeug.security import generate_password_hash
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField, SelectField, RadioField
-from wtforms.validators import DataRequired, Email, EqualTo, Optional
+from wtforms.validators import DataRequired, Email, EqualTo, Optional as WTFormsOptional
 from flask_wtf.file import FileField, FileAllowed
 
-from ..models.database import db
-from ..services.aluno_service import AlunoService
-from ..services.instrutor_service import InstrutorService
-from ..models.user import User
-from ..models.turma import Turma
-from ..models.school import School
-from ..models.user_school import UserSchool
+from backend.models.database import db
+from backend.services.aluno_service import AlunoService
+from backend.services.instrutor_service import InstrutorService
+from backend.models.user import User
+from backend.models.turma import Turma
+from backend.models.school import School
+from backend.models.user_school import UserSchool
+from utils.decorators import super_admin_required # CORREÇÃO APLICADA AQUI
 
 user_bp = Blueprint("user", __name__, url_prefix="/user")
 
@@ -54,14 +55,14 @@ class MeuPerfilForm(FlaskForm):
     posto_categoria = SelectField("Categoria", choices=list(posto_graduacao_structured.keys()), validators=[DataRequired()])
     posto_graduacao = SelectField('Posto/Graduação', choices=[], validators=[DataRequired()]) # Choices são dinâmicas
 
-    turma_id = SelectField('Turma', coerce=int, validators=[Optional()])
+    turma_id = SelectField('Turma', coerce=int, validators=[WTFormsOptional()])
     is_rr = RadioField("Efetivo da Reserva Remunerada (RR)", choices=[('True', 'Sim'), ('False', 'Não')], coerce=lambda x: x == 'True', default=False)
     
     foto_perfil = FileField('Alterar Foto de Perfil', validators=[FileAllowed(['jpg', 'jpeg', 'png', 'gif', 'webp'], 'Apenas imagens!')])
 
-    current_password = PasswordField('Senha Atual', validators=[Optional()])
-    new_password = PasswordField('Nova Senha', validators=[Optional(), EqualTo('confirm_new_password', message='As senhas não correspondem.')])
-    confirm_new_password = PasswordField('Confirmar Nova Senha', validators=[Optional()])
+    current_password = PasswordField('Senha Atual', validators=[WTFormsOptional()])
+    new_password = PasswordField('Nova Senha', validators=[WTFormsOptional(), EqualTo('confirm_new_password', message='As senhas não correspondem.')])
+    confirm_new_password = PasswordField('Confirmar Nova Senha', validators=[WTFormsOptional()])
     submit = SubmitField('Salvar Alterações')
 
 
@@ -107,12 +108,8 @@ def insert_user_school(user_id: int, school_id: int, role: str):
 def meu_perfil():
     form = MeuPerfilForm(obj=current_user)
     
-    # --- CORREÇÃO APLICADA AQUI ---
-    # Garante que a lista de turmas seja sempre uma lista, mesmo que vazia,
-    # para evitar o erro em perfis que não são de alunos.
     form.turma_id.choices = []
     
-    # Lógica para popular dinamicamente as escolhas de Posto/Graduação
     if request.method == 'GET':
         posto_atual = current_user.posto_graduacao
         categoria_encontrada = 'Outros' # Padrão
@@ -143,7 +140,6 @@ def meu_perfil():
             current_user.nome_completo = form.nome_completo.data
             current_user.posto_graduacao = form.posto_graduacao.data
             
-            # --- Adicionado para salvar o nome de guerra ---
             nome_de_guerra = request.form.get('nome_de_guerra')
             if nome_de_guerra:
                 current_user.nome_de_guerra = nome_de_guerra
@@ -215,7 +211,6 @@ def change_password_ajax():
         return jsonify({'success': False, 'message': 'Ocorreu um erro interno ao alterar a senha.'}), 500
 
 
-# ===== Rotas de Admin (sem alterações, mantidas como estavam) =====
 @user_bp.route("/criar-admin", methods=["GET", "POST"])
 @login_required
 def criar_admin_escola():
@@ -307,3 +302,30 @@ def lista_admins_escola():
     ).scalars().all()
 
     return render_template("listar_admins_escola.html", admins=rows)
+
+# --- NOVAS ROTAS PARA SUPER ADMIN ---
+@user_bp.route('/select-school')
+@login_required
+@super_admin_required
+def select_school():
+    """Página para o Super Admin selecionar a escola ativa."""
+    # A relação agora é 'schools' no modelo User, que é uma lista de UserSchool
+    schools = [user_school.school for user_school in current_user.schools]
+    return render_template('select_school.html', schools=schools)
+
+
+@user_bp.route('/set-active-school/<int:school_id>')
+@login_required
+@super_admin_required
+def set_active_school(school_id):
+    """Define a escola ativa para o Super Admin."""
+    # Verifica se o super admin tem permissão para acessar esta escola
+    if any(user_school.school_id == school_id for user_school in current_user.schools):
+        current_user.active_school_id = school_id
+        db.session.commit()
+        flash('Escola ativa alterada com sucesso!', 'success')
+    else:
+        flash('Você não tem permissão para acessar esta escola.', 'danger')
+    
+    return redirect(url_for('main.dashboard'))
+# --- FIM DAS NOVAS ROTAS ---
