@@ -3,10 +3,44 @@
 {% block title %}Página Não Encontrada{% endblock %}
 
 {% block content %}
-<div class="error-container">
-    <h1>404</h1>
-    <p>Página Não Encontrada</p>
-    <p>A página que você está procurando não existe.</p>
+<style>
+    .error-page-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        min-height: 70vh;
+    }
+    .error-page-container img {
+        max-width: 120px;
+        margin-bottom: 2rem;
+    }
+    .error-page-container h1 {
+        font-family: var(--font-family-title);
+        font-size: 2rem;
+        color: var(--color-secondary);
+        margin-bottom: 0.5rem;
+    }
+    .error-page-container .error-code {
+        font-size: 4rem;
+        font-weight: 800;
+        color: var(--color-primary-light);
+        line-height: 1;
+    }
+    .error-page-container p {
+        font-size: 1.1rem;
+        color: var(--color-text-muted);
+        max-width: 400px;
+        margin-bottom: 2rem;
+    }
+</style>
+
+<div class="error-page-container">
+    <img src="{{ url_for('static', filename='img/brasao.png') }}" alt="Logo EsFAS">
+    <div class="error-code">404</div>
+    <h1>Página Não Encontrada</h1>
+    <p>O endereço que você tentou acessar não existe ou foi movido.</p>
     <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary">Voltar para o Início</a>
 </div>
 {% endblock %}

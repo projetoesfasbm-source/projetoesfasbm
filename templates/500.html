@@ -1,13 +1,40 @@
 {% extends "base.html" %}
 
-{% block title %}Erro Interno do Servidor{% endblock %}
+{% block title %}Sistema em Manutenção{% endblock %}
 
 {% block content %}
-<div class="error-container">
-    <h1>500</h1>
-    <p>Erro Interno do Servidor</p>
-    <p>Ocorreu um erro inesperado. Por favor, tente novamente mais tarde.</p>
-    <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary">Voltar para o Início</a>
+<style>
+    .maintenance-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        min-height: 70vh;
+    }
+    .maintenance-container img {
+        max-width: 120px;
+        margin-bottom: 2rem;
+    }
+    .maintenance-container h1 {
+        font-family: var(--font-family-title);
+        font-size: 2rem;
+        color: var(--color-secondary);
+        margin-bottom: 0.5rem;
+    }
+    .maintenance-container p {
+        font-size: 1.1rem;
+        color: var(--color-text-muted);
+        max-width: 400px;
+        margin-bottom: 2rem;
+    }
+</style>
+
+<div class="maintenance-container">
+    <img src="{{ url_for('static', filename='img/brasao.png') }}" alt="Logo EsFAS">
+    <h1>Sistema EsFAS</h1>
+    <p>No momento, o sistema está em manutenção ou passando por uma atualização. Por favor, tente novamente em alguns instantes.</p>
+    <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary">Tentar Voltar para o Início</a>
 </div>
 {% endblock %}
 
