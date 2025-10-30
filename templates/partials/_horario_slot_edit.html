@@ -1,3 +1,6 @@
+{# backend/services/site_config_service.py #}
+
+{# templates/partials/_horario_slot_edit.html #}
 {% if aula != 'SKIP' %}
     <td class="schedule-slot"
         rowspan="{{ aula.duracao if not aula.is_disposicao else 1 }}"
@@ -19,17 +22,20 @@
                 </div>
 
                 {% if aula.status == 'pendente' and is_admin %}
-                    <div class="slot-actions approval">
+                    {# AÇÕES PARA AULAS PENDENTES: MUDANÇA DE LAYOUT PARA HORIZONTAL #}
+                    <div class="slot-actions horizontal-actions approval">
                         <button class="btn-icon approve" data-action="approve_all" data-id="{{ aula.id }}" data-periodo="{{ aula.periodo }}" data-duracao="{{ aula.duracao }}" title="Aprovar Todos os Períodos">✓</button>
                         <button class="btn-icon manage" data-action="manage_approval" data-id="{{ aula.id }}" title="Gerenciar Aprovação Parcial">✏️</button>
                         <button class="btn-icon deny" data-action="deny_aula" data-id="{{ aula.id }}" title="Negar Aula">×</button>
                     </div>
                 {% elif aula.can_edit and not aula.is_continuation %}
-                    <div class="slot-actions">
+                    {# AÇÕES PARA AULAS CONFIRMADAS: MUDANÇA DE LAYOUT PARA HORIZONTAL #}
+                    <div class="slot-actions horizontal-actions">
                         <button class="btn-icon" data-action="edit" data-id="{{ aula.id }}" title="Editar Aula">✏️</button>
                         <button class="btn-icon" data-action="delete" data-id="{{ aula.id }}" title="Remover Aula">🗑️</button>
                     </div>
                 {% elif not aula.can_edit and not aula.is_continuation %}
+                    {# AÇÕES PARA AULAS SÓ DE VISUALIZAÇÃO #}
                     <div class="slot-actions">
                         <span class="no-permission" title="Você não pode editar esta aula">🔒</span>
                     </div>

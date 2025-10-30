@@ -73,38 +73,6 @@
 .slot-actions .btn-icon.manage { background-color: var(--color-warning); }
 .slot-actions .btn-icon.manage:hover { background-color: #d97706; }
 
-/* --- CORREÇÃO DE ALINHAMENTO DO MODAL --- */
-#approval-modal-form .form-actions {
-    justify-content: space-between;
-    border-top: 1px solid var(--color-border);
-    padding-top: 1.5rem;
-    margin-top: 1.5rem;
-}
-#approval-periodos-container {
-    max-height: 200px;
-    overflow-y: auto;
-    padding: 0.5rem;
-}
-#approval-periodos-container .form-check {
-    padding: 0.75rem 1.25rem;
-    background-color: #f8fafc;
-    border: 1px solid var(--color-border);
-    border-radius: 8px;
-    margin-bottom: 0.5rem;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-}
-#approval-periodos-container .form-check:hover { background-color: #eef5ff; }
-#approval-periodos-container .form-check input[type="checkbox"] {
-    margin-right: 0.75rem; /* Adiciona espaço entre o checkbox e o texto */
-}
-#approval-periodos-container .form-check label {
-    margin-bottom: 0; 
-    cursor: pointer;
-}
-/* --- FIM DA CORREÇÃO DE ALINHAMENTO DO MODAL --- */
-
 /* --- NOVO ESTILO PARA OS INTERVALOS --- */
 tr.break-after > td {
     border-bottom: 3px solid #fcd34d; /* Cor amarelada para o intervalo */
@@ -163,7 +131,7 @@ tr.break-after > td {
             <input type="hidden" id="approval-horario-id" name="horario_id">
             <div id="approval-periodos-container" class="form-group">
             </div>
-            <div class="form-actions">
+            <div class="form-actions" style="justify-content: space-between; margin-top: 1.5rem; padding-top: 0;">
                 <button type="button" class="btn btn-secondary" id="approval-modal-cancel">Cancelar</button>
                 <div class="btn-group">
                     <button type="button" class="btn btn-danger" id="approval-negar">Negar Aula</button>
@@ -240,40 +208,6 @@ document.addEventListener('DOMContentLoaded', function() {
         openModal(horarioModalOverlay);
     }
 
-    async function openApprovalModal(horarioId) {
-        const form = document.getElementById('approval-modal-form');
-        form.reset();
-        document.getElementById('approval-horario-id').value = horarioId;
-        const modalTitle = document.getElementById('approval-modal-title');
-        const infoP = document.getElementById('approval-modal-info');
-        const periodosContainer = document.getElementById('approval-periodos-container');
-        periodosContainer.innerHTML = 'Carregando...';
-        
-        try {
-            const res = await fetch(`/horario/get-aula/${horarioId}`);
-            const data = await res.json();
-            
-            if (data.success) {
-                modalTitle.textContent = `Gerenciar Aula de ${data.materia}`;
-                infoP.textContent = `Solicitada por: ${data.instrutor_nome}`;
-                periodosContainer.innerHTML = '<label class="form-label">Selecione os períodos para aprovar:</label>';
-                for (let i = 0; i < data.duracao; i++) {
-                    const periodo = data.periodo + i;
-                    periodosContainer.innerHTML += `
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="periodos" value="${periodo}" id="periodo-${periodo}" checked>
-                            <label class="form-check-label" for="periodo-${periodo}">${periodo}º Período</label>
-                        </div>`;
-                }
-                openModal(approvalModalOverlay);
-            } else {
-                alert('Erro: ' + data.message);
-            }
-        } catch (error) {
-            alert("Não foi possível carregar os detalhes da aula para aprovação.");
-        }
-    }
-
     function sendFullApprovalAction(horarioId, action) {
         const confirmMessage = action === 'negar' ? 'Tem certeza que deseja NEGAR (remover) esta solicitação de aula?' : null;
         if (confirmMessage && !confirm(confirmMessage)) {
@@ -301,6 +235,43 @@ document.addEventListener('DOMContentLoaded', function() {
         form.submit();
     }
 
+
+    async function openApprovalModal(horarioId) {
+        const form = document.getElementById('approval-modal-form');
+        form.reset();
+        document.getElementById('approval-horario-id').value = horarioId;
+        const modalTitle = document.getElementById('approval-modal-title');
+        const infoP = document.getElementById('approval-modal-info');
+        const periodosContainer = document.getElementById('approval-periodos-container');
+        periodosContainer.innerHTML = 'Carregando...';
+        
+        try {
+            const res = await fetch(`/horario/get-aula/${horarioId}`);
+            const data = await res.json();
+            
+            if (data.success) {
+                modalTitle.textContent = `Gerenciar Aula de ${data.materia}`;
+                infoP.textContent = `Solicitada por: ${data.instrutor_nome}`;
+                
+                // CORREÇÃO: Usa data.periodo e data.duracao para iterar corretamente
+                periodosContainer.innerHTML = '<label class="form-label">Selecione os períodos para aprovar:</label>';
+                for (let i = 0; i < data.duracao; i++) {
+                    const periodo = data.periodo + i; // Começa do período inicial do bloco
+                    periodosContainer.innerHTML += `
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="periodos" value="${periodo}" id="periodo-${periodo}" checked>
+                            <label class="form-check-label" for="periodo-${periodo}">${periodo}º Período</label>
+                        </div>`;
+                }
+                openModal(approvalModalOverlay);
+            } else {
+                alert('Erro: ' + data.message);
+            }
+        } catch (error) {
+            alert("Não foi possível carregar os detalhes da aula para aprovação.");
+        }
+    }
+
     function handleTableClick(e) {
         const target = e.target.closest('button');
         if (!target) return;
@@ -320,6 +291,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (confirm('Tem certeza que deseja remover esta aula?')) {
                 fetch('/horario/remover-aula', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken }, body: JSON.stringify({ horario_id: id }) }).then(res => res.json()).then(data => { if (data.success) window.location.reload(); else alert('Erro: ' + data.message); });
             }
+        // --- CORREÇÃO DOS BOTÕES DE APROVAÇÃO RÁPIDA ---
         } else if (action === 'approve_all') {
             sendFullApprovalAction(id, 'aprovar');
         } else if (action === 'manage_approval') {
@@ -392,6 +364,38 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+    // --- FUNÇÃO DE APROVAÇÃO PARCIAL UNIFICADA ---
+    function sendPartialApproval(horarioId, periodos) {
+        fetch('/horario/aprovar-parcial', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ horario_id: horarioId, periodos: periodos })
+        }).then(res => res.json()).then(data => {
+            if (data.success) {
+                window.location.reload();
+            } else {
+                alert('Erro: ' + data.message);
+            }
+        });
+    }
+
+    // --- LISTENER PARA O BOTÃO NEGAR DENTRO DO MODAL ---
+    document.getElementById('approval-negar').addEventListener('click', function() {
+        const horarioId = document.getElementById('approval-horario-id').value;
+        if (confirm('Tem certeza que deseja NEGAR (remover) esta solicitação de aula?')) {
+             sendPartialApproval(horarioId, []); // Envia lista vazia para negar tudo
+        }
+    });
+
+    // --- ATUALIZAÇÃO DO SUBMIT DO MODAL DE APROVAÇÃO ---
+    document.getElementById('approval-modal-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const horarioId = document.getElementById('approval-horario-id').value;
+        const selectedPeriodos = Array.from(document.querySelectorAll('#approval-periodos-container input:checked')).map(cb => parseInt(cb.value));
+        
+        sendPartialApproval(horarioId, selectedPeriodos);
+    });
+    
     document.getElementById('modal-cancel').addEventListener('click', () => closeModal(horarioModalOverlay));
     document.getElementById('approval-modal-cancel').addEventListener('click', () => closeModal(approvalModalOverlay));
     if (horarioModalOverlay) { horarioModalOverlay.addEventListener('click', (e) => { if (e.target === horarioModalOverlay) closeModal(horarioModalOverlay); }); }
