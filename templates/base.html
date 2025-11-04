@@ -23,9 +23,8 @@
         }
 
         {% if site_config is defined and site_config.site_background %}
-        body{
-            background: url('{{ site_config.site_background }}') no-repeat center center fixed !important;
-            background-size: cover !important;
+        :root {
+            --site-bg-url: url('{{ site_config.site_background }}');
         }
         {% endif %}
 
