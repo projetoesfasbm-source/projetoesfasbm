@@ -40,6 +40,10 @@ from backend.models.notification import Notification
 from backend.models.push_subscription import PushSubscription
 from backend.models.discipline_rule import DisciplineRule
 
+# --- ADICIONADO PARA A MIGRAÇÃO DA AVALIAÇÃO ---
+from backend.models.avaliacao import AvaliacaoAtitudinal, AvaliacaoItem
+# -----------------------------------------------
+
 
 def create_app(config_class=Config):
     """
@@ -258,14 +262,12 @@ def register_cli_commands(app):
             popular_questionario_db()
         print("Comando de popular questionário executado.")
 
-    # --- ESSE É O COMANDO QUE ESTAVA FALTANDO ---
     @app.cli.command("seed-npccal")
     def seed_npccal_command():
         """Popula o banco de dados com as regras de disciplina (NPCCAL)."""
         from scripts.seed_npccal import seed_rules
         with app.app_context():
             seed_rules()
-    # ---------------------------------------------
 
 if __name__ == '__main__':
     app = create_app()

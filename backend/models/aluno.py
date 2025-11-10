@@ -10,7 +10,8 @@ if t.TYPE_CHECKING:
     from .historico import HistoricoAluno
     from .historico_disciplina import HistoricoDisciplina
     from .turma import Turma
-    from .processo_disciplina import ProcessoDisciplina # <-- NOVA IMPORTAÇÃO
+    from .processo_disciplina import ProcessoDisciplina
+    from .avaliacao import AvaliacaoAtitudinal  # <-- 1. ADICIONADO AQUI
 
 class Aluno(db.Model):
     __tablename__ = 'alunos'
@@ -35,8 +36,12 @@ class Aluno(db.Model):
     historico: Mapped[list["HistoricoAluno"]] = relationship(back_populates="aluno", cascade="all, delete-orphan")
     historico_disciplinas: Mapped[list["HistoricoDisciplina"]] = relationship(back_populates="aluno", cascade="all, delete-orphan")
 
-    # --- NOVA RELAÇÃO ADICIONADA ---
     processos_disciplinares: Mapped[list["ProcessoDisciplina"]] = relationship(back_populates="aluno", cascade="all, delete-orphan")
+
+    # --- 2. ADICIONADO AQUI ---
+    # Relacionamento com as Avaliações Atitudinais
+    avaliacoes: Mapped[list["AvaliacaoAtitudinal"]] = relationship(back_populates="aluno", cascade="all, delete-orphan")
+    # --------------------------
 
     def __init__(self, user_id: int, opm: str, 
                  id_aluno: t.Optional[str] = None, num_aluno: t.Optional[str] = None,

@@ -17,6 +17,7 @@ from .email_service import EmailService
 class JusticaService:
     @staticmethod
     def get_analise_disciplinar_data():
+        # ... (código existente sem alterações) ...
         processos = db.session.scalars(
             select(ProcessoDisciplina)
             .options(
@@ -24,7 +25,7 @@ class JusticaService:
                 joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.user)
             )
         ).all()
-
+        # ... (resto do método) ...
         total_processos = len(processos)
         status_counts = Counter(p.status for p in processos)
         turma_counts = Counter()
@@ -54,6 +55,7 @@ class JusticaService:
 
     @staticmethod
     def get_processos_para_usuario(user):
+        # ... (código existente sem alterações) ...
         stmt = select(ProcessoDisciplina)
         if user.role == 'aluno' and hasattr(user, 'aluno_profile') and user.aluno_profile:
             stmt = stmt.where(ProcessoDisciplina.aluno_id == user.aluno_profile.id)
@@ -65,6 +67,7 @@ class JusticaService:
 
     @staticmethod
     def get_finalized_processos():
+        # ... (código existente sem alterações) ...
         stmt = select(ProcessoDisciplina).where(
             ProcessoDisciplina.status == 'Finalizado',
             ProcessoDisciplina.decisao_final.isnot(None)
@@ -76,6 +79,7 @@ class JusticaService:
 
     @staticmethod
     def get_processos_por_ids(processo_ids):
+        # ... (código existente sem alterações) ...
         if not processo_ids:
             return []
         
@@ -85,9 +89,10 @@ class JusticaService:
             joinedload(ProcessoDisciplina.relator)
         )).all()
 
+    # --- MÉTODO ATUALIZADO ---
     @staticmethod
-    def criar_processo(fato, observacao, aluno_id, relator_id):
-        """Cria um novo processo disciplinar e notifica o aluno por Push e E-mail."""
+    def criar_processo(fato, observacao, aluno_id, relator_id, pontos=0.0):
+        """Cria um novo processo disciplinar, salvando os pontos, e notifica o aluno."""
         try:
             aluno = db.session.get(Aluno, aluno_id)
             if not aluno or not aluno.user:
@@ -97,7 +102,8 @@ class JusticaService:
                 fato_constatado=fato,
                 observacao=observacao,
                 aluno_id=aluno_id,
-                relator_id=relator_id
+                relator_id=relator_id,
+                pontos=pontos  # <-- SALVA OS PONTOS AQUI
             )
             db.session.add(novo_processo)
 
@@ -111,7 +117,6 @@ class JusticaService:
             
             db.session.flush() # Garante o ID do processo
             
-            # --- NOTIFICAÇÕES (INÍCIO) ---
             message = "Um novo processo disciplinar foi aberto em seu nome. Por favor, acesse o sistema para dar ciência."
             notification_url = url_for('justica.index', _external=True)
             
@@ -120,9 +125,6 @@ class JusticaService:
             # 2. E-mail
             if aluno.user.email:
                 EmailService.send_justice_notification_email(aluno.user, novo_processo, notification_url)
-            else:
-                 current_app.logger.warning(f"Aluno {aluno.id} sem e-mail. Notificação não enviada.")
-            # --- NOTIFICAÇÕES (FIM) ---
             
             db.session.commit()
             return True, "Infração registrada com sucesso e aluno notificado!"
@@ -133,7 +135,7 @@ class JusticaService:
 
     @staticmethod
     def registrar_ciente(processo_id, user):
-        """Registra a ciência e notifica os administradores."""
+        # ... (código existente sem alterações) ...
         processo = db.session.get(ProcessoDisciplina, processo_id)
         if not processo or (hasattr(user, 'aluno_profile') and processo.aluno_id != user.aluno_profile.id):
             return False, "Processo não encontrado ou não pertence a você."
@@ -152,7 +154,7 @@ class JusticaService:
 
     @staticmethod
     def enviar_defesa(processo_id, defesa, user):
-        """Salva a defesa e notifica os administradores."""
+        # ... (código existente sem alterações) ...
         processo = db.session.get(ProcessoDisciplina, processo_id)
         if not processo or (hasattr(user, 'aluno_profile') and processo.aluno_id != user.aluno_profile.id):
             return False, "Processo não encontrado ou não pertence a você."
@@ -172,7 +174,7 @@ class JusticaService:
 
     @staticmethod
     def finalizar_processo(processo_id, decisao, fundamentacao, detalhes_sancao):
-        """Finaliza o processo, registra no histórico e notifica o aluno do veredito por e-mail."""
+        # ... (código existente sem alterações) ...
         processo = db.session.get(ProcessoDisciplina, processo_id)
         if not processo:
             return False, "Processo não encontrado."
@@ -192,7 +194,6 @@ class JusticaService:
         processo.decisao_final = decisao
         processo.detalhes_sancao = detalhes_sancao if detalhes_sancao else None
 
-        # --- NOTIFICAÇÃO DE VEREDITO (INÍCIO) ---
         if processo.aluno and processo.aluno.user:
              message = f"O processo disciplinar #{processo.id} foi finalizado. Veredito: {decisao}."
              notification_url = url_for('justica.index', _external=True) 
@@ -200,15 +201,13 @@ class JusticaService:
 
              if processo.aluno.user.email:
                 EmailService.send_justice_verdict_email(processo.aluno.user, processo)
-             else:
-                 current_app.logger.warning(f"Aluno {processo.aluno_id} sem e-mail para veredito.")
-        # --- NOTIFICAÇÃO DE VEREDITO (FIM) ---
 
         db.session.commit()
         return True, "Processo finalizado com sucesso e aluno notificado do veredito."
 
     @staticmethod
     def deletar_processo(processo_id):
+        # ... (código existente sem alterações) ...
         processo = db.session.get(ProcessoDisciplina, processo_id)
         if not processo:
             return False, "Processo não encontrado."

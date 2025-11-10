@@ -9,13 +9,13 @@ from ..models.database import db
 from ..models.aluno import Aluno
 from ..models.user import User
 from ..models.turma import Turma
-from ..models.discipline_rule import DisciplineRule # <-- Importa o novo modelo
+from ..models.discipline_rule import DisciplineRule # <-- Importa do banco
 from ..services.justica_service import JusticaService
 from utils.decorators import admin_or_programmer_required
 
 justica_bp = Blueprint('justica', __name__, url_prefix='/justica-e-disciplina')
 
-# --- A antiga lista FATOS_PREDEFINIDOS foi removida daqui ---
+# --- A LISTA 'FATOS_PREDEFINIDOS' FOI REMOVIDA DAQUI ---
 
 @justica_bp.route('/')
 @login_required
@@ -27,19 +27,17 @@ def index():
     processos_finalizados = [p for p in processos if p.status == 'Finalizado']
 
     # --- NOVA LÓGICA: Busca fatos do banco de dados ---
-    # 1. Identifica qual escola está ativa para o usuário
     active_school = g.get('active_school') 
-    npccal_type_da_escola = 'ctsp' # Valor padrão de segurança
+    npccal_type_da_escola = 'ctsp' 
     
     if active_school:
         npccal_type_da_escola = active_school.npccal_type
     
-    # 2. Busca apenas as regras que se aplicam a essa escola
-    # Ex: Se a escola é CBFPM, só trará as 110 regras de soldado.
+    # Busca apenas as regras que se aplicam a essa escola
     regras_db = db.session.scalars(
         select(DisciplineRule)
         .where(DisciplineRule.npccal_type == npccal_type_da_escola)
-        .order_by(DisciplineRule.id)
+        .order_by(DisciplineRule.id) # Ordena pelo ID (ou 'codigo' se preferir)
     ).all()
     # --------------------------------------------------
 
@@ -47,52 +45,23 @@ def index():
         'justica/index.html',
         em_andamento=processos_em_andamento,
         finalizados=processos_finalizados,
-        fatos_predefinidos=regras_db # Passa a lista vinda do Banco para o template
+        fatos_predefinidos=regras_db # Passa a lista vinda do Banco
     )
 
 @justica_bp.route('/analise')
 @login_required
 @admin_or_programmer_required
 def analise():
-    """Página de análise de dados e gráficos."""
+    # ... (código existente sem alterações) ...
     dados_analise = JusticaService.get_analise_disciplinar_data()
     return render_template('justica/analise.html', dados=dados_analise)
 
-@justica_bp.route('/novo', methods=['POST'])
-@login_required
-@admin_or_programmer_required
-def novo_processo():
-    aluno_id = request.form.get('aluno_id')
-    # O formulário agora envia a descrição E os pontos em campos separados
-    fato_descricao = request.form.get('fato_descricao') 
-    fato_pontos = request.form.get('fato_pontos')
-    observacao = request.form.get('observacao')
-
-    if not aluno_id or not fato_descricao:
-        flash('Aluno e Fato Constatado são obrigatórios.', 'danger')
-        return redirect(url_for('justica.index'))
-
-    # Converte os pontos para número (padrão 0.0 se falhar)
-    try:
-        pontos = float(fato_pontos) if fato_pontos else 0.0
-    except ValueError:
-        pontos = 0.0
-
-    # Chama o serviço passando os novos dados
-    success, message = JusticaService.criar_processo(
-        fato_descricao, 
-        observacao, 
-        int(aluno_id), 
-        current_user.id,
-        pontos # <-- Passa os pontos para serem salvos no processo
-    )
-    flash(message, 'success' if success else 'danger')
-    return redirect(url_for('justica.index'))
 
 @justica_bp.route('/finalizar/<int:processo_id>', methods=['POST'])
 @login_required
 @admin_or_programmer_required
 def finalizar_processo(processo_id):
+    # ... (código existente sem alterações) ...
     decisao = request.form.get('decisao_final')
     fundamentacao = request.form.get('fundamentacao')
     detalhes_sancao = request.form.get('detalhes_sancao')
@@ -108,10 +77,40 @@ def finalizar_processo(processo_id):
     success, message = JusticaService.finalizar_processo(processo_id, decisao, fundamentacao, detalhes_sancao)
     flash(message, 'success' if success else 'danger')
     return redirect(url_for('justica.index'))
+    
+@justica_bp.route('/novo', methods=['POST'])
+@login_required
+@admin_or_programmer_required
+def novo_processo():
+    aluno_id = request.form.get('aluno_id')
+    # O formulário agora envia a descrição E os pontos
+    fato_descricao = request.form.get('fato_descricao') 
+    fato_pontos = request.form.get('fato_pontos')
+    observacao = request.form.get('observacao')
+
+    if not aluno_id or not fato_descricao:
+        flash('Aluno e Fato Constatado são obrigatórios.', 'danger')
+        return redirect(url_for('justica.index'))
+
+    try:
+        pontos = float(fato_pontos) if fato_pontos else 0.0
+    except ValueError:
+        pontos = 0.0
+
+    success, message = JusticaService.criar_processo(
+        fato_descricao, 
+        observacao, 
+        int(aluno_id), 
+        current_user.id,
+        pontos # <-- Passa os pontos para o service
+    )
+    flash(message, 'success' if success else 'danger')
+    return redirect(url_for('justica.index'))
 
 @justica_bp.route('/dar-ciente/<int:processo_id>', methods=['POST'])
 @login_required
 def dar_ciente(processo_id):
+    # ... (código existente sem alterações) ...
     success, message = JusticaService.registrar_ciente(processo_id, current_user)
     flash(message, 'success' if success else 'danger')
     return redirect(url_for('justica.index'))
@@ -119,6 +118,7 @@ def dar_ciente(processo_id):
 @justica_bp.route('/enviar-defesa/<int:processo_id>', methods=['POST'])
 @login_required
 def enviar_defesa(processo_id):
+    # ... (código existente sem alterações) ...
     defesa = request.form.get('defesa')
     if not defesa:
         flash('O texto da defesa não pode estar vazio.', 'danger')
@@ -132,6 +132,7 @@ def enviar_defesa(processo_id):
 @login_required
 @admin_or_programmer_required
 def deletar_processo(processo_id):
+    # ... (código existente sem alterações) ...
     success, message = JusticaService.deletar_processo(processo_id)
     flash(message, 'success' if success else 'danger')
     return redirect(url_for('justica.index'))
@@ -140,9 +141,8 @@ def deletar_processo(processo_id):
 @login_required
 @admin_or_programmer_required
 def api_get_alunos():
+    # ... (código existente sem alterações) ...
     search = request.args.get('q', '').lower()
-    
-    # Garante que só retorna alunos da mesma escola que o administrador está visualizando
     active_school = g.get('active_school')
     if not active_school:
         return jsonify({'error': 'Nenhuma escola ativa selecionada'}), 400
@@ -150,7 +150,7 @@ def api_get_alunos():
     query = (
         select(Aluno)
         .join(User)
-        .join(Turma) # Join com Turma para filtrar por escola
+        .join(Turma)
         .where(
             Turma.school_id == active_school.id,
             or_(
@@ -169,6 +169,7 @@ def api_get_alunos():
 @login_required
 @admin_or_programmer_required
 def api_get_aluno_details(aluno_id):
+    # ... (código existente sem alterações) ...
     aluno = db.session.get(Aluno, aluno_id)
     if not aluno or not aluno.user:
         return jsonify({'error': 'Aluno não encontrado'}), 404
@@ -184,14 +185,14 @@ def api_get_aluno_details(aluno_id):
 @login_required
 @admin_or_programmer_required
 def exportar_selecao():
-    # Tenta configurar o locale para datas em português
+    # ... (código existente sem alterações) ...
     try:
         locale.setlocale(locale.LC_TIME, 'pt_BR.UTF-8')
     except locale.Error:
         try:
             locale.setlocale(locale.LC_TIME, 'Portuguese_Brazil')
         except locale.Error:
-             pass # Usa o padrão do sistema se falhar
+             pass 
 
     if request.method == 'POST':
         processo_ids = request.form.getlist('processo_ids')
