@@ -8,7 +8,6 @@
     <p class="text-secondary">Gerenciamento de processos disciplinares.</p>
 </div>
 
-<!-- Botões de Ação -->
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
         {% if current_user.role in ['admin_escola', 'programador', 'super_admin'] %}
@@ -29,7 +28,6 @@
     </div>
 </div>
 
-<!-- Abas de Navegação -->
 <ul class="nav nav-tabs mb-3" id="processosTab" role="tablist">
     <li class="nav-item" role="presentation">
         <button class="nav-link active" id="andamento-tab" data-bs-toggle="tab" data-bs-target="#andamento" type="button" role="tab" aria-controls="andamento" aria-selected="true">
@@ -43,7 +41,6 @@
     </li>
 </ul>
 
-<!-- Conteúdo das Abas -->
 <div class="tab-content" id="processosTabContent">
     <div class="tab-pane fade show active" id="andamento" role="tabpanel" aria-labelledby="andamento-tab">
         {% if em_andamento %}
@@ -74,8 +71,6 @@
     </div>
 </div>
 
-
-<!-- Modal Novo Processo -->
 {% if current_user.role in ['admin_escola', 'programador', 'super_admin'] %}
 <div class="modal fade" id="novoProcessoModal" tabindex="-1" aria-labelledby="novoProcessoModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
@@ -92,15 +87,15 @@
                     <div class="mb-3">
                         <label for="aluno_id" class="form-label">Aluno</label>
                         <select class="form-select" id="aluno_id" name="aluno_id" required>
-                        </select>
+                            </select>
                     </div>
 
                     <div id="aluno-details" class="card p-2 mb-3" style="display: none;">
                         <small class="text-muted">Detalhes do Aluno:</small>
                         <div>
-                            <span id="aluno-posto" class="badge bg-secondary">POSTO/GRADUAÇÃO</span>
-                            <strong id="aluno-nome">NOME DO ALUNO</strong>
-                            (<span id="aluno-matricula">MATRÍCULA</span>)
+                            <span id="aluno-posto" class="badge bg-secondary"></span>
+                            <strong id="aluno-nome"></strong>
+                            (<span id="aluno-matricula"></span>)
                         </div>
                     </div>
                     
@@ -109,20 +104,14 @@
                         <select class="form-select" id="fato_descricao" name="fato_descricao" required>
                             <option value="" data-pontos="0.0" selected disabled>Selecione um fato...</option>
                             
-                            <!-- 
-                                === LÓGICA ATUALIZADA ===
-                                O 'active_school' vem do 'g.active_school' que o app.py injeta.
-                                Ele só mostra os pontos se o NPCCAL da escola NÃO for 'ctsp'.
-                            -->
                             {% for rule in fatos_predefinidos %}
                                 <option value="{{ rule.descricao }}" data-pontos="{{ rule.pontos }}">
                                     ({{ rule.codigo }}) {{ rule.descricao }}
-                                    {% if active_school and active_school.npccal_type != 'ctsp' %}
-                                        <span class="text-danger">[{{ rule.pontos }} pontos]</span>
+                                    {% if g.active_school and g.active_school.npccal_type != 'cfs' %}
+                                     - [{{ rule.pontos }} pts]
                                     {% endif %}
                                 </option>
                             {% endfor %}
-                            
                         </select>
                     </div>
                     
@@ -162,10 +151,13 @@ $(document).ready(function() {
         }
     });
 
-    // Atualiza os detalhes do aluno quando um é selecionado
+    // Atualiza os detalhes do aluno quando selecionado
     $('#aluno_id').on('select2:select', function (e) {
         var alunoId = e.params.data.id;
-        fetch(`{{ url_for('justica.api_get_aluno_details', aluno_id=0) }}`.replace('0', alunoId))
+        // Substitui o '0' na URL gerada pelo Flask pelo ID real
+        var url = "{{ url_for('justica.api_get_aluno_details', aluno_id=0) }}".replace('/0', '/' + alunoId);
+        
+        fetch(url)
             .then(response => response.json())
             .then(data => {
                 if (!data.error) {
@@ -177,21 +169,23 @@ $(document).ready(function() {
             });
     });
 
-    // Limpa os detalhes ao fechar o modal
+    // Limpa o modal ao fechar
     $('#novoProcessoModal').on('hidden.bs.modal', function () {
         $('#aluno_id').val(null).trigger('change');
         $('#aluno-details').hide();
         $(this).find('form')[0].reset();
         $('#fato_descricao').val(null).trigger('change');
+        $('#fato_pontos').val('0.0'); // Reseta os pontos também
     });
 
-    // Inicializa o Select2 para Fatos (para permitir busca)
+    // Inicializa Select2 para os Fatos (permite busca textual)
     $('#fato_descricao').select2({
         dropdownParent: $('#novoProcessoModal'),
-        theme: "bootstrap-5"
+        theme: "bootstrap-5",
+        placeholder: 'Pesquise o fato...'
     });
 
-    // SCRIPT PARA ATUALIZAR PONTOS (não muda)
+    // Atualiza o campo oculto de pontos quando um fato é selecionado
     $('#fato_descricao').on('change', function() {
         var selectedOption = $(this).find('option:selected');
         var pontos = selectedOption.data('pontos') || 0.0;

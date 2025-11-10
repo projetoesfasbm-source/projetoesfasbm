@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}Avaliação Atitudinal - Seleção{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <h1><i class="fas fa-star-half-alt"></i> Avaliação Atitudinal (FADA)</h1>
+    <p class="text-muted">Selecione uma turma e um aluno para iniciar uma nova avaliação.</p>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" action="{{ url_for('avaliacao.index') }}" class="row g-3 align-items-end">
+            <div class="col-md-10">
+                <label for="turma_id" class="form-label fw-bold">Selecione a Turma</label>
+                <select class="form-select" name="turma_id" id="turma_id" onchange="this.form.submit()">
+                    <option value="">-- Escolha uma turma --</option>
+                    {% for turma in turmas %}
+                    <option value="{{ turma.id }}" {% if selected_turma_id == turma.id %}selected{% endif %}>
+                        {{ turma.nome }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="fas fa-filter"></i> Filtrar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if alunos %}
+<div class="table-container">
+    <table class="table table-hover align-middle">
+        <thead class="table-light">
+            <tr>
+                <th>Matrícula</th>
+                <th>Posto/Grad.</th>
+                <th>Nome Completo</th>
+                <th class="text-end">Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for aluno in alunos %}
+            <tr>
+                <td>{{ aluno.user.matricula }}</td>
+                <td>{{ aluno.user.posto_graduacao }}</td>
+                <td><strong>{{ aluno.user.nome_completo }}</strong></td>
+                <td class="text-end">
+                    <a href="{{ url_for('avaliacao.ver_avaliacoes', aluno_id=aluno.id) }}" class="btn btn-sm btn-outline-secondary me-1" title="Ver Histórico">
+                        <i class="fas fa-history"></i> Histórico
+                    </a>
+                    <a href="{{ url_for('avaliacao.nova_avaliacao', aluno_id=aluno.id) }}" class="btn btn-sm btn-success" title="Nova Avaliação">
+                        <i class="fas fa-plus-circle"></i> Avaliar
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% elif selected_turma_id %}
+<div class="alert alert-info">
+    <i class="fas fa-info-circle"></i> Nenhum aluno encontrado nesta turma.
+</div>
+{% else %}
+<div class="alert alert-secondary text-center p-5">
+    <h4><i class="fas fa-arrow-up"></i></h4>
+    <p>Selecione uma turma acima para começar.</p>
+</div>
+{% endif %}
+
+{% endblock %}

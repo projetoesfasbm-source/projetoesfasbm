@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Nova Avaliação{% endblock %}
+{% block content %}
+<div class="content-header">
+    <h1>Nova Avaliação: {{ aluno.user.nome_completo }}</h1>
+</div>
+<form method="POST" class="table-container p-4">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="aluno_id" value="{{ aluno.id }}">
+    
+    <div class="row mb-4 bg-light p-3 border rounded">
+        <div class="col-md-6">
+            <label class="form-label fw-bold">Início do Período</label>
+            <input type="date" name="periodo_inicio" class="form-control" value="{{ data_inicio }}" required>
+        </div>
+        <div class="col-md-6">
+            <label class="form-label fw-bold">Fim do Período</label>
+            <input type="date" name="periodo_fim" class="form-control" value="{{ data_fim }}" required>
+        </div>
+    </div>
+
+    <h4 class="mb-3">Critérios FADA (Notas 0 a 10)</h4>
+    <div class="row">
+        {% for criterio in criterios %}
+        <div class="col-md-6 mb-3">
+            <label class="form-label">{{ criterio }}</label>
+            <div class="d-flex gap-2 align-items-center">
+                <input type="range" class="form-range" min="0" max="10" step="0.1" value="10" 
+                       name="criterio_{{ loop.index0 }}" oninput="this.nextElementSibling.textContent = parseFloat(this.value).toFixed(1)">
+                <span class="badge bg-primary" style="min-width:50px">10.0</span>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="mb-3 mt-4">
+        <label class="form-label fw-bold">Observações</label>
+        <textarea name="observacoes" class="form-control" rows="3"></textarea>
+    </div>
+
+    <div class="text-end">
+        <a href="{{ url_for('avaliacao.index') }}" class="btn btn-secondary">Cancelar</a>
+        <button type="submit" class="btn btn-success">Salvar Avaliação</button>
+    </div>
+</form>
+{% endblock %}

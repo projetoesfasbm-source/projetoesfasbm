@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Histórico de Avaliações{% endblock %}
+{% block content %}
+<div class="content-header">
+    <h1>Histórico: {{ aluno.user.nome_completo }}</h1>
+</div>
+<div class="mb-3">
+    <a href="{{ url_for('avaliacao.index') }}" class="btn btn-outline-secondary">Voltar</a>
+</div>
+<div class="table-container">
+    <table class="table table-hover">
+        <thead>
+            <tr>
+                <th>Período</th>
+                <th class="text-center">Nota Disciplinar</th>
+                <th class="text-center">Média FADA</th>
+                <th class="text-center">Nota Final (AAt)</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for av in avaliacoes %}
+            <tr>
+                <td>{{ av.periodo_inicio.strftime('%d/%m/%Y') }} - {{ av.periodo_fim.strftime('%d/%m/%Y') }}</td>
+                <td class="text-center">{{ av.nota_disciplinar }}</td>
+                <td class="text-center">{{ av.nota_fada }}</td>
+                <td class="text-center fw-bold">
+                    <span class="badge {{ 'bg-success' if av.nota_final >= 8 else 'bg-warning' if av.nota_final >= 6 else 'bg-danger' }}">
+                        {{ av.nota_final }}
+                    </span>
+                </td>
+                <td>
+                    <a href="{{ url_for('avaliacao.detalhe_avaliacao', avaliacao_id=av.id) }}" class="btn btn-sm btn-primary"><i class="fas fa-eye"></i></a>
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" class="text-center text-muted">Nenhuma avaliação encontrada.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
