@@ -9,14 +9,14 @@ from ..models.historico import HistoricoAluno
 from sqlalchemy import select, or_, and_, func
 from sqlalchemy.orm import joinedload
 from datetime import datetime, timezone
-from flask import current_app, url_for # <-- ADICIONE url_for
+from flask import current_app, url_for
 from collections import Counter
-from .notification_service import NotificationService # <-- ADICIONE ESTA LINHA
+from .notification_service import NotificationService
+from .email_service import EmailService
 
 class JusticaService:
     @staticmethod
     def get_analise_disciplinar_data():
-        # ... (código existente sem alterações) ...
         processos = db.session.scalars(
             select(ProcessoDisciplina)
             .options(
@@ -54,7 +54,6 @@ class JusticaService:
 
     @staticmethod
     def get_processos_para_usuario(user):
-        # ... (código existente sem alterações) ...
         stmt = select(ProcessoDisciplina)
         if user.role == 'aluno' and hasattr(user, 'aluno_profile') and user.aluno_profile:
             stmt = stmt.where(ProcessoDisciplina.aluno_id == user.aluno_profile.id)
@@ -66,7 +65,6 @@ class JusticaService:
 
     @staticmethod
     def get_finalized_processos():
-        # ... (código existente sem alterações) ...
         stmt = select(ProcessoDisciplina).where(
             ProcessoDisciplina.status == 'Finalizado',
             ProcessoDisciplina.decisao_final.isnot(None)
@@ -78,7 +76,6 @@ class JusticaService:
 
     @staticmethod
     def get_processos_por_ids(processo_ids):
-        # ... (código existente sem alterações) ...
         if not processo_ids:
             return []
         
@@ -90,11 +87,11 @@ class JusticaService:
 
     @staticmethod
     def criar_processo(fato, observacao, aluno_id, relator_id):
-        """Cria um novo processo disciplinar e notifica o aluno."""
+        """Cria um novo processo disciplinar e notifica o aluno por Push e E-mail."""
         try:
             aluno = db.session.get(Aluno, aluno_id)
-            if not aluno:
-                return False, "Aluno não encontrado."
+            if not aluno or not aluno.user:
+                return False, "Aluno ou perfil de usuário do aluno não encontrado."
 
             novo_processo = ProcessoDisciplina(
                 fato_constatado=fato,
@@ -112,16 +109,24 @@ class JusticaService:
             )
             db.session.add(novo_historico)
             
-            # --- LÓGICA DE NOTIFICAÇÃO ADICIONADA ---
-            message = "Um novo processo disciplinar foi aberto em seu nome. Por favor, dê ciência."
+            db.session.flush() # Garante o ID do processo
+            
+            # --- NOTIFICAÇÕES (INÍCIO) ---
+            message = "Um novo processo disciplinar foi aberto em seu nome. Por favor, acesse o sistema para dar ciência."
             notification_url = url_for('justica.index', _external=True)
-            NotificationService.create_notification(aluno.user_id, message, notification_url)
-            # --- FIM DA LÓGICA DE NOTIFICAÇÃO ---
+            
+            # 1. App/Push
+            NotificationService.create_notification(aluno.user.id, message, notification_url)
+            # 2. E-mail
+            if aluno.user.email:
+                EmailService.send_justice_notification_email(aluno.user, novo_processo, notification_url)
+            # --- NOTIFICAÇÕES (FIM) ---
             
             db.session.commit()
             return True, "Infração registrada com sucesso e aluno notificado!"
         except Exception as e:
             db.session.rollback()
+            current_app.logger.error(f"Erro ao criar processo: {e}")
             return False, f"Erro ao registrar infração: {e}"
 
     @staticmethod
@@ -134,13 +139,11 @@ class JusticaService:
         processo.status = 'Aluno Notificado'
         processo.data_ciente = datetime.now(timezone.utc)
 
-        # --- LÓGICA DE NOTIFICAÇÃO ADICIONADA ---
         turma = processo.aluno.turma
         if turma and turma.school_id:
             message = f"O aluno {user.nome_de_guerra} deu ciência do processo disciplinar #{processo.id}."
             notification_url = url_for('justica.index', _external=True)
             NotificationService.create_notification_for_roles(turma.school_id, ['admin_escola', 'super_admin', 'programador'], message, notification_url)
-        # --- FIM DA LÓGICA DE NOTIFICAÇÃO ---
         
         db.session.commit()
         return True, "Ciência registrada com sucesso."
@@ -156,27 +159,26 @@ class JusticaService:
         processo.defesa = defesa
         processo.data_defesa = datetime.now(timezone.utc)
 
-        # --- LÓGICA DE NOTIFICAÇÃO ADICIONADA ---
         turma = processo.aluno.turma
         if turma and turma.school_id:
             message = f"O aluno {user.nome_de_guerra} enviou a defesa para o processo #{processo.id}."
             notification_url = url_for('justica.index', _external=True)
             NotificationService.create_notification_for_roles(turma.school_id, ['admin_escola', 'super_admin', 'programador'], message, notification_url)
-        # --- FIM DA LÓGICA DE NOTIFICAÇÃO ---
 
         db.session.commit()
         return True, "Defesa enviada com sucesso."
 
     @staticmethod
     def finalizar_processo(processo_id, decisao, fundamentacao, detalhes_sancao):
-        # ... (código existente sem alterações) ...
+        """Finaliza o processo, registra no histórico e notifica o aluno do veredito por e-mail."""
         processo = db.session.get(ProcessoDisciplina, processo_id)
         if not processo:
             return False, "Processo não encontrado."
 
+        # Busca histórico para fechar
         historico_correspondente = db.session.scalars(select(HistoricoAluno).where(
             HistoricoAluno.aluno_id == processo.aluno_id,
-            HistoricoAluno.descricao.like(f"%Abertura de processo: {processo.fato_constatado}%"),
+            HistoricoAluno.descricao.like(f"%Abertura de processo: {processo.fato_constatado[:50]}%"),
             HistoricoAluno.data_fim.is_(None)
         ).order_by(HistoricoAluno.data_inicio.desc())).first()
         
@@ -190,11 +192,24 @@ class JusticaService:
         processo.detalhes_sancao = detalhes_sancao if detalhes_sancao else None
 
         db.session.commit()
-        return True, "Processo finalizado com sucesso."
+
+        # --- NOTIFICAÇÃO DE VEREDITO (INÍCIO) ---
+        # Recarrega o aluno com o user para garantir que temos o e-mail
+        if processo.aluno and processo.aluno.user and processo.aluno.user.email:
+             # Notificação Push
+             message = f"O processo disciplinar #{processo.id} foi finalizado. Veredito: {decisao}."
+             # URL leva para o histórico ou para a lista de processos (ajuste conforme necessidade)
+             notification_url = url_for('justica.index', _external=True) 
+             NotificationService.create_notification(processo.aluno.user.id, message, notification_url)
+
+             # Notificação por E-mail
+             EmailService.send_justice_verdict_email(processo.aluno.user, processo)
+        # --- NOTIFICAÇÃO DE VEREDITO (FIM) ---
+
+        return True, "Processo finalizado com sucesso e aluno notificado do veredito."
 
     @staticmethod
     def deletar_processo(processo_id):
-        # ... (código existente sem alterações) ...
         processo = db.session.get(ProcessoDisciplina, processo_id)
         if not processo:
             return False, "Processo não encontrado."
@@ -202,7 +217,7 @@ class JusticaService:
         try:
             historico_para_deletar = db.session.scalars(select(HistoricoAluno).where(
                 HistoricoAluno.aluno_id == processo.aluno_id,
-                HistoricoAluno.descricao.like(f"%Abertura de processo: {processo.fato_constatado}%")
+                HistoricoAluno.descricao.like(f"%Abertura de processo: {processo.fato_constatado[:50]}%")
             )).first()
 
             if historico_para_deletar:

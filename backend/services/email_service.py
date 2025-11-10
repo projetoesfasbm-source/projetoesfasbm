@@ -24,8 +24,12 @@ def send_async_email_brevo(app, to_email, subject, html_content):
         
         # Extrai o nome e o e-mail do remetente
         sender_str = os.environ.get('MAIL_DEFAULT_SENDER', '"Sistema EsFAS" <noreply@esfasbm.pythonanywhere.com>')
-        sender_name = sender_str.split('<')[0].strip().replace('"', '')
-        sender_email = sender_str.split('<')[1].replace('>', '').strip()
+        if '<' in sender_str and '>' in sender_str:
+            sender_name = sender_str.split('<')[0].strip().replace('"', '')
+            sender_email = sender_str.split('<')[1].replace('>', '').strip()
+        else:
+            sender_name = "Sistema EsFAS"
+            sender_email = sender_str.strip()
         
         sender = {"name": sender_name, "email": sender_email}
         to = [{"email": to_email}]
@@ -47,6 +51,10 @@ def send_async_email_brevo(app, to_email, subject, html_content):
 class EmailService:
     @staticmethod
     def send_password_reset_email(user, token):
+        if not user.email:
+            log.warning(f"Tentativa de enviar e-mail de redefinição para usuário sem e-mail: {user.matricula}")
+            return None
+            
         log.info(f"Preparando e-mail (Brevo API) para o utilizador: {user.email}")
         app = current_app._get_current_object()
         
@@ -57,6 +65,51 @@ class EmailService:
         )
 
         subject = 'Redefinição de Senha - Sistema EsFAS'
+        
+        thr = Thread(target=send_async_email_brevo, args=[app, user.email, subject, html_content])
+        thr.start()
+        return thr
+
+    @staticmethod
+    def send_justice_notification_email(user, processo, url):
+        """Envia e-mail notificando o aluno da abertura de um processo."""
+        if not user.email:
+            log.warning(f"Usuário {user.matricula} sem e-mail cadastrado para notificação de justiça.")
+            return None
+
+        log.info(f"Enviando notificação de ABERTURA de processo para: {user.email}")
+        app = current_app._get_current_object()
+        
+        html_content = render_template(
+            'email/notificacao_justica.html',
+            user=user,
+            processo=processo,
+            url=url
+        )
+
+        subject = f'Notificação de Processo Disciplinar - Nº {processo.id}'
+        
+        thr = Thread(target=send_async_email_brevo, args=[app, user.email, subject, html_content])
+        thr.start()
+        return thr
+
+    @staticmethod
+    def send_justice_verdict_email(user, processo):
+        """Envia e-mail notificando o aluno do veredito final do processo."""
+        if not user.email:
+             log.warning(f"Usuário {user.matricula} sem e-mail cadastrado para veredito de justiça.")
+             return None
+
+        log.info(f"Enviando notificação de VEREDITO de processo para: {user.email}")
+        app = current_app._get_current_object()
+        
+        html_content = render_template(
+            'email/veredito_justica.html',
+            user=user,
+            processo=processo
+        )
+
+        subject = f'Decisão de Processo Disciplinar - Nº {processo.id}'
         
         thr = Thread(target=send_async_email_brevo, args=[app, user.email, subject, html_content])
         thr.start()
