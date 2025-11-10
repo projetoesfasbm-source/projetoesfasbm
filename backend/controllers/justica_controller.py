@@ -1,6 +1,6 @@
 # backend/controllers/justica_controller.py
 
-from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, Response
+from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, Response, g
 from flask_login import login_required, current_user
 from sqlalchemy import select, or_
 import locale
@@ -8,71 +8,14 @@ import locale
 from ..models.database import db
 from ..models.aluno import Aluno
 from ..models.user import User
+from ..models.turma import Turma
+from ..models.discipline_rule import DisciplineRule # <-- Importa o novo modelo
 from ..services.justica_service import JusticaService
 from utils.decorators import admin_or_programmer_required
 
 justica_bp = Blueprint('justica', __name__, url_prefix='/justica-e-disciplina')
 
-# Lista de infrações extraída da normativa
-FATOS_PREDEFINIDOS = [
-    "I - Movimentar-se em forma, sem prévia autorização;",
-    "II - Afastar-se do quartel sem tomar conhecimento do aditamento, ordens e recomendações do dia;",
-    "III - Demonstrar sonolência, desatenção ou displicência em atividade do CAI ou instrução;",
-    "IV - Não primar pela manutenção e limpeza das áreas de uso comum;",
-    "V - Deixar de comunicar ao Comandante do Pelotão mudança de endereço e telefones;",
-    "VI - Não manter limpo e devidamente organizado os locais de uso individual ou coletivo;",
-    "VII - Não primar pelo bom estado de conservação e limpeza de material carga;",
-    "VIII - Deixar material abandonado ou em local que não deva permanecer;",
-    "XIV - Portar-se em local público sem observar a postura e os preceitos éticos;",
-    "XV - Dirigir-se a repartição ou a local restrito sem estar autorizado;",
-    "XVI - Estar desatento na leitura do aditamento interno ou na transmissão de ordens;",
-    "XVII - Apresentar-se com fardamento incompleto, desalinhado, mal passado ou não regulamentar;",
-    "XVIII - Portar objeto, mesmo de uso particular, que contraste com o uniforme;",
-    "XIX - Deixar de observar normas internas para o estacionamento de viaturas;",
-    "XX - Deixar de portar a Carteira de Identidade Militar e o cartão do IPERGS;",
-    "XXI - Apresentar-se com o cabelo, barba, unhas em desacordo com o estabelecido;",
-    "XXII - Aproveitar-se de formaturas ou serviço para ocultar suas faltas ou irregularidades;",
-    "XXVI - Deixar de observar rigorosamente os preceitos de regulamentos ou normas;",
-    "XXVII - Deixar, quando na função de comando ou em serviço, de cumprir as prescrições afetas as suas funções;",
-    "XXVIII - Dirigir-se à autoridade superior sem percorrer o canal hierárquico;",
-    "XXIX - Extraviar, danificar ou deixar de encaminhar documentos específicos ao ensino;",
-    "XXX - Entrar ou sair do local sem a devida permissão de superior hierárquico;",
-    "XXXI - Manter em sua posse qualquer material ou objeto sem autorização;",
-    "XXXII - Deixar de cumprir determinação de aluno em função de chefia;",
-    "XXXIII - Cumprir parcialmente ou deturpar ordem recebida;",
-    "XXXIV - Retirar-se do local de instrução, sem permissão;",
-    "XXXV - Tomar medidas de ordem administrativa ou disciplinar fora de sua esfera de atribuições;",
-    "XXXVI - Deixar, quando em função de comando, de encaminhar ao escalão superior solicitação que deva ser solucionada;",
-    "XXXVII - Deixar de colocar a arma na arrecadação tão logo cesse a instrução ou serviço;",
-    "XLI - Utilizar material não permitido em instrução ou serviço;",
-    "XLII - Determinar formatura ou deslocamento de tropa sem autorização;",
-    "XLIII - Perturbar, através de conversa ou ruído, o local de instrução ou de estudo;",
-    "XLIV - Comentar com pessoas estranhas ao Corpo de Alunos, assuntos que só dizem respeito ao público interno;",
-    "XLV - Permitir que o aluno, durante o cumprimento de punição, afaste-se do local determinado;",
-    "XLVI - Deixar, quando de hora ou turno de serviço, de tomar providências que exijam sua atuação;",
-    "XLVII - Apresentar atitude comportamental que prejudique o bom desempenho de seu serviço;",
-    "XLVIII - Transitar fardado fora da área do quartel, sem estar devidamente autorizado;",
-    "XLIX - Deixar de comparecer ou de permanecer em local em que seja determinada a sua presença;",
-    "LII - Deixar de confeccionar parte escrita quando presenciar ou tiver conhecimento de qualquer irregularidade;",
-    "LIII - Promover atividades comerciais nas dependências da EsFAS sem autorização;",
-    "LIV - Viajar para fora do Estado do Rio Grande do Sul sem comunicar o Comando de Alunos;",
-    "LV - Afastar-se do quartel sem estar autorizado;",
-    "LVI - Deixar o aluno em férias escolares ou dispensa, de regressar no dia marcado à EsFAS;",
-    "LVII - Assumir compromisso em nome do Corpo de Alunos ou da EsFAS sem autorização;",
-    "LVIII - Demonstrar descontrole financeiro, afetando o conceito da Corporação perante a comunidade;",
-    "LIX - Deixar de saldar, ou não fazê-lo em tempo hábil, compromissos financeiros com a administração da EsFAS;",
-    "LX - Afastar-se do seu local de serviço, quando em seu quarto de hora, desde que não se constitua abandono;",
-    "XI - Danificar material da fazenda estadual;",
-    "LXV - Portar ou utilizar telefone móvel fora dos horários autorizados pelo Corpo de Aluno;",
-    "LXVI - Transitar no complexo da EsFAS trajando uniforme em desacordo com o previsto;",
-    "LXVII - Deixar de fazer a manutenção do fuzil, quando escalado ou determinado;",
-    "LXVIII - Deixar de ter nos seus armários, todos os fardamentos previstos no enxoval do CTSP;",
-    "LXIX - Sair da sala de aula, mesmo que com autorização, por motivo fútil;",
-    "LXX - Transitar nas dependências do Corpo de Alunos nos horários de sala de aula;",
-    "LXXI - Levar pessoa estranha às dependências do Corpo de Alunos sem prévia autorização;",
-    "LXXII - Utilizar qualquer dependência da EsFAS, fora do horário de expediente, sem prévia autorização;",
-    "LXXIII - Realizar instrução ou atividade física se houver determinação médica em contrário."
-]
+# --- A antiga lista FATOS_PREDEFINIDOS foi removida daqui ---
 
 @justica_bp.route('/')
 @login_required
@@ -83,11 +26,28 @@ def index():
     processos_em_andamento = [p for p in processos if p.status != 'Finalizado']
     processos_finalizados = [p for p in processos if p.status == 'Finalizado']
 
+    # --- NOVA LÓGICA: Busca fatos do banco de dados ---
+    # 1. Identifica qual escola está ativa para o usuário
+    active_school = g.get('active_school') 
+    npccal_type_da_escola = 'ctsp' # Valor padrão de segurança
+    
+    if active_school:
+        npccal_type_da_escola = active_school.npccal_type
+    
+    # 2. Busca apenas as regras que se aplicam a essa escola
+    # Ex: Se a escola é CBFPM, só trará as 110 regras de soldado.
+    regras_db = db.session.scalars(
+        select(DisciplineRule)
+        .where(DisciplineRule.npccal_type == npccal_type_da_escola)
+        .order_by(DisciplineRule.id)
+    ).all()
+    # --------------------------------------------------
+
     return render_template(
         'justica/index.html',
         em_andamento=processos_em_andamento,
         finalizados=processos_finalizados,
-        fatos_predefinidos=FATOS_PREDEFINIDOS # Passa a lista para o template
+        fatos_predefinidos=regras_db # Passa a lista vinda do Banco para o template
     )
 
 @justica_bp.route('/analise')
@@ -98,6 +58,36 @@ def analise():
     dados_analise = JusticaService.get_analise_disciplinar_data()
     return render_template('justica/analise.html', dados=dados_analise)
 
+@justica_bp.route('/novo', methods=['POST'])
+@login_required
+@admin_or_programmer_required
+def novo_processo():
+    aluno_id = request.form.get('aluno_id')
+    # O formulário agora envia a descrição E os pontos em campos separados
+    fato_descricao = request.form.get('fato_descricao') 
+    fato_pontos = request.form.get('fato_pontos')
+    observacao = request.form.get('observacao')
+
+    if not aluno_id or not fato_descricao:
+        flash('Aluno e Fato Constatado são obrigatórios.', 'danger')
+        return redirect(url_for('justica.index'))
+
+    # Converte os pontos para número (padrão 0.0 se falhar)
+    try:
+        pontos = float(fato_pontos) if fato_pontos else 0.0
+    except ValueError:
+        pontos = 0.0
+
+    # Chama o serviço passando os novos dados
+    success, message = JusticaService.criar_processo(
+        fato_descricao, 
+        observacao, 
+        int(aluno_id), 
+        current_user.id,
+        pontos # <-- Passa os pontos para serem salvos no processo
+    )
+    flash(message, 'success' if success else 'danger')
+    return redirect(url_for('justica.index'))
 
 @justica_bp.route('/finalizar/<int:processo_id>', methods=['POST'])
 @login_required
@@ -116,23 +106,6 @@ def finalizar_processo(processo_id):
         return redirect(url_for('justica.index'))
 
     success, message = JusticaService.finalizar_processo(processo_id, decisao, fundamentacao, detalhes_sancao)
-    flash(message, 'success' if success else 'danger')
-    return redirect(url_for('justica.index'))
-    
-# ... (o resto do arquivo pode permanecer como está)
-@justica_bp.route('/novo', methods=['POST'])
-@login_required
-@admin_or_programmer_required
-def novo_processo():
-    aluno_id = request.form.get('aluno_id')
-    fato = request.form.get('fato')
-    observacao = request.form.get('observacao')
-
-    if not aluno_id or not fato:
-        flash('Aluno e Fato Constatado são obrigatórios.', 'danger')
-        return redirect(url_for('justica.index'))
-
-    success, message = JusticaService.criar_processo(fato, observacao, int(aluno_id), current_user.id)
     flash(message, 'success' if success else 'danger')
     return redirect(url_for('justica.index'))
 
@@ -168,10 +141,18 @@ def deletar_processo(processo_id):
 @admin_or_programmer_required
 def api_get_alunos():
     search = request.args.get('q', '').lower()
+    
+    # Garante que só retorna alunos da mesma escola que o administrador está visualizando
+    active_school = g.get('active_school')
+    if not active_school:
+        return jsonify({'error': 'Nenhuma escola ativa selecionada'}), 400
+    
     query = (
         select(Aluno)
         .join(User)
+        .join(Turma) # Join com Turma para filtrar por escola
         .where(
+            Turma.school_id == active_school.id,
             or_(
                 User.nome_completo.ilike(f'%{search}%'),
                 User.matricula.ilike(f'%{search}%')
@@ -203,10 +184,14 @@ def api_get_aluno_details(aluno_id):
 @login_required
 @admin_or_programmer_required
 def exportar_selecao():
+    # Tenta configurar o locale para datas em português
     try:
         locale.setlocale(locale.LC_TIME, 'pt_BR.UTF-8')
     except locale.Error:
-        locale.setlocale(locale.LC_TIME, '')
+        try:
+            locale.setlocale(locale.LC_TIME, 'Portuguese_Brazil')
+        except locale.Error:
+             pass # Usa o padrão do sistema se falhar
 
     if request.method == 'POST':
         processo_ids = request.form.getlist('processo_ids')

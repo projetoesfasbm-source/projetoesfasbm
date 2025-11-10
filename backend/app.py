@@ -38,10 +38,7 @@ from backend.models.resposta import Resposta
 from backend.models.processo_disciplina import ProcessoDisciplina
 from backend.models.notification import Notification
 from backend.models.push_subscription import PushSubscription
-
-# --- NOVO MODELO IMPORTADO ---
 from backend.models.discipline_rule import DisciplineRule
-# -----------------------------
 
 
 def create_app(config_class=Config):
@@ -60,7 +57,6 @@ def create_app(config_class=Config):
     # --- INICIALIZAÇÃO DO FIREBASE ---
     try:
         cred_path = os.path.join(os.path.dirname(__file__), 'credentials.json')
-        # Verifica se o arquivo existe antes de tentar carregar
         if os.path.exists(cred_path):
             cred = credentials.Certificate(cred_path)
             firebase_admin.initialize_app(cred)
@@ -68,7 +64,6 @@ def create_app(config_class=Config):
         else:
              app.logger.warning(f"Arquivo 'credentials.json' não encontrado em {cred_path}. Funcionalidades do Firebase não estarão disponíveis.")
     except ValueError:
-         # Se o app já foi inicializado (comum no reload do Flask em debug), ignora
          pass
     except Exception as e:
         app.logger.error(f"ERRO ao inicializar o Firebase Admin SDK: {e}")
@@ -147,29 +142,27 @@ def register_handlers_and_processors(app):
     def inject_global_vars():
         from backend.services.site_config_service import SiteConfigService
 
-        # Injeção das configurações do site
         if 'site_config' not in g:
             if app.config.get("TESTING", False):
                 SiteConfigService.init_default_configs()
             configs = SiteConfigService.get_all_configs()
             g.site_config = {c.config_key: c.config_value for c in configs}
 
-        # Injeção da escola ativa
         active_school = None
         if current_user.is_authenticated:
             school_id_to_load = None
             
-            # Se for Super Admin ou Programador, a escola ativa é a que está na sessão
             if current_user.role in ['super_admin', 'programador']:
                 school_id_to_load = session.get('view_as_school_id')
             
-            # Se for outro tipo de usuário, pega a primeira escola da sua lista de vínculos
             elif hasattr(current_user, 'user_schools') and current_user.user_schools:
                 school_id_to_load = current_user.user_schools[0].school_id
 
-            # Carrega o objeto da escola se um ID foi encontrado
             if school_id_to_load:
                 active_school = db.session.get(School, school_id_to_load)
+
+        # Disponibiliza a escola ativa globalmente para os templates
+        g.active_school = active_school 
 
         return {
             'site_config': g.site_config,
@@ -264,6 +257,15 @@ def register_cli_commands(app):
         with create_app().app_context():
             popular_questionario_db()
         print("Comando de popular questionário executado.")
+
+    # --- ESSE É O COMANDO QUE ESTAVA FALTANDO ---
+    @app.cli.command("seed-npccal")
+    def seed_npccal_command():
+        """Popula o banco de dados com as regras de disciplina (NPCCAL)."""
+        from scripts.seed_npccal import seed_rules
+        with app.app_context():
+            seed_rules()
+    # ---------------------------------------------
 
 if __name__ == '__main__':
     app = create_app()
