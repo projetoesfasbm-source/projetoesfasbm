@@ -56,12 +56,18 @@ def create_app(config_class=Config):
     # --- INICIALIZAÇÃO DO FIREBASE ---
     try:
         cred_path = os.path.join(os.path.dirname(__file__), 'credentials.json')
-        cred = credentials.Certificate(cred_path)
-        firebase_admin.initialize_app(cred)
-        app.logger.info("Firebase Admin SDK inicializado com sucesso.")
+        # Verifica se o arquivo existe antes de tentar carregar
+        if os.path.exists(cred_path):
+            cred = credentials.Certificate(cred_path)
+            firebase_admin.initialize_app(cred)
+            app.logger.info("Firebase Admin SDK inicializado com sucesso.")
+        else:
+            app.logger.warning(f"Arquivo 'credentials.json' não encontrado em {cred_path}. Funcionalidades do Firebase não estarão disponíveis.")
+    except ValueError:
+         # Se o app já foi inicializado (comum no reload), ignora
+         pass
     except Exception as e:
         app.logger.error(f"ERRO ao inicializar o Firebase Admin SDK: {e}")
-        app.logger.error("Verifique se o arquivo 'credentials.json' está na pasta 'backend/'.")
     # --- FIM DA INICIALIZAÇÃO ---
 
     db.init_app(app)

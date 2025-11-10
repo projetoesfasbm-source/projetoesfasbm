@@ -120,6 +120,8 @@ class JusticaService:
             # 2. E-mail
             if aluno.user.email:
                 EmailService.send_justice_notification_email(aluno.user, novo_processo, notification_url)
+            else:
+                 current_app.logger.warning(f"Aluno {aluno.id} sem e-mail. Notificação não enviada.")
             # --- NOTIFICAÇÕES (FIM) ---
             
             db.session.commit()
@@ -175,7 +177,6 @@ class JusticaService:
         if not processo:
             return False, "Processo não encontrado."
 
-        # Busca histórico para fechar
         historico_correspondente = db.session.scalars(select(HistoricoAluno).where(
             HistoricoAluno.aluno_id == processo.aluno_id,
             HistoricoAluno.descricao.like(f"%Abertura de processo: {processo.fato_constatado[:50]}%"),
@@ -191,21 +192,19 @@ class JusticaService:
         processo.decisao_final = decisao
         processo.detalhes_sancao = detalhes_sancao if detalhes_sancao else None
 
-        db.session.commit()
-
         # --- NOTIFICAÇÃO DE VEREDITO (INÍCIO) ---
-        # Recarrega o aluno com o user para garantir que temos o e-mail
-        if processo.aluno and processo.aluno.user and processo.aluno.user.email:
-             # Notificação Push
+        if processo.aluno and processo.aluno.user:
              message = f"O processo disciplinar #{processo.id} foi finalizado. Veredito: {decisao}."
-             # URL leva para o histórico ou para a lista de processos (ajuste conforme necessidade)
              notification_url = url_for('justica.index', _external=True) 
              NotificationService.create_notification(processo.aluno.user.id, message, notification_url)
 
-             # Notificação por E-mail
-             EmailService.send_justice_verdict_email(processo.aluno.user, processo)
+             if processo.aluno.user.email:
+                EmailService.send_justice_verdict_email(processo.aluno.user, processo)
+             else:
+                 current_app.logger.warning(f"Aluno {processo.aluno_id} sem e-mail para veredito.")
         # --- NOTIFICAÇÃO DE VEREDITO (FIM) ---
 
+        db.session.commit()
         return True, "Processo finalizado com sucesso e aluno notificado do veredito."
 
     @staticmethod
