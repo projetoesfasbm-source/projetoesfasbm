@@ -31,6 +31,12 @@ class School(db.Model):
         nullable=False,
     )
 
+    # --- NOVO CAMPO ADICIONADO ---
+    # Define qual regulamento (NPCCAL) esta escola segue: 'cfs', 'cbfpm', 'cspm'
+    # O 'default' e 'server_default' garantem que escolas existentes funcionem
+    npccal_type: Mapped[str] = mapped_column(db.String(20), nullable=False, default='cfs', server_default='cfs')
+    # -------------------------------
+
     user_schools: Mapped[list['UserSchool']] = relationship('UserSchool', back_populates='school', cascade="all, delete-orphan")
 
     @property
@@ -39,7 +45,7 @@ class School(db.Model):
 
     turmas: Mapped[list['Turma']] = relationship('Turma', back_populates='school', cascade="all, delete-orphan")
     
-    # --- RELAÇÃO REMOVIDA ---
+    # --- RELAÇÃO REMOVIDA (Mantido seu comentário) ---
     # disciplinas: Mapped[list['Disciplina']] = relationship('Disciplina', back_populates='school', cascade="all, delete-orphan")
 
     __table_args__ = (

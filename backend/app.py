@@ -39,6 +39,10 @@ from backend.models.processo_disciplina import ProcessoDisciplina
 from backend.models.notification import Notification
 from backend.models.push_subscription import PushSubscription
 
+# --- NOVO MODELO IMPORTADO ---
+from backend.models.discipline_rule import DisciplineRule
+# -----------------------------
+
 
 def create_app(config_class=Config):
     """
@@ -62,9 +66,9 @@ def create_app(config_class=Config):
             firebase_admin.initialize_app(cred)
             app.logger.info("Firebase Admin SDK inicializado com sucesso.")
         else:
-            app.logger.warning(f"Arquivo 'credentials.json' não encontrado em {cred_path}. Funcionalidades do Firebase não estarão disponíveis.")
+             app.logger.warning(f"Arquivo 'credentials.json' não encontrado em {cred_path}. Funcionalidades do Firebase não estarão disponíveis.")
     except ValueError:
-         # Se o app já foi inicializado (comum no reload), ignora
+         # Se o app já foi inicializado (comum no reload do Flask em debug), ignora
          pass
     except Exception as e:
         app.logger.error(f"ERRO ao inicializar o Firebase Admin SDK: {e}")
