@@ -4,194 +4,313 @@
 
 {% block content %}
 <div class="content-header">
-    <h1 class="text-primary">Justiça e Disciplina</h1>
-    <p class="text-secondary">Gerenciamento de processos disciplinares.</p>
+    <h1>Justiça e Disciplina</h1>
+    <p>Acompanhamento de processos disciplinares.</p>
 </div>
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <div>
-        {% if current_user.role in ['admin_escola', 'programador', 'super_admin'] %}
-        <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#novoProcessoModal">
-            <i class="fas fa-plus me-1"></i> Novo Processo
-        </button>
-        {% endif %}
-    </div>
-    <div>
-        {% if current_user.role in ['admin_escola', 'programador', 'super_admin'] %}
-        <a href="{{ url_for('justica.analise') }}" class="btn btn-outline-primary">
-            <i class="fas fa-chart-bar me-1"></i> Análise Gráfica
-        </a>
-        <a href="{{ url_for('justica.exportar_selecao') }}" class="btn btn-outline-secondary">
-            <i class="fas fa-file-export me-1"></i> Exportar para BI
-        </a>
-        {% endif %}
-    </div>
-</div>
-
-<ul class="nav nav-tabs mb-3" id="processosTab" role="tablist">
-    <li class="nav-item" role="presentation">
-        <button class="nav-link active" id="andamento-tab" data-bs-toggle="tab" data-bs-target="#andamento" type="button" role="tab" aria-controls="andamento" aria-selected="true">
-            Em Andamento <span class="badge bg-warning text-dark">{{ em_andamento | length }}</span>
-        </button>
-    </li>
-    <li class="nav-item" role="presentation">
-        <button class="nav-link" id="finalizados-tab" data-bs-toggle="tab" data-bs-target="#finalizados" type="button" role="tab" aria-controls="finalizados" aria-selected="false">
-            Finalizados <span class="badge bg-light text-dark">{{ finalizados | length }}</span>
-        </button>
-    </li>
-</ul>
-
-<div class="tab-content" id="processosTabContent">
-    <div class="tab-pane fade show active" id="andamento" role="tabpanel" aria-labelledby="andamento-tab">
-        {% if em_andamento %}
-            {% for processo in em_andamento %}
+<div class="justice-page-layout">
+    <div class="justice-main-content">
+        <div class="justice-container">
+            <div class="justice-options">
+                <button class="btn btn-primary justice-option-btn active" data-target="inProgressContent">Em Andamento</button>
+                <button class="btn btn-warning justice-option-btn" data-target="finalizadosContent">Finalizados</button>
                 {% if current_user.role in ['admin_escola', 'programador', 'super_admin'] %}
-                    {% include 'partials/_processo_card_admin.html' %}
-                {% elif current_user.role == 'aluno' %}
-                    {% include 'partials/_processo_card_aluno.html' %}
+                <button class="btn btn-success justice-option-btn" data-target="newTransgressionContent">Nova Infração</button>
+                <a href="{{ url_for('justica.exportar_selecao') }}" class="btn btn-info">Exportar para BI</a>
                 {% endif %}
-            {% endfor %}
-        {% else %}
-            <div class="alert alert-info" role="alert">Nenhum processo em andamento.</div>
-        {% endif %}
-    </div>
-
-    <div class="tab-pane fade" id="finalizados" role="tabpanel" aria-labelledby="finalizados-tab">
-        {% if finalizados %}
-            {% for processo in finalizados %}
-                 {% if current_user.role in ['admin_escola', 'programador', 'super_admin'] %}
-                    {% include 'partials/_processo_card_admin.html' %}
-                {% elif current_user.role == 'aluno' %}
-                    {% include 'partials/_processo_card_aluno.html' %}
-                {% endif %}
-            {% endfor %}
-        {% else %}
-            <div class="alert alert-info" role="alert">Nenhum processo finalizado.</div>
-        {% endif %}
-    </div>
-</div>
-
-{% if current_user.role in ['admin_escola', 'programador', 'super_admin'] %}
-<div class="modal fade" id="novoProcessoModal" tabindex="-1" aria-labelledby="novoProcessoModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="novoProcessoModalLabel">Registrar Novo Processo Disciplinar</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form action="{{ url_for('justica.novo_processo') }}" method="POST" id="novoProcessoForm">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="fato_pontos" id="fato_pontos" value="0.0">
 
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label for="aluno_id" class="form-label">Aluno</label>
-                        <select class="form-select" id="aluno_id" name="aluno_id" required>
-                            </select>
+            <div class="justice-content active" id="inProgressContent">
+                <h3 class="justice-content-title">Processos em Andamento</h3>
+                {% if em_andamento %}
+                    {% for processo in em_andamento %}
+                        {% if current_user.role == 'aluno' %}
+                            {% include 'partials/_processo_card_aluno.html' %}
+                        {% else %}
+                            {% include 'partials/_processo_card_admin.html' %}
+                        {% endif %}
+                    {% endfor %}
+                {% else %}
+                    <div class="alert alert-info">Nenhum processo em andamento encontrado.</div>
+                {% endif %}
+            </div>
+            
+            <div class="justice-content" id="finalizadosContent">
+                <h3 class="justice-content-title">Processos Finalizados</h3>
+                {% if finalizados %}
+                    {% for processo in finalizados %}
+                        {% if current_user.role == 'aluno' %}
+                            {% include 'partials/_processo_card_aluno.html' %}
+                        {% else %}
+                            {% include 'partials/_processo_card_admin.html' %}
+                        {% endif %}
+                    {% endfor %}
+                {% else %}
+                    <div class="alert alert-info">Nenhum processo finalizado encontrado.</div>
+                {% endif %}
+            </div>
+
+            {% if current_user.role in ['admin_escola', 'programador', 'super_admin'] %}
+            <div class="justice-content" id="newTransgressionContent">
+                <h3 class="justice-content-title">Registrar Nova Infração</h3>
+                <form method="POST" action="{{ url_for('justica.novo_processo') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="fato_pontos" id="fato_pontos" value="0.0">
+
+                    <div class="form-group">
+                        <label for="aluno_search_input">Aluno</label>
+                        <div class="search-form-container">
+                            <div class="input-group">
+                                <input type="search" id="aluno_search_input" class="form-control" placeholder="Buscar por nome ou matrícula..." autocomplete="off">
+                            </div>
+                        </div>
+                        <div id="aluno_results" class="search-results"></div>
+                        <input type="hidden" name="aluno_id" id="aluno_id_hidden" required>
+                        <div id="aluno_selected" class="selected-item-display" style="display: none;"></div>
                     </div>
+                    
+                    <div id="transgression_fields" style="display: none;">
+                        <div class="form-group">
+                            <label for="fato_search_input">Fato Constatado</label>
+                            <input type="text" id="fato_search_input" class="form-control mb-2" placeholder="Pesquisar na lista de infrações...">
+                            
+                            <div class="facts-list-container" id="facts-list-container">
+                                {% for rule in fatos_predefinidos %}
+                                    <div class="result-item" 
+                                         data-fato="({{ rule.codigo }}) {{ rule.descricao }}"
+                                         data-pontos="{{ rule.pontos }}">
+                                        {{ rule.codigo }} - {{ rule.descricao }}
+                                        
+                                        {% if g.active_school and g.active_school.npccal_type != 'cfs' %}
+                                            <span class="badge bg-secondary float-end">{{ rule.pontos }} pts</span>
+                                        {% endif %}
+                                    </div>
+                                {% endfor %}
+                            </div>
+                            <input type="hidden" id="fato_hidden_input" name="fato_descricao" required>
+                        </div>
 
-                    <div id="aluno-details" class="card p-2 mb-3" style="display: none;">
-                        <small class="text-muted">Detalhes do Aluno:</small>
-                        <div>
-                            <span id="aluno-posto" class="badge bg-secondary"></span>
-                            <strong id="aluno-nome"></strong>
-                            (<span id="aluno-matricula"></span>)
+                        <div class="form-group">
+                            <label for="observacao">Observação (Termo de Justificação)</label>
+                            <textarea id="observacao" name="observacao" class="form-control" rows="12"></textarea>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">Registrar</button>
                         </div>
                     </div>
-
-                    <div class="mb-3">
-                        <label for="fato_descricao" class="form-label">Fato Constatado</label>
-                        <select class="form-select" id="fato_descricao" name="fato_descricao" required>
-                            <option value="" data-pontos="0.0" selected disabled>Selecione um fato...</option>
-
-                            {% for rule in fatos_predefinidos %}
-                                <option value="{{ rule.descricao }}" data-pontos="{{ rule.pontos }}">
-                                    ({{ rule.codigo }}) {{ rule.descricao }}
-                                    {% if g.active_school and g.active_school.npccal_type != 'cfs' %}
-                                     - [{{ rule.pontos }} pts]
-                                    {% endif %}
-                                </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="observacao" class="form-label">Observações (Opcional)</label>
-                        <textarea class="form-control" id="observacao" name="observacao" rows="3" placeholder="Detalhes adicionais, como local, data/hora da ocorrência, etc."></textarea>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-success">Registrar e Notificar Aluno</button>
-                </div>
-            </form>
+                </form>
+            </div>
+            {% endif %}
         </div>
     </div>
+
+    <div class="justice-sidebar">
+        {% if current_user.role in ['admin_escola', 'programador', 'super_admin'] %}
+        <a href="{{ url_for('justica.analise') }}" class="analysis-card">
+            <div class="analysis-card-icon">📊</div>
+            <div class="analysis-card-text">
+                <h4>Análise de Dados</h4>
+                <p>Gráficos e estatísticas sobre as infrações.</p>
+            </div>
+        </a>
+        {% endif %}
+    </div>
 </div>
-{% endif %}
 
-{% endblock %}
+<style>
+    /* Mantendo seus estilos originais */
+    .justice-page-layout { display: grid; grid-template-columns: 1fr; gap: 1.5rem; }
+    @media (min-width: 992px) { .justice-page-layout { grid-template-columns: 3fr 1fr; } }
+    .analysis-card { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 1.5rem; border-radius: var(--border-radius); background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light)); color: white; text-decoration: none; transition: all 0.3s ease; border: 2px solid transparent; min-height: 150px; box-shadow: var(--shadow-soft); }
+    .analysis-card:hover { transform: translateY(-5px); box-shadow: var(--shadow-medium); border-color: rgba(255, 255, 255, 0.5); }
+    .analysis-card-icon { font-size: 2.5rem; line-height: 1; margin-bottom: 0.75rem; }
+    .analysis-card-text h4 { font-size: 1.2rem; font-weight: 700; margin: 0 0 0.25rem 0; }
+    .analysis-card-text p { font-size: 0.8rem; opacity: 0.8; margin: 0; }
 
-{% block scripts %}
+    .facts-list-container { max-height: 250px; overflow-y: auto; border: 1px solid #ccc; border-radius: 8px; background: #f8fafc; padding: 0.5rem; }
+    .result-item { padding: 10px; cursor: pointer; border-radius: 4px; }
+    .result-item:hover { background-color: #e2e8f0; }
+    .result-item.selected { background-color: var(--color-primary); color: white; }
+
+    .justice-options { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.5rem; align-items: center; }
+    .justice-option-btn.active { filter: brightness(1.1); box-shadow: inset 0 2px 4px rgba(0,0,0,0.15); transform: translateY(1px); }
+    .justice-content { display: none; }
+    .justice-content.active { display: block; }
+    .justice-content-title { margin-bottom: 1.5rem; }
+    
+    .search-form-container { position: relative; }
+    .search-results { max-height: 200px; overflow-y: auto; border: 1px solid #ccc; border-radius: 0 0 8px 8px; background: white; position: absolute; width: 100%; z-index: 10; display: none; }
+    .selected-item-display { background-color: #e9ecef; padding: 10px; border-radius: 4px; margin-top: 5px; display: flex; justify-content: space-between; align-items: center; }
+    .remove-selected-btn { cursor: pointer; color: red; font-weight: bold; }
+</style>
+
 <script>
-$(document).ready(function() {
-    // Inicializa o Select2 para Alunos
-    $('#novoProcessoModal').appendTo("body");
-    $('#aluno_id').select2({
-        dropdownParent: $('#novoProcessoModal'),
-        theme: "bootstrap-5",
-        placeholder: 'Digite a matrícula ou nome do aluno...',
-        minimumInputLength: 2,
-        ajax: {
-            url: "{{ url_for('justica.api_get_alunos') }}",
-            dataType: 'json',
-            delay: 250,
-            data: function (params) { return { q: params.term }; },
-            processResults: function (data) { return { results: data }; },
-            cache: true
+document.addEventListener('DOMContentLoaded', function() {
+    // --- Lógica das abas ---
+    const optionBtns = document.querySelectorAll('.justice-option-btn');
+    const contentDivs = document.querySelectorAll('.justice-content');
+    optionBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            optionBtns.forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            contentDivs.forEach(div => div.classList.remove('active'));
+            document.getElementById(this.dataset.target).classList.add('active');
+        });
+    });
+
+    // --- Elementos do Formulário ---
+    const alunoSearchInput = document.getElementById('aluno_search_input');
+    const alunoResults = document.getElementById('aluno_results');
+    const alunoHiddenInput = document.getElementById('aluno_id_hidden');
+    const alunoSelectedDisplay = document.getElementById('aluno_selected');
+    const transgressionFields = document.getElementById('transgression_fields');
+    const observacaoTextarea = document.getElementById('observacao');
+    
+    let observacaoTemplateOriginal = '';
+
+    // --- Busca de Aluno ---
+    if (alunoSearchInput) {
+        let searchTimeout;
+        alunoSearchInput.addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            const query = this.value;
+            
+            // Limpa seleção se o usuário começar a digitar de novo
+            alunoHiddenInput.value = '';
+            transgressionFields.style.display = 'none';
+
+            if (query.length < 2) {
+                alunoResults.style.display = 'none';
+                return;
+            }
+            searchTimeout = setTimeout(() => {
+                fetch(`{{ url_for('justica.api_get_alunos') }}?q=${query}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        alunoResults.innerHTML = '';
+                        if (data.length > 0) {
+                            data.forEach(aluno => {
+                                const item = document.createElement('div');
+                                item.className = 'result-item';
+                                item.textContent = aluno.text;
+                                item.dataset.id = aluno.id;
+                                item.addEventListener('click', function() {
+                                    selectAluno(this.dataset.id, this.textContent);
+                                });
+                                alunoResults.appendChild(item);
+                            });
+                            alunoResults.style.display = 'block';
+                        } else {
+                            alunoResults.style.display = 'none';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Erro na busca:', error);
+                        alunoResults.style.display = 'none';
+                    });
+            }, 300);
+        });
+
+        function selectAluno(alunoId, alunoText) {
+            alunoSearchInput.style.display = 'none';
+            alunoSelectedDisplay.innerHTML = `<span>${alunoText}</span><span class="remove-selected-btn" title="Remover seleção"> &times;</span>`;
+            alunoSelectedDisplay.style.display = 'flex';
+            alunoHiddenInput.value = alunoId;
+            alunoResults.style.display = 'none';
+
+            // CORREÇÃO 3: URL construída corretamente para evitar erro 404/500
+            // Substitui o '/0' placeholder pelo ID real do aluno
+            const url = "{{ url_for('justica.api_get_aluno_details', aluno_id=0) }}".replace('/0', '/' + alunoId);
+
+            fetch(url)
+                .then(response => response.json())
+                .then(details => {
+                    if (details.error) {
+                        alert("Erro ao carregar detalhes do aluno: " + details.error);
+                        return;
+                    }
+                    const hoje = new Date();
+                    const dia = hoje.getDate();
+                    const mes = hoje.toLocaleString('pt-BR', { month: 'long' });
+                    const ano = hoje.getFullYear();
+                    const autoridadeNome = "{{ current_user.nome_completo or 'NOME DA AUTORIDADE' }}";
+                    const autoridadePosto = "{{ current_user.posto_graduacao or 'POSTO DA AUTORIDADE' }}";
+
+                    observacaoTemplateOriginal = `Tendo em vista as informações constantes na Parte Nº 000/CAl/EsFAS/${ano}, evidenciando a existência, em tese, de infração das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação:\n\n1. Justificante: ${details.posto_graduacao} ${details.nome_completo}, Id Func. ${details.matricula}.\n\n2. Descrição da conduta infracional: O(a) ${details.posto_graduacao} ${details.nome_completo}, Id Func. ${details.matricula}, no dia ${dia} de ${mes} de ${ano}, ...... \nCom isso, incorreu no item...\n\n3. Cientifico-lhe que a contar do recebimento da presente, abre-se o prazo de 24 horas, para que, querendo, apresente resposta escrita com as provas que entender cabíveis. Fica advertido o acusado que a não entrega da justificação dentro do prazo estipulado, implicará em reconhecimento como verdadeiros os fatos imputados.\n\n\n${autoridadeNome}\n${autoridadePosto}`;
+                    
+                    observacaoTextarea.value = observacaoTemplateOriginal;
+                    transgressionFields.style.display = 'block';
+                })
+                .catch(error => console.error('Erro ao buscar detalhes:', error));
         }
+
+        alunoSelectedDisplay.addEventListener('click', function(e) {
+            if (e.target.classList.contains('remove-selected-btn')) {
+                alunoSearchInput.style.display = 'block';
+                alunoSearchInput.value = '';
+                alunoSelectedDisplay.style.display = 'none';
+                alunoHiddenInput.value = '';
+                transgressionFields.style.display = 'none';
+                observacaoTextarea.value = '';
+                observacaoTemplateOriginal = '';
+                alunoSearchInput.focus();
+            }
+        });
+
+        document.addEventListener('click', function(e) {
+            if (!alunoSearchInput.contains(e.target) && !alunoResults.contains(e.target)) {
+                alunoResults.style.display = 'none';
+            }
+        });
+    }
+
+    // --- Lógica do Fato Constatado ---
+    const fatoSearchInput = document.getElementById('fato_search_input');
+    const fatoListContainer = document.getElementById('facts-list-container');
+    const fatoHiddenInput = document.getElementById('fato_hidden_input');
+    const fatoPontosInput = document.getElementById('fato_pontos'); // Referência ao novo input
+    const fatoItems = fatoListContainer.querySelectorAll('.result-item');
+
+    fatoSearchInput.addEventListener('input', function() {
+        const query = this.value.toLowerCase();
+        fatoItems.forEach(item => {
+            // Pesquisa no texto visível E no atributo de dados para maior flexibilidade
+            const fatoText = (item.innerText + ' ' + item.dataset.fato).toLowerCase();
+            item.style.display = fatoText.includes(query) ? 'block' : 'none';
+        });
     });
 
-    // Atualiza os detalhes do aluno quando selecionado
-    $('#aluno_id').on('select2:select', function (e) {
-        var alunoId = e.params.data.id;
-        // Substitui o '0' na URL gerada pelo Flask pelo ID real
-        var url = "{{ url_for('justica.api_get_aluno_details', aluno_id=0) }}".replace('/0', '/' + alunoId);
+    fatoItems.forEach(item => {
+        item.addEventListener('click', function() {
+            const fatoText = this.dataset.fato;
+            const pontos = this.dataset.pontos || 0.0;
 
-        fetch(url)
-            .then(response => response.json())
-            .then(data => {
-                if (!data.error) {
-                    $('#aluno-posto').text(data.posto_graduacao);
-                    $('#aluno-nome').text(data.nome_completo);
-                    $('#aluno-matricula').text(data.matricula);
-                    $('#aluno-details').show();
-                }
-            });
+            fatoItems.forEach(i => i.classList.remove('selected'));
+            this.classList.add('selected');
+            
+            fatoHiddenInput.value = fatoText;
+            fatoPontosInput.value = pontos; // Atualiza os pontos para envio
+
+            updateObservacaoComFato(fatoText);
+        });
     });
 
-    // Limpa o modal ao fechar
-    $('#novoProcessoModal').on('hidden.bs.modal', function () {
-        $('#aluno_id').val(null).trigger('change');
-        $('#aluno-details').hide();
-        $(this).find('form')[0].reset();
-        $('#fato_descricao').val(null).trigger('change');
-        $('#fato_pontos').val('0.0'); // Reseta os pontos também
-    });
+    function updateObservacaoComFato(fatoText) {
+        // Regex mais flexível para capturar (CODIGO) Descrição
+        const regex = /^\(([^)]+)\)\s*(.*)$/;
+        const match = fatoText.match(regex);
+        let fatoDetalhes = fatoText;
 
-    // Inicializa Select2 para os Fatos (permite busca textual)
-    $('#fato_descricao').select2({
-        dropdownParent: $('#novoProcessoModal'),
-        theme: "bootstrap-5",
-        placeholder: 'Pesquise o fato...'
-    });
-
-    // Atualiza o campo oculto de pontos quando um fato é selecionado
-    $('#fato_descricao').on('change', function() {
-        var selectedOption = $(this).find('option:selected');
-        var pontos = selectedOption.data('pontos') || 0.0;
-        $('#fato_pontos').val(pontos);
-    });
+        if (match) {
+            const codigo = match[1];
+            const descricao = match[2].trim();
+            fatoDetalhes = `no item ${codigo} - "${descricao}"`;
+        }
+        
+        let textoObservacao = observacaoTemplateOriginal;
+        textoObservacao = textoObservacao.replace(/no item\.\.\./, `${fatoDetalhes};`);
+        observacaoTextarea.value = textoObservacao;
+    }
 });
 </script>
 {% endblock %}
