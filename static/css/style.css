@@ -361,8 +361,7 @@ html::after{ content: ""; position: fixed; inset: 0; z-index: -2; background: rg
 .notification-item.unread { background-color: rgba(59, 130, 246, 0.1); }
 .notification-message { font-family: var(--font-family-base); font-size: 0.9rem; font-weight: 500; margin-bottom: 0.1rem !important; white-space: normal; color: var(--color-text) !important; }
 .notification-date { font-size: 0.75rem; color: var(--color-text-muted); }
-}
-}
+
 /* Correção para fundo de login: Torna o 'content-wrapper' transparente em páginas sem sidebar */
 body.no-sidebar .content-wrapper { 
     background: transparent !important; 

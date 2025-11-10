@@ -82,7 +82,7 @@
             <form action="{{ url_for('justica.novo_processo') }}" method="POST" id="novoProcessoForm">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="fato_pontos" id="fato_pontos" value="0.0">
-                
+
                 <div class="modal-body">
                     <div class="mb-3">
                         <label for="aluno_id" class="form-label">Aluno</label>
@@ -98,12 +98,12 @@
                             (<span id="aluno-matricula"></span>)
                         </div>
                     </div>
-                    
+
                     <div class="mb-3">
                         <label for="fato_descricao" class="form-label">Fato Constatado</label>
                         <select class="form-select" id="fato_descricao" name="fato_descricao" required>
                             <option value="" data-pontos="0.0" selected disabled>Selecione um fato...</option>
-                            
+
                             {% for rule in fatos_predefinidos %}
                                 <option value="{{ rule.descricao }}" data-pontos="{{ rule.pontos }}">
                                     ({{ rule.codigo }}) {{ rule.descricao }}
@@ -114,7 +114,7 @@
                             {% endfor %}
                         </select>
                     </div>
-                    
+
                     <div class="mb-3">
                         <label for="observacao" class="form-label">Observações (Opcional)</label>
                         <textarea class="form-control" id="observacao" name="observacao" rows="3" placeholder="Detalhes adicionais, como local, data/hora da ocorrência, etc."></textarea>
@@ -136,6 +136,7 @@
 <script>
 $(document).ready(function() {
     // Inicializa o Select2 para Alunos
+    $('#novoProcessoModal').appendTo("body");
     $('#aluno_id').select2({
         dropdownParent: $('#novoProcessoModal'),
         theme: "bootstrap-5",
@@ -156,7 +157,7 @@ $(document).ready(function() {
         var alunoId = e.params.data.id;
         // Substitui o '0' na URL gerada pelo Flask pelo ID real
         var url = "{{ url_for('justica.api_get_aluno_details', aluno_id=0) }}".replace('/0', '/' + alunoId);
-        
+
         fetch(url)
             .then(response => response.json())
             .then(data => {
