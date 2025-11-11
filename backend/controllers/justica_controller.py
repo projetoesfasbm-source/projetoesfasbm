@@ -1,6 +1,7 @@
 # backend/controllers/justica_controller.py
 
-from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, Response, g
+# Importa 'session' e 'g' (usaremos 'session' para a API)
+from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, Response, g, session
 from flask_login import login_required, current_user
 from sqlalchemy import select, or_
 import locale
@@ -9,13 +10,13 @@ from ..models.database import db
 from ..models.aluno import Aluno
 from ..models.user import User
 from ..models.turma import Turma
-from ..models.discipline_rule import DisciplineRule # <-- Importa do banco
+from ..models.discipline_rule import DisciplineRule
+from ..models.school import School # Necessário para buscar a escola
+from ..models.user_school import UserSchool # Necessário para a consulta
 from ..services.justica_service import JusticaService
 from utils.decorators import admin_or_programmer_required
 
 justica_bp = Blueprint('justica', __name__, url_prefix='/justica-e-disciplina')
-
-# --- A LISTA 'FATOS_PREDEFINIDOS' FOI REMOVIDA DAQUI ---
 
 @justica_bp.route('/')
 @login_required
@@ -26,33 +27,30 @@ def index():
     processos_em_andamento = [p for p in processos if p.status != 'Finalizado']
     processos_finalizados = [p for p in processos if p.status == 'Finalizado']
 
-    # --- NOVA LÓGICA: Busca fatos do banco de dados ---
+    # Aqui 'g.active_school' funciona porque esta rota USA render_template
     active_school = g.get('active_school') 
     npccal_type_da_escola = 'ctsp' 
     
     if active_school:
         npccal_type_da_escola = active_school.npccal_type
     
-    # Busca apenas as regras que se aplicam a essa escola
     regras_db = db.session.scalars(
         select(DisciplineRule)
         .where(DisciplineRule.npccal_type == npccal_type_da_escola)
-        .order_by(DisciplineRule.id) # Ordena pelo ID (ou 'codigo' se preferir)
+        .order_by(DisciplineRule.id)
     ).all()
-    # --------------------------------------------------
 
     return render_template(
         'justica/index.html',
         em_andamento=processos_em_andamento,
         finalizados=processos_finalizados,
-        fatos_predefinidos=regras_db # Passa a lista vinda do Banco
+        fatos_predefinidos=regras_db
     )
 
 @justica_bp.route('/analise')
 @login_required
 @admin_or_programmer_required
 def analise():
-    # ... (código existente sem alterações) ...
     dados_analise = JusticaService.get_analise_disciplinar_data()
     return render_template('justica/analise.html', dados=dados_analise)
 
@@ -61,7 +59,6 @@ def analise():
 @login_required
 @admin_or_programmer_required
 def finalizar_processo(processo_id):
-    # ... (código existente sem alterações) ...
     decisao = request.form.get('decisao_final')
     fundamentacao = request.form.get('fundamentacao')
     detalhes_sancao = request.form.get('detalhes_sancao')
@@ -83,7 +80,6 @@ def finalizar_processo(processo_id):
 @admin_or_programmer_required
 def novo_processo():
     aluno_id = request.form.get('aluno_id')
-    # O formulário agora envia a descrição E os pontos
     fato_descricao = request.form.get('fato_descricao') 
     fato_pontos = request.form.get('fato_pontos')
     observacao = request.form.get('observacao')
@@ -102,7 +98,7 @@ def novo_processo():
         observacao, 
         int(aluno_id), 
         current_user.id,
-        pontos # <-- Passa os pontos para o service
+        pontos
     )
     flash(message, 'success' if success else 'danger')
     return redirect(url_for('justica.index'))
@@ -110,7 +106,6 @@ def novo_processo():
 @justica_bp.route('/dar-ciente/<int:processo_id>', methods=['POST'])
 @login_required
 def dar_ciente(processo_id):
-    # ... (código existente sem alterações) ...
     success, message = JusticaService.registrar_ciente(processo_id, current_user)
     flash(message, 'success' if success else 'danger')
     return redirect(url_for('justica.index'))
@@ -118,7 +113,6 @@ def dar_ciente(processo_id):
 @justica_bp.route('/enviar-defesa/<int:processo_id>', methods=['POST'])
 @login_required
 def enviar_defesa(processo_id):
-    # ... (código existente sem alterações) ...
     defesa = request.form.get('defesa')
     if not defesa:
         flash('O texto da defesa não pode estar vazio.', 'danger')
@@ -132,7 +126,6 @@ def enviar_defesa(processo_id):
 @login_required
 @admin_or_programmer_required
 def deletar_processo(processo_id):
-    # ... (código existente sem alterações) ...
     success, message = JusticaService.deletar_processo(processo_id)
     flash(message, 'success' if success else 'danger')
     return redirect(url_for('justica.index'))
@@ -141,19 +134,32 @@ def deletar_processo(processo_id):
 @login_required
 @admin_or_programmer_required
 def api_get_alunos():
-    # ... (código existente sem alterações) ...
     search = request.args.get('q', '').lower()
-    active_school = g.get('active_school')
-    if not active_school:
-        return jsonify({'error': 'Nenhuma escola ativa selecionada'}), 400
     
+    # --- INÍCIO DA CORREÇÃO DEFINITIVA ---
+    # A variável 'g' não é populada em rotas de API que não usam 'render_template'.
+    # Temos de buscar a escola ativa manualmente a partir da 'session',
+    # replicando a lógica que existe em 'app.py'.
+
+    school_id_to_load = None
+    if current_user.role in ['super_admin', 'programador']:
+        school_id_to_load = session.get('view_as_school_id')
+    elif hasattr(current_user, 'user_schools') and current_user.user_schools:
+        school_id_to_load = current_user.user_schools[0].school_id
+
+    if not school_id_to_load:
+        return jsonify({'error': 'Nenhuma escola ativa selecionada na sessão.'}), 400
+    
+    # Esta é a consulta correta. Ela filtra os Alunos com base
+    # no vínculo do User (UserSchool) com a escola ativa.
     query = (
         select(Aluno)
-        .join(User)
-        .join(Turma)
+        .join(User, Aluno.user_id == User.id)
+        .join(UserSchool, User.id == UserSchool.user_id)
         .where(
-            Turma.school_id == active_school.id,
-            or_(
+            UserSchool.school_id == school_id_to_load, # 1. Filtra pela escola correta
+            User.role == 'aluno',                      # 2. Garante que é um aluno
+            or_(                                       # 3. Filtra pela busca
                 User.nome_completo.ilike(f'%{search}%'),
                 User.matricula.ilike(f'%{search}%')
             )
@@ -161,6 +167,8 @@ def api_get_alunos():
         .order_by(User.nome_completo)
         .limit(20)
     )
+    # --- FIM DA CORREÇÃO DEFINITIVA ---
+    
     alunos = db.session.scalars(query).all()
     results = [{'id': a.id, 'text': f"{a.user.nome_completo} ({a.user.matricula})"} for a in alunos]
     return jsonify(results)
@@ -169,7 +177,6 @@ def api_get_alunos():
 @login_required
 @admin_or_programmer_required
 def api_get_aluno_details(aluno_id):
-    # ... (código existente sem alterações) ...
     aluno = db.session.get(Aluno, aluno_id)
     if not aluno or not aluno.user:
         return jsonify({'error': 'Aluno não encontrado'}), 404
@@ -185,7 +192,6 @@ def api_get_aluno_details(aluno_id):
 @login_required
 @admin_or_programmer_required
 def exportar_selecao():
-    # ... (código existente sem alterações) ...
     try:
         locale.setlocale(locale.LC_TIME, 'pt_BR.UTF-8')
     except locale.Error:
