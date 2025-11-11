@@ -259,7 +259,6 @@
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             // Script da Sidebar
-            // ... (código existente da sidebar)
             const sidebar = document.getElementById('sidebar');
             const sidebarToggle = document.getElementById('sidebarToggle');
             const sidebarOverlay = document.getElementById('sidebarOverlay');
@@ -270,38 +269,11 @@
             if (sidebarToggle) sidebarToggle.addEventListener('click', toggleSidebar);
             if (sidebarOverlay) sidebarOverlay.addEventListener('click', toggleSidebar);
 
-            // Script de Modal Customizado (Existente)
-            function openModal(modal) {
-                if (modal) {
-                    modal.classList.add('visible');
-                    document.body.style.overflow = 'hidden';
-                }
-            }
-            function closeModal(modal) {
-                if (modal) {
-                    modal.classList.remove('visible');
-                    document.body.style.overflow = '';
-                }
-            }
-            document.addEventListener('click', function (e) {
-                const openTrigger = e.target.closest('[data-modal-target]');
-                if (openTrigger) {
-                    const modal = document.querySelector(openTrigger.dataset.modalTarget);
-                    const event = new CustomEvent('modal:open', { detail: { modal: modal, trigger: openTrigger } });
-                    document.dispatchEvent(event);
-                    openModal(modal);
-                }
-                const closeTrigger = e.target.closest('[data-modal-close]');
-                if (closeTrigger) {
-                    const modal = closeTrigger.closest('.modal-overlay');
-                    closeModal(modal);
-                }
-            });
-            document.querySelectorAll('.modal-overlay').forEach(overlay => {
-                overlay.addEventListener('click', (e) => {
-                    if (e.target === overlay) closeModal(overlay);
-                });
-            });
+            // --- [CORREÇÃO FINAL]: Removido script de modal customizado ---
+            // O site usa Bootstrap 5 para modais (com data-bs-toggle), 
+            // então o script antigo (que usava 'data-modal-target') foi removido
+            // para evitar conflitos de JavaScript, que era a CAUSA ORIGINAL
+            // do congelamento do modal.
 
             // Script de Alterar Senha (Existente)
             const changePasswordModal = document.getElementById('changePasswordModal');
@@ -426,7 +398,9 @@
                 });
             }
 
-            if (current_user.is_authenticated) {
+            // --- [CORREÇÃO FINAL]: Correção do JavaScript fatal ---
+            // Converte o booleano do Python (True) para o do JavaScript (true).
+            if ({{ current_user.is_authenticated | tojson }}) {
                 fetchNotifications();
                 setInterval(fetchNotifications, 60000);
             }

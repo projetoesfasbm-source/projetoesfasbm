@@ -22,11 +22,14 @@
                 {% endif %}
 
                 {% if processo.status in ['Aluno Notificado', 'Defesa Enviada'] %}
+                <!-- ### INÍCIO DA CORREÇÃO ### -->
+                <!-- Trocamos 'js-open-analise-modal' e 'data-processo-id' pelos atributos nativos do Bootstrap 5 -->
                 <button class="btn btn-sm btn-success" 
                         data-bs-toggle="modal"
                         data-bs-target="#finalizarModal-{{ processo.id }}">
                     <i class="fas fa-gavel me-1"></i> Analisar
                 </button>
+                <!-- ### FIM DA CORREÇÃO ### -->
                 {% endif %}
             </div>
         </div>

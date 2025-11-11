@@ -145,10 +145,6 @@
 </style>
 
 <script>
-// NOTA: O script de "BYPASS" foi removido.
-// O script restante abaixo é apenas para a lógica das abas e da busca de alunos/fatos,
-// que não está relacionada ao problema do modal "Analisar".
-
 document.addEventListener('DOMContentLoaded', function() {
     // --- Lógica das abas (IGUAL AO BACKUP) ---
     const optionBtns = document.querySelectorAll('.justice-option-btn');
@@ -311,6 +307,12 @@ document.addEventListener('DOMContentLoaded', function() {
         textoObservacao = textoObservacao.replace(/no item\.\.\./, `${fatoDetalhes};`);
         observacaoTextarea.value = textoObservacao;
     }
+    
+    // ### CORREÇÃO FINAL ###
+    // O script de 'BYPASS' foi totalmente removido deste arquivo.
+    // A lógica de abrir o modal agora é controlada 100% pelos
+    // atributos data-bs-toggle e data-bs-target no botão 'Analisar'
+    // corrigido no arquivo 'partials/_processo_card_admin.html'.
 });
 </script>
 {% endblock %}

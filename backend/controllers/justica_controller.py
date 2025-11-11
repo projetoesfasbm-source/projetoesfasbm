@@ -1,5 +1,3 @@
-# backend/controllers/justica_controller.py
-
 # Importa 'session' e 'g' (usaremos 'session' para a API)
 from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, Response, g, session
 from flask_login import login_required, current_user
@@ -51,8 +49,25 @@ def index():
 @login_required
 @admin_or_programmer_required
 def analise():
-    dados_analise = JusticaService.get_analise_disciplinar_data()
-    return render_template('justica/analise.html', dados=dados_analise)
+    # --- INÍCIO DA CORREÇÃO ---
+    # O log de erro (UndefinedError: 'dict object' has no attribute 'status_counts')
+    # indica que o template 'analise.html' espera receber uma variável 'dados'
+    # que contenha um dicionário aninhado chamado 'status_counts'.
+    
+    # Provavelmente, a função do serviço retorna o dicionário de contagem DIRETAMENTE.
+    contagem_de_status = JusticaService.get_analise_disciplinar_data()
+    
+    # Portanto, precisamos "embrulhar" essa contagem na estrutura que o template espera.
+    dados_para_template = {
+        'status_counts': contagem_de_status
+        # Se a função de serviço retornar outros dados, adicione-os aqui também.
+        # Ex: 'outros_dados': JusticaService.get_outros_dados()
+    }
+    
+    # Passamos o dicionário 'dados_para_template' (que agora contém 'status_counts')
+    # para o template como a variável 'dados'.
+    return render_template('justica/analise.html', dados=dados_para_template)
+    # --- FIM DA CORREÇÃO ---
 
 
 @justica_bp.route('/finalizar/<int:processo_id>', methods=['POST'])
@@ -198,7 +213,7 @@ def exportar_selecao():
         try:
             locale.setlocale(locale.LC_TIME, 'Portuguese_Brazil')
         except locale.Error:
-             pass 
+            pass 
 
     if request.method == 'POST':
         processo_ids = request.form.getlist('processo_ids')
