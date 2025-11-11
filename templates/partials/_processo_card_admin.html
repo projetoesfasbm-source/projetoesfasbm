@@ -16,13 +16,14 @@
                 <form action="{{ url_for('justica.deletar_processo', processo_id=processo.id) }}" method="POST" onsubmit="return confirm('Tem certeza que deseja excluir este processo? Esta ação não pode ser desfeita.');" class="ms-2">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir Processo">
-                        <i class="fas fa-trash"></i>
+                        <i class="fas fa-trash me-1"></i> Excluir
                     </button>
                 </form>
                 {% endif %}
 
-                {% if processo.status == 'Defesa Enviada' %}
-                <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#finalizarModal-{{ processo.id }}">
+                {% if processo.status in ['Aluno Notificado', 'Defesa Enviada'] %}
+                <button class="btn btn-sm btn-success js-open-analise-modal" 
+                        data-processo-id="{{ processo.id }}">
                     <i class="fas fa-gavel me-1"></i> Analisar
                 </button>
                 {% endif %}
@@ -48,7 +49,7 @@
                     <p class="preserve-whitespace">{{ processo.defesa }}</p>
                     <small class="text-muted">Enviada em {{ processo.data_defesa.strftime('%d/%m/%Y às %H:%M') }}</small>
                 {% else %}
-                    <p class="text-muted fst-italic">Aluno ainda não apresentou defesa (Ciente em: {{ processo.data_ciente.strftime('%d/%m/%Y às %H:%M') if processo.data_ciente else 'N/A' }}).</p>
+                    <p class="text-muted fst-italic">Aluno ciente em {{ processo.data_ciente.strftime('%d/%m/%Y às %H:%M') if processo.data_ciente else 'N/A' }}.<br>Nenhuma defesa foi apresentada.</p>
                 {% endif %}
             </div>
         {% endif %}
@@ -63,7 +64,7 @@
             </div>
         {% endif %}
 
-        {% if processo.status == 'Defesa Enviada' %}
+        {% if processo.status in ['Aluno Notificado', 'Defesa Enviada'] %}
         <div class="modal fade" id="finalizarModal-{{ processo.id }}" tabindex="-1" aria-labelledby="modalLabel-{{ processo.id }}" aria-hidden="true">
             <div class="modal-dialog modal-lg">
                 <div class="modal-content">
@@ -78,7 +79,7 @@
                                 <label class="form-label"><strong>Fato:</strong> {{ processo.fato_constatado }}</label>
                             </div>
                             <div class="mb-3">
-                                <label class="form-label"><strong>Defesa:</strong> {{ processo.defesa }}</label>
+                                <label class="form-label"><strong>Defesa:</strong> {{ processo.defesa or "Aluno não apresentou defesa." }}</label>
                             </div>
                             <hr>
                             <div class="mb-3">
