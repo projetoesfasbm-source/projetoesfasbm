@@ -79,10 +79,10 @@
                                     <div class="result-item" 
                                          data-fato="({{ rule.codigo }}) {{ rule.descricao }}"
                                          data-pontos="{{ rule.pontos }}">
-                                         <strong>{{ rule.codigo }}</strong> - {{ rule.descricao }}
-                                         {% if g.active_school and g.active_school.npccal_type != 'cfs' %}
+                                        <strong>{{ rule.codigo }}</strong> - {{ rule.descricao }}
+                                        {% if g.active_school and g.active_school.npccal_type != 'cfs' %}
                                             <span class="badge bg-danger float-end">{{ rule.pontos }} pts</span>
-                                         {% endif %}
+                                        {% endif %}
                                     </div>
                                 {% endfor %}
                             </div>
@@ -145,6 +145,10 @@
 </style>
 
 <script>
+// NOTA: O script de "BYPASS" foi removido.
+// O script restante abaixo é apenas para a lógica das abas e da busca de alunos/fatos,
+// que não está relacionada ao problema do modal "Analisar".
+
 document.addEventListener('DOMContentLoaded', function() {
     // --- Lógica das abas (IGUAL AO BACKUP) ---
     const optionBtns = document.querySelectorAll('.justice-option-btn');
@@ -307,36 +311,6 @@ document.addEventListener('DOMContentLoaded', function() {
         textoObservacao = textoObservacao.replace(/no item\.\.\./, `${fatoDetalhes};`);
         observacaoTextarea.value = textoObservacao;
     }
-
-
-    // --- $$$ INÍCIO DA CORREÇÃO DO MODAL (BYPASS) $$$ ---
-    // Este código vai ouvir os cliques nos botões 'Analisar' e abrir o modal
-    // manualmente, ignorando qualquer outro script que esteja causando o bug do spinner.
-    document.addEventListener('click', function(e) {
-        const analisarBtn = e.target.closest('.js-open-analise-modal');
-        
-        if (analisarBtn) {
-            e.preventDefault(); // Impede qualquer ação padrão
-            
-            const processoId = analisarBtn.dataset.processoId;
-            if (!processoId) {
-                console.error("Botão de análise sem data-processo-id.");
-                return;
-            }
-            
-            const modalElement = document.getElementById(`finalizarModal-${processoId}`);
-            if (!modalElement) {
-                console.error(`Modal #finalizarModal-${processoId} não encontrado.`);
-                return;
-            }
-            
-            // Cria ou obtém a instância do modal do Bootstrap e a exibe
-            const modalInstance = bootstrap.Modal.getOrCreateInstance(modalElement);
-            modalInstance.show();
-        }
-    });
-    // --- $$$ FIM DA CORREÇÃO DO MODAL (BYPASS) $$$ ---
-
 });
 </script>
 {% endblock %}

@@ -22,8 +22,9 @@
                 {% endif %}
 
                 {% if processo.status in ['Aluno Notificado', 'Defesa Enviada'] %}
-                <button class="btn btn-sm btn-success js-open-analise-modal" 
-                        data-processo-id="{{ processo.id }}">
+                <button class="btn btn-sm btn-success" 
+                        data-bs-toggle="modal"
+                        data-bs-target="#finalizarModal-{{ processo.id }}">
                     <i class="fas fa-gavel me-1"></i> Analisar
                 </button>
                 {% endif %}
