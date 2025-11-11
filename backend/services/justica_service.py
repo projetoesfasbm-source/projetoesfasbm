@@ -1,230 +1,263 @@
 # backend/services/justica_service.py
 
+from flask import g, url_for
+from sqlalchemy import select, func
+from datetime import datetime, timezone
 from ..models.database import db
-from ..models.processo_disciplina import ProcessoDisciplina
 from ..models.aluno import Aluno
 from ..models.user import User
 from ..models.turma import Turma
-from ..models.historico import HistoricoAluno
-from sqlalchemy import select, or_, and_, func
+from ..models.user_school import UserSchool # <-- Importação necessária
+from ..models.processo_disciplina import ProcessoDisciplina
+from ..services.notification_service import NotificationService
 from sqlalchemy.orm import joinedload
-from datetime import datetime, timezone
-from flask import current_app, url_for
-from collections import Counter
-from .notification_service import NotificationService
-from .email_service import EmailService
+from sqlalchemy.exc import SQLAlchemyError
 
 class JusticaService:
-    @staticmethod
-    def get_analise_disciplinar_data():
-        # ... (código existente sem alterações) ...
-        processos = db.session.scalars(
-            select(ProcessoDisciplina)
-            .options(
-                joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.turma),
-                joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.user)
-            )
-        ).all()
-        # ... (resto do método) ...
-        total_processos = len(processos)
-        status_counts = Counter(p.status for p in processos)
-        turma_counts = Counter()
-        for p in processos:
-            if p.aluno and p.aluno.turma:
-                turma_counts[p.aluno.turma.nome] += 1
-        month_counts = Counter()
-        for p in processos:
-            mes_ano = p.data_ocorrencia.strftime("%Y-%m")
-            month_counts[mes_ano] += 1
-        sorted_months = sorted(month_counts.keys())
-        month_labels = [datetime.strptime(m, "%Y-%m").strftime("%b/%Y") for m in sorted_months]
-        month_data = [month_counts[m] for m in sorted_months]
-        fato_counts = Counter(p.fato_constatado.strip() for p in processos)
-        top_5_fatos = fato_counts.most_common(5)
-
-        return {
-            'total_processos': total_processos,
-            'status_counts': dict(status_counts),
-            'turma_labels': list(turma_counts.keys()),
-            'turma_data': list(turma_counts.values()),
-            'month_labels': month_labels,
-            'month_data': month_data,
-            'top_fatos_labels': [fato[0] for fato in top_5_fatos],
-            'top_fatos_data': [fato[1] for fato in top_5_fatos],
-        }
-
+    
     @staticmethod
     def get_processos_para_usuario(user):
-        # ... (código existente sem alterações) ...
-        stmt = select(ProcessoDisciplina)
-        if user.role == 'aluno' and hasattr(user, 'aluno_profile') and user.aluno_profile:
-            stmt = stmt.where(ProcessoDisciplina.aluno_id == user.aluno_profile.id)
+        """Busca processos relevantes para o usuário (admin vê todos, aluno vê só os seus)."""
+        if user.role in ['admin_escola', 'super_admin', 'programador']:
+            active_school = g.get('active_school')
+            if not active_school:
+                return []
             
-        return db.session.scalars(stmt.options(
-            joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.user),
-            joinedload(ProcessoDisciplina.relator)
-        ).order_by(ProcessoDisciplina.data_ocorrencia.desc())).all()
+            # --- CORREÇÃO 1: (Processo Sumido) ---
+            # A consulta agora filtra pelo UserSchool (vínculo do usuário com a escola).
+            # Isto garante que processos de alunos (mesmo sem turma) apareçam.
+            query = (
+                select(ProcessoDisciplina)
+                .join(Aluno, ProcessoDisciplina.aluno_id == Aluno.id)
+                .join(User, Aluno.user_id == User.id)
+                .join(UserSchool, User.id == UserSchool.user_id) # Filtra pelo vínculo do User
+                .where(UserSchool.school_id == active_school.id) # E não pela turma
+                .options(
+                    joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.user),
+                    joinedload(ProcessoDisciplina.relator)
+                )
+                .order_by(ProcessoDisciplina.data_ocorrencia.desc())
+            )
+        else:
+            # Query para Aluno (sempre esteve correta)
+            query = (
+                select(ProcessoDisciplina)
+                .where(ProcessoDisciplina.aluno_id == user.aluno_profile.id)
+                .options(
+                    joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.user),
+                    joinedload(ProcessoDisciplina.relator)
+                )
+                .order_by(ProcessoDisciplina.data_ocorrencia.desc())
+            )
+            
+        return db.session.scalars(query).all()
 
     @staticmethod
-    def get_finalized_processos():
-        # ... (código existente sem alterações) ...
-        stmt = select(ProcessoDisciplina).where(
-            ProcessoDisciplina.status == 'Finalizado',
-            ProcessoDisciplina.decisao_final.isnot(None)
-        )
-        return db.session.scalars(stmt.options(
-            joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.user),
-            joinedload(ProcessoDisciplina.relator)
-        ).order_by(ProcessoDisciplina.data_decisao.desc())).all()
-
-    @staticmethod
-    def get_processos_por_ids(processo_ids):
-        # ... (código existente sem alterações) ...
-        if not processo_ids:
-            return []
+    def criar_processo(fato, observacao, aluno_id, relator_id, pontos: float = 0.0):
+        aluno = db.session.get(Aluno, aluno_id)
+        if not aluno:
+            return False, "Aluno não encontrado."
         
-        stmt = select(ProcessoDisciplina).where(ProcessoDisciplina.id.in_(processo_ids))
-        return db.session.scalars(stmt.options(
-            joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.user),
-            joinedload(ProcessoDisciplina.relator)
-        )).all()
+        if not aluno.user_id:
+             return False, "Este aluno não possui um usuário associado. Não é possível notificá-lo."
 
-    # --- MÉTODO ATUALIZADO ---
-    @staticmethod
-    def criar_processo(fato, observacao, aluno_id, relator_id, pontos=0.0):
-        """Cria um novo processo disciplinar, salvando os pontos, e notifica o aluno."""
         try:
-            aluno = db.session.get(Aluno, aluno_id)
-            if not aluno or not aluno.user:
-                return False, "Aluno ou perfil de usuário do aluno não encontrado."
-
             novo_processo = ProcessoDisciplina(
-                fato_constatado=fato,
-                observacao=observacao,
                 aluno_id=aluno_id,
                 relator_id=relator_id,
-                pontos=pontos  # <-- SALVA OS PONTOS AQUI
+                fato_constatado=fato,
+                observacao=observacao,
+                pontos=pontos,
+                status='Aguardando Ciência' # Status inicial correto
             )
             db.session.add(novo_processo)
-
-            novo_historico = HistoricoAluno(
-                aluno_id=aluno_id,
-                tipo='Infração Disciplinar',
-                descricao=f'Abertura de processo: {fato}',
-                data_inicio=datetime.now(timezone.utc)
-            )
-            db.session.add(novo_historico)
-            
-            db.session.flush() # Garante o ID do processo
-            
-            message = "Um novo processo disciplinar foi aberto em seu nome. Por favor, acesse o sistema para dar ciência."
-            notification_url = url_for('justica.index', _external=True)
-            
-            # 1. App/Push
-            NotificationService.create_notification(aluno.user.id, message, notification_url)
-            # 2. E-mail
-            if aluno.user.email:
-                EmailService.send_justice_notification_email(aluno.user, novo_processo, notification_url)
-            
             db.session.commit()
-            return True, "Infração registrada com sucesso e aluno notificado!"
+            
+            # --- CORREÇÃO 2: (Erro 'title') ---
+            # O NotificationService não aceita 'title', apenas 'message'.
+            NotificationService.create_notification(
+                user_id=aluno.user_id,
+                message=f"Novo Processo Disciplinar: {fato}", # Título incluído na mensagem
+                url=url_for('justica.index', _external=True)
+            )
+            
+            return True, "Processo disciplinar registrado e aluno notificado com sucesso!"
+        
+        except SQLAlchemyError as e:
+            db.session.rollback()
+            return False, f"Erro de banco de dados: {e}"
         except Exception as e:
             db.session.rollback()
-            current_app.logger.error(f"Erro ao criar processo: {e}")
-            return False, f"Erro ao registrar infração: {e}"
+            return False, f"Erro inesperado ao criar processo: {e}"
 
     @staticmethod
     def registrar_ciente(processo_id, user):
-        # ... (código existente sem alterações) ...
+        """Aluno clica no botão 'Estou Ciente'."""
         processo = db.session.get(ProcessoDisciplina, processo_id)
-        if not processo or (hasattr(user, 'aluno_profile') and processo.aluno_id != user.aluno_profile.id):
+        if not processo or processo.aluno_id != user.aluno_profile.id:
             return False, "Processo não encontrado ou não pertence a você."
         
-        processo.status = 'Aluno Notificado'
-        processo.data_ciente = datetime.now(timezone.utc)
-
-        turma = processo.aluno.turma
-        if turma and turma.school_id:
-            message = f"O aluno {user.nome_de_guerra} deu ciência do processo disciplinar #{processo.id}."
-            notification_url = url_for('justica.index', _external=True)
-            NotificationService.create_notification_for_roles(turma.school_id, ['admin_escola', 'super_admin', 'programador'], message, notification_url)
-        
-        db.session.commit()
-        return True, "Ciência registrada com sucesso."
+        if processo.status != 'Aguardando Ciência':
+            return False, "Este processo não está mais aguardando ciência."
+            
+        try:
+            processo.status = 'Aluno Notificado'
+            processo.data_ciente = datetime.now(timezone.utc)
+            db.session.commit()
+            
+            # --- CORREÇÃO 2: (Erro 'title') ---
+            NotificationService.create_notification(
+                user_id=processo.relator_id,
+                message=f"O aluno {user.nome_completo} deu ciência do Processo nº {processo.id}.",
+                url=url_for('justica.index', _external=True)
+            )
+            
+            return True, "Ciência registrada com sucesso. Você tem 24h para apresentar sua defesa."
+        except Exception as e:
+            db.session.rollback()
+            return False, f"Erro ao registrar ciência: {e}"
 
     @staticmethod
     def enviar_defesa(processo_id, defesa, user):
-        # ... (código existente sem alterações) ...
         processo = db.session.get(ProcessoDisciplina, processo_id)
-        if not processo or (hasattr(user, 'aluno_profile') and processo.aluno_id != user.aluno_profile.id):
+        if not processo or processo.aluno_id != user.aluno_profile.id:
             return False, "Processo não encontrado ou não pertence a você."
+
+        if processo.status != 'Aluno Notificado':
+            return False, "O prazo para defesa expirou ou a defesa já foi enviada."
+
+        try:
+            processo.defesa = defesa
+            processo.data_defesa = datetime.now(timezone.utc)
+            processo.status = 'Defesa Enviada'
+            db.session.commit()
             
-        processo.status = 'Defesa Enviada'
-        processo.defesa = defesa
-        processo.data_defesa = datetime.now(timezone.utc)
-
-        turma = processo.aluno.turma
-        if turma and turma.school_id:
-            message = f"O aluno {user.nome_de_guerra} enviou a defesa para o processo #{processo.id}."
-            notification_url = url_for('justica.index', _external=True)
-            NotificationService.create_notification_for_roles(turma.school_id, ['admin_escola', 'super_admin', 'programador'], message, notification_url)
-
-        db.session.commit()
-        return True, "Defesa enviada com sucesso."
-
+            # --- CORREÇÃO 2: (Erro 'title') ---
+            NotificationService.create_notification(
+                user_id=processo.relator_id,
+                message=f"O aluno {user.nome_completo} enviou a defesa para o Processo nº {processo.id}.",
+                url=url_for('justica.index', _external=True)
+            )
+            
+            return True, "Defesa enviada com sucesso."
+        except Exception as e:
+            db.session.rollback()
+            return False, f"Erro ao enviar defesa: {e}"
+            
     @staticmethod
     def finalizar_processo(processo_id, decisao, fundamentacao, detalhes_sancao):
-        # ... (código existente sem alterações) ...
         processo = db.session.get(ProcessoDisciplina, processo_id)
         if not processo:
             return False, "Processo não encontrado."
-
-        historico_correspondente = db.session.scalars(select(HistoricoAluno).where(
-            HistoricoAluno.aluno_id == processo.aluno_id,
-            HistoricoAluno.descricao.like(f"%Abertura de processo: {processo.fato_constatado[:50]}%"),
-            HistoricoAluno.data_fim.is_(None)
-        ).order_by(HistoricoAluno.data_inicio.desc())).first()
-        
-        if historico_correspondente:
-            historico_correspondente.data_fim = datetime.now(timezone.utc)
             
-        processo.status = 'Finalizado'
-        processo.fundamentacao = fundamentacao
-        processo.data_decisao = datetime.now(timezone.utc)
-        processo.decisao_final = decisao
-        processo.detalhes_sancao = detalhes_sancao if detalhes_sancao else None
-
-        if processo.aluno and processo.aluno.user:
-             message = f"O processo disciplinar #{processo.id} foi finalizado. Veredito: {decisao}."
-             notification_url = url_for('justica.index', _external=True) 
-             NotificationService.create_notification(processo.aluno.user.id, message, notification_url)
-
-             if processo.aluno.user.email:
-                EmailService.send_justice_verdict_email(processo.aluno.user, processo)
-
-        db.session.commit()
-        return True, "Processo finalizado com sucesso e aluno notificado do veredito."
+        if processo.status not in ['Defesa Enviada', 'Aluno Notificado']:
+            return False, "Este processo não está em fase de finalização."
+            
+        try:
+            processo.decisao_final = decisao
+            processo.fundamentacao = fundamentacao
+            processo.detalhes_sancao = detalhes_sancao
+            processo.data_decisao = datetime.now(timezone.utc)
+            processo.status = 'Finalizado'
+            
+            db.session.commit()
+            
+            # --- CORREÇÃO 2: (Erro 'title') ---
+            NotificationService.create_notification(
+                user_id=processo.aluno.user_id,
+                message=f"Seu processo nº {processo.id} foi finalizado. Decisão: {decisao}.",
+                url=url_for('justica.index', _external=True)
+            )
+            
+            return True, "Processo finalizado com sucesso!"
+        except Exception as e:
+            db.session.rollback()
+            return False, f"Erro ao finalizar processo: {e}"
 
     @staticmethod
     def deletar_processo(processo_id):
-        # ... (código existente sem alterações) ...
         processo = db.session.get(ProcessoDisciplina, processo_id)
         if not processo:
             return False, "Processo não encontrado."
-        
+
+        if processo.status != 'Aguardando Ciência':
+            return False, "Não é possível excluir um processo após o aluno dar ciência."
+            
         try:
-            historico_para_deletar = db.session.scalars(select(HistoricoAluno).where(
-                HistoricoAluno.aluno_id == processo.aluno_id,
-                HistoricoAluno.descricao.like(f"%Abertura de processo: {processo.fato_constatado[:50]}%")
-            )).first()
-
-            if historico_para_deletar:
-                db.session.delete(historico_para_deletar)
-
             db.session.delete(processo)
             db.session.commit()
-            return True, "Processo disciplinar e seu registro no histórico foram excluídos com sucesso."
+            return True, "Processo excluído com sucesso."
         except Exception as e:
             db.session.rollback()
-            current_app.logger.error(f"Erro ao deletar processo: {e}")
-            return False, "Ocorreu um erro ao tentar excluir o processo."
+            return False, f"Erro ao excluir processo: {e}"
+            
+    @staticmethod
+    def get_processos_por_ids(ids):
+        query = select(ProcessoDisciplina).where(ProcessoDisciplina.id.in_(ids))
+        return db.session.scalars(query).all()
+        
+    @staticmethod
+    def get_finalized_processos():
+        active_school = g.get('active_school')
+        if not active_school:
+            return []
+        
+        # Subquery para filtrar pela escola (via UserSchool)
+        alunos_da_escola = (
+            select(Aluno.id)
+            .join(User, Aluno.user_id == User.id)
+            .join(UserSchool, User.id == UserSchool.user_id)
+            .where(UserSchool.school_id == active_school.id)
+        ).subquery()
+        
+        query = (
+            select(ProcessoDisciplina)
+            .join(alunos_da_escola, ProcessoDisciplina.aluno_id == alunos_da_escola.c.id)
+            .where(ProcessoDisciplina.status == 'Finalizado')
+            .order_by(ProcessoDisciplina.data_decisao.desc())
+        )
+        return db.session.scalars(query).all()
+
+    @staticmethod
+    def get_analise_disciplinar_data():
+        active_school = g.get('active_school')
+        if not active_school:
+            return {}
+
+        # Subquery para filtrar pela escola (via UserSchool)
+        alunos_da_escola = (
+            select(Aluno.id)
+            .join(User, Aluno.user_id == User.id)
+            .join(UserSchool, User.id == UserSchool.user_id)
+            .where(UserSchool.school_id == active_school.id)
+        ).subquery()
+
+        status_counts = db.session.execute(
+            select(ProcessoDisciplina.status, func.count(ProcessoDisciplina.id))
+            .join(alunos_da_escola, ProcessoDisciplina.aluno_id == alunos_da_escola.c.id)
+            .group_by(ProcessoDisciplina.status)
+        ).all()
+        
+        common_facts = db.session.execute(
+            select(ProcessoDisciplina.fato_constatado, func.count(ProcessoDisciplina.id).label('total'))
+            .join(alunos_da_escola, ProcessoDisciplina.aluno_id == alunos_da_escola.c.id)
+            .group_by(ProcessoDisciplina.fato_constatado)
+            .order_by(func.count(ProcessoDisciplina.id).desc())
+            .limit(10)
+        ).all()
+        
+        top_alunos = db.session.execute(
+            select(User.nome_completo, func.count(ProcessoDisciplina.id).label('total'))
+            .join(alunos_da_escola, ProcessoDisciplina.aluno_id == alunos_da_escola.c.id)
+            .join(Aluno, ProcessoDisciplina.aluno_id == Aluno.id)
+            .join(User, Aluno.user_id == User.id)
+            .group_by(User.nome_completo)
+            .order_by(func.count(ProcessoDisciplina.id).desc())
+            .limit(10)
+        ).all()
+
+        return {
+            'status_counts': [{'status': s[0], 'total': s[1]} for s in status_counts],
+            'common_facts': [{'fato': f[0], 'total': f[1]} for f in common_facts],
+            'top_alunos': [{'nome': a[0], 'total': a[1]} for a in top_alunos]
+        }

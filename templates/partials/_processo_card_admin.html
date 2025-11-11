@@ -1,97 +1,112 @@
-{# templates/partials/_processo_card_admin.html #}
-<div class="process-card" style="border-left-color: {% if processo.status == 'Pendente' %}#f59e0b{% elif processo.status == 'Aluno Notificado' %}#3b82f6{% elif processo.status == 'Defesa Enviada' %}#10b981{% else %}#64748b{% endif %};">
-    <div class="process-header">
-        <div>
-            <div class="process-title">{{ processo.aluno.user.nome_completo }} ({{ processo.aluno.user.matricula }})</div>
-            <small class="text-muted">Relatado por: {{ processo.relator.nome_de_guerra or processo.relator.username }} em {{ processo.data_ocorrencia.strftime('%d/%m/%Y') }}</small>
-        </div>
-        <div class="process-id">ID: {{ processo.id }}</div>
-    </div>
-    <div class="process-detail">
-        <span class="detail-label">Fato Constatado:</span>
-        <div class="preserve-whitespace">{{ processo.fato_constatado }}</div>
-    </div>
-    {% if processo.observacao %}
-    <div class="process-detail">
-        <span class="detail-label">Observação:</span>
-        <div class="preserve-whitespace">{{ processo.observacao }}</div>
-    </div>
-    {% endif %}
-    <div class="process-detail">
-        <span class="detail-label">Status:</span> 
-        <span class="status-badge {% if 'Pendente' in processo.status %}pendente{% elif 'Notificado' in processo.status %}notificado{% elif 'Defesa' in processo.status %}defesa-enviada{% else %}finalizado{% endif %}">
-            {{ processo.status }}
-        </span>
-    </div>
-    {% if processo.defesa %}
-    <div class="process-detail">
-        <span class="detail-label">Defesa do Aluno:</span>
-        <div class="preserve-whitespace" style="background-color: #f8fafc; padding: 0.5rem; border-radius: 4px; border: 1px solid #e2e8f0;">{{ processo.defesa }}</div>
-    </div>
-    {% endif %}
+<div class="card process-card mb-3 status-{{ processo.status | lower | replace(' ', '-') | replace('ç', 'c') | replace('ã', 'a') }}">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start mb-3">
+            <div>
+                <span class="status-badge status-{{ processo.status | lower | replace(' ', '-') | replace('ç', 'c') | replace('ã', 'a') }}">
+                    {{ processo.status }}
+                </span>
+                <h5 class="process-title mt-2 mb-1">
+                    {{ processo.aluno.user.posto_graduacao }} {{ processo.aluno.user.nome_completo }}
+                </h5>
+                <span class="process-id">ID Processo: {{ processo.id }} | Matrícula: {{ processo.aluno.user.matricula }}</span>
+            </div>
+            
+            <div class="btn-group">
+                {% if processo.status == 'Aguardando Ciência' %}
+                <form action="{{ url_for('justica.deletar_processo', processo_id=processo.id) }}" method="POST" onsubmit="return confirm('Tem certeza que deseja excluir este processo? Esta ação não pode ser desfeita.');" class="ms-2">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir Processo">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </form>
+                {% endif %}
 
-    {% if processo.status == 'Defesa Enviada' %}
-    <form method="POST" action="{{ url_for('justica.finalizar_processo', processo_id=processo.id) }}" class="mt-3">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div class="form-group">
-            <label for="decisao_final_{{ processo.id }}"><strong>Decisão/Sanção a Aplicar</strong></label>
-            <select name="decisao_final" id="decisao_final_{{ processo.id }}" class="form-control" onchange="toggleSanctionDetails(this)">
-                <option value="Justificado">Justificado (Arquivar)</option>
-                <option value="Advertência">Advertência</option>
-                <option value="Repreensão">Repreensão</option>
-                <option value="Sustação da Dispensa">Sustação da Dispensa</option>
-            </select>
+                {% if processo.status == 'Defesa Enviada' %}
+                <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#finalizarModal-{{ processo.id }}">
+                    <i class="fas fa-gavel me-1"></i> Analisar
+                </button>
+                {% endif %}
+            </div>
         </div>
-        <div class="form-group" id="detalhes_sancao_container_{{ processo.id }}" style="display: none;">
-            <label for="detalhes_sancao_{{ processo.id }}"><strong>Detalhes da Sanção (Texto da Advertência/Repreensão)</strong></label>
-            <textarea name="detalhes_sancao" id="detalhes_sancao_{{ processo.id }}" class="form-control" rows="3" placeholder="Descreva aqui o texto que constará na advertência ou repreensão."></textarea>
-        </div>
-        <div class="form-group">
-            <label for="fundamentacao_{{ processo.id }}"><strong>Fundamentação da Decisão</strong></label>
-            <textarea name="fundamentacao" id="fundamentacao_{{ processo.id }}" class="form-control" rows="4" placeholder="Descreva os motivos para a sua decisão..." required></textarea>
-        </div>
-        <div class="form-actions mt-2" style="border-top: none; padding-top: 0; justify-content: flex-start;">
-            <button type="submit" class="btn btn-success">Finalizar Processo</button>
-        </div>
-    </form>
-    {% endif %}
 
-    {% if processo.status == 'Finalizado' %}
-    <div class="process-detail">
-        <span class="detail-label">Decisão Final:</span> {{ processo.decisao_final }}
-    </div>
-    {% if processo.detalhes_sancao %}
-    <div class="process-detail">
-        <span class="detail-label">Detalhes da Sanção:</span>
-        <div class="preserve-whitespace">{{ processo.detalhes_sancao }}</div>
-    </div>
-    {% endif %}
-    <div class="process-detail">
-        <span class="detail-label">Fundamentação:</span>
-        <div class="preserve-whitespace">{{ processo.fundamentacao }}</div>
-    </div>
-    {% endif %}
+        <hr>
 
-    <div class="form-actions mt-3" style="justify-content: flex-end; border-top: 1px solid #eee; padding-top: 1rem;">
-        <form method="POST" action="{{ url_for('justica.deletar_processo', processo_id=processo.id) }}" onsubmit="return confirm('Tem certeza que deseja excluir esta transgressão permanentemente? Esta ação não pode ser desfeita.');">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-danger btn-sm">Excluir Transgressão</button>
-        </form>
+        <div class="process-detail">
+            <span class="detail-label">Fato Constatado:</span>
+            <p class="preserve-whitespace">{{ processo.fato_constatado }}</p>
+        </div>
+        <div class="process-detail">
+            <span class="detail-label">Relator (Termo de Justificação):</span>
+            <p class="preserve-whitespace">{{ processo.observacao or "N/A" }}</p>
+            <small class="text-muted">Registrado por {{ processo.relator.nome_completo }} em {{ processo.data_ocorrencia.strftime('%d/%m/%Y às %H:%M') }}</small>
+        </div>
+
+        {% if processo.status in ['Aluno Notificado', 'Defesa Enviada'] %}
+            <div class="process-detail bg-light p-3 rounded border mt-3">
+                <span class="detail-label">Defesa do Aluno:</span>
+                {% if processo.defesa %}
+                    <p class="preserve-whitespace">{{ processo.defesa }}</p>
+                    <small class="text-muted">Enviada em {{ processo.data_defesa.strftime('%d/%m/%Y às %H:%M') }}</small>
+                {% else %}
+                    <p class="text-muted fst-italic">Aluno ainda não apresentou defesa (Ciente em: {{ processo.data_ciente.strftime('%d/%m/%Y às %H:%M') if processo.data_ciente else 'N/A' }}).</p>
+                {% endif %}
+            </div>
+        {% endif %}
+
+        {% if processo.status == 'Finalizado' %}
+            <div class="process-detail bg-light p-3 rounded border border-2 mt-3">
+                <span class="detail-label text-success">Decisão Final ({{ processo.decisao_final }}):</span>
+                <p class="preserve-whitespace fw-bold">{{ processo.detalhes_sancao or "Sem detalhes adicionais." }}</p>
+                <span class="detail-label">Fundamentação:</span>
+                <p class="preserve-whitespace">{{ processo.fundamentacao }}</p>
+                <small class="text-muted">Decisão em {{ processo.data_decisao.strftime('%d/%m/%Y às %H:%M') }}</Zsmall>
+            </div>
+        {% endif %}
+
+        {% if processo.status == 'Defesa Enviada' %}
+        <div class="modal fade" id="finalizarModal-{{ processo.id }}" tabindex="-1" aria-labelledby="modalLabel-{{ processo.id }}" aria-hidden="true">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="modalLabel-{{ processo.id }}">Finalizar Processo de {{ processo.aluno.user.nome_completo }}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <form action="{{ url_for('justica.finalizar_processo', processo_id=processo.id) }}" method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label class="form-label"><strong>Fato:</strong> {{ processo.fato_constatado }}</label>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label"><strong>Defesa:</strong> {{ processo.defesa }}</label>
+                            </div>
+                            <hr>
+                            <div class="mb-3">
+                                <label for="decisao_final-{{ processo.id }}" class="form-label">Decisão Final</label>
+                                <select name="decisao_final" id="decisao_final-{{ processo.id }}" class="form-select" required>
+                                    <option value="" disabled selected>Selecione a decisão...</option>
+                                    <option value="Justificado">Justificado (Sem Sanção)</option>
+                                    <option value="Advertência">Advertência (Com Sanção)</option>
+                                    <option value="Repreensão">Repreensão (Com Sanção)</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="detalhes_sancao-{{ processo.id }}" class="form-label">Detalhes da Sanção (Obrigatório se Advertência/Repreensão)</label>
+                                <textarea name="detalhes_sancao" id="detalhes_sancao-{{ processo.id }}" class="form-control" rows="3" placeholder="Ex: Perda de 0,5 ponto na média disciplinar."></textarea>
+                            </div>
+                            <div class="mb-3">
+                                <label for="fundamentacao-{{ processo.id }}" class="form-label">Fundamentação da Decisão</label>
+                                <textarea name="fundamentacao" id="fundamentacao-{{ processo.id }}" class="form-control" rows="5" placeholder="Descreva por que a defesa foi (ou não) aceita e a base para a decisão." required></textarea>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="submit" class="btn btn-success">Salvar Decisão</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endif %}
     </div>
 </div>
-
-<script>
-    function toggleSanctionDetails(selectElement) {
-        const processoId = selectElement.id.split('_').pop();
-        const detailsContainer = document.getElementById(`detalhes_sancao_container_${processoId}`);
-        const detailsTextarea = document.getElementById(`detalhes_sancao_${processoId}`);
-        
-        if (selectElement.value === 'Advertência' || selectElement.value === 'Repreensão') {
-            detailsContainer.style.display = 'block';
-            detailsTextarea.required = true;
-        } else {
-            detailsContainer.style.display = 'none';
-            detailsTextarea.required = false;
-        }
-    }
-</script>

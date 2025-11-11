@@ -1,49 +1,74 @@
-{# templates/partials/_processo_card_aluno.html #}
-<div class="process-card" style="border-left-color: {% if processo.status == 'Pendente' %}#f59e0b{% elif processo.status == 'Aluno Notificado' %}#3b82f6{% elif processo.status == 'Defesa Enviada' %}#10b981{% else %}#64748b{% endif %};">
-    <div class="process-header">
-        <div>
-            <div class="process-title">Processo Disciplinar</div>
-            <small class="text-muted">Data da Ocorrência: {{ processo.data_ocorrencia.strftime('%d/%m/%Y') }}</small>
+<div class="card process-card mb-3 status-{{ processo.status | lower | replace(' ', '-') | replace('ç', 'c') | replace('ã', 'a') }}">
+    <div class="card-body">
+        <div class="process-header">
+            <div>
+                <span class="status-badge status-{{ processo.status | lower | replace(' ', '-') | replace('ç', 'c') | replace('ã', 'a') }}">
+                    {{ processo.status }}
+                </span>
+                <h5 class="process-title mt-2 mb-1">Processo Disciplinar Nº {{ processo.id }}</h5>
+            </div>
+            <span class="process-id">{{ processo.data_ocorrencia.strftime('%d/%m/%Y') }}</span>
         </div>
-        <div class="process-id">ID: {{ processo.id }}</div>
-    </div>
-    <div class="process-detail">
-        <span class="detail-label">Fato Constatado:</span>
-        <div class="preserve-whitespace">{{ processo.fato_constatado }}</div>
-    </div>
-    <div class="process-detail">
-        <span class="detail-label">Status:</span> 
-        <span class="status-badge {% if 'Pendente' in processo.status %}pendente{% elif 'Notificado' in processo.status %}notificado{% elif 'Defesa' in processo.status %}defesa-enviada{% else %}finalizado{% endif %}">
-            {{ processo.status }}
-        </span>
-    </div>
-    {% if processo.status == 'Pendente' %}
-        <form method="POST" action="{{ url_for('justica.dar_ciente', processo_id=processo.id) }}" class="mt-3">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-primary">Dar Ciência</button>
-        </form>
-    {% endif %}
-    {% if processo.status == 'Aluno Notificado' %}
-        <form method="POST" action="{{ url_for('justica.enviar_defesa', processo_id=processo.id) }}" class="mt-3">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <div class="form-group">
-                <label for="defesa_{{ processo.id }}">Sua Defesa:</label>
-                <textarea name="defesa" id="defesa_{{ processo.id }}" class="form-control" rows="4" required></textarea>
-            </div>
-            <div class="form-actions mt-2">
-                <button type="submit" class="btn btn-primary">Enviar Defesa</button>
-            </div>
-        </form>
-    {% endif %}
-    {% if processo.status == 'Defesa Enviada' or processo.status == 'Finalizado' %}
+
+        <hr>
+
         <div class="process-detail">
-            <span class="detail-label">Sua Defesa:</span>
-            <div class="preserve-whitespace" style="background-color: #f8fafc; padding: 0.5rem; border-radius: 4px; border: 1px solid #e2e8f0;">{{ processo.defesa }}</div>
+            <span class="detail-label">Fato Constatado:</span>
+            <p class="preserve-whitespace">{{ processo.fato_constatado }}</p>
         </div>
-    {% endif %}
-    {% if processo.status == 'Finalizado' %}
-    <div class="process-detail">
-        <span class="detail-label">Decisão Final:</span> {{ processo.decisao_final }}
+        <div class="process-detail">
+            <span class="detail-label">Termo de Justificação (Relator):</span>
+            <p class="preserve-whitespace">{{ processo.observacao }}</p>
+            <small class="text-muted">Registrado por {{ processo.relator.nome_completo }}</small>
+        </div>
+
+        {% if processo.status == 'Aguardando Ciência' %}
+            <div class="alert alert-warning mt-3">
+                <strong>Ação Necessária:</strong> Você precisa dar ciência deste processo.
+                <form action="{{ url_for('justica.dar_ciente', processo_id=processo.id) }}" method="POST" class="mt-2">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-warning">Estou Ciente</button>
+                </form>
+            </div>
+        {% endif %}
+
+        {% if processo.status == 'Aluno Notificado' %}
+            <div class="alert alert-info mt-3">
+                <strong>Ação Necessária:</strong> Envie sua defesa.
+                <form action="{{ url_for('justica.enviar_defesa', processo_id=processo.id) }}" method="POST" class="mt-2">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="form-group">
+                        <textarea name="defesa" class="form-control" rows="5" placeholder="Digite sua defesa aqui..." required></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Enviar Defesa</button>
+                </form>
+            </div>
+        {% endif %}
+
+        {% if processo.status == 'Defesa Enviada' %}
+            <div class="process-detail bg-light p-3 rounded border">
+                <span class="detail-label">Sua Defesa:</span>
+                <p class="preserve-whitespace">{{ processo.defesa }}</p>
+                <small class="text-muted">Enviada em {{ processo.data_defesa.strftime('%d/%m/%Y às %H:%M') }}. Aguardando análise.</small>
+            </div>
+        {% endif %}
+
+        {% if processo.status == 'Finalizado' %}
+            <div class="process-detail p-3 rounded border 
+                {% if processo.decisao_final == 'Justificado' %}border-success bg-success-light{% else %}border-danger bg-danger-light{% endif %}">
+                
+                <span class="detail-label {% if processo.decisao_final == 'Justificado' %}text-success{% else %}text-danger{% endif %}">
+                    <i class="fas fa-gavel"></i> Decisão Final: {{ processo.decisao_final }}
+                </span>
+                
+                {% if processo.decisao_final != 'Justificado' %}
+                <p class="preserve-whitespace fw-bold mt-2">{{ processo.detalhes_sancao or "Sem detalhes de sanção." }}</p>
+                {% endif %}
+                
+                <span class="detail-label mt-2">Fundamentação da Autoridade:</span>
+                <p class="preserve-whitespace">{{ processo.fundamentacao }}</p>
+                <small class="text-muted">Decisão em {{ processo.data_decisao.strftime('%d/%m/%Y às %H:%M') }}</small>
+            </div>
+        {% endif %}
     </div>
-    {% endif %}
 </div>
