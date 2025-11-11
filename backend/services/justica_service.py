@@ -1,6 +1,7 @@
 # backend/services/justica_service.py
 
-from flask import g, url_for
+# --- CORREÇÃO: Importar 'session' ---
+from flask import g, url_for, session
 from sqlalchemy import select, func
 from datetime import datetime, timezone
 from ..models.database import db
@@ -19,19 +20,27 @@ class JusticaService:
     def get_processos_para_usuario(user):
         """Busca processos relevantes para o usuário (admin vê todos, aluno vê só os seus)."""
         if user.role in ['admin_escola', 'super_admin', 'programador']:
-            active_school = g.get('active_school')
-            if not active_school:
-                return []
             
-            # --- CORREÇÃO 1: (Processo Sumido) ---
+            # --- INÍCIO DA CORREÇÃO ---
+            # Busca a escola ativa manualmente a partir da session e do user.
+            # Não podemos confiar em 'g' (Flask global) dentro da camada de serviço.
+            school_id_to_load = None
+            if user.role in ['super_admin', 'programador']:
+                school_id_to_load = session.get('view_as_school_id')
+            elif hasattr(user, 'user_schools') and user.user_schools:
+                school_id_to_load = user.user_schools[0].school_id
+
+            if not school_id_to_load:
+                return [] # Retorna vazio se nenhuma escola for encontrada
+            # --- FIM DA CORREÇÃO ---
+            
             # A consulta agora filtra pelo UserSchool (vínculo do usuário com a escola).
-            # Isto garante que processos de alunos (mesmo sem turma) apareçam.
             query = (
                 select(ProcessoDisciplina)
                 .join(Aluno, ProcessoDisciplina.aluno_id == Aluno.id)
                 .join(User, Aluno.user_id == User.id)
                 .join(UserSchool, User.id == UserSchool.user_id) # Filtra pelo vínculo do User
-                .where(UserSchool.school_id == active_school.id) # E não pela turma
+                .where(UserSchool.school_id == school_id_to_load) # <-- USA A VARIÁVEL CORRETA
                 .options(
                     joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.user),
                     joinedload(ProcessoDisciplina.relator)
@@ -73,7 +82,6 @@ class JusticaService:
             db.session.add(novo_processo)
             db.session.commit()
             
-            # --- CORREÇÃO 2: (Erro 'title') ---
             # O NotificationService não aceita 'title', apenas 'message'.
             NotificationService.create_notification(
                 user_id=aluno.user_id,
@@ -105,7 +113,6 @@ class JusticaService:
             processo.data_ciente = datetime.now(timezone.utc)
             db.session.commit()
             
-            # --- CORREÇÃO 2: (Erro 'title') ---
             NotificationService.create_notification(
                 user_id=processo.relator_id,
                 message=f"O aluno {user.nome_completo} deu ciência do Processo nº {processo.id}.",
@@ -132,7 +139,6 @@ class JusticaService:
             processo.status = 'Defesa Enviada'
             db.session.commit()
             
-            # --- CORREÇÃO 2: (Erro 'title') ---
             NotificationService.create_notification(
                 user_id=processo.relator_id,
                 message=f"O aluno {user.nome_completo} enviou a defesa para o Processo nº {processo.id}.",
@@ -162,7 +168,6 @@ class JusticaService:
             
             db.session.commit()
             
-            # --- CORREÇÃO 2: (Erro 'title') ---
             NotificationService.create_notification(
                 user_id=processo.aluno.user_id,
                 message=f"Seu processo nº {processo.id} foi finalizado. Decisão: {decisao}.",

@@ -6,29 +6,19 @@
     <title>{% block title %}Sistema EsFAS{% endblock %}</title>
     <meta name="csrf-token" content="{{ csrf_token() }}">
     
-    <!-- Bootstrap CSS (Existente) -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     
-    <!-- Fontes (Existente) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bree+Serif&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
-    <!-- === INÍCIO DAS NOVAS BIBLIOTECAS (CORREÇÃO) === -->
-    <!-- 1. jQuery (Necessário para o Select2) -->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
     
-    <!-- 2. Select2 CSS (Para o estilo dos dropdowns) -->
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     
-    <!-- 3. Select2 Theme for Bootstrap 5 -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
-    <!-- === FIM DAS NOVAS BIBLIOTECAS === -->
-
-    <!-- CSS Principal (Existente) -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='3.1') }}">
 
-    <!-- Chart.js (Existente) -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
@@ -84,7 +74,6 @@
     
     {% if current_user.is_authenticated %}
     <header class="top-navbar">
-        <!-- ... (seu código do top-navbar não muda) ... -->
         <div class="top-navbar-content">
             <div class="top-navbar-left-items">
                 <button class="sidebar-toggle" id="sidebarToggle">☰</button>
@@ -93,7 +82,7 @@
                     {% if active_school %}
                         {{ active_school.name }}
                     {% elif current_user.role == 'super_admin' %}
-                        <a href="{{ url_for('user.select_school') }}" class="text-white text-decoration-none">Selecione uma escola</a>
+                        <a href="{{ url_for('super_admin.select_school') }}" class="text-white text-decoration-none">Selecione uma escola</a>
                     {% else %}
                         Sistema de Gerenciamento
                     {% endif %}
@@ -130,7 +119,7 @@
                         <li><a class="dropdown-item" href="{{ url_for('user.meu_perfil') }}">Meu Perfil</a></li>
                         
                         {% if current_user.role == 'super_admin' %}
-                        <li><a class="dropdown-item" href="{{ url_for('user.select_school') }}">Mudar Escola Ativa</a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('super_admin.select_school') }}">Mudar Escola Ativa</a></li>
                         {% endif %}
                         <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#changePasswordModal">Alterar Senha</a></li>
                     </ul>
@@ -146,7 +135,6 @@
     <div class="page-container">
         {% if current_user.is_authenticated %}
         <aside class="sidebar" id="sidebar">
-            <!-- ... (seu código da sidebar não muda) ... -->
             <div class="sidebar-header">
                 <a href="{{ url_for('main.dashboard') }}" class="nav-brand">
                     <div class="sidebar-logo-container">
@@ -264,10 +252,8 @@
 
     {% block modals %}{% endblock %}
     
-    <!-- Bootstrap JS (Existente) -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
     
-    <!-- === ADICIONADO: Select2 JS (deve vir depois do jQuery) === -->
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
     <script>
