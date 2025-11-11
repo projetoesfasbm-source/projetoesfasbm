@@ -68,7 +68,7 @@ def create_app(config_class=Config):
                 firebase_admin.initialize_app(cred)
                 app.logger.info("Firebase Admin SDK inicializado com sucesso.")
         else:
-             app.logger.warning(f"Arquivo 'credentials.json' não encontrado em {cred_path}. Funcionalidades do Firebase não estarão disponíveis.")
+                 app.logger.warning(f"Arquivo 'credentials.json' não encontrado em {cred_path}. Funcionalidades do Firebase não estarão disponíveis.")
     except ValueError:
          pass # App já inicializado
     except Exception as e:
@@ -193,6 +193,39 @@ def register_handlers_and_processors(app):
         response.headers["X-Frame-Options"] = "SAMEORIGIN"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+
+        # --- INÍCIO DA CORREÇÃO (CSP) ---
+        # A política de segurança foi atualizada para incluir
+        # 'unsafe-inline' (para os scripts no HTML) e o CDN
+        # no 'connect-src' (para os .map files).
+        csp = [
+            # Padrão: só permite carregar coisas da própria origem ('self')
+            "default-src 'self'",
+            
+            # Scripts: permite 'self', CDNs, 'unsafe-eval' (Bootstrap) e 'unsafe-inline' (scripts do base/index)
+            "script-src 'self' https://code.jquery.com https://cdn.jsdelivr.net 'unsafe-eval' 'unsafe-inline'",
+            
+            # Estilos: permite 'self', CDNs e 'unsafe-inline' (style no base.html)
+            "style-src 'self' https://cdn.jsdelivr.net https://fonts.googleapis.com 'unsafe-inline'",
+            
+            # Fontes: permite 'self' e o CDN de fontes do Google
+            "font-src 'self' https://fonts.gstatic.com",
+            
+            # Imagens: permite 'self', 'data:' e todas as origens (*)
+            "img-src 'self' data: *",
+            
+            # Conexões: permite 'self' (APIs) e o CDN (para .map files)
+            "connect-src 'self' https://cdn.jsdelivr.net",
+            
+            # Objetos: não permite (flash, etc)
+            "object-src 'none'",
+            
+            # Frames: só da mesma origem
+            "frame-ancestors 'self'"
+        ]
+        response.headers["Content-Security-Policy"] = "; ".join(csp)
+        # --- FIM DA CORREÇÃO (CSP) ---
+
         return response
 
     @app.errorhandler(404)
@@ -261,9 +294,9 @@ def register_cli_commands(app):
     def clear_data_command(app_flag):
         from scripts.clear_data import clear_transactional_data
         if not app_flag:
-             if input("ATENÇÃO: Este comando irá apagar TODOS os dados de alunos, turmas, etc. Deseja continuar? (s/n): ").lower() != 's':
-                print("Operação cancelada.")
-                return
+                 if input("ATENÇÃO: Este comando irá apagar TODOS os dados de alunos, turmas, etc. Deseja continuar? (s/n): ").lower() != 's':
+                     print("Operação cancelada.")
+                     return
         with create_app().app_context():
             clear_transactional_data()
 
