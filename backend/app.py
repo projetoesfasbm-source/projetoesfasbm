@@ -20,7 +20,7 @@ from backend.services.asset_service import AssetService
 # É crucial que todos os modelos sejam importados aqui para que
 # o Alembic/Flask-Migrate possa detectar as mudanças no schema.
 from backend.models.aluno import Aluno
-from backend.models.avaliacao import AvaliacaoAtitudinal, AvaliacaoItem # <-- NOVO
+from backend.models.avaliacao import AvaliacaoAtitudinal, AvaliacaoItem
 from backend.models.disciplina import Disciplina
 from backend.models.disciplina_turma import DisciplinaTurma
 from backend.models.discipline_rule import DisciplineRule
@@ -43,7 +43,18 @@ from backend.models.site_config import SiteConfig
 from backend.models.turma import Turma
 from backend.models.turma_cargo import TurmaCargo
 from backend.models.user_school import UserSchool
+# ### INÍCIO DA ALTERAÇÃO ###
+# Adicionada a importação do novo modelo para o Alembic/Migrate
+from backend.models.fada_avaliacao import FadaAvaliacao
+# ### FIM DA ALTERAÇÃO ###
 # ------------------------------------------------------------
+from datetime import datetime, timezone
+try:
+    # 'zoneinfo' é padrão do Python 3.9+ (que você usa)
+    from zoneinfo import ZoneInfo
+except ImportError:
+    # Fallback para versões mais antigas (se necessário, mas improvável)
+    from backports.zoneinfo import ZoneInfo
 
 def create_app(config_class=Config):
     """
@@ -70,10 +81,42 @@ def create_app(config_class=Config):
         else:
                  app.logger.warning(f"Arquivo 'credentials.json' não encontrado em {cred_path}. Funcionalidades do Firebase não estarão disponíveis.")
     except ValueError:
-         pass # App já inicializado
+       pass # App já inicializado
     except Exception as e:
         app.logger.error(f"ERRO ao inicializar o Firebase Admin SDK: {e}")
     # --- FIM DA INICIALIZAÇÃO ---
+
+    # ### INÍCIO DA CORREÇÃO DE FUSO HORÁRIO (VERSÃO 2) ###
+    @app.template_filter('br_time')
+    def format_datetime_as_brt(dt_utc, format_str=None):
+        """
+        Converte um datetime UTC para o fuso de Brasília (BRT).
+        Aceita um formato de string opcional.
+        """
+        if not dt_utc:
+            return "N/A"
+
+        try:
+            BRT = ZoneInfo("America/Sao_Paulo")
+
+            # Garante que o datetime esteja ciente do seu fuso (UTC)
+            if dt_utc.tzinfo is None:
+                dt_utc = dt_utc.replace(tzinfo=timezone.utc)
+
+            # Converte para o fuso de Brasília
+            dt_brt = dt_utc.astimezone(BRT)
+
+            # ### ALTERAÇÃO AQUI ###
+            # Se o usuário passou um formato (ex: '%d/%m/%Y'), use-o.
+            if format_str:
+                return dt_brt.strftime(format_str)
+            else:
+                # Caso contrário, use o formato padrão com data e hora.
+                return dt_brt.strftime("%d/%m/%Y às %H:%M")
+
+        except Exception as e:
+            return str(dt_utc)
+    # ### FIM DA CORREÇÃO DE FUSO HORÁRIO ###
 
     db.init_app(app)
     Migrate(app, db)
@@ -156,31 +199,34 @@ def register_handlers_and_processors(app):
             # Em testes, garante que existam configs padrão
             if app.config.get("TESTING", False):
                 SiteConfigService.init_default_configs()
-            
+
             configs = SiteConfigService.get_all_configs()
             g.site_config = {c.config_key: c.config_value for c in configs}
 
-        active_school = None
+        # ### INÍCIO DA CORREÇÃO (g.active_school) ###
+        # Esta é a lógica corrigida e robusta para carregar a escola ativa.
+        # Ela resolve o bug "Nenhuma escola ativa selecionada" para admins vinculados.
+        g.active_school = None
+        school_id_to_load = None
+
         if current_user.is_authenticated:
-            school_id_to_load = None
-            
-            # Super Admin/Programador podem "ver como" outra escola
+            # 1. Se for Super Admin ou Programador, a prioridade é a sessão "Visualizar Como".
             if current_user.role in ['super_admin', 'programador']:
                 school_id_to_load = session.get('view_as_school_id')
             
-            # Usuários comuns veem sua própria escola
-            elif hasattr(current_user, 'user_schools') and current_user.user_schools:
+            # 2. Se for qualquer outro usuário (ou um Super Admin não visualizando), 
+            #    tenta carregar a escola do vínculo.
+            if school_id_to_load is None and hasattr(current_user, 'user_schools') and current_user.user_schools:
                 school_id_to_load = current_user.user_schools[0].school_id
-
+            
             if school_id_to_load:
-                active_school = db.session.get(School, school_id_to_load)
-
-        # Disponibiliza a escola ativa globalmente para os templates
-        g.active_school = active_school 
+                g.active_school = db.session.get(School, school_id_to_load)
+        
+        # ### FIM DA CORREÇÃO (g.active_school) ###
 
         return {
             'site_config': g.site_config,
-            'active_school': active_school
+            'active_school': g.active_school # Passa a escola carregada (ou None) para o template
         }
 
     @app.after_request
@@ -201,25 +247,25 @@ def register_handlers_and_processors(app):
         csp = [
             # Padrão: só permite carregar coisas da própria origem ('self')
             "default-src 'self'",
-            
+
             # Scripts: permite 'self', CDNs, 'unsafe-eval' (Bootstrap) e 'unsafe-inline' (scripts do base/index)
             "script-src 'self' https://code.jquery.com https://cdn.jsdelivr.net 'unsafe-eval' 'unsafe-inline'",
-            
+
             # Estilos: permite 'self', CDNs e 'unsafe-inline' (style no base.html)
             "style-src 'self' https://cdn.jsdelivr.net https://fonts.googleapis.com 'unsafe-inline'",
-            
+
             # Fontes: permite 'self' e o CDN de fontes do Google
             "font-src 'self' https://fonts.gstatic.com",
-            
+
             # Imagens: permite 'self', 'data:' e todas as origens (*)
             "img-src 'self' data: *",
-            
+
             # Conexões: permite 'self' (APIs) e o CDN (para .map files)
             "connect-src 'self' https://cdn.jsdelivr.net",
-            
+
             # Objetos: não permite (flash, etc)
             "object-src 'none'",
-            
+
             # Frames: só da mesma origem
             "frame-ancestors 'self'"
         ]
@@ -294,9 +340,9 @@ def register_cli_commands(app):
     def clear_data_command(app_flag):
         from scripts.clear_data import clear_transactional_data
         if not app_flag:
-                 if input("ATENÇÃO: Este comando irá apagar TODOS os dados de alunos, turmas, etc. Deseja continuar? (s/n): ").lower() != 's':
-                     print("Operação cancelada.")
-                     return
+                if input("ATENÇÃO: Este comando irá apagar TODOS os dados de alunos, turmas, etc. Deseja continuar? (s/n): ").lower() != 's':
+                    print("Operação cancelada.")
+                    return
         with create_app().app_context():
             clear_transactional_data()
 

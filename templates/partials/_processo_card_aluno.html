@@ -7,7 +7,7 @@
                 </span>
                 <h5 class="process-title mt-2 mb-1">Processo Disciplinar Nº {{ processo.id }}</h5>
             </div>
-            <span class="process-id">{{ processo.data_ocorrencia.strftime('%d/%m/%Y') }}</span>
+            <span class="process-id">{{ processo.data_ocorrencia | br_time('%d/%m/%Y') }}</span>
         </div>
 
         <hr>
@@ -49,25 +49,25 @@
             <div class="process-detail bg-light p-3 rounded border">
                 <span class="detail-label">Sua Defesa:</span>
                 <p class="preserve-whitespace">{{ processo.defesa }}</p>
-                <small class="text-muted">Enviada em {{ processo.data_defesa.strftime('%d/%m/%Y às %H:%M') }}. Aguardando análise.</small>
+                <small class="text-muted">Enviada em {{ processo.data_defesa | br_time('%d/%m/%Y às %H:%M') }}. Aguardando análise.</small>
             </div>
         {% endif %}
 
         {% if processo.status == 'Finalizado' %}
-            <div class="process-detail p-3 rounded border 
+            <div class="process-detail p-3 rounded border
                 {% if processo.decisao_final == 'Justificado' %}border-success bg-success-light{% else %}border-danger bg-danger-light{% endif %}">
-                
+
                 <span class="detail-label {% if processo.decisao_final == 'Justificado' %}text-success{% else %}text-danger{% endif %}">
                     <i class="fas fa-gavel"></i> Decisão Final: {{ processo.decisao_final }}
                 </span>
-                
+
                 {% if processo.decisao_final != 'Justificado' %}
                 <p class="preserve-whitespace fw-bold mt-2">{{ processo.detalhes_sancao or "Sem detalhes de sanção." }}</p>
                 {% endif %}
-                
+
                 <span class="detail-label mt-2">Fundamentação da Autoridade:</span>
                 <p class="preserve-whitespace">{{ processo.fundamentacao }}</p>
-                <small class="text-muted">Decisão em {{ processo.data_decisao.strftime('%d/%m/%Y às %H:%M') }}</small>
+                <small class="text-muted">Decisão em {{ processo.data_decisao | br_time('%d/%m/%Y às %H:%M') }}</small>
             </div>
         {% endif %}
     </div>

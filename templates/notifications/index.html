@@ -16,7 +16,7 @@
                     <a href="{{ notification.url or '#' }}" class="notification-link">
                         <div class="notification-content">
                             <p class="notification-message">{{ notification.message }}</p>
-                            <span class="notification-date">{{ notification.created_at.strftime('%d/%m/%Y às %H:%M') }}</span>
+                            <span class="notification-date">{{ notification.created_at | br_time('%d/%m/%Y às %H:%M') }}</span>
                         </div>
                     </a>
                 </li>

@@ -57,17 +57,17 @@
 
     {% for processo in processos %}
     <div class="processo-container {% if not loop.first %}subsequente{% endif %}">
-        
+
         <div class="title">
             TERMO DE JUSTIFICAÇÃO Nº {{ "%03d"|format(processo.id) }}
         </div>
 
-        <p>Tendo em vista as informações constantes na Parte Nº 000/CAl/EsFAS/{{ processo.data_ocorrencia.strftime('%Y') }}, evidenciando a existência, em tese, de infração das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação:</p>
+        <p>Tendo em vista as informações constantes na Parte Nº 000/CAl/EsFAS/{{ processo.data_ocorrencia | br_time('%Y') }}, evidenciando a existência, em tese, de infração das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação:</p>
 
         <div class="section">
             <p><strong>1. Justificante:</strong> {{ processo.aluno.user.posto_graduacao or '(POSTO/GRADUAÇÃO)' }} {{ processo.aluno.user.nome_completo or '(NOME COMPLETO)' }} Id Func. {{ processo.aluno.user.matricula or '(MATRICULA)' }}</p>
-            
-            <p><strong>2. Descrição da conduta infracional:</strong> O(a) {{ processo.aluno.user.posto_graduacao or '(POSTO/GRADUAÇÃO)' }} {{ processo.aluno.user.nome_completo or '(NOME COMPLETO)' }} Id Func. {{ processo.aluno.user.matricula or '(MATRICULA)' }}, no dia {{ processo.data_ocorrencia.strftime('%d de %B de %Y') }},
+
+            <p><strong>2. Descrição da conduta infracional:</strong> O(a) {{ processo.aluno.user.posto_graduacao or '(POSTO/GRADUAÇÃO)' }} {{ processo.aluno.user.nome_completo or '(NOME COMPLETO)' }} Id Func. {{ processo.aluno.user.matricula or '(MATRICULA)' }}, no dia {{ processo.data_ocorrencia | br_time('%d de %B de %Y') }},
             {% set parts = processo.fato_constatado.split('-', 1) %}
             {% if parts | length == 2 %}
                 {% set romano = parts[0].strip() %}
@@ -77,7 +77,7 @@
                 {{ processo.fato_constatado }}. Com isso, incorreu no item (FATO NÃO PADRONIZADO);
             {% endif %}
             </p>
-            
+
             <p><strong>3. Cientifico-lhe</strong> que a contar do recebimento da presente, abre-se o prazo de 24 horas, para que, querendo, apresente resposta escrita com as provas que entender cabíveis. Fica advertido o acusado que a não entrega da justificação dentro do prazo estipulado, implicará em reconhecimento como verdadeiros os fatos imputados.</p>
         </div>
 

@@ -21,7 +21,7 @@
                             <input type="text" class="form-control" id="school_name" name="school_name" required>
                         </div>
                     </div>
-                    
+
                     <div class="col-md-6">
                         <div class="form-group">
                             <label for="npccal_type">Tipo de NPCCAL (Regras Disciplinares)</label>
@@ -97,7 +97,7 @@
                             <th scope="row">{{ school.id }}</th>
                             <td>{{ school.nome }}</td>
                             <td>
-                                <span class="badge 
+                                <span class="badge
                                     {% if school.npccal_type == 'ctsp' %}bg-secondary
                                     {% else %}bg-info
                                     {% endif %}">
@@ -105,7 +105,7 @@
                                 </span>
                             </td>
                             <td>{{ 'Sim' if school.is_active else 'Não' }}</td>
-                            <td>{{ school.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+                            <td>{{ school.created_at | br_time('%d/%m/%Y %H:%M') }}</td>
                             <td>
                                 <form method="POST" action="{{ url_for('super_admin.delete_school', school_id=school.id) }}" onsubmit="return confirm('ATENÇÃO: Excluir esta escola irá remover permanentemente todos os seus dados (turmas, alunos, vínculos, etc.). Esta ação não pode ser desfeita. Deseja continuar?');">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
