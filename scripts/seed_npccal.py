@@ -1,15 +1,10 @@
 # scripts/seed_npccal.py
+
 from backend.models.database import db
 from backend.models.discipline_rule import DisciplineRule
 from sqlalchemy import delete
 import click
 
-# =============================================================================
-# LISTA 1: CTSP (SARGENTOS) - 76 ITENS
-# Origem: Lista oficial fornecida pelo usuário.
-# Pontos: 0.0 (Não utilizam Avaliação Atitudinal)
-# =============================================================================
-# --- INÍCIO DO BLOCO ATUALIZADO ---
 CTSP_DATA = [
     {"codigo": "I", "descricao": "Movimentar-se em forma, sem prévia autorização;"},
     {"codigo": "II", "descricao": "Afastar-se do quartel sem tomar conhecimento do aditamento interno ou ordens e recomendações do dia, salvo se não constituir infração mais grave;"},
@@ -88,12 +83,7 @@ CTSP_DATA = [
     {"codigo": "LXXV", "descricao": "Interagir em redes sociais durante o horário de aula em que esteja presente o instrutor;"},
     {"codigo": "LXXVI", "descricao": "Publicar na internet conteúdo indecoroso que atente contra a imagem da Corporação."}
 ]
-# --- FIM DO BLOCO ATUALIZADO ---
 
-# =============================================================================
-# CBFPM (SOLDADOS) - LISTA COMPLETA (110 ITENS)
-# Origem: Fornecida por você, com base no Anexo T.
-# =============================================================================
 CBFPM_DATA = [
     {"codigo": "1", "descricao": "Faltar com a camaradagem para com colegas de instituição.", "gravidade": "MÉDIA", "pontos": 0.5},
     {"codigo": "2", "descricao": "Desrespeitar ou ser descortês para com colegas, policiais militares, servidores e civis.", "gravidade": "MÉDIA", "pontos": 0.5},
@@ -207,10 +197,6 @@ CBFPM_DATA = [
     {"codigo": "110", "descricao": "Deixar de fiscalizar o cumprimento das normas e ordens vigentes quando de serviço ou em função de comando.", "gravidade": "MÉDIA", "pontos": 0.5}
 ]
 
-# =============================================================================
-# CSPM (OFICIAIS) - LISTA COMPLETA (172 ITENS)
-# Origem: Anexo R do PDF oficial. (Não têm "Gravidade", apenas "Pontos")
-# =============================================================================
 CSPM_DATA = [
     {"codigo": "R-1", "descricao": "Omitir informação relevante em registro de Livro de Partes Diárias;", "pontos": 0.2},
     {"codigo": "R-2", "descricao": "Omitir informação relevante em documento oficial, desde que não gere fato mais grave;", "pontos": 0.5},

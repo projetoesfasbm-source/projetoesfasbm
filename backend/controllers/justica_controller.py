@@ -41,7 +41,7 @@ def index():
     processos_finalizados = [p for p in processos if p.status == 'Finalizado']
 
     active_school = g.get('active_school') 
-    fatos_predefinidos = []
+    fatos_predefinidos = ['ctsp']
     permite_pontuacao = False  # Por padrão, não permite pontuação
 
     if active_school:
