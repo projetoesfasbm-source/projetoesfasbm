@@ -17,8 +17,6 @@ from backend.models.user import User
 from backend.services.asset_service import AssetService
 
 # --- Importações de TODOS os modelos para o Flask-Migrate ---
-# É crucial que todos os modelos sejam importados aqui para que
-# o Alembic/Flask-Migrate possa detectar as mudanças no schema.
 from backend.models.aluno import Aluno
 from backend.models.avaliacao import AvaliacaoAtitudinal, AvaliacaoItem
 from backend.models.disciplina import Disciplina
@@ -73,7 +71,6 @@ def create_app(config_class=Config):
     try:
         cred_path = os.path.join(os.path.dirname(__file__), 'credentials.json')
         if os.path.exists(cred_path):
-            # Verifica se já existe um app inicializado para evitar erro de duplicação em reloads
             if not firebase_admin._apps:
                 cred = credentials.Certificate(cred_path)
                 firebase_admin.initialize_app(cred)
@@ -86,7 +83,7 @@ def create_app(config_class=Config):
         app.logger.error(f"ERRO ao inicializar o Firebase Admin SDK: {e}")
     # --- FIM DA INICIALIZAÇÃO ---
 
-    # ### INÍCIO DA CORREÇÃO DE FUSO HORÁRIO (VERSÃO 2) ###
+    # ### FILTRO DE FUSO HORÁRIO (JÁ ESTAVA CORRETO) ###
     @app.template_filter('br_time')
     def format_datetime_as_brt(dt_utc, format_str=None):
         """
@@ -99,24 +96,19 @@ def create_app(config_class=Config):
         try:
             BRT = ZoneInfo("America/Sao_Paulo")
 
-            # Garante que o datetime esteja ciente do seu fuso (UTC)
             if dt_utc.tzinfo is None:
                 dt_utc = dt_utc.replace(tzinfo=timezone.utc)
 
-            # Converte para o fuso de Brasília
             dt_brt = dt_utc.astimezone(BRT)
-
-            # ### ALTERAÇÃO AQUI ###
-            # Se o usuário passou um formato (ex: '%d/%m/%Y'), use-o.
+            
             if format_str:
                 return dt_brt.strftime(format_str)
             else:
-                # Caso contrário, use o formato padrão com data e hora.
                 return dt_brt.strftime("%d/%m/%Y às %H:%M")
 
         except Exception as e:
             return str(dt_utc)
-    # ### FIM DA CORREÇÃO DE FUSO HORÁRIO ###
+    # ### FIM DO FILTRO ###
 
     db.init_app(app)
     Migrate(app, db)
@@ -142,13 +134,12 @@ def create_app(config_class=Config):
 
 def register_blueprints(app):
     """Importa e registra os blueprints na aplicação."""
-    # Importações locais para evitar dependência circular
     from backend.controllers.admin_controller import admin_escola_bp
     from backend.controllers.admin_tools_controller import tools_bp
     from backend.controllers.aluno_controller import aluno_bp
     from backend.controllers.assets_controller import assets_bp
     from backend.controllers.auth_controller import auth_bp
-    from backend.controllers.avaliacao_controller import avaliacao_bp # <-- NOVO IMPORT
+    from backend.controllers.avaliacao_controller import avaliacao_bp
     from backend.controllers.customizer_controller import customizer_bp
     from backend.controllers.disciplina_controller import disciplina_bp
     from backend.controllers.historico_controller import historico_bp
@@ -166,13 +157,12 @@ def register_blueprints(app):
     from backend.controllers.user_controller import user_bp
     from backend.controllers.vinculo_controller import vinculo_bp
 
-    # Registro dos Blueprints
     app.register_blueprint(admin_escola_bp)
     app.register_blueprint(tools_bp)
     app.register_blueprint(aluno_bp)
     app.register_blueprint(assets_bp)
     app.register_blueprint(auth_bp)
-    app.register_blueprint(avaliacao_bp) # <-- REGISTRO DO NOVO BLUEPRINT
+    app.register_blueprint(avaliacao_bp)
     app.register_blueprint(customizer_bp)
     app.register_blueprint(disciplina_bp)
     app.register_blueprint(historico_bp)
@@ -196,7 +186,6 @@ def register_handlers_and_processors(app):
         from backend.services.site_config_service import SiteConfigService
 
         if 'site_config' not in g:
-            # Em testes, garante que existam configs padrão
             if app.config.get("TESTING", False):
                 SiteConfigService.init_default_configs()
 
@@ -221,12 +210,12 @@ def register_handlers_and_processors(app):
             
             if school_id_to_load:
                 g.active_school = db.session.get(School, school_id_to_load)
-        
         # ### FIM DA CORREÇÃO (g.active_school) ###
 
+        # Esta função deve retornar um dicionário para o template.
         return {
             'site_config': g.site_config,
-            'active_school': g.active_school # Passa a escola carregada (ou None) para o template
+            'active_school': g.active_school # Passa a escola (ou None) para os templates
         }
 
     @app.after_request
@@ -240,37 +229,18 @@ def register_handlers_and_processors(app):
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
 
-        # --- INÍCIO DA CORREÇÃO (CSP) ---
-        # A política de segurança foi atualizada para incluir
-        # 'unsafe-inline' (para os scripts no HTML) e o CDN
-        # no 'connect-src' (para os .map files).
+        # Política de Segurança de Conteúdo (CSP) (mantida do seu original)
         csp = [
-            # Padrão: só permite carregar coisas da própria origem ('self')
             "default-src 'self'",
-
-            # Scripts: permite 'self', CDNs, 'unsafe-eval' (Bootstrap) e 'unsafe-inline' (scripts do base/index)
             "script-src 'self' https://code.jquery.com https://cdn.jsdelivr.net 'unsafe-eval' 'unsafe-inline'",
-
-            # Estilos: permite 'self', CDNs e 'unsafe-inline' (style no base.html)
             "style-src 'self' https://cdn.jsdelivr.net https://fonts.googleapis.com 'unsafe-inline'",
-
-            # Fontes: permite 'self' e o CDN de fontes do Google
             "font-src 'self' https://fonts.gstatic.com",
-
-            # Imagens: permite 'self', 'data:' e todas as origens (*)
             "img-src 'self' data: *",
-
-            # Conexões: permite 'self' (APIs) e o CDN (para .map files)
             "connect-src 'self' https://cdn.jsdelivr.net",
-
-            # Objetos: não permite (flash, etc)
             "object-src 'none'",
-
-            # Frames: só da mesma origem
             "frame-ancestors 'self'"
         ]
         response.headers["Content-Security-Policy"] = "; ".join(csp)
-        # --- FIM DA CORREÇÃO (CSP) ---
 
         return response
 
@@ -284,7 +254,7 @@ def register_handlers_and_processors(app):
         return render_template('500.html'), 500
 
 def register_cli_commands(app):
-    # ... (comandos CLI permanecem iguais) ...
+    # (Seus comandos CLI originais permanecem aqui, sem alterações)
     @app.cli.command("create-super-admin")
     def create_super_admin():
         with app.app_context():
