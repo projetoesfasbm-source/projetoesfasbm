@@ -4,7 +4,7 @@ from flask import Blueprint, render_template, request, flash, redirect, url_for,
 from flask_login import login_required, current_user
 from sqlalchemy import select, or_
 import locale
-from datetime import datetime # <-- ADICIONADO
+from datetime import datetime # Importado para FADA
 
 # ### INÍCIO DA ALTERAÇÃO (FADA) ###
 from weasyprint import HTML
@@ -24,16 +24,13 @@ from ..models.turma import Turma
 from ..models.discipline_rule import DisciplineRule
 from ..models.school import School
 from ..models.user_school import UserSchool
-# ### INÍCIO DA ALTERAÇÃO (FADA) ###
 from ..models.fada_avaliacao import FadaAvaliacao # Importa o novo modelo
-# ### FIM DA ALTERAÇÃO ###
 from ..services.justica_service import JusticaService
 from utils.decorators import admin_or_programmer_required
 
 justica_bp = Blueprint('justica', __name__, url_prefix='/justica-e-disciplina')
 
-# --- (Suas rotas 'index', 'analise', 'finalizar_processo', 'novo_processo', 'dar_ciente', etc. continuam aqui, inalteradas) ---
-
+# --- INÍCIO DA FUNÇÃO CORRIGIDA ---
 @justica_bp.route('/')
 @login_required
 def index():
@@ -45,29 +42,31 @@ def index():
 
     active_school = g.get('active_school') 
     fatos_predefinidos = []
-    permite_pontuacao = False  # Por padrão, não permite pontuação (para CTSP)
+    permite_pontuacao = False  # Por padrão, não permite pontuação
 
     if active_school:
         npccal_type_da_escola = active_school.npccal_type
         
-        # A pontuação SÓ se aplica a 'cspm' e 'cbfpm', conforme os PDFs.
+        # 1. A pontuação SÓ se aplica a 'cspm' e 'cbfpm'.
         if npccal_type_da_escola in ['cspm', 'cbfpm']:
             permite_pontuacao = True
             
-            # Carrega as regras de disciplina corretas do banco
-            fatos_predefinidos = db.session.scalars(
-                select(DisciplineRule)
-                .where(DisciplineRule.npccal_type == npccal_type_da_escola)
-                .order_by(DisciplineRule.id)
-            ).all()
+        # 2. CORREÇÃO: Busca as regras exatas para o tipo da escola (seja 'ctsp', 'cspm' ou 'cbfpm')
+        #    Removemos a lógica que forçava 'cspm'
+        fatos_predefinidos = db.session.scalars(
+            select(DisciplineRule)
+            .where(DisciplineRule.npccal_type == npccal_type_da_escola)
+            .order_by(DisciplineRule.id)
+        ).all()
     
     return render_template(
         'justica/index.html',
         em_andamento=processos_em_andamento,
         finalizados=processos_finalizados,
-        fatos_predefinidos=fatos_predefinidos,
+        fatos_predefinidos=fatos_predefinidos, # Esta lista agora será populada corretamente
         permite_pontuacao=permite_pontuacao
     )
+# --- FIM DA FUNÇÃO CORRIGIDA ---
 
 @justica_bp.route('/analise')
 @login_required
@@ -269,37 +268,41 @@ def fada_lista_alunos():
         flash('Nenhuma escola ativa selecionada.', 'danger')
         return redirect(url_for('main.dashboard'))
         
+    if active_school.npccal_type == 'ctsp':
+        flash('A avaliação FADA não se aplica a esta escola.', 'info')
+        return redirect(url_for('justica.index'))
+
     alunos = JusticaService.get_alunos_para_fada(active_school.id)
     return render_template('justica/fada_lista_alunos.html', alunos=alunos)
 
-# --- INÍCIO DA ROTA MODIFICADA ---
 @justica_bp.route('/fada/avaliar/<int:aluno_id>', methods=['GET', 'POST'])
 @login_required
 @admin_or_programmer_required
 def fada_avaliar_aluno(aluno_id):
     """Exibe o formulário FADA para um aluno específico (GET) ou salva (POST)."""
+    
+    active_school = g.get('active_school')
+    if active_school and active_school.npccal_type == 'ctsp':
+        flash('A avaliação FADA não se aplica a esta escola.', 'info')
+        return redirect(url_for('justica.index'))
+
     aluno = db.session.get(Aluno, aluno_id)
     if not aluno or not aluno.user:
         flash('Aluno não encontrado.', 'danger')
         return redirect(url_for('justica.fada_lista_alunos'))
     
-    active_school = g.get('active_school')
-    
-    # --- LÓGICA DO NOME PADRÃO (Início) ---
     default_name = current_user.nome_completo or current_user.username
     if active_school and current_user.role == 'admin_escola':
         default_name = f"Administrador {active_school.nome}"
-    # --- LÓGICA DO NOME PADRÃO (Fim) ---
 
     if request.method == 'POST':
-        # Pega o nome customizado do formulário
         nome_avaliador_custom = request.form.get('nome_avaliador_custom', default_name)
 
         success, message, avaliacao_id = JusticaService.salvar_fada(
             request.form, 
             aluno_id, 
             current_user.id,
-            nome_avaliador_custom # <-- Passa o novo campo
+            nome_avaliador_custom 
         )
         
         if success:
@@ -312,52 +315,51 @@ def fada_avaliar_aluno(aluno_id):
     return render_template(
         'justica/fada_formulario.html', 
         aluno=aluno, 
-        default_name=default_name # <-- Passa para o template
+        default_name=default_name 
     )
-# --- FIM DA ROTA MODIFICADA ---
 
-# --- INÍCIO DA ROTA MODIFICADA ---
 @justica_bp.route('/fada/pdf/<int:avaliacao_id>')
 @login_required
 @admin_or_programmer_required
 def fada_gerar_pdf(avaliacao_id):
     """Gera o PDF de uma avaliação FADA preenchida."""
+    
+    active_school = g.get('active_school')
+    if active_school and active_school.npccal_type == 'ctsp':
+        flash('A avaliação FADA não se aplica a esta escola.', 'info')
+        return redirect(url_for('justica.index'))
+
     avaliacao = JusticaService.get_fada_por_id(avaliacao_id)
     if not avaliacao:
         flash('Avaliação FADA não encontrada.', 'danger')
         return redirect(url_for('justica.fada_lista_alunos'))
 
-    # --- LÓGICA DO NOME DO AVALIADOR (Início) ---
     avaliador_nome = avaliacao.nome_avaliador_custom
     
-    # Fallback para avaliações antigas que não terão esse campo salvo
     if not avaliador_nome:
         avaliador = avaliacao.avaliador
-        escola = g.get('active_school') # Tenta pegar a escola ativa
+        escola = g.get('active_school') 
         
-        avaliador_nome = "Avaliador" # Nome super padrão
+        avaliador_nome = "Avaliador" 
         if avaliador:
             avaliador_nome = avaliador.nome_completo or avaliador.username
         
         if escola and avaliador and avaliador.role == 'admin_escola':
              avaliador_nome = f"Administrador {escola.nome}"
-    # --- LÓGICA DO NOME DO AVALIADOR (Fim) ---
     
     try:
         data_geracao = datetime.now(ZoneInfo("America/Sao_Paulo"))
     except Exception:
-        data_geracao = datetime.now() # Fallback simples
+        data_geracao = datetime.now()
 
-    # Renderiza o template HTML
     html_string = render_template(
         'justica/fada_pdf_template.html', 
         avaliacao=avaliacao,
-        aluno=avaliacao.aluno, # Passa o aluno explicitamente
-        avaliador_nome=avaliador_nome, # Passa o nome correto
+        aluno=avaliacao.aluno, 
+        avaliador_nome=avaliador_nome, 
         data_geracao=data_geracao
     )
     
-    # Gera o PDF usando WeasyPrint
     pdf_file = HTML(string=html_string).write_pdf()
     
     return Response(
@@ -365,6 +367,5 @@ def fada_gerar_pdf(avaliacao_id):
         mimetype="application/pdf",
         headers={"Content-disposition": f"attachment; filename=fada_aluno_{avaliacao.aluno_id}.pdf"}
     )
-# --- FIM DA ROTA MODIFICADA ---
 
 # ### FIM DAS NOVAS ROTAS FADA ###
