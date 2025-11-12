@@ -4,10 +4,17 @@ from flask import Blueprint, render_template, request, flash, redirect, url_for,
 from flask_login import login_required, current_user
 from sqlalchemy import select, or_
 import locale
+from datetime import datetime # <-- ADICIONADO
 
 # ### INÍCIO DA ALTERAÇÃO (FADA) ###
 from weasyprint import HTML
 from io import BytesIO
+try:
+    # 'zoneinfo' é padrão do Python 3.9+
+    from zoneinfo import ZoneInfo
+except ImportError:
+    # Fallback para versões mais antigas
+    from backports.zoneinfo import ZoneInfo
 # ### FIM DA ALTERAÇÃO ###
 
 from ..models.database import db
@@ -24,6 +31,8 @@ from ..services.justica_service import JusticaService
 from utils.decorators import admin_or_programmer_required
 
 justica_bp = Blueprint('justica', __name__, url_prefix='/justica-e-disciplina')
+
+# --- (Suas rotas 'index', 'analise', 'finalizar_processo', 'novo_processo', 'dar_ciente', etc. continuam aqui, inalteradas) ---
 
 @justica_bp.route('/')
 @login_required
@@ -73,7 +82,9 @@ def analise():
     contagem_de_status = JusticaService.get_analise_disciplinar_data()
     
     dados_para_template = {
-        'status_counts': contagem_de_status
+        'status_counts': contagem_de_status['status_counts'],
+        'common_facts': contagem_de_status['common_facts'],
+        'top_alunos': contagem_de_status['top_alunos']
     }
     
     return render_template('justica/analise.html', dados=dados_para_template)
@@ -113,9 +124,6 @@ def novo_processo():
         flash('Aluno e Fato Constatado são obrigatórios.', 'danger')
         return redirect(url_for('justica.index'))
 
-    # ### INÍCIO DA ALTERAÇÃO (LÓGICA CTSP) ###
-    # Se a escola for CTSP, força os pontos a 0.0,
-    # caso contrário, usa o valor do formulário (que pode ser 0.0 ou mais).
     active_school = g.get('active_school')
     if active_school and active_school.npccal_type == 'ctsp':
         pontos = 0.0
@@ -124,7 +132,6 @@ def novo_processo():
             pontos = float(fato_pontos) if fato_pontos else 0.0
         except ValueError:
             pontos = 0.0
-    # ### FIM DA ALTERAÇÃO ###
 
     success, message = JusticaService.criar_processo(
         fato_descricao, 
@@ -265,32 +272,51 @@ def fada_lista_alunos():
     alunos = JusticaService.get_alunos_para_fada(active_school.id)
     return render_template('justica/fada_lista_alunos.html', alunos=alunos)
 
+# --- INÍCIO DA ROTA MODIFICADA ---
 @justica_bp.route('/fada/avaliar/<int:aluno_id>', methods=['GET', 'POST'])
 @login_required
 @admin_or_programmer_required
 def fada_avaliar_aluno(aluno_id):
-    """Exibe o formulário FADA para um aluno específico."""
+    """Exibe o formulário FADA para um aluno específico (GET) ou salva (POST)."""
     aluno = db.session.get(Aluno, aluno_id)
     if not aluno or not aluno.user:
         flash('Aluno não encontrado.', 'danger')
         return redirect(url_for('justica.fada_lista_alunos'))
+    
+    active_school = g.get('active_school')
+    
+    # --- LÓGICA DO NOME PADRÃO (Início) ---
+    default_name = current_user.nome_completo or current_user.username
+    if active_school and current_user.role == 'admin_escola':
+        default_name = f"Administrador {active_school.nome}"
+    # --- LÓGICA DO NOME PADRÃO (Fim) ---
 
     if request.method == 'POST':
+        # Pega o nome customizado do formulário
+        nome_avaliador_custom = request.form.get('nome_avaliador_custom', default_name)
+
         success, message, avaliacao_id = JusticaService.salvar_fada(
             request.form, 
             aluno_id, 
-            current_user.id
+            current_user.id,
+            nome_avaliador_custom # <-- Passa o novo campo
         )
         
         if success:
             flash(message, 'success')
-            # Redireciona para o PDF recém-criado
             return redirect(url_for('justica.fada_gerar_pdf', avaliacao_id=avaliacao_id))
         else:
             flash(message, 'danger')
+            default_name = nome_avaliador_custom
             
-    return render_template('justica/fada_formulario.html', aluno=aluno)
+    return render_template(
+        'justica/fada_formulario.html', 
+        aluno=aluno, 
+        default_name=default_name # <-- Passa para o template
+    )
+# --- FIM DA ROTA MODIFICADA ---
 
+# --- INÍCIO DA ROTA MODIFICADA ---
 @justica_bp.route('/fada/pdf/<int:avaliacao_id>')
 @login_required
 @admin_or_programmer_required
@@ -301,8 +327,35 @@ def fada_gerar_pdf(avaliacao_id):
         flash('Avaliação FADA não encontrada.', 'danger')
         return redirect(url_for('justica.fada_lista_alunos'))
 
+    # --- LÓGICA DO NOME DO AVALIADOR (Início) ---
+    avaliador_nome = avaliacao.nome_avaliador_custom
+    
+    # Fallback para avaliações antigas que não terão esse campo salvo
+    if not avaliador_nome:
+        avaliador = avaliacao.avaliador
+        escola = g.get('active_school') # Tenta pegar a escola ativa
+        
+        avaliador_nome = "Avaliador" # Nome super padrão
+        if avaliador:
+            avaliador_nome = avaliador.nome_completo or avaliador.username
+        
+        if escola and avaliador and avaliador.role == 'admin_escola':
+             avaliador_nome = f"Administrador {escola.nome}"
+    # --- LÓGICA DO NOME DO AVALIADOR (Fim) ---
+    
+    try:
+        data_geracao = datetime.now(ZoneInfo("America/Sao_Paulo"))
+    except Exception:
+        data_geracao = datetime.now() # Fallback simples
+
     # Renderiza o template HTML
-    html_string = render_template('justica/fada_pdf_template.html', avaliacao=avaliacao)
+    html_string = render_template(
+        'justica/fada_pdf_template.html', 
+        avaliacao=avaliacao,
+        aluno=avaliacao.aluno, # Passa o aluno explicitamente
+        avaliador_nome=avaliador_nome, # Passa o nome correto
+        data_geracao=data_geracao
+    )
     
     # Gera o PDF usando WeasyPrint
     pdf_file = HTML(string=html_string).write_pdf()
@@ -312,5 +365,6 @@ def fada_gerar_pdf(avaliacao_id):
         mimetype="application/pdf",
         headers={"Content-disposition": f"attachment; filename=fada_aluno_{avaliacao.aluno_id}.pdf"}
     )
+# --- FIM DA ROTA MODIFICADA ---
 
 # ### FIM DAS NOVAS ROTAS FADA ###

@@ -54,12 +54,9 @@ class FadaAvaliacao(db.Model):
     
     adaptacao_carreira: Mapped[str] = mapped_column(String(50), nullable=False, default='Em adaptação à carreira militar')
 
-    # Relação de volta no Aluno
-    # Adicionar em 'aluno.py':
-    # fada_avaliacoes: Mapped[list['FadaAvaliacao']] = relationship('FadaAvaliacao', back_populates='aluno', lazy='dynamic')
-    
-    # Relação de volta no User (para o avaliador)
-    # Não precisa de back_populates se for só para ler
+    # --- INÍCIO DA ADIÇÃO ---
+    nome_avaliador_custom: Mapped[t.Optional[str]] = mapped_column(String(200))
+    # --- FIM DA ADIÇÃO ---
 
     def __repr__(self):
         return f"<FadaAvaliacao id={self.id} aluno_id={self.aluno_id}>"

@@ -180,11 +180,19 @@ def register_blueprints(app):
     app.register_blueprint(user_bp)
     app.register_blueprint(vinculo_bp)
 
-def register_handlers_and_processors(app):
-    @app.context_processor
-    def inject_global_vars():
-        from backend.services.site_config_service import SiteConfigService
+# ### INÍCIO DA SEÇÃO CORRIGIDA ###
 
+def register_handlers_and_processors(app):
+
+    @app.before_request
+    def load_globals():
+        """
+        Carrega variáveis globais da requisição (escola e config) no objeto 'g'.
+        Isso é executado ANTES de qualquer rota.
+        """
+        from backend.services.site_config_service import SiteConfigService
+        
+        # 1. Carrega o SiteConfig
         if 'site_config' not in g:
             if app.config.get("TESTING", False):
                 SiteConfigService.init_default_configs()
@@ -192,9 +200,7 @@ def register_handlers_and_processors(app):
             configs = SiteConfigService.get_all_configs()
             g.site_config = {c.config_key: c.config_value for c in configs}
 
-        # ### INÍCIO DA CORREÇÃO (g.active_school) ###
-        # Esta é a lógica corrigida e robusta para carregar a escola ativa.
-        # Ela resolve o bug "Nenhuma escola ativa selecionada" para admins vinculados.
+        # 2. Carrega a Escola Ativa
         g.active_school = None
         school_id_to_load = None
 
@@ -210,12 +216,19 @@ def register_handlers_and_processors(app):
             
             if school_id_to_load:
                 g.active_school = db.session.get(School, school_id_to_load)
-        # ### FIM DA CORREÇÃO (g.active_school) ###
+        
+        # Ao final desta função, g.site_config e g.active_school 
+        # já estão disponíveis para todas as rotas.
 
-        # Esta função deve retornar um dicionário para o template.
+    @app.context_processor
+    def inject_globals_to_template():
+        """
+        Injeta as variáveis globais (que já foram carregadas) nos templates HTML.
+        """
+        # Esta função agora apenas lê os valores de 'g'
         return {
-            'site_config': g.site_config,
-            'active_school': g.active_school # Passa a escola (ou None) para os templates
+            'site_config': g.get('site_config'),
+            'active_school': g.get('active_school') # Passa a escola (ou None) para os templates
         }
 
     @app.after_request
@@ -252,6 +265,8 @@ def register_handlers_and_processors(app):
     def internal_error(error):
         db.session.rollback() # Garante rollback em caso de erro no banco
         return render_template('500.html'), 500
+
+# ### FIM DA SEÇÃO CORRIGIDA ###
 
 def register_cli_commands(app):
     # (Seus comandos CLI originais permanecem aqui, sem alterações)

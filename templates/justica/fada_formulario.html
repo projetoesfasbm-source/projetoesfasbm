@@ -9,7 +9,7 @@
     <h4>{{ aluno.user.posto_graduacao or '' }} {{ aluno.user.nome_completo }} ({{ aluno.user.matricula or 'N/A' }})</h4>
 </div>
 
-<form method="POST">
+<form method="POST"> 
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     
     <div class="card">
@@ -77,6 +77,19 @@
         </div>
     </div>
 
+    <div class="card mt-4">
+        <div class="card-header">
+            Dados do Avaliador
+        </div>
+        <div class="card-body">
+            <div class="form-group">
+                <label for="nome_avaliador_custom" class="form-label">Nome do Avaliador (para o PDF)</label>
+                <input type="text" class="form-control" id="nome_avaliador_custom" name="nome_avaliador_custom" 
+                       value="{{ default_name | e }}" required>
+                <small class="form-text text-muted">Este nome aparecerá como o avaliador no documento PDF gerado.</small>
+            </div>
+        </div>
+    </div>
     <div class="mt-4 d-flex justify-content-end">
         <a href="{{ url_for('justica.fada_lista_alunos') }}" class="btn btn-secondary me-2">Cancelar</a>
         <button type="submit" class="btn btn-success">Salvar Avaliação e Gerar PDF</button>
