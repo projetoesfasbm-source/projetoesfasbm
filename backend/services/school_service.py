@@ -4,16 +4,30 @@ from sqlalchemy.exc import IntegrityError
 
 class SchoolService:
     @staticmethod
-    def create_school(name: str):
+    # ### INÍCIO DA ALTERAÇÃO ###
+    # Adicionado 'npccal_type' à assinatura da função
+    def create_school(name: str, npccal_type: str):
+    # ### FIM DA ALTERAÇÃO ###
         """Cria uma nova escola."""
         if not name:
             return False, "O nome da escola não pode estar vazio."
+            
+        # ### INÍCIO DA ALTERAÇÃO ###
+        # Validação para o novo campo
+        if not npccal_type:
+            return False, "O Tipo de NPCCAL é obrigatório."
+        # ### FIM DA ALTERAÇÃO ###
 
         try:
-            new_school = School(nome=name)
+            # ### INÍCIO DA ALTERAÇÃO ###
+            # Adicionado 'npccal_type' ao criar o objeto School
+            new_school = School(nome=name, npccal_type=npccal_type)
+            # ### FIM DA ALTERAÇÃO ###
+            
             db.session.add(new_school)
             db.session.commit()
-            return True, f"Escola '{name}' criada com sucesso."
+            # Mensagem de sucesso atualizada para incluir o tipo
+            return True, f"Escola '{name}' (Tipo: {npccal_type.upper()}) criada com sucesso."
         except IntegrityError:
             db.session.rollback()
             return False, f"Uma escola com o nome '{name}' já existe."

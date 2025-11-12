@@ -32,9 +32,10 @@ class School(db.Model):
     )
 
     # --- NOVO CAMPO ADICIONADO ---
-    # Define qual regulamento (NPCCAL) esta escola segue: 'cfs', 'cbfpm', 'cspm'
-    # O 'default' e 'server_default' garantem que escolas existentes funcionem
-    npccal_type: Mapped[str] = mapped_column(db.String(20), nullable=False, default='cfs', server_default='cfs')
+    # ### INÍCIO DA ALTERAÇÃO ###
+    # O 'default' e 'server_default' foram alterados para 'ctsp' (que é o "sem pontos")
+    npccal_type: Mapped[str] = mapped_column(db.String(20), nullable=False, default='ctsp', server_default='ctsp')
+    # ### FIM DA ALTERAÇÃO ###
     # -------------------------------
 
     user_schools: Mapped[list['UserSchool']] = relationship('UserSchool', back_populates='school', cascade="all, delete-orphan")

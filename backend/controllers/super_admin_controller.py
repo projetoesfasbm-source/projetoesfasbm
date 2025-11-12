@@ -36,15 +36,22 @@ def exit_view():
 @super_admin_required
 def manage_schools():
     if request.method == 'POST':
+        # ### INÍCIO DA ALTERAÇÃO ###
+        # Capturamos o 'npccal_type' do formulário
         school_name = request.form.get('school_name')
-        if not school_name:
-            flash('O nome da escola é obrigatório.', 'danger')
+        npccal_type = request.form.get('npccal_type')
+
+        # Verificamos ambos os campos
+        if not school_name or not npccal_type:
+            flash('O nome da escola e o Tipo de NPCCAL são obrigatórios.', 'danger')
         else:
-            success, message = SchoolService.create_school(school_name)
+            # Enviamos ambos os dados para o service
+            success, message = SchoolService.create_school(school_name, npccal_type)
             if success:
                 flash(message, 'success')
             else:
                 flash(message, 'danger')
+        # ### FIM DA ALTERAÇÃO ###
         return redirect(url_for('super_admin.manage_schools'))
         
     schools = db.session.query(School).order_by(School.nome).all()
