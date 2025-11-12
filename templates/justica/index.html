@@ -15,10 +15,16 @@
                 <button class="btn btn-primary justice-option-btn active" data-target="inProgressContent">Em Andamento</button>
                 <button class="btn btn-warning justice-option-btn" data-target="finalizadosContent">Finalizados</button>
                 
+                {% if current_user.role in ['admin_escola', 'programador', 'super_admin'] %}
+                    <button class="btn btn-success justice-option-btn" data-target="newTransgressionContent">Nova Infração</button>
+                    
+                    <a href="{{ url_for('justica.fada_lista_alunos') }}" class="btn btn-info">Avaliação FADA</a>
+                {% endif %}
+                
                 {% if current_user.role in ['admin_escola', 'programador', 'super_admin'] and permite_pontuacao %}
-                <button class="btn btn-success justice-option-btn" data-target="newTransgressionContent">Nova Infração</button>
                 <a href="{{ url_for('justica.exportar_selecao') }}" class="btn btn-info">Exportar para BI</a>
                 {% endif %}
+                
                 </div>
 
             <div class="justice-content active" id="inProgressContent">
@@ -51,7 +57,7 @@
                 {% endif %}
             </div>
 
-            {% if current_user.role in ['admin_escola', 'programador', 'super_admin'] and permite_pontuacao %}
+            {% if current_user.role in ['admin_escola', 'programador', 'super_admin'] %}
             <div class="justice-content" id="newTransgressionContent">
                 <h3 class="justice-content-title">Registrar Nova Infração</h3>
                 <form method="POST" action="{{ url_for('justica.novo_processo') }}">
@@ -71,23 +77,32 @@
                     </div>
                     
                     <div id="transgression_fields" style="display: none;">
-                        <div class="form-group">
-                            <label for="fato_search_input">Fato Constatado</label>
-                            <input type="text" id="fato_search_input" class="form-control mb-2" placeholder="Pesquisar na lista de infrações...">
-                            
-                            <div class="facts-list-container" id="facts-list-container">
-                                {% for rule in fatos_predefinidos %}
-                                    <div class="result-item" 
-                                         data-fato="({{ rule.codigo }}) {{ rule.descricao }}"
-                                         data-pontos="{{ rule.pontos }}">
-                                        <strong>{{ rule.codigo }}</strong> - {{ rule.descricao }}
-                                        <span class="badge bg-danger float-end">{{ rule.pontos }} pts</span>
-                                    </div>
-                                {% endfor %}
+                        
+                        {% if permite_pontuacao %}
+                            <div class="form-group">
+                                <label for="fato_search_input">Fato Constatado (Com Pontuação)</label>
+                                <input type="text" id="fato_search_input" class="form-control mb-2" placeholder="Pesquisar na lista de infrações...">
+                                
+                                <div class="facts-list-container" id="facts-list-container">
+                                    {% for rule in fatos_predefinidos %}
+                                        <div class="result-item" 
+                                             data-fato="({{ rule.codigo }}) {{ rule.descricao }}"
+                                             data-pontos="{{ rule.pontos }}">
+                                            <strong>{{ rule.codigo }}</strong> - {{ rule.descricao }}
+                                            <span class="badge bg-danger float-end">{{ rule.pontos }} pts</span>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                                <input type="hidden" id="fato_hidden_input" name="fato_descricao" required>
                             </div>
-                            <input type="hidden" id="fato_hidden_input" name="fato_descricao" required>
-                        </div>
-
+                        {% else %}
+                            <div class="form-group">
+                                <label for="fato_descricao_manual">Fato Constatado (Sem Pontuação)</label>
+                                <p class="form-text">Registre o fato constatado para fins de histórico disciplinar. Esta infração não gera pontuação.</p>
+                                <textarea id="fato_descricao_manual" name="fato_descricao" class="form-control" rows="3" placeholder="Descreva o fato constatado..." required></textarea>
+                            </div>
+                        {% endif %}
+                        
                         <div class="form-group">
                             <label for="observacao">Observação (Termo de Justificação)</label>
                             <textarea id="observacao" name="observacao" class="form-control" rows="12"></textarea>
@@ -99,7 +114,8 @@
                 </form>
             </div>
             {% endif %}
-            </div>
+
+        </div>
     </div>
 
     <div class="justice-sidebar">
@@ -112,11 +128,11 @@
             </div>
         </a>
         {% endif %}
-        </div>
+    </div>
 </div>
 
 <style>
-    /* ESTILOS ORIGINAIS DO SEU BACKUP MANTIDOS INTEGRALMENTE */
+    /* ... (Seus estilos CSS permanecem os mesmos) ... */
     .justice-page-layout { display: grid; grid-template-columns: 1fr; gap: 1.5rem; }
     @media (min-width: 992px) { .justice-page-layout { grid-template-columns: 3fr 1fr; } }
     .analysis-card { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 1.5rem; border-radius: var(--border-radius); background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light)); color: white; text-decoration: none; transition: all 0.3s ease; border: 2px solid transparent; min-height: 150px; box-shadow: var(--shadow-soft); }
@@ -145,7 +161,7 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // --- Lógica das abas (SEU CÓDIGO ORIGINAL - MANTIDO) ---
+    // --- Lógica das abas (MANTIDA) ---
     const optionBtns = document.querySelectorAll('.justice-option-btn');
     const contentDivs = document.querySelectorAll('.justice-content');
     optionBtns.forEach(btn => {
@@ -153,7 +169,6 @@ document.addEventListener('DOMContentLoaded', function() {
             optionBtns.forEach(b => b.classList.remove('active'));
             this.classList.add('active');
             contentDivs.forEach(div => div.classList.remove('active'));
-            // Evita erro se o target (ex: newTransgressionContent) não existir
             const targetElement = document.getElementById(this.dataset.target);
             if (targetElement) {
                 targetElement.classList.add('active');
@@ -161,7 +176,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // --- Elementos do Formulário (SEU CÓDIGO ORIGINAL - MANTIDO) ---
+    // --- Elementos do Formulário (MANTIDOS) ---
     const alunoSearchInput = document.getElementById('aluno_search_input');
     const alunoResults = document.getElementById('aluno_results');
     const alunoHiddenInput = document.getElementById('aluno_id_hidden');
@@ -171,16 +186,14 @@ document.addEventListener('DOMContentLoaded', function() {
     
     let observacaoTemplateOriginal = '';
 
-    // --- Busca de Aluno (SEU CÓDIGO ORIGINAL - MANTIDO) ---
-    // A verificação 'if (alunoSearchInput)' garante que o script não quebre
-    // se o formulário de "Nova Infração" não for renderizado (em escolas CTSP).
+    // --- Busca de Aluno (MANTIDA) ---
     if (alunoSearchInput) {
+        // ... (todo o seu código de busca de aluno, selectAluno, etc. permanece idêntico) ...
         let searchTimeout;
         alunoSearchInput.addEventListener('input', function() {
             clearTimeout(searchTimeout);
             const query = this.value;
             
-            // Reseta se começar a digitar de novo
             alunoHiddenInput.value = '';
             transgressionFields.style.display = 'none';
 
@@ -219,7 +232,6 @@ document.addEventListener('DOMContentLoaded', function() {
             alunoHiddenInput.value = alunoId;
             alunoResults.style.display = 'none';
 
-            // CORREÇÃO VITAL: Garante que a URL fique correta (ex: .../123 em vez de .../0123)
             const url = "{{ url_for('justica.api_get_aluno_details', aluno_id=0) }}".replace('/0', '/' + alunoId);
 
             fetch(url)
@@ -235,6 +247,20 @@ document.addEventListener('DOMContentLoaded', function() {
                     observacaoTemplateOriginal = `Tendo em vista as informações constantes na Parte Nº 000/CAl/EsFAS/${ano}, evidenciando a existência, em tese, de infração das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação:\n\n1. Justificante: ${details.posto_graduacao} ${details.nome_completo}, Id Func. ${details.matricula}.\n\n2. Descrição da conduta infracional: O(a) ${details.posto_graduacao} ${details.nome_completo}, Id Func. ${details.matricula}, no dia ${dia} de ${mes} de ${ano}, ...... \nCom isso, incorreu no item...\n\n3. Cientifico-lhe que a contar do recebimento da presente, abre-se o prazo de 24 horas, para que, querendo, apresente resposta escrita com as provas que entender cabíveis. Fica advertido o acusado que a não entrega da justificação dentro do prazo estipulado, implicará em reconhecimento como verdadeiros os fatos imputados.\n\n\n${autoridadeNome}\n${autoridadePosto}`;
                     observacaoTextarea.value = observacaoTemplateOriginal;
                     transgressionFields.style.display = 'block';
+
+                    // ### INÍCIO DA ALTERAÇÃO (LÓGICA CTSP) ###
+                    // Se for CTSP (sem pontos), limpa o "incorreu no item..."
+                    {% if not permite_pontuacao %}
+                        updateObservacaoComFato(null); // Limpa o template
+                    {% else %}
+                        // Se for CSPM/CBFPM, limpa os inputs de infração
+                        // para forçar o usuário a selecionar um.
+                        document.getElementById('fato_hidden_input').value = '';
+                        document.getElementById('fato_pontos').value = '0.0';
+                        const fatoItems = document.querySelectorAll('.facts-list-container .result-item');
+                        fatoItems.forEach(i => i.classList.remove('selected'));
+                    {% endif %}
+                    // ### FIM DA ALTERAÇÃO ###
                 });
         }
 
@@ -258,20 +284,19 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // --- Lógica do Fato Constatado (SEU CÓDIGO ORIGINAL - MANTIDO) ---
+    // --- Lógica do Fato Constatado (MANTIDA, mas só funciona se 'permite_pontuacao' for True) ---
     const fatoSearchInput = document.getElementById('fato_search_input');
     
-    // A verificação 'if (fatoSearchInput)' garante que o script não quebre
-    if (fatoSearchInput) {
+    // Este 'if' garante que o script só rode para CSPM/CBFPM
+    if (fatoSearchInput) { 
         const fatoListContainer = document.getElementById('facts-list-container');
         const fatoHiddenInput = document.getElementById('fato_hidden_input');
-        const fatoPontosInput = document.getElementById('fato_pontos'); // Referência ao novo input
+        const fatoPontosInput = document.getElementById('fato_pontos'); 
         const fatoItems = fatoListContainer.querySelectorAll('.result-item');
 
         fatoSearchInput.addEventListener('input', function() {
             const query = this.value.toLowerCase();
             fatoItems.forEach(item => {
-                // Busca no texto visível do item (Código + Descrição)
                 const fatoText = item.innerText.toLowerCase();
                 item.style.display = fatoText.includes(query) ? 'block' : 'none';
             });
@@ -279,27 +304,27 @@ document.addEventListener('DOMContentLoaded', function() {
 
         fatoItems.forEach(item => {
             item.addEventListener('click', function() {
-                // Remove seleção anterior
                 fatoItems.forEach(i => i.classList.remove('selected'));
-                // Adiciona seleção atual
                 this.classList.add('selected');
                 
-                // Pega os dados dos atributos data-*
                 const fatoText = this.dataset.fato;
                 const pontos = this.dataset.pontos || 0.0;
                 
-                // Atualiza os inputs ocultos para envio
                 fatoHiddenInput.value = fatoText;
                 fatoPontosInput.value = pontos; 
 
-                // Atualiza o texto da observação
                 updateObservacaoComFato(fatoText);
             });
         });
+    }
 
-        function updateObservacaoComFato(fatoText) {
-            // Nova Regex para capturar formato (CÓDIGO) Descrição
-            // Ex: (A.1) Faltar com a verdade... ou (IV) Chegar atrasado...
+    // Função 'updateObservacao' (MANTIDA)
+    function updateObservacaoComFato(fatoText) {
+        let textoObservacao = observacaoTemplateOriginal;
+
+        // ### INÍCIO DA ALTERAÇÃO (LÓGICA CTSP) ###
+        if (fatoText) {
+            // Se for CSPM/CBFPM, preenche o "incorreu no item..."
             const regex = /^\(([^)]+)\)\s*(.*)$/;
             const match = fatoText.match(regex);
             let fatoDetalhes = fatoText;
@@ -309,47 +334,37 @@ document.addEventListener('DOMContentLoaded', function() {
                 const descricao = match[2].trim();
                 fatoDetalhes = `no item ${codigo} - "${descricao}"`;
             }
-            
-            // Usa o template original para evitar múltiplas substituições
-            let textoObservacao = observacaoTemplateOriginal;
             textoObservacao = textoObservacao.replace(/no item\.\.\./, `${fatoDetalhes};`);
-            observacaoTextarea.value = textoObservacao;
+        } else {
+            // Se for CTSP (fatoText = null), remove a linha do item
+            textoObservacao = textoObservacao.replace(/\nCom isso, incorreu no item\.\.\./, '');
         }
+        // ### FIM DA ALTERAÇÃO ###
+        
+        observacaoTextarea.value = textoObservacao;
     }
     
-    // ### INÍCIO DA SOLUÇÃO "SEM MODAL" (NÃO TRAVA) ###
-    // Este script foi a correção para o travamento da tela e é mantido.
-    
-    // 1. Encontra todos os botões "Analisar" e "Cancelar" (ambos têm a classe)
+    // --- Lógica de Toggle do Formulário "Analisar" (MANTIDA) ---
     const botoesToggleForm = document.querySelectorAll('.js-toggle-analise-form');
-    
     botoesToggleForm.forEach(function(botao) {
         botao.addEventListener('click', function(event) {
             event.preventDefault();
-            
-            // 2. Acha o formulário-alvo
             const targetFormId = this.dataset.targetForm;
             const formElement = document.querySelector(targetFormId);
-            
-            // 3. Acha o texto "Analisar" no botão principal (o do cabeçalho do card)
             const botaoPrincipal = this.closest('.card-body').querySelector('.btn-group .js-toggle-analise-form');
             const textoBotao = botaoPrincipal ? botaoPrincipal.querySelector('.js-toggle-text') : null;
 
             if (formElement) {
-                // 4. Simplesmente alterna a visibilidade
                 if (formElement.style.display === 'none' || formElement.style.display === '') {
                     formElement.style.display = 'block';
-                    if (textoBotao) textoBotao.textContent = 'Fechar'; // Muda texto do botão
+                    if (textoBotao) textoBotao.textContent = 'Fechar';
                 } else {
                     formElement.style.display = 'none';
-                    if (textoBotao) textoBotao.textContent = 'Analisar'; // Volta texto
+                    if (textoBotao) textoBotao.textContent = 'Analisar';
                 }
-            } else {
-                console.error('Formulário-alvo não encontrado:', targetFormId);
             }
         });
     });
-    // ### FIM DA SOLUÇÃO ###
 
 });
 </script>

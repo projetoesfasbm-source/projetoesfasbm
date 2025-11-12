@@ -23,10 +23,10 @@ class Aluno(db.Model):
     num_aluno: Mapped[str] = mapped_column(db.String(20), nullable=True)
     funcao_atual: Mapped[t.Optional[str]] = mapped_column(db.String(50))
     foto_perfil: Mapped[str] = mapped_column(db.String(255), default='default.png')
-    
+
     telefone: Mapped[t.Optional[str]] = mapped_column(db.String(20))
     data_nascimento: Mapped[t.Optional[date]] = mapped_column(db.Date)
-    
+
     turma_id: Mapped[t.Optional[int]] = mapped_column(ForeignKey('turmas.id'))
     turma: Mapped[t.Optional["Turma"]] = relationship(back_populates="alunos")
 
@@ -41,10 +41,12 @@ class Aluno(db.Model):
     processos_disciplinares: Mapped[list["ProcessoDisciplina"]] = relationship(back_populates="aluno", cascade="all, delete-orphan")
     avaliacoes: Mapped[list["AvaliacaoAtitudinal"]] = relationship(back_populates="aluno", cascade="all, delete-orphan")
 
-    def __init__(self, user_id: int, opm: str, 
+    fada_avaliacoes: Mapped[list['FadaAvaliacao']] = relationship('FadaAvaliacao', back_populates='aluno', lazy='dynamic', cascade="all, delete-orphan")
+
+    def __init__(self, user_id: int, opm: str,
                  id_aluno: t.Optional[str] = None, num_aluno: t.Optional[str] = None,
                  funcao_atual: t.Optional[str] = None, foto_perfil: str = 'default.png',
-                 telefone: t.Optional[str] = None, data_nascimento: t.Optional[date] = None, 
+                 telefone: t.Optional[str] = None, data_nascimento: t.Optional[date] = None,
                  turma_id: t.Optional[int] = None, **kw: t.Any) -> None:
         super().__init__(user_id=user_id, opm=opm,
                          id_aluno=id_aluno, num_aluno=num_aluno,

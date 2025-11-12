@@ -25,7 +25,8 @@ from .opcao_resposta import OpcaoResposta
 from .resposta import Resposta
 from .processo_disciplina import ProcessoDisciplina
 from .notification import Notification
-from .push_subscription import PushSubscription # <-- ADICIONE ESTA LINHA
+from .push_subscription import PushSubscription
+from .fada_avaliacao import FadaAvaliacao
 
 
 __all__ = [

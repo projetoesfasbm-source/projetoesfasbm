@@ -2,7 +2,7 @@
 
 # --- CORREÇÃO: Importar 'session' ---
 from flask import g, url_for, session
-from sqlalchemy import select, func
+from sqlalchemy import select, func, and_
 from datetime import datetime, timezone
 from ..models.database import db
 from ..models.aluno import Aluno
@@ -10,6 +10,9 @@ from ..models.user import User
 from ..models.turma import Turma
 from ..models.user_school import UserSchool # <-- Importação necessária
 from ..models.processo_disciplina import ProcessoDisciplina
+# ### INÍCIO DA ALTERAÇÃO (FADA) ###
+from ..models.fada_avaliacao import FadaAvaliacao 
+# ### FIM DA ALTERAÇÃO ###
 from ..services.notification_service import NotificationService
 from sqlalchemy.orm import joinedload
 from sqlalchemy.exc import SQLAlchemyError
@@ -98,104 +101,9 @@ class JusticaService:
             db.session.rollback()
             return False, f"Erro inesperado ao criar processo: {e}"
 
-    @staticmethod
-    def registrar_ciente(processo_id, user):
-        """Aluno clica no botão 'Estou Ciente'."""
-        processo = db.session.get(ProcessoDisciplina, processo_id)
-        if not processo or processo.aluno_id != user.aluno_profile.id:
-            return False, "Processo não encontrado ou não pertence a você."
-        
-        if processo.status != 'Aguardando Ciência':
-            return False, "Este processo não está mais aguardando ciência."
-            
-        try:
-            processo.status = 'Aluno Notificado'
-            processo.data_ciente = datetime.now(timezone.utc)
-            db.session.commit()
-            
-            NotificationService.create_notification(
-                user_id=processo.relator_id,
-                message=f"O aluno {user.nome_completo} deu ciência do Processo nº {processo.id}.",
-                url=url_for('justica.index', _external=True)
-            )
-            
-            return True, "Ciência registrada com sucesso. Você tem 24h para apresentar sua defesa."
-        except Exception as e:
-            db.session.rollback()
-            return False, f"Erro ao registrar ciência: {e}"
+    # ... (registrar_ciente, enviar_defesa, finalizar_processo, deletar_processo, ... ) ...
+    # ... (MANTENHA TODAS AS SUAS FUNÇÕES EXISTENTES AQUI) ...
 
-    @staticmethod
-    def enviar_defesa(processo_id, defesa, user):
-        processo = db.session.get(ProcessoDisciplina, processo_id)
-        if not processo or processo.aluno_id != user.aluno_profile.id:
-            return False, "Processo não encontrado ou não pertence a você."
-
-        if processo.status != 'Aluno Notificado':
-            return False, "O prazo para defesa expirou ou a defesa já foi enviada."
-
-        try:
-            processo.defesa = defesa
-            processo.data_defesa = datetime.now(timezone.utc)
-            processo.status = 'Defesa Enviada'
-            db.session.commit()
-            
-            NotificationService.create_notification(
-                user_id=processo.relator_id,
-                message=f"O aluno {user.nome_completo} enviou a defesa para o Processo nº {processo.id}.",
-                url=url_for('justica.index', _external=True)
-            )
-            
-            return True, "Defesa enviada com sucesso."
-        except Exception as e:
-            db.session.rollback()
-            return False, f"Erro ao enviar defesa: {e}"
-            
-    @staticmethod
-    def finalizar_processo(processo_id, decisao, fundamentacao, detalhes_sancao):
-        processo = db.session.get(ProcessoDisciplina, processo_id)
-        if not processo:
-            return False, "Processo não encontrado."
-            
-        if processo.status not in ['Defesa Enviada', 'Aluno Notificado']:
-            return False, "Este processo não está em fase de finalização."
-            
-        try:
-            processo.decisao_final = decisao
-            processo.fundamentacao = fundamentacao
-            processo.detalhes_sancao = detalhes_sancao
-            processo.data_decisao = datetime.now(timezone.utc)
-            processo.status = 'Finalizado'
-            
-            db.session.commit()
-            
-            NotificationService.create_notification(
-                user_id=processo.aluno.user_id,
-                message=f"Seu processo nº {processo.id} foi finalizado. Decisão: {decisao}.",
-                url=url_for('justica.index', _external=True)
-            )
-            
-            return True, "Processo finalizado com sucesso!"
-        except Exception as e:
-            db.session.rollback()
-            return False, f"Erro ao finalizar processo: {e}"
-
-    @staticmethod
-    def deletar_processo(processo_id):
-        processo = db.session.get(ProcessoDisciplina, processo_id)
-        if not processo:
-            return False, "Processo não encontrado."
-
-        if processo.status != 'Aguardando Ciência':
-            return False, "Não é possível excluir um processo após o aluno dar ciência."
-            
-        try:
-            db.session.delete(processo)
-            db.session.commit()
-            return True, "Processo excluído com sucesso."
-        except Exception as e:
-            db.session.rollback()
-            return False, f"Erro ao excluir processo: {e}"
-            
     @staticmethod
     def get_processos_por_ids(ids):
         query = select(ProcessoDisciplina).where(ProcessoDisciplina.id.in_(ids))
@@ -266,3 +174,88 @@ class JusticaService:
             'common_facts': [{'fato': f[0], 'total': f[1]} for f in common_facts],
             'top_alunos': [{'nome': a[0], 'total': a[1]} for a in top_alunos]
         }
+        
+    # ### INÍCIO DAS NOVAS FUNÇÕES FADA ###
+
+    @staticmethod
+    def get_alunos_para_fada(school_id):
+        """Busca todos os alunos de uma escola para a lista da FADA."""
+        query = (
+            select(Aluno)
+            .join(User, Aluno.user_id == User.id)
+            .join(UserSchool, User.id == UserSchool.user_id)
+            .where(
+                UserSchool.school_id == school_id,
+                User.role == 'aluno'
+            )
+            .order_by(User.nome_completo)
+        )
+        return db.session.scalars(query).all()
+
+    @staticmethod
+    def get_fada_por_id(avaliacao_id):
+        """Busca uma avaliação FADA específica pelo ID."""
+        return db.session.get(FadaAvaliacao, avaliacao_id)
+
+    @staticmethod
+    def salvar_fada(form_data, aluno_id, avaliador_id):
+        """Cria ou atualiza uma avaliação FADA para um aluno."""
+        try:
+            # Tenta encontrar uma FADA existente para este aluno (pode ser usado para editar)
+            # Por simplicidade, vamos criar uma nova a cada vez.
+            # avaliacao = db.session.scalar(select(FadaAvaliacao).where(FadaAvaliacao.aluno_id == aluno_id))
+            # if not avaliacao:
+            #     avaliacao = FadaAvaliacao(aluno_id=aluno_id)
+            
+            # Nova avaliação sempre
+            avaliacao = FadaAvaliacao(aluno_id=aluno_id, avaliador_id=avaliador_id)
+
+            # Preenche os 18 atributos
+            for i in range(1, 19):
+                field_name = f'attr_{i}'
+                form_field_name = f'attr_{i}_expressao' if i == 1 else \
+                                  f'attr_{i}_planejamento' if i == 2 else \
+                                  f'attr_{i}_perseveranca' if i == 3 else \
+                                  f'attr_{i}_apresentacao' if i == 4 else \
+                                  f'attr_{i}_lealdade' if i == 5 else \
+                                  f'attr_{i}_tato' if i == 6 else \
+                                  f'attr_{i}_equilibrio' if i == 7 else \
+                                  f'attr_{i}_disciplina' if i == 8 else \
+                                  f'attr_{i}_responsabilidade' if i == 9 else \
+                                  f'attr_{i}_maturidade' if i == 10 else \
+                                  f'attr_{i}_assiduidade' if i == 11 else \
+                                  f'attr_{i}_pontualidade' if i == 12 else \
+                                  f'attr_{i}_diccao' if i == 13 else \
+                                  f'attr_{i}_lideranca' if i == 14 else \
+                                  f'attr_{i}_relacionamento' if i == 15 else \
+                                  f'attr_{i}_etica' if i == 16 else \
+                                  f'attr_{i}_produtividade' if i == 17 else \
+                                  f'attr_{i}_eficiencia' # 18
+                
+                # O nome no form é só attr_1, attr_2, etc.
+                form_field_name = f'attr_{i}'
+                
+                # Pega o valor do form, converte para float, e usa 8.0 como padrão
+                valor = form_data.get(form_field_name)
+                try:
+                    valor_float = float(valor)
+                except (ValueError, TypeError):
+                    valor_float = 8.0 # Padrão
+                
+                setattr(avaliacao, field_name, valor_float)
+
+            # Preenche os campos de texto
+            avaliacao.justificativa_notas = form_data.get('justificativa_notas')
+            avaliacao.observacoes = form_data.get('observacoes')
+            avaliacao.adaptacao_carreira = form_data.get('adaptacao_carreira', 'Em adaptação à carreira militar')
+
+            db.session.add(avaliacao)
+            db.session.commit()
+            
+            return True, "Avaliação FADA salva com sucesso.", avaliacao.id
+        
+        except Exception as e:
+            db.session.rollback()
+            return False, f"Erro ao salvar a avaliação FADA: {e}", None
+            
+    # ### FIM DAS NOVAS FUNÇÕES FADA ###
