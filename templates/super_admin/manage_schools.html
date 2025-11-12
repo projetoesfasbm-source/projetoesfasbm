@@ -14,10 +14,26 @@
         <div class="card-body">
             <form method="POST" action="{{ url_for('super_admin.manage_schools') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                <div class="form-group">
-                    <label for="school_name">Nome da Escola</label>
-                    <input type="text" class="form-control" id="school_name" name="school_name" required>
-                </div>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="school_name">Nome da Escola</label>
+                            <input type="text" class="form-control" id="school_name" name="school_name" required>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="npccal_type">Tipo de NPCCAL (Regras Disciplinares)</label>
+                            <select name="npccal_type" id="npccal_type" class="form-select" required>
+                                <option value="" disabled selected>Selecione um tipo...</option>
+                                <option value="cspm">CSPM (Com Avaliação Atitudinal por Pontos)</option>
+                                <option value="cbfpm">CBFPM (Com Avaliação Atitudinal por Pontos)</option>
+                                <option value="ctsp">CTSP (Sem sistema de pontuação)</option>
+                            </select>
+                        </div>
+                    </div>
+                    </div>
                 <button type="submit" class="btn btn-primary mt-3">Criar Escola</button>
             </form>
         </div>
@@ -69,6 +85,7 @@
                         <tr>
                             <th scope="col">ID</th>
                             <th scope="col">Nome</th>
+                            <th scope="col">Tipo NPCCAL</th>
                             <th scope="col">Ativa</th>
                             <th scope="col">Criada em</th>
                             <th scope="col">Ações</th>
@@ -79,6 +96,14 @@
                         <tr>
                             <th scope="row">{{ school.id }}</th>
                             <td>{{ school.nome }}</td>
+                            <td>
+                                <span class="badge 
+                                    {% if school.npccal_type == 'ctsp' %}bg-secondary
+                                    {% else %}bg-info
+                                    {% endif %}">
+                                    {{ school.npccal_type.upper() if school.npccal_type else 'N/D' }}
+                                </span>
+                            </td>
                             <td>{{ 'Sim' if school.is_active else 'Não' }}</td>
                             <td>{{ school.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
                             <td>

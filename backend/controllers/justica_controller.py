@@ -25,30 +25,51 @@ def index():
     processos_em_andamento = [p for p in processos if p.status != 'Finalizado']
     processos_finalizados = [p for p in processos if p.status == 'Finalizado']
 
-    # Aqui 'g.active_school' funciona porque esta rota USA render_template
+    # ### INÍCIO DA ALTERAÇÃO ###
+    # Verifica o tipo de NPCCAL da escola ativa para decidir se a pontuação se aplica.
     active_school = g.get('active_school') 
-    npccal_type_da_escola = 'ctsp' 
-    
+    fatos_predefinidos = []
+    permite_pontuacao = False  # Por padrão, não permite pontuação
+
     if active_school:
         npccal_type_da_escola = active_school.npccal_type
-    
-    regras_db = db.session.scalars(
-        select(DisciplineRule)
-        .where(DisciplineRule.npccal_type == npccal_type_da_escola)
-        .order_by(DisciplineRule.id)
-    ).all()
+        
+        # A pontuação SÓ se aplica a 'cspm' e 'cbfpm', conforme os PDFs.
+        if npccal_type_da_escola in ['cspm', 'cbfpm']:
+            permite_pontuacao = True
+            
+            # Carrega as regras de disciplina corretas do banco
+            fatos_predefinidos = db.session.scalars(
+                select(DisciplineRule)
+                .where(DisciplineRule.npccal_type == npccal_type_da_escola)
+                .order_by(DisciplineRule.id)
+            ).all()
+        
+        # Se for 'ctsp', permite_pontuacao continuará False
+        # e fatos_predefinidos (regras) será uma lista vazia.
+    # ### FIM DA ALTERAÇÃO ###
 
     return render_template(
         'justica/index.html',
         em_andamento=processos_em_andamento,
         finalizados=processos_finalizados,
-        fatos_predefinidos=regras_db
+        fatos_predefinidos=fatos_predefinidos,
+        permite_pontuacao=permite_pontuacao  # <-- Passa a flag para o template
     )
 
 @justica_bp.route('/analise')
 @login_required
 @admin_or_programmer_required
 def analise():
+    
+    # ### INÍCIO DA ALTERAÇÃO ###
+    # Proteção: Garante que escolas 'ctsp' não acessem a análise
+    active_school = g.get('active_school')
+    if not active_school or active_school.npccal_type not in ['cspm', 'cbfpm']:
+        flash('A Análise de Dados não se aplica a esta escola.', 'info')
+        return redirect(url_for('justica.index'))
+    # ### FIM DA ALTERAÇÃO ###
+
     # --- INÍCIO DA CORREÇÃO ---
     # O log de erro (UndefinedError: 'dict object' has no attribute 'status_counts')
     # indica que o template 'analise.html' espera receber uma variável 'dados'
@@ -94,6 +115,15 @@ def finalizar_processo(processo_id):
 @login_required
 @admin_or_programmer_required
 def novo_processo():
+    
+    # ### INÍCIO DA ALTERAÇÃO ###
+    # Proteção: Garante que escolas 'ctsp' não criem novos processos
+    active_school = g.get('active_school')
+    if not active_school or active_school.npccal_type not in ['cspm', 'cbfpm']:
+        flash('Não é possível registrar infrações com pontuação para esta escola.', 'danger')
+        return redirect(url_for('justica.index'))
+    # ### FIM DA ALTERAÇÃO ###
+    
     aluno_id = request.form.get('aluno_id')
     fato_descricao = request.form.get('fato_descricao') 
     fato_pontos = request.form.get('fato_pontos')
@@ -153,7 +183,7 @@ def api_get_alunos():
     
     # --- INÍCIO DA CORREÇÃO DEFINITIVA ---
     # A variável 'g' não é populada em rotas de API que não usam 'render_template'.
-    # Temos de buscar a escola ativa manualmente a partir da 'session',
+    # Temos de buscar a escola ativa manually a partir da 'session',
     # replicando a lógica que existe em 'app.py'.
 
     school_id_to_load = None
@@ -207,6 +237,15 @@ def api_get_aluno_details(aluno_id):
 @login_required
 @admin_or_programmer_required
 def exportar_selecao():
+    
+    # ### INÍCIO DA ALTERAÇÃO ###
+    # Proteção: Garante que escolas 'ctsp' não acessem a exportação
+    active_school = g.get('active_school')
+    if not active_school or active_school.npccal_type not in ['cspm', 'cbfpm']:
+        flash('A exportação não se aplica a esta escola.', 'info')
+        return redirect(url_for('justica.index'))
+    # ### FIM DA ALTERAÇÃO ###
+    
     try:
         locale.setlocale(locale.LC_TIME, 'pt_BR.UTF-8')
     except locale.Error:

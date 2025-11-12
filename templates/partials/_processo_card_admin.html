@@ -22,14 +22,11 @@
                 {% endif %}
 
                 {% if processo.status in ['Aluno Notificado', 'Defesa Enviada'] %}
-                <!-- ### INÍCIO DA CORREÇÃO ### -->
-                <!-- Trocamos 'js-open-analise-modal' e 'data-processo-id' pelos atributos nativos do Bootstrap 5 -->
-                <button class="btn btn-sm btn-success" 
-                        data-bs-toggle="modal"
-                        data-bs-target="#finalizarModal-{{ processo.id }}">
-                    <i class="fas fa-gavel me-1"></i> Analisar
+                <button class="btn btn-sm btn-success js-toggle-analise-form" 
+                        data-target-form="#analise-form-{{ processo.id }}">
+                    <i class="fas fa-gavel me-1"></i> 
+                    <span class="js-toggle-text">Analisar</span>
                 </button>
-                <!-- ### FIM DA CORREÇÃO ### -->
                 {% endif %}
             </div>
         </div>
@@ -64,54 +61,49 @@
                 <p class="preserve-whitespace fw-bold">{{ processo.detalhes_sancao or "Sem detalhes adicionais." }}</p>
                 <span class="detail-label">Fundamentação:</span>
                 <p class="preserve-whitespace">{{ processo.fundamentacao }}</p>
-                <small class="text-muted">Decisão em {{ processo.data_decisao.strftime('%d/%m/%Y às %H:%M') }}</Zsmall>
+                <small class="text-muted">Decisão em {{ processo.data_decisao.strftime('%d/%m/%Y às %H:%M') }}</small>
             </div>
         {% endif %}
 
         {% if processo.status in ['Aluno Notificado', 'Defesa Enviada'] %}
-        <div class="modal fade" id="finalizarModal-{{ processo.id }}" tabindex="-1" aria-labelledby="modalLabel-{{ processo.id }}" aria-hidden="true">
-            <div class="modal-dialog modal-lg">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="modalLabel-{{ processo.id }}">Finalizar Processo de {{ processo.aluno.user.nome_completo }}</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                    </div>
-                    <form action="{{ url_for('justica.finalizar_processo', processo_id=processo.id) }}" method="POST">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <div class="modal-body">
-                            <div class="mb-3">
-                                <label class="form-label"><strong>Fato:</strong> {{ processo.fato_constatado }}</label>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label"><strong>Defesa:</strong> {{ processo.defesa or "Aluno não apresentou defesa." }}</label>
-                            </div>
-                            <hr>
-                            <div class="mb-3">
-                                <label for="decisao_final-{{ processo.id }}" class="form-label">Decisão Final</label>
-                                <select name="decisao_final" id="decisao_final-{{ processo.id }}" class="form-select" required>
-                                    <option value="" disabled selected>Selecione a decisão...</option>
-                                    <option value="Justificado">Justificado (Sem Sanção)</option>
-                                    <option value="Advertência">Advertência (Com Sanção)</option>
-                                    <option value="Repreensão">Repreensão (Com Sanção)</option>
-                                </select>
-                            </div>
-                            <div class="mb-3">
-                                <label for="detalhes_sancao-{{ processo.id }}" class="form-label">Detalhes da Sanção (Obrigatório se Advertência/Repreensão)</label>
-                                <textarea name="detalhes_sancao" id="detalhes_sancao-{{ processo.id }}" class="form-control" rows="3" placeholder="Ex: Perda de 0,5 ponto na média disciplinar."></textarea>
-                            </div>
-                            <div class="mb-3">
-                                <label for="fundamentacao-{{ processo.id }}" class="form-label">Fundamentação da Decisão</label>
-                                <textarea name="fundamentacao" id="fundamentacao-{{ processo.id }}" class="form-control" rows="5" placeholder="Descreva por que a defesa foi (ou não) aceita e a base para a decisão." required></textarea>
-                            </div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                            <button type="submit" class="btn btn-success">Salvar Decisão</button>
-                        </div>
-                    </form>
+        <div class="analise-form-container border p-3 mt-3 rounded bg-light" id="analise-form-{{ processo.id }}" style="display: none;">
+            
+            <h5 class="mb-3">Finalizar Processo de {{ processo.aluno.user.nome_completo }}</h5>
+            
+            <form action="{{ url_for('justica.finalizar_processo', processo_id=processo.id) }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                
+                <div class="mb-3">
+                    <label class="form-label d-block"><strong>Fato:</strong> {{ processo.fato_constatado }}</label>
                 </div>
-            </div>
+                <div class="mb-3">
+                    <label class="form-label d-block"><strong>Defesa:</strong> {{ processo.defesa or "Aluno não apresentou defesa." }}</label>
+                </div>
+                <hr>
+                <div class="mb-3">
+                    <label for="decisao_final-{{ processo.id }}" class="form-label">Decisão Final</label>
+                    <select name="decisao_final" id="decisao_final-{{ processo.id }}" class="form-select" required>
+                        <option value="" disabled selected>Selecione a decisão...</option>
+                        <option value="Justificado">Justificado (Sem Sanção)</option>
+                        <option value="Advertência">Advertência (Com Sanção)</option>
+                        <option value="Repreensão">Repreensão (Com Sanção)</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label for="detalhes_sancao-{{ processo.id }}" class="form-label">Detalhes da Sanção (Obrigatório se Advertência/Repreensão)</label>
+                    <textarea name="detalhes_sancao" id="detalhes_sancao-{{ processo.id }}" class="form-control" rows="3" placeholder="Ex: Perda de 0,5 ponto na média disciplinar."></textarea>
+                </div>
+                <div class="mb-3">
+                    <label for="fundamentacao-{{ processo.id }}" class="form-label">Fundamentação da Decisão</label>
+                    <textarea name="fundamentacao" id="fundamentacao-{{ processo.id }}" class="form-control" rows="5" placeholder="Descreva por que a defesa foi (ou não) aceita e a base para a decisão." required></textarea>
+                </div>
+
+                <div class="d-flex justify-content-end gap-2 mt-3">
+                    <button type="button" class="btn btn-secondary js-toggle-analise-form" data-target-form="#analise-form-{{ processo.id }}">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Salvar Decisão</button>
+                </div>
+            </form>
         </div>
         {% endif %}
-    </div>
+        </div>
 </div>
