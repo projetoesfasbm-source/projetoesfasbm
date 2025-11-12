@@ -1,4 +1,5 @@
-# Importa 'session' e 'g' (usaremos 'session' para a API)
+# backend/controllers/justica_controller.py
+
 from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, Response, g, session
 from flask_login import login_required, current_user
 from sqlalchemy import select, or_
@@ -14,8 +15,8 @@ from ..models.aluno import Aluno
 from ..models.user import User
 from ..models.turma import Turma
 from ..models.discipline_rule import DisciplineRule
-from ..models.school import School # Necessário para buscar a escola
-from ..models.user_school import UserSchool # Necessário para a consulta
+from ..models.school import School
+from ..models.user_school import UserSchool
 # ### INÍCIO DA ALTERAÇÃO (FADA) ###
 from ..models.fada_avaliacao import FadaAvaliacao # Importa o novo modelo
 # ### FIM DA ALTERAÇÃO ###
@@ -69,9 +70,12 @@ def analise():
         flash('A Análise de Dados não se aplica a esta escola.', 'info')
         return redirect(url_for('justica.index'))
 
-    # ... (seu código de análise existente) ...
     contagem_de_status = JusticaService.get_analise_disciplinar_data()
-    dados_para_template = { 'status_counts': contagem_de_status }
+    
+    dados_para_template = {
+        'status_counts': contagem_de_status
+    }
+    
     return render_template('justica/analise.html', dados=dados_para_template)
 
 
@@ -79,7 +83,6 @@ def analise():
 @login_required
 @admin_or_programmer_required
 def finalizar_processo(processo_id):
-    # ... (seu código de finalizar_processo existente) ...
     decisao = request.form.get('decisao_final')
     fundamentacao = request.form.get('fundamentacao')
     detalhes_sancao = request.form.get('detalhes_sancao')
@@ -133,8 +136,82 @@ def novo_processo():
     flash(message, 'success' if success else 'danger')
     return redirect(url_for('justica.index'))
 
-# ... (dar_ciente, enviar_defesa, deletar_processo, api_get_alunos, api_get_aluno_details...) ...
-# ... (MANTENHA TODAS AS SUAS ROTAS EXISTENTES AQUI) ...
+@justica_bp.route('/dar-ciente/<int:processo_id>', methods=['POST'])
+@login_required
+def dar_ciente(processo_id):
+    success, message = JusticaService.registrar_ciente(processo_id, current_user)
+    flash(message, 'success' if success else 'danger')
+    return redirect(url_for('justica.index'))
+
+@justica_bp.route('/enviar-defesa/<int:processo_id>', methods=['POST'])
+@login_required
+def enviar_defesa(processo_id):
+    defesa = request.form.get('defesa')
+    if not defesa:
+        flash('O texto da defesa não pode estar vazio.', 'danger')
+        return redirect(url_for('justica.index'))
+    
+    success, message = JusticaService.enviar_defesa(processo_id, defesa, current_user)
+    flash(message, 'success' if success else 'danger')
+    return redirect(url_for('justica.index'))
+
+@justica_bp.route('/deletar/<int:processo_id>', methods=['POST'])
+@login_required
+@admin_or_programmer_required
+def deletar_processo(processo_id):
+    success, message = JusticaService.deletar_processo(processo_id)
+    flash(message, 'success' if success else 'danger')
+    return redirect(url_for('justica.index'))
+
+@justica_bp.route('/api/alunos')
+@login_required
+@admin_or_programmer_required
+def api_get_alunos():
+    search = request.args.get('q', '').lower()
+    
+    school_id_to_load = None
+    if current_user.role in ['super_admin', 'programador']:
+        school_id_to_load = session.get('view_as_school_id')
+    elif hasattr(current_user, 'user_schools') and current_user.user_schools:
+        school_id_to_load = current_user.user_schools[0].school_id
+
+    if not school_id_to_load:
+        return jsonify({'error': 'Nenhuma escola ativa selecionada na sessão.'}), 400
+    
+    query = (
+        select(Aluno)
+        .join(User, Aluno.user_id == User.id)
+        .join(UserSchool, User.id == UserSchool.user_id)
+        .where(
+            UserSchool.school_id == school_id_to_load, 
+            User.role == 'aluno',                      
+            or_(                                       
+                User.nome_completo.ilike(f'%{search}%'),
+                User.matricula.ilike(f'%{search}%')
+            )
+        )
+        .order_by(User.nome_completo)
+        .limit(20)
+    )
+    
+    alunos = db.session.scalars(query).all()
+    results = [{'id': a.id, 'text': f"{a.user.nome_completo} ({a.user.matricula})"} for a in alunos]
+    return jsonify(results)
+
+@justica_bp.route('/api/aluno-details/<int:aluno_id>')
+@login_required
+@admin_or_programmer_required
+def api_get_aluno_details(aluno_id):
+    aluno = db.session.get(Aluno, aluno_id)
+    if not aluno or not aluno.user:
+        return jsonify({'error': 'Aluno não encontrado'}), 404
+    
+    details = {
+        'posto_graduacao': aluno.user.posto_graduacao or 'POSTO/GRADUAÇÃO',
+        'matricula': aluno.user.matricula or 'MATRÍCULA',
+        'nome_completo': aluno.user.nome_completo or 'NOME DO ALUNO'
+    }
+    return jsonify(details)
 
 @justica_bp.route('/exportar', methods=['GET', 'POST'])
 @login_required
@@ -146,19 +223,24 @@ def exportar_selecao():
         flash('A exportação não se aplica a esta escola.', 'info')
         return redirect(url_for('justica.index'))
     
-    # ... (seu código de exportar_selecao existente) ...
     try:
         locale.setlocale(locale.LC_TIME, 'pt_BR.UTF-8')
     except locale.Error:
-        pass 
+        try:
+            locale.setlocale(locale.LC_TIME, 'Portuguese_Brazil')
+        except locale.Error:
+            pass 
 
     if request.method == 'POST':
         processo_ids = request.form.getlist('processo_ids')
         if not processo_ids:
             flash('Nenhum processo selecionado para exportar.', 'warning')
             return redirect(url_for('justica.exportar_selecao'))
+
         processos = JusticaService.get_processos_por_ids([int(pid) for pid in processo_ids])
+        
         rendered_html = render_template('justica/export_bi_template.html', processos=processos)
+        
         return Response(
             rendered_html,
             mimetype="application/msword",

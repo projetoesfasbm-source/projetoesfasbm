@@ -27,6 +27,11 @@ from .processo_disciplina import ProcessoDisciplina
 from .notification import Notification
 from .push_subscription import PushSubscription
 from .fada_avaliacao import FadaAvaliacao
+# ### INÍCIO DA ALTERAÇÃO ###
+# Importa os nomes corretos das classes
+from .discipline_rule import DisciplineRule
+from .avaliacao import AvaliacaoAtitudinal
+# ### FIM DA ALTERAÇÃO ###
 
 
 __all__ = [
@@ -54,5 +59,12 @@ __all__ = [
     'Resposta',
     'ProcessoDisciplina',
     'Notification',
-    'PushSubscription' # <-- ADICIONE ESTA LINHA
+    'PushSubscription',
+    
+    # ### INÍCIO DA ALTERAÇÃO ###
+    # Adiciona os nomes corretos à lista __all__
+    'DisciplineRule',
+    'AvaliacaoAtitudinal', # Nome corrigido
+    'FadaAvaliacao'
+    # ### FIM DA ALTERAÇÃO ###
 ]

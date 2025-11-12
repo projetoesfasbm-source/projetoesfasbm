@@ -13,6 +13,10 @@ if t.TYPE_CHECKING:
     from .turma import Turma
     from .processo_disciplina import ProcessoDisciplina
     from .avaliacao import AvaliacaoAtitudinal
+    # ### INÍCIO DA ALTERAÇÃO ###
+    # Adicionada a importação para o type checking
+    from .fada_avaliacao import FadaAvaliacao 
+    # ### FIM DA ALTERAÇÃO ###
 
 class Aluno(db.Model):
     __tablename__ = 'alunos'
@@ -41,6 +45,7 @@ class Aluno(db.Model):
     processos_disciplinares: Mapped[list["ProcessoDisciplina"]] = relationship(back_populates="aluno", cascade="all, delete-orphan")
     avaliacoes: Mapped[list["AvaliacaoAtitudinal"]] = relationship(back_populates="aluno", cascade="all, delete-orphan")
 
+    # Esta linha já estava correta no seu arquivo
     fada_avaliacoes: Mapped[list['FadaAvaliacao']] = relationship('FadaAvaliacao', back_populates='aluno', lazy='dynamic', cascade="all, delete-orphan")
 
     def __init__(self, user_id: int, opm: str,

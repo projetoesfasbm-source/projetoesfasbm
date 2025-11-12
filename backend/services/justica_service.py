@@ -1,18 +1,21 @@
 # backend/services/justica_service.py
 
-# --- CORREÇÃO: Importar 'session' ---
-from flask import g, url_for, session
+# ### INÍCIO DA ALTERAÇÃO ###
+# Importar 'render_template' para gerar o HTML do e-mail
+# e 'EmailService' para enviá-lo
+from flask import g, url_for, session, render_template
+from ..services.email_service import EmailService
+# ### FIM DA ALTERAÇÃO ###
+
 from sqlalchemy import select, func, and_
 from datetime import datetime, timezone
 from ..models.database import db
 from ..models.aluno import Aluno
 from ..models.user import User
 from ..models.turma import Turma
-from ..models.user_school import UserSchool # <-- Importação necessária
+from ..models.user_school import UserSchool
 from ..models.processo_disciplina import ProcessoDisciplina
-# ### INÍCIO DA ALTERAÇÃO (FADA) ###
 from ..models.fada_avaliacao import FadaAvaliacao 
-# ### FIM DA ALTERAÇÃO ###
 from ..services.notification_service import NotificationService
 from sqlalchemy.orm import joinedload
 from sqlalchemy.exc import SQLAlchemyError
@@ -24,9 +27,6 @@ class JusticaService:
         """Busca processos relevantes para o usuário (admin vê todos, aluno vê só os seus)."""
         if user.role in ['admin_escola', 'super_admin', 'programador']:
             
-            # --- INÍCIO DA CORREÇÃO ---
-            # Busca a escola ativa manualmente a partir da session e do user.
-            # Não podemos confiar em 'g' (Flask global) dentro da camada de serviço.
             school_id_to_load = None
             if user.role in ['super_admin', 'programador']:
                 school_id_to_load = session.get('view_as_school_id')
@@ -34,16 +34,14 @@ class JusticaService:
                 school_id_to_load = user.user_schools[0].school_id
 
             if not school_id_to_load:
-                return [] # Retorna vazio se nenhuma escola for encontrada
-            # --- FIM DA CORREÇÃO ---
+                return [] 
             
-            # A consulta agora filtra pelo UserSchool (vínculo do usuário com a escola).
             query = (
                 select(ProcessoDisciplina)
                 .join(Aluno, ProcessoDisciplina.aluno_id == Aluno.id)
                 .join(User, Aluno.user_id == User.id)
-                .join(UserSchool, User.id == UserSchool.user_id) # Filtra pelo vínculo do User
-                .where(UserSchool.school_id == school_id_to_load) # <-- USA A VARIÁVEL CORRETA
+                .join(UserSchool, User.id == UserSchool.user_id) 
+                .where(UserSchool.school_id == school_id_to_load) 
                 .options(
                     joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.user),
                     joinedload(ProcessoDisciplina.relator)
@@ -51,7 +49,10 @@ class JusticaService:
                 .order_by(ProcessoDisciplina.data_ocorrencia.desc())
             )
         else:
-            # Query para Aluno (sempre esteve correta)
+            # Assumindo que o perfil do aluno está em user.aluno_profile
+            if not user.aluno_profile:
+                return [] # Retorna vazio se o usuário não for um aluno
+            
             query = (
                 select(ProcessoDisciplina)
                 .where(ProcessoDisciplina.aluno_id == user.aluno_profile.id)
@@ -70,8 +71,8 @@ class JusticaService:
         if not aluno:
             return False, "Aluno não encontrado."
         
-        if not aluno.user_id:
-             return False, "Este aluno não possui um usuário associado. Não é possível notificá-lo."
+        if not aluno.user or not aluno.user.email:
+             return False, "Este aluno não possui um usuário ou e-mail associado. Não é possível notificá-lo."
 
         try:
             novo_processo = ProcessoDisciplina(
@@ -80,30 +81,165 @@ class JusticaService:
                 fato_constatado=fato,
                 observacao=observacao,
                 pontos=pontos,
-                status='Aguardando Ciência' # Status inicial correto
+                status='Aguardando Ciência' 
             )
             db.session.add(novo_processo)
-            db.session.commit()
             
-            # O NotificationService não aceita 'title', apenas 'message'.
+            # ### INÍCIO DA ALTERAÇÃO ###
+            # 1. Gerar o conteúdo HTML do e-mail usando o template
+            html_content = render_template(
+                'email/notificacao_justica.html', 
+                aluno=aluno, 
+                processo=novo_processo
+            )
+            
+            # 2. Enviar o e-mail para o aluno
+            EmailService.send_generic_email(
+                to_email=aluno.user.email,
+                subject="Novo Processo Disciplinar Registrado",
+                html_content=html_content
+            )
+            # ### FIM DA ALTERAÇÃO ###
+
+            # 3. Criar a notificação interna (sininho)
             NotificationService.create_notification(
-                user_id=aluno.user_id,
-                message=f"Novo Processo Disciplinar: {fato}", # Título incluído na mensagem
+                user_id=aluno.user.id,
+                message=f"Novo Processo Disciplinar: {fato}", 
                 url=url_for('justica.index', _external=True)
             )
             
-            return True, "Processo disciplinar registrado e aluno notificado com sucesso!"
+            # 4. Salvar tudo no banco
+            db.session.commit()
+            
+            return True, "Processo disciplinar registrado e aluno notificado por e-mail e notificação interna!"
         
         except SQLAlchemyError as e:
             db.session.rollback()
             return False, f"Erro de banco de dados: {e}"
         except Exception as e:
             db.session.rollback()
-            return False, f"Erro inesperado ao criar processo: {e}"
+            # Adiciona um log mais detalhado em caso de falha no envio do e-mail
+            return False, f"Erro inesperado ao criar processo (verifique as configurações de e-mail): {e}"
 
-    # ... (registrar_ciente, enviar_defesa, finalizar_processo, deletar_processo, ... ) ...
-    # ... (MANTENHA TODAS AS SUAS FUNÇÕES EXISTENTES AQUI) ...
+    @staticmethod
+    def registrar_ciente(processo_id, user):
+        processo = db.session.get(ProcessoDisciplina, processo_id)
+        if not processo or processo.aluno_id != user.aluno_profile.id:
+            return False, "Processo não encontrado ou não pertence a você."
+        
+        if processo.status != 'Aguardando Ciência':
+            return False, "Este processo não está mais aguardando ciência."
+            
+        try:
+            processo.status = 'Aluno Notificado'
+            processo.data_ciente = datetime.now(timezone.utc)
+            db.session.commit()
+            
+            NotificationService.create_notification(
+                user_id=processo.relator_id,
+                message=f"O aluno {user.nome_completo} deu ciência do Processo nº {processo.id}.",
+                url=url_for('justica.index', _external=True)
+            )
+            
+            return True, "Ciência registrada com sucesso. Você tem 24h para apresentar sua defesa."
+        except Exception as e:
+            db.session.rollback()
+            return False, f"Erro ao registrar ciência: {e}"
 
+    @staticmethod
+    def enviar_defesa(processo_id, defesa, user):
+        processo = db.session.get(ProcessoDisciplina, processo_id)
+        if not processo or processo.aluno_id != user.aluno_profile.id:
+            return False, "Processo não encontrado ou não pertence a você."
+
+        if processo.status != 'Aluno Notificado':
+            return False, "O prazo para defesa expirou ou a defesa já foi enviada."
+
+        try:
+            processo.defesa = defesa
+            processo.data_defesa = datetime.now(timezone.utc)
+            processo.status = 'Defesa Enviada'
+            db.session.commit()
+            
+            NotificationService.create_notification(
+                user_id=processo.relator_id,
+                message=f"O aluno {user.nome_completo} enviou a defesa para o Processo nº {processo.id}.",
+                url=url_for('justica.index', _external=True)
+            )
+            
+            return True, "Defesa enviada com sucesso."
+        except Exception as e:
+            db.session.rollback()
+            return False, f"Erro ao enviar defesa: {e}"
+            
+    @staticmethod
+    def finalizar_processo(processo_id, decisao, fundamentacao, detalhes_sancao):
+        processo = db.session.get(ProcessoDisciplina, processo_id)
+        if not processo:
+            return False, "Processo não encontrado."
+            
+        if processo.status not in ['Defesa Enviada', 'Aluno Notificado', 'Aguardando Ciência']:
+             return False, "Este processo não está em fase de finalização."
+        
+        # ### INÍCIO DA ALTERAÇÃO ###
+        # Busca o e-mail do aluno para a notificação
+        aluno_user = getattr(getattr(processo, 'aluno', None), 'user', None)
+        if not aluno_user or not aluno_user.email:
+             return False, "Não foi possível encontrar o usuário ou e-mail do aluno para notificar."
+        # ### FIM DA ALTERAÇÃO ###
+
+        try:
+            processo.decisao_final = decisao
+            processo.fundamentacao = fundamentacao
+            processo.detalhes_sancao = detalhes_sancao
+            processo.data_decisao = datetime.now(timezone.utc)
+            processo.status = 'Finalizado'
+            
+            # ### INÍCIO DA ALTERAÇÃO ###
+            # Envia e-mail de notificação da decisão
+            html_content = render_template(
+                'email/veredito_justica.html', 
+                aluno=processo.aluno, 
+                processo=processo
+            )
+            EmailService.send_generic_email(
+                to_email=aluno_user.email,
+                subject=f"Decisão do Processo Disciplinar nº {processo.id}",
+                html_content=html_content
+            )
+            # ### FIM DA ALTERAÇÃO ###
+
+            # Cria notificação interna
+            NotificationService.create_notification(
+                user_id=aluno_user.id,
+                message=f"Seu processo nº {processo.id} foi finalizado. Decisão: {decisao}.",
+                url=url_for('justica.index', _external=True)
+            )
+            
+            db.session.commit()
+            
+            return True, "Processo finalizado e aluno notificado por e-mail!"
+        except Exception as e:
+            db.session.rollback()
+            return False, f"Erro ao finalizar processo (verifique as configurações de e-mail): {e}"
+
+    @staticmethod
+    def deletar_processo(processo_id):
+        processo = db.session.get(ProcessoDisciplina, processo_id)
+        if not processo:
+            return False, "Processo não encontrado."
+
+        if processo.status != 'Aguardando Ciência':
+            return False, "Não é possível excluir um processo após o aluno dar ciência."
+            
+        try:
+            db.session.delete(processo)
+            db.session.commit()
+            return True, "Processo excluído com sucesso."
+        except Exception as e:
+            db.session.rollback()
+            return False, f"Erro ao excluir processo: {e}"
+            
     @staticmethod
     def get_processos_por_ids(ids):
         query = select(ProcessoDisciplina).where(ProcessoDisciplina.id.in_(ids))
@@ -115,7 +251,6 @@ class JusticaService:
         if not active_school:
             return []
         
-        # Subquery para filtrar pela escola (via UserSchool)
         alunos_da_escola = (
             select(Aluno.id)
             .join(User, Aluno.user_id == User.id)
@@ -137,7 +272,6 @@ class JusticaService:
         if not active_school:
             return {}
 
-        # Subquery para filtrar pela escola (via UserSchool)
         alunos_da_escola = (
             select(Aluno.id)
             .join(User, Aluno.user_id == User.id)
@@ -188,61 +322,52 @@ class JusticaService:
                 UserSchool.school_id == school_id,
                 User.role == 'aluno'
             )
+            .options(joinedload(Aluno.user)) # Carrega os dados do usuário
             .order_by(User.nome_completo)
         )
         return db.session.scalars(query).all()
 
     @staticmethod
     def get_fada_por_id(avaliacao_id):
-        """Busca uma avaliação FADA específica pelo ID."""
-        return db.session.get(FadaAvaliacao, avaliacao_id)
+        """Busca uma avaliação FADA específica pelo ID, com dados do aluno e avaliador."""
+        query = (
+            select(FadaAvaliacao)
+            .where(FadaAvaliacao.id == avaliacao_id)
+            .options(
+                joinedload(FadaAvaliacao.aluno).joinedload(Aluno.user),
+                joinedload(FadaAvaliacao.avaliador)
+            )
+        )
+        return db.session.scalar(query)
 
     @staticmethod
     def salvar_fada(form_data, aluno_id, avaliador_id):
         """Cria ou atualiza uma avaliação FADA para um aluno."""
         try:
-            # Tenta encontrar uma FADA existente para este aluno (pode ser usado para editar)
-            # Por simplicidade, vamos criar uma nova a cada vez.
-            # avaliacao = db.session.scalar(select(FadaAvaliacao).where(FadaAvaliacao.aluno_id == aluno_id))
-            # if not avaliacao:
-            #     avaliacao = FadaAvaliacao(aluno_id=aluno_id)
-            
-            # Nova avaliação sempre
             avaliacao = FadaAvaliacao(aluno_id=aluno_id, avaliador_id=avaliador_id)
 
-            # Preenche os 18 atributos
+            # Mapeia os 18 atributos
             for i in range(1, 19):
-                field_name = f'attr_{i}'
-                form_field_name = f'attr_{i}_expressao' if i == 1 else \
-                                  f'attr_{i}_planejamento' if i == 2 else \
-                                  f'attr_{i}_perseveranca' if i == 3 else \
-                                  f'attr_{i}_apresentacao' if i == 4 else \
-                                  f'attr_{i}_lealdade' if i == 5 else \
-                                  f'attr_{i}_tato' if i == 6 else \
-                                  f'attr_{i}_equilibrio' if i == 7 else \
-                                  f'attr_{i}_disciplina' if i == 8 else \
-                                  f'attr_{i}_responsabilidade' if i == 9 else \
-                                  f'attr_{i}_maturidade' if i == 10 else \
-                                  f'attr_{i}_assiduidade' if i == 11 else \
-                                  f'attr_{i}_pontualidade' if i == 12 else \
-                                  f'attr_{i}_diccao' if i == 13 else \
-                                  f'attr_{i}_lideranca' if i == 14 else \
-                                  f'attr_{i}_relacionamento' if i == 15 else \
-                                  f'attr_{i}_etica' if i == 16 else \
-                                  f'attr_{i}_produtividade' if i == 17 else \
-                                  f'attr_{i}_eficiencia' # 18
+                field_name_map = {
+                    1: 'attr_1_expressao', 2: 'attr_2_planejamento', 3: 'attr_3_perseveranca',
+                    4: 'attr_4_apresentacao', 5: 'attr_5_lealdade', 6: 'attr_6_tato',
+                    7: 'attr_7_equilibrio', 8: 'attr_8_disciplina', 9: 'attr_9_responsabilidade',
+                    10: 'attr_10_maturidade', 11: 'attr_11_assiduidade', 12: 'attr_12_pontualidade',
+                    13: 'attr_13_diccao', 14: 'attr_14_lideranca', 15: 'attr_15_relacionamento',
+                    16: 'attr_16_etica', 17: 'attr_17_produtividade', 18: 'attr_18_eficiencia'
+                }
+                field_name = field_name_map.get(i)
+                form_field_name = f'attr_{i}' # O nome no formulário é 'attr_1', 'attr_2', etc.
                 
-                # O nome no form é só attr_1, attr_2, etc.
-                form_field_name = f'attr_{i}'
-                
-                # Pega o valor do form, converte para float, e usa 8.0 como padrão
                 valor = form_data.get(form_field_name)
                 try:
                     valor_float = float(valor)
+                    valor_float = max(0.0, min(10.0, valor_float))
                 except (ValueError, TypeError):
                     valor_float = 8.0 # Padrão
                 
-                setattr(avaliacao, field_name, valor_float)
+                if field_name:
+                    setattr(avaliacao, field_name, valor_float)
 
             # Preenche os campos de texto
             avaliacao.justificativa_notas = form_data.get('justificativa_notas')

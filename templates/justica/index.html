@@ -132,7 +132,7 @@
 </div>
 
 <style>
-    /* ... (Seus estilos CSS permanecem os mesmos) ... */
+    /* Estilos CSS permanecem os mesmos */
     .justice-page-layout { display: grid; grid-template-columns: 1fr; gap: 1.5rem; }
     @media (min-width: 992px) { .justice-page-layout { grid-template-columns: 3fr 1fr; } }
     .analysis-card { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 1.5rem; border-radius: var(--border-radius); background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light)); color: white; text-decoration: none; transition: all 0.3s ease; border: 2px solid transparent; min-height: 150px; box-shadow: var(--shadow-soft); }
@@ -188,7 +188,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // --- Busca de Aluno (MANTIDA) ---
     if (alunoSearchInput) {
-        // ... (todo o seu código de busca de aluno, selectAluno, etc. permanece idêntico) ...
         let searchTimeout;
         alunoSearchInput.addEventListener('input', function() {
             clearTimeout(searchTimeout);
@@ -249,9 +248,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     transgressionFields.style.display = 'block';
 
                     // ### INÍCIO DA ALTERAÇÃO (LÓGICA CTSP) ###
-                    // Se for CTSP (sem pontos), limpa o "incorreu no item..."
                     {% if not permite_pontuacao %}
-                        updateObservacaoComFato(null); // Limpa o template
+                        // Se for CTSP (sem pontos), limpa o "incorreu no item..."
+                        updateObservacaoComFato(null); 
+                        // Garante que o campo de pontos esteja zerado
+                        document.getElementById('fato_pontos').value = '0.0';
                     {% else %}
                         // Se for CSPM/CBFPM, limpa os inputs de infração
                         // para forçar o usuário a selecionar um.
@@ -345,6 +346,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // --- Lógica de Toggle do Formulário "Analisar" (MANTIDA) ---
+    // (O código que removeu o modal e corrigiu o travamento)
     const botoesToggleForm = document.querySelectorAll('.js-toggle-analise-form');
     botoesToggleForm.forEach(function(botao) {
         botao.addEventListener('click', function(event) {
