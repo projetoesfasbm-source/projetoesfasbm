@@ -41,7 +41,7 @@ def index():
     processos_finalizados = [p for p in processos if p.status == 'Finalizado']
 
     active_school = g.get('active_school') 
-    fatos_predefinidos = ['ctsp']
+    fatos_predefinidos = []
     permite_pontuacao = False  # Por padrão, não permite pontuação
 
     if active_school:
@@ -101,9 +101,15 @@ def finalizar_processo(processo_id):
         flash('É necessário selecionar uma decisão e preencher a fundamentação.', 'danger')
         return redirect(url_for('justica.index'))
     
-    if decisao in ['Advertência', 'Repreensão'] and not detalhes_sancao:
-        flash('Para Advertência ou Repreensão, o campo de detalhes da sanção é obrigatório.', 'danger')
-        return redirect(url_for('justica.index'))
+    # ######################################################
+    # ### INÍCIO DA CORREÇÃO (Campo 'detalhes_sancao' agora é opcional) ###
+    # ######################################################
+    # if decisao in ['Advertência', 'Repreensão'] and not detalhes_sancao:
+    #     flash('Para Advertência ou Repreensão, o campo de detalhes da sanção é obrigatório.', 'danger')
+    #     return redirect(url_for('justica.index'))
+    # ######################################################
+    # ### FIM DA CORREÇÃO ###
+    # ######################################################
 
     success, message = JusticaService.finalizar_processo(processo_id, decisao, fundamentacao, detalhes_sancao)
     flash(message, 'success' if success else 'danger')

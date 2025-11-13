@@ -4,8 +4,19 @@
     <meta charset="UTF-8">
     <title>FADA - {{ avaliacao.aluno.user.nome_completo }}</title>
     <style>
+        @page {
+            size: A4;
+            margin: 1.5cm;
+            @frame footer {
+                -pdf-frame-content: footer-content;
+                bottom: 1cm;
+                left: 1.5cm;
+                right: 1.5cm;
+                height: 1cm;
+            }
+        }
         body { font-family: sans-serif; font-size: 10pt; line-height: 1.4; }
-        .container { width: 90%; margin: 0 auto; }
+        .container { width: 100%; margin: 0 auto; }
         .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; }
         .header h4, .header h5 { margin: 0; }
         h1, h2, h3 { text-align: center; }
@@ -14,13 +25,15 @@
         .tabela-atributos { width: 100%; border-collapse: collapse; margin-top: 20px; }
         .tabela-atributos th, .tabela-atributos td { border: 1px solid #000; padding: 6px; }
         .tabela-atributos th { background-color: #f0f0f0; text-align: left; }
+        .tabela-atributos td:nth-child(2) { text-align: center; }
         .tabela-atributos td:last-child { text-align: center; font-weight: bold; }
         .conceito { text-align: center; font-weight: bold; }
         .conceito.aprovado { color: green; }
         .conceito.reprovado { color: red; }
-        .justificativas { margin-top: 20px; border: 1px solid #ccc; padding: 10px; min-height: 80px; }
-        .assinaturas { margin-top: 80px; text-align: center; }
+        .justificativas { margin-top: 20px; border: 1px solid #ccc; padding: 10px; min-height: 60px; page-break-inside: avoid; }
+        .assinaturas { margin-top: 60px; text-align: center; page-break-inside: avoid; }
         .assinatura-linha { display: inline-block; width: 300px; border-top: 1px solid #000; padding-top: 5px; }
+        .footer-media { text-align: right; font-size: 12pt; font-weight: bold; margin-top: 20px; }
     </style>
 </head>
 <body>
@@ -38,14 +51,16 @@
             <p><strong>ALUNO:</strong> {{ avaliacao.aluno.user.nome_completo }}</p>
             <p><strong>ID.FUNC:</strong> {{ avaliacao.aluno.user.matricula or 'N/A' }}</p>
             <p><strong>OPM:</strong> {{ g.active_school.nome if g and g.active_school else 'N/A' }}</p>
-            <p><strong>AVALIADOR:</strong> {{ avaliacao.avaliador.nome_completo }}</p>
-            <p><strong>DATA DA AVALIAÇÃO:</strong> {{ avaliacao.data_avaliacao | br_time('%d/%m/%Y') }}</p>
+            
+            <p><strong>AVALIADOR:</strong> {{ avaliador_nome }}</p>
+            
+            <p><strong>DATA DA AVALIAÇÃO:</strong> {{ data_geracao | br_time('%d/%m/%Y') }}</p>
         </div>
 
         <table class="tabela-atributos">
             <thead>
                 <tr>
-                    <th>ATRIBUTOS AVALIADOS</th>
+                    <th style="width: 70%;">ATRIBUTOS AVALIADOS</th>
                     <th>GRAU</th>
                     <th>CONCEITO</th>
                 </tr>
@@ -77,14 +92,17 @@
             </tbody>
         </table>
 
+        <div class="footer-media">
+            MÉDIA FINAL: {{ "%.2f" | format(avaliacao.media_final) }}
+        </div>
         <div class="justificativas">
             <strong>Justificativa para Graus Abaixo de 7.0 ou Acima de 9.0:</strong>
-            <p>{{ avaliacao.justificativa_notas or "N/A" }}</p>
+            <p style="white-space: pre-wrap;">{{ avaliacao.justificativa_notas or "N/A" }}</p>
         </div>
 
         <div class="justificativas">
             <strong>Observações Gerais:</strong>
-            <p>{{ avaliacao.observacoes or "N/A" }}</p>
+            <p style="white-space: pre-wrap;">{{ avaliacao.observacoes or "N/A" }}</p>
         </div>
 
         <div class="justificativas" style="text-align: center;">
@@ -94,7 +112,7 @@
 
         <div class="assinaturas">
             <div class="assinatura-linha">
-                {{ avaliacao.avaliador.nome_completo }}<br>
+                {{ avaliador_nome }}<br>
                 Avaliador
             </div>
         </div>
@@ -106,6 +124,10 @@
             </div>
         </div>
 
+    </div>
+    
+    <div id="footer-content" style="text-align: right; font-size: 9pt;">
+        Página <pdf:pagenumber> de <pdf:pagecount>
     </div>
 </body>
 </html>

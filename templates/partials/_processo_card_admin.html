@@ -75,7 +75,12 @@
                 
                 <div class="mb-3">
                     <label class="form-label d-block"><strong>Fato:</strong> {{ processo.fato_constatado }}</label>
-                </div>
+                    
+                    {% if permite_pontuacao and processo.pontos and processo.pontos > 0 %}
+                        <label class="form-label d-block text-danger"><strong>Pontuação Original da Infração:</strong> {{ processo.pontos }} pontos</label>
+                    {% endif %}
+                    </div>
+
                 <div class="mb-3">
                     <label class="form-label d-block"><strong>Defesa:</strong> {{ processo.defesa or "Aluno não apresentou defesa." }}</label>
                 </div>
@@ -84,21 +89,13 @@
                     <label for="decisao_final-{{ processo.id }}" class="form-label">Decisão Final</label>
                     <select name="decisao_final" id="decisao_final-{{ processo.id }}" class="form-select" required>
                         <option value="" disabled selected>Selecione a decisão...</option>
-                        <option value="Justificado">Justificado (Sem Sanção)</option>
                         
-                        {% if permite_pontuacao %}
+                        <option value="Justificado">Justificado (Sem Sanção)</option>
                         <option value="Advertência">Advertência (Com Sanção)</option>
                         <option value="Repreensão">Repreensão (Com Sanção)</option>
-                        {% endif %}
                         </select>
                 </div>
                 
-                {% if permite_pontuacao %}
-                <div class="mb-3">
-                    <label for="detalhes_sancao-{{ processo.id }}" class="form-label">Detalhes da Sanção (Obrigatório se Advertência/Repreensão)</label>
-                    <textarea name="detalhes_sancao" id="detalhes_sancao-{{ processo.id }}" class="form-control" rows="3" placeholder="Ex: Perda de 0,5 ponto na média disciplinar."></textarea>
-                </div>
-                {% endif %}
                 <div class="mb-3">
                     <label for="fundamentacao-{{ processo.id }}" class="form-label">Fundamentação da Decisão</label>
                     <textarea name="fundamentacao" id="fundamentacao-{{ processo.id }}" class="form-control" rows="5" placeholder="Descreva por que a defesa foi (ou não) aceita e a base para a decisão." required></textarea>
