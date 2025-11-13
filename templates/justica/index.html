@@ -78,29 +78,34 @@
                     
                     <div id="transgression_fields" style="display: none;">
                         
-                        {% if permite_pontuacao %}
-                            <div class="form-group">
-                                <label for="fato_search_input">Fato Constatado (Com Pontuação)</label>
-                                <input type="text" id="fato_search_input" class="form-control mb-2" placeholder="Pesquisar na lista de infrações...">
-                                
-                                <div class="facts-list-container" id="facts-list-container">
-                                    {% for rule in fatos_predefinidos %}
-                                        <div class="result-item" 
-                                             data-fato="({{ rule.codigo }}) {{ rule.descricao }}"
-                                             data-pontos="{{ rule.pontos }}">
-                                            <strong>{{ rule.codigo }}</strong> - {{ rule.descricao }}
+                        {% if fatos_predefinidos %}
+                        <div class="form-group">
+                            <label for="fato_search_input">Fato Constatado</label>
+                            <input type="text" id="fato_search_input" class="form-control mb-2" placeholder="Pesquisar na lista de infrações...">
+                            
+                            <div class="facts-list-container" id="facts-list-container">
+                                {% for rule in fatos_predefinidos %}
+                                    <div class="result-item" 
+                                         data-fato="({{ rule.codigo }}) {{ rule.descricao }}"
+                                         data-pontos="{{ rule.pontos if permite_pontuacao else '0.0' }}">
+                                        
+                                        <strong>{{ rule.codigo }}</strong> - {{ rule.descricao }}
+                                        
+                                        {% if permite_pontuacao %}
                                             <span class="badge bg-danger float-end">{{ rule.pontos }} pts</span>
-                                        </div>
-                                    {% endfor %}
-                                </div>
-                                <input type="hidden" id="fato_hidden_input" name="fato_descricao" required>
+                                        {% endif %}
+                                    </div>
+                                {% endfor %}
                             </div>
+                            <input type="hidden" id="fato_hidden_input" name="fato_descricao" required>
+                        </div>
+                        
                         {% else %}
-                            <div class="form-group">
-                                <label for="fato_descricao_manual">Fato Constatado (Sem Pontuação)</label>
-                                <p class="form-text">Registre o fato constatado para fins de histórico disciplinar. Esta infração não gera pontuação.</p>
-                                <textarea id="fato_descricao_manual" name="fato_descricao" class="form-control" rows="3" placeholder="Descreva o fato constatado..." required></textarea>
-                            </div>
+                        <div class="form-group">
+                            <label for="fato_descricao_manual">Fato Constatado (Registro Manual)</label>
+                            <p class="form-text">Nenhuma infração pré-definida encontrada para esta escola. Registre o fato manualmente.</p>
+                            <textarea id="fato_descricao_manual" name="fato_descricao" class="form-control" rows="3" placeholder="Descreva o fato constatado..." required></textarea>
+                        </div>
                         {% endif %}
                         
                         <div class="form-group">
@@ -247,21 +252,23 @@ document.addEventListener('DOMContentLoaded', function() {
                     observacaoTextarea.value = observacaoTemplateOriginal;
                     transgressionFields.style.display = 'block';
 
-                    // ### INÍCIO DA ALTERAÇÃO (LÓGICA CTSP) ###
-                    {% if not permite_pontuacao %}
-                        // Se for CTSP (sem pontos), limpa o "incorreu no item..."
-                        updateObservacaoComFato(null); 
-                        // Garante que o campo de pontos esteja zerado
-                        document.getElementById('fato_pontos').value = '0.0';
-                    {% else %}
-                        // Se for CSPM/CBFPM, limpa os inputs de infração
-                        // para forçar o usuário a selecionar um.
-                        document.getElementById('fato_hidden_input').value = '';
-                        document.getElementById('fato_pontos').value = '0.0';
+                    // Esta lógica agora está correta.
+                    // Ela vai limpar a seleção de infração para AMBOS os casos,
+                    // forçando o usuário a selecionar uma (seja CTSP ou CSPM).
+                    
+                    // Limpa o item 'incorreu...'
+                    updateObservacaoComFato(null); 
+                    
+                    // Garante que os pontos estejam zerados até a seleção
+                    document.getElementById('fato_pontos').value = '0.0';
+
+                    // Reseta a seleção visual da lista (se ela existir)
+                    const fatoHiddenInput = document.getElementById('fato_hidden_input');
+                    if (fatoHiddenInput) {
+                        fatoHiddenInput.value = '';
                         const fatoItems = document.querySelectorAll('.facts-list-container .result-item');
                         fatoItems.forEach(i => i.classList.remove('selected'));
-                    {% endif %}
-                    // ### FIM DA ALTERAÇÃO ###
+                    }
                 });
         }
 
@@ -285,10 +292,11 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // --- Lógica do Fato Constatado (MANTIDA, mas só funciona se 'permite_pontuacao' for True) ---
+    // --- Lógica do Fato Constatado (Seletor) ---
+    // Esta lógica agora funciona tanto para CTSP quanto para CSPM/CBFPM,
+    // desde que 'fatos_predefinidos' exista.
     const fatoSearchInput = document.getElementById('fato_search_input');
     
-    // Este 'if' garante que o script só rode para CSPM/CBFPM
     if (fatoSearchInput) { 
         const fatoListContainer = document.getElementById('facts-list-container');
         const fatoHiddenInput = document.getElementById('fato_hidden_input');
@@ -309,6 +317,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 this.classList.add('selected');
                 
                 const fatoText = this.dataset.fato;
+                // Pega os pontos do 'data-pontos' (que será 0.0 para CTSP)
                 const pontos = this.dataset.pontos || 0.0;
                 
                 fatoHiddenInput.value = fatoText;
@@ -320,12 +329,12 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Função 'updateObservacao' (MANTIDA)
+    // Esta função já lidava bem com 'fatoText' nulo ou preenchido.
     function updateObservacaoComFato(fatoText) {
         let textoObservacao = observacaoTemplateOriginal;
 
-        // ### INÍCIO DA ALTERAÇÃO (LÓGICA CTSP) ###
         if (fatoText) {
-            // Se for CSPM/CBFPM, preenche o "incorreu no item..."
+            // Se um fato foi selecionado, preenche o "incorreu no item..."
             const regex = /^\(([^)]+)\)\s*(.*)$/;
             const match = fatoText.match(regex);
             let fatoDetalhes = fatoText;
@@ -337,16 +346,14 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             textoObservacao = textoObservacao.replace(/no item\.\.\./, `${fatoDetalhes};`);
         } else {
-            // Se for CTSP (fatoText = null), remove a linha do item
+            // Se nenhum fato selecionado (ou se for CTSP no início), remove a linha do item
             textoObservacao = textoObservacao.replace(/\nCom isso, incorreu no item\.\.\./, '');
         }
-        // ### FIM DA ALTERAÇÃO ###
         
         observacaoTextarea.value = textoObservacao;
     }
     
     // --- Lógica de Toggle do Formulário "Analisar" (MANTIDA) ---
-    // (O código que removeu o modal e corrigiu o travamento)
     const botoesToggleForm = document.querySelectorAll('.js-toggle-analise-form');
     botoesToggleForm.forEach(function(botao) {
         botao.addEventListener('click', function(event) {
