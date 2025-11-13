@@ -18,13 +18,15 @@
                 {% if current_user.role in ['admin_escola', 'programador', 'super_admin'] %}
                     <button class="btn btn-success justice-option-btn" data-target="newTransgressionContent">Nova Infração</button>
                     
+                    {% if permite_pontuacao %}
                     <a href="{{ url_for('justica.fada_lista_alunos') }}" class="btn btn-info">Avaliação FADA</a>
+                    {% endif %}
+                
                 {% endif %}
                 
                 {% if current_user.role in ['admin_escola', 'programador', 'super_admin'] and permite_pontuacao %}
                 <a href="{{ url_for('justica.exportar_selecao') }}" class="btn btn-info">Exportar para BI</a>
                 {% endif %}
-                
                 </div>
 
             <div class="justice-content active" id="inProgressContent">
@@ -137,7 +139,7 @@
 </div>
 
 <style>
-    /* Estilos CSS permanecem os mesmos */
+    /* Estilos CSS (sem alterações) */
     .justice-page-layout { display: grid; grid-template-columns: 1fr; gap: 1.5rem; }
     @media (min-width: 992px) { .justice-page-layout { grid-template-columns: 3fr 1fr; } }
     .analysis-card { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 1.5rem; border-radius: var(--border-radius); background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light)); color: white; text-decoration: none; transition: all 0.3s ease; border: 2px solid transparent; min-height: 150px; box-shadow: var(--shadow-soft); }
@@ -166,7 +168,7 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // --- Lógica das abas (MANTIDA) ---
+    // --- Lógica das abas (sem alterações) ---
     const optionBtns = document.querySelectorAll('.justice-option-btn');
     const contentDivs = document.querySelectorAll('.justice-content');
     optionBtns.forEach(btn => {
@@ -181,7 +183,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // --- Elementos do Formulário (MANTIDOS) ---
+    // --- Elementos do Formulário (sem alterações) ---
     const alunoSearchInput = document.getElementById('aluno_search_input');
     const alunoResults = document.getElementById('aluno_results');
     const alunoHiddenInput = document.getElementById('aluno_id_hidden');
@@ -191,7 +193,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     let observacaoTemplateOriginal = '';
 
-    // --- Busca de Aluno (MANTIDA) ---
+    // --- Busca de Aluno (sem alterações) ---
     if (alunoSearchInput) {
         let searchTimeout;
         alunoSearchInput.addEventListener('input', function() {
@@ -252,17 +254,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     observacaoTextarea.value = observacaoTemplateOriginal;
                     transgressionFields.style.display = 'block';
 
-                    // Esta lógica agora está correta.
-                    // Ela vai limpar a seleção de infração para AMBOS os casos,
-                    // forçando o usuário a selecionar uma (seja CTSP ou CSPM).
-                    
-                    // Limpa o item 'incorreu...'
                     updateObservacaoComFato(null); 
                     
-                    // Garante que os pontos estejam zerados até a seleção
                     document.getElementById('fato_pontos').value = '0.0';
 
-                    // Reseta a seleção visual da lista (se ela existir)
                     const fatoHiddenInput = document.getElementById('fato_hidden_input');
                     if (fatoHiddenInput) {
                         fatoHiddenInput.value = '';
@@ -292,9 +287,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // --- Lógica do Fato Constatado (Seletor) ---
-    // Esta lógica agora funciona tanto para CTSP quanto para CSPM/CBFPM,
-    // desde que 'fatos_predefinidos' exista.
+    // --- Lógica do Fato Constatado (Seletor) (sem alterações) ---
     const fatoSearchInput = document.getElementById('fato_search_input');
     
     if (fatoSearchInput) { 
@@ -317,7 +310,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 this.classList.add('selected');
                 
                 const fatoText = this.dataset.fato;
-                // Pega os pontos do 'data-pontos' (que será 0.0 para CTSP)
                 const pontos = this.dataset.pontos || 0.0;
                 
                 fatoHiddenInput.value = fatoText;
@@ -328,13 +320,11 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Função 'updateObservacao' (MANTIDA)
-    // Esta função já lidava bem com 'fatoText' nulo ou preenchido.
+    // --- Função 'updateObservacao' (sem alterações) ---
     function updateObservacaoComFato(fatoText) {
         let textoObservacao = observacaoTemplateOriginal;
 
         if (fatoText) {
-            // Se um fato foi selecionado, preenche o "incorreu no item..."
             const regex = /^\(([^)]+)\)\s*(.*)$/;
             const match = fatoText.match(regex);
             let fatoDetalhes = fatoText;
@@ -346,14 +336,13 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             textoObservacao = textoObservacao.replace(/no item\.\.\./, `${fatoDetalhes};`);
         } else {
-            // Se nenhum fato selecionado (ou se for CTSP no início), remove a linha do item
             textoObservacao = textoObservacao.replace(/\nCom isso, incorreu no item\.\.\./, '');
         }
         
         observacaoTextarea.value = textoObservacao;
     }
     
-    // --- Lógica de Toggle do Formulário "Analisar" (MANTIDA) ---
+    // --- Lógica de Toggle do Formulário "Analisar" (sem alterações) ---
     const botoesToggleForm = document.querySelectorAll('.js-toggle-analise-form');
     botoesToggleForm.forEach(function(botao) {
         botao.addEventListener('click', function(event) {
