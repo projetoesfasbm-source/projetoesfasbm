@@ -1,9 +1,9 @@
 # backend/services/justica_service.py
 
 # ### INÍCIO DA ALTERAÇÃO ###
-# Importar 'render_template' para gerar o HTML do e-mail
-# e 'EmailService' para enviá-lo
-from flask import g, url_for, session, render_template
+# Importar 'render_template' não é mais necessário aqui, mas url_for é.
+# Importar 'EmailService' para enviá-lo
+from flask import g, url_for, session, render_template # render_template é usado no FADA
 from ..services.email_service import EmailService
 # ### FIM DA ALTERAÇÃO ###
 
@@ -15,7 +15,7 @@ from ..models.user import User
 from ..models.turma import Turma
 from ..models.user_school import UserSchool
 from ..models.processo_disciplina import ProcessoDisciplina
-from ..models.fada_avaliacao import FadaAvaliacao 
+from ..models.fada_avaliacao import FadaAvaliacao
 from ..services.notification_service import NotificationService
 from sqlalchemy.orm import joinedload
 from sqlalchemy.exc import SQLAlchemyError
@@ -71,7 +71,9 @@ class JusticaService:
         if not aluno:
             return False, "Aluno não encontrado."
         
-        if not aluno.user or not aluno.user.email:
+        # ### CORREÇÃO: Busca o 'aluno.user' para passar aos serviços
+        aluno_user = aluno.user
+        if not aluno_user or not aluno_user.email:
              return False, "Este aluno não possui um usuário ou e-mail associado. Não é possível notificá-lo."
 
         try:
@@ -85,27 +87,34 @@ class JusticaService:
             )
             db.session.add(novo_processo)
             
-            # ### INÍCIO DA ALTERAÇÃO ###
-            # 1. Gerar o conteúdo HTML do e-mail usando o template
-            html_content = render_template(
-                'email/notificacao_justica.html', 
-                aluno=aluno, 
-                processo=novo_processo
+            # ######################################################
+            # ### INÍCIO DA CORREÇÃO DE HOJE ###
+            # ######################################################
+            # Força o banco a popular os defaults (como ID e data_ocorrencia)
+            # ANTES de passar o objeto 'novo_processo' para o template de e-mail.
+            db.session.flush()
+            # ######################################################
+            # ### FIM DA CORREÇÃO DE HOJE ###
+            # ######################################################
+
+            # ### INÍCIO DA CORREÇÃO ANTERIOR (E-MAIL) ###
+            # 1. Gerar a URL para os links
+            url_notificacao = url_for('justica.index', _external=True)
+
+            # 2. Enviar o e-mail para o aluno usando o serviço correto
+            # O EmailService já tem o template e as variáveis corretas (incluindo 'user')
+            EmailService.send_justice_notification_email(
+                user=aluno_user,
+                processo=novo_processo, # Agora 'novo_processo' tem a data_ocorrencia
+                url=url_notificacao
             )
-            
-            # 2. Enviar o e-mail para o aluno
-            EmailService.send_generic_email(
-                to_email=aluno.user.email,
-                subject="Novo Processo Disciplinar Registrado",
-                html_content=html_content
-            )
-            # ### FIM DA ALTERAÇÃO ###
+            # ### FIM DA CORREÇÃO ANTERIOR (E-MAIL) ###
 
             # 3. Criar a notificação interna (sininho)
             NotificationService.create_notification(
-                user_id=aluno.user.id,
+                user_id=aluno_user.id,
                 message=f"Novo Processo Disciplinar: {fato}", 
-                url=url_for('justica.index', _external=True)
+                url=url_notificacao
             )
             
             # 4. Salvar tudo no banco
@@ -118,7 +127,7 @@ class JusticaService:
             return False, f"Erro de banco de dados: {e}"
         except Exception as e:
             db.session.rollback()
-            # Adiciona um log mais detalhado em caso de falha no envio do e-mail
+            # Este 'except' pega o erro 'strftime'
             return False, f"Erro inesperado ao criar processo (verifique as configurações de e-mail): {e}"
 
     @staticmethod
@@ -181,12 +190,9 @@ class JusticaService:
         if processo.status not in ['Defesa Enviada', 'Aluno Notificado', 'Aguardando Ciência']:
              return False, "Este processo não está em fase de finalização."
         
-        # ### INÍCIO DA ALTERAÇÃO ###
-        # Busca o e-mail do aluno para a notificação
         aluno_user = getattr(getattr(processo, 'aluno', None), 'user', None)
         if not aluno_user or not aluno_user.email:
              return False, "Não foi possível encontrar o usuário ou e-mail do aluno para notificar."
-        # ### FIM DA ALTERAÇÃO ###
 
         try:
             processo.decisao_final = decisao
@@ -195,19 +201,13 @@ class JusticaService:
             processo.data_decisao = datetime.now(timezone.utc)
             processo.status = 'Finalizado'
             
-            # ### INÍCIO DA ALTERAÇÃO ###
-            # Envia e-mail de notificação da decisão
-            html_content = render_template(
-                'email/veredito_justica.html', 
-                aluno=processo.aluno, 
+            # ### INÍCIO DA CORREÇÃO ANTERIOR (E-MAIL) ###
+            # Envia e-mail de notificação da decisão usando o serviço correto
+            EmailService.send_justice_verdict_email(
+                user=aluno_user,
                 processo=processo
             )
-            EmailService.send_generic_email(
-                to_email=aluno_user.email,
-                subject=f"Decisão do Processo Disciplinar nº {processo.id}",
-                html_content=html_content
-            )
-            # ### FIM DA ALTERAÇÃO ###
+            # ### FIM DA CORREÇÃO ANTERIOR (E-MAIL) ###
 
             # Cria notificação interna
             NotificationService.create_notification(
@@ -216,6 +216,7 @@ class JusticaService:
                 url=url_for('justica.index', _external=True)
             )
             
+            # O flush não é necessário aqui, pois o commit() vem antes de qualquer erro
             db.session.commit()
             
             return True, "Processo finalizado e aluno notificado por e-mail!"
@@ -341,10 +342,16 @@ class JusticaService:
         return db.session.scalar(query)
 
     @staticmethod
-    def salvar_fada(form_data, aluno_id, avaliador_id):
+    # ### CORREÇÃO DE BUG ANTERIOR: Adicionado 'nome_avaliador_custom' que estava faltando ###
+    def salvar_fada(form_data, aluno_id, avaliador_id, nome_avaliador_custom):
         """Cria ou atualiza uma avaliação FADA para um aluno."""
         try:
-            avaliacao = FadaAvaliacao(aluno_id=aluno_id, avaliador_id=avaliador_id)
+            # ### CORREÇÃO DE BUG ANTERIOR: Passa o 'nome_avaliador_custom' para o modelo ###
+            avaliacao = FadaAvaliacao(
+                aluno_id=aluno_id, 
+                avaliador_id=avaliador_id,
+                nome_avaliador_custom=nome_avaliador_custom
+            )
 
             # Mapeia os 18 atributos
             for i in range(1, 19):
