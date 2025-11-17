@@ -14,6 +14,7 @@ from ..models.disciplina import Disciplina
 from ..models.ciclo import Ciclo
 from ..models.turma import Turma
 from ..services.disciplina_service import DisciplinaService
+from ..services.turma_service import TurmaService # <-- IMPORT ADICIONADO
 from ..services.user_service import UserService
 from utils.decorators import admin_or_programmer_required, school_admin_or_programmer_required, can_view_management_pages_required
 
@@ -25,7 +26,7 @@ class DisciplinaForm(FlaskForm):
     carga_horaria_cumprida = IntegerField('Carga Horária Já Cumprida', validators=[Optional(), NumberRange(min=0)], default=0)
     ciclo_id = SelectField('Ciclo', coerce=int, validators=[DataRequired()])
     turma_ids = SelectMultipleField('Turmas', coerce=int, validators=[DataRequired(message="Selecione pelo menos uma turma.")],
-                                    option_widget=CheckboxInput(), widget=ListWidget(prefix_label=False))
+                                      option_widget=CheckboxInput(), widget=ListWidget(prefix_label=False))
     submit = SubmitField('Salvar')
 
 class DeleteForm(FlaskForm):
@@ -41,14 +42,27 @@ def listar_disciplinas():
         return redirect(url_for('main.dashboard'))
         
     turma_selecionada_id = request.args.get('turma_id', type=int)
-    turmas_disponiveis = db.session.scalars(select(Turma).where(Turma.school_id == school_id).order_by(Turma.nome)).all()
+    
+    # --- REFATORADO ---
+    # Busca turmas e disciplinas usando os serviços
+    turmas_disponiveis = TurmaService.get_turmas_by_school(school_id)
+    todas_disciplinas = DisciplinaService.get_disciplinas_by_school(school_id)
 
-    disciplinas_com_progresso = []
+    disciplinas_filtradas = []
     if turma_selecionada_id:
-        turma_obj = db.session.get(Turma, turma_selecionada_id)
-        for d in turma_obj.disciplinas:
-            progresso = DisciplinaService.get_dados_progresso(d, turma_obj.nome)
-            disciplinas_com_progresso.append({'disciplina': d, 'progresso': progresso})
+        # Filtra a lista em Python
+        disciplinas_filtradas = [d for d in todas_disciplinas if d.turma_id == turma_selecionada_id]
+    else:
+        # Mostra todas as disciplinas da escola
+        disciplinas_filtradas = todas_disciplinas
+
+    # Processa apenas a lista filtrada
+    disciplinas_com_progresso = []
+    for d in disciplinas_filtradas:
+        # d.turma já deve estar carregado (ou será pego da sessão do db)
+        progresso = DisciplinaService.get_dados_progresso(d, d.turma.nome) 
+        disciplinas_com_progresso.append({'disciplina': d, 'progresso': progresso})
+    # --- FIM DA REFATORAÇÃO ---
 
     delete_form = DeleteForm()
     
@@ -70,7 +84,11 @@ def adicionar_disciplina():
     form = DisciplinaForm()
     ciclos = db.session.scalars(select(Ciclo).order_by(Ciclo.nome)).all()
     form.ciclo_id.choices = [(c.id, c.nome) for c in ciclos]
-    turmas = db.session.scalars(select(Turma).where(Turma.school_id == school_id).order_by(Turma.nome)).all()
+    
+    # --- REFATORADO ---
+    turmas = TurmaService.get_turmas_by_school(school_id)
+    # ------------------
+    
     form.turma_ids.choices = [(t.id, t.nome) for t in turmas]
     
     if form.validate_on_submit():

@@ -38,10 +38,21 @@ class DeleteForm(FlaskForm):
 @can_view_management_pages_required
 def listar_turmas():
     delete_form = DeleteForm()
-    turmas = db.session.scalars(select(Turma).order_by(Turma.nome)).all()
+    
+    # --- INÍCIO DA CORREÇÃO ---
+    # O bug estava aqui. A consulta buscava TODAS as turmas do banco.
+    # Agora, buscamos o school_id e usamos o serviço para filtrar as turmas.
+    school_id = UserService.get_current_school_id()
+    if not school_id:
+        flash('Nenhuma escola associada ou selecionada.', 'warning')
+        return redirect(url_for('main.dashboard'))
+        
+    turmas = TurmaService.get_turmas_by_school(school_id)
+    # --- FIM DA CORREÇÃO ---
 
     if current_user.role == 'aluno' and current_user.aluno_profile and current_user.aluno_profile.turma_id:
         user_turma_id = current_user.aluno_profile.turma_id
+        # A lógica de ordenação para o aluno permanece
         turmas = sorted(turmas, key=lambda t: t.id != user_turma_id)
 
     return render_template('listar_turmas.html', turmas=turmas, delete_form=delete_form)
@@ -50,10 +61,15 @@ def listar_turmas():
 @login_required
 @can_view_management_pages_required
 def detalhes_turma(turma_id):
+    school_id = UserService.get_current_school_id()
     turma = db.session.get(Turma, turma_id)
-    if not turma:
-        flash('Turma não encontrada.', 'danger')
+    
+    # --- CORREÇÃO DE SEGURANÇA ---
+    # Impede que um usuário veja detalhes de uma turma de outra escola
+    if not turma or turma.school_id != school_id:
+        flash('Turma não encontrada ou não pertence a esta escola.', 'danger')
         return redirect(url_for('turma.listar_turmas'))
+    # --- FIM DA CORREÇÃO ---
     
     cargos_atuais = TurmaService.get_cargos_da_turma(turma_id, CARGOS_LISTA)
     
@@ -64,7 +80,14 @@ def detalhes_turma(turma_id):
 @login_required
 @school_admin_or_programmer_required
 def salvar_cargos_turma(turma_id):
-    # O formulário WTForms não é mais necessário aqui, pois os dados vêm do modal
+    # --- CORREÇÃO DE SEGURANÇA (Verificação) ---
+    school_id = UserService.get_current_school_id()
+    turma = db.session.get(Turma, turma_id)
+    if not turma or turma.school_id != school_id:
+        flash('Turma não encontrada ou não pertence a esta escola.', 'danger')
+        return redirect(url_for('turma.listar_turmas'))
+    # --- FIM DA CORREÇÃO ---
+
     success, message = TurmaService.atualizar_cargos(turma_id, request.form)
     flash(message, 'success' if success else 'danger')
     return redirect(url_for('turma.detalhes_turma', turma_id=turma_id))
@@ -80,6 +103,7 @@ def cadastrar_turma():
         flash('Não foi possível identificar a escola. Por favor, contate o suporte.', 'danger')
         return redirect(url_for('turma.listar_turmas'))
 
+    # Esta consulta já estava correta, filtrando por school_id.
     alunos_sem_turma = db.session.scalars(
         select(Aluno).join(User).join(UserSchool).where(
             Aluno.turma_id.is_(None),
@@ -100,13 +124,27 @@ def cadastrar_turma():
 @login_required
 @school_admin_or_programmer_required
 def editar_turma(turma_id):
+    school_id = UserService.get_current_school_id()
     turma = db.session.get(Turma, turma_id)
-    if not turma:
-        flash('Turma não encontrada.', 'danger')
+    
+    # --- CORREÇÃO DE SEGURANÇA ---
+    if not turma or turma.school_id != school_id:
+        flash('Turma não encontrada ou não pertence a esta escola.', 'danger')
         return redirect(url_for('turma.listar_turmas'))
+    # --- FIM DA CORREÇÃO ---
     
     form = TurmaForm(obj=turma)
-    alunos_disponiveis = db.session.scalars(select(Aluno).join(User).where(or_(Aluno.turma_id.is_(None), Aluno.turma_id == turma_id)).order_by(User.nome_completo)).all()
+    
+    # --- CORREÇÃO DE VAZAMENTO DE DADOS ---
+    # A consulta anterior não filtrava por escola, mostrando alunos de outras escolas.
+    alunos_disponiveis = db.session.scalars(
+        select(Aluno).join(User).join(UserSchool).where(
+            UserSchool.school_id == school_id, # <-- FILTRO DE ESCOLA ADICIONADO
+            or_(Aluno.turma_id.is_(None), Aluno.turma_id == turma_id)
+        ).order_by(User.nome_completo)
+    ).all()
+    # --- FIM DA CORREÇÃO ---
+    
     form.alunos_ids.choices = [(a.id, f"{a.user.nome_completo} ({a.user.matricula})") for a in alunos_disponiveis]
     
     if form.validate_on_submit():
@@ -124,6 +162,14 @@ def editar_turma(turma_id):
 @login_required
 @school_admin_or_programmer_required
 def excluir_turma(turma_id):
+    # --- CORREÇÃO DE SEGURANÇA ---
+    school_id = UserService.get_current_school_id()
+    turma = db.session.get(Turma, turma_id)
+    if not turma or turma.school_id != school_id:
+        flash('Turma não encontrada ou não pertence a esta escola.', 'danger')
+        return redirect(url_for('turma.listar_turmas'))
+    # --- FIM DA CORREÇÃO ---
+
     form = DeleteForm()
     if form.validate_on_submit():
         success, message = TurmaService.delete_turma(turma_id)

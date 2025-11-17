@@ -74,11 +74,19 @@ class AlunoService:
             view_as = session.get('view_as_school_id')
             if view_as:
                 school_filter_ids = [int(view_as)]
+            # --- INÍCIO DA CORREÇÃO ---
+            # Se 'view_as' for None (escola nova), definimos como lista vazia []
+            # para forçar o filtro a não retornar nada.
+            else:
+                school_filter_ids = []
+            # --- FIM DA CORREÇÃO ---
         else:
             school_filter_ids = [us.school_id for us in getattr(user, 'user_schools', [])] or []
 
+        # Agora, 'school_filter_ids' nunca será None, e o filtro será aplicado
         if school_filter_ids is not None:
             if not school_filter_ids:
+                # Se a lista estiver vazia (escola nova), retorna uma página vazia
                 return db.paginate(select(Aluno).where(db.false()), page=page, per_page=per_page)
             stmt = stmt.where(UserSchool.school_id.in_(school_filter_ids))
 

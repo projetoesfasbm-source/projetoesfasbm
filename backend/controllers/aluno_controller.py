@@ -11,6 +11,7 @@ import json
 
 from ..models.database import db
 from ..services.aluno_service import AlunoService
+from ..services.turma_service import TurmaService # <-- IMPORT ADICIONADO
 from ..models.user import User
 from ..models.aluno import Aluno
 from ..models.turma import Turma
@@ -98,7 +99,11 @@ def listar_alunos():
         return redirect(url_for('main.dashboard'))
 
     alunos_paginados = AlunoService.get_all_alunos(current_user, nome_turma=turma_filtrada, search_term=search_term, page=page, per_page=15)
-    turmas = db.session.scalars(select(Turma).where(Turma.school_id==school_id).order_by(Turma.nome)).all()
+    
+    # --- REFATORADO ---
+    # Chamando o serviço em vez de consultar o DB diretamente.
+    turmas = TurmaService.get_turmas_by_school(school_id)
+    # ------------------
     
     return render_template(
         'listar_alunos.html', 
@@ -124,7 +129,12 @@ def editar_aluno(aluno_id):
         return redirect(url_for('aluno.listar_alunos'))
 
     form = EditAlunoForm(obj=aluno)
-    turmas = db.session.scalars(select(Turma).where(Turma.school_id==school_id).order_by(Turma.nome)).all()
+    
+    # --- REFATORADO ---
+    # Chamando o serviço em vez de consultar o DB diretamente.
+    turmas = TurmaService.get_turmas_by_school(school_id)
+    # ------------------
+    
     form.turma_id.choices = [(t.id, t.nome) for t in turmas]
 
     if request.method == 'GET':
@@ -156,7 +166,7 @@ def editar_aluno(aluno_id):
     if form.is_submitted() and 'funcao_atual' not in request.form:
          categoria_selecionada = form.posto_categoria.data
          if categoria_selecionada in posto_graduacao_structured:
-              form.posto_graduacao.choices = [(p, p) for p in posto_graduacao_structured[categoria_selecionada]]
+             form.posto_graduacao.choices = [(p, p) for p in posto_graduacao_structured[categoria_selecionada]]
 
     if form.validate_on_submit() and 'funcao_atual' not in request.form:
         success, message = AlunoService.update_aluno(aluno_id, form.data)

@@ -1,4 +1,4 @@
-# backend/services/horario_service.py (Versão Completa Corrigida)
+# backend/services/horario_service.py
 
 from flask import current_app, url_for
 from flask_login import current_user
@@ -17,6 +17,10 @@ from ..models.semana import Semana
 from ..models.turma import Turma
 from ..models.user import User
 from .notification_service import NotificationService
+# --- IMPORT ADICIONADO ---
+# Importa o serviço de instrutor para usarmos a busca filtrada
+from .instrutor_service import InstrutorService 
+# -------------------------
 
 
 class HorarioService:
@@ -153,6 +157,7 @@ class HorarioService:
         if not turma_obj:
             return {'success': False, 'message': 'Turma não encontrada.'}
 
+        # A busca de disciplinas está correta, pois é filtrada pela turma (que é da escola)
         disciplinas_disponiveis = []
         if is_admin:
             disciplinas_da_turma = db.session.scalars(
@@ -185,15 +190,15 @@ class HorarioService:
                     {"id": d.id, "nome": d.materia, "restantes": horas_restantes}
                 )
 
+        # --- CORREÇÃO DO VAZAMENTO DE DADOS ---
+        # A consulta anterior (select(Instrutor).all()) buscava todos os instrutores
+        # do banco. Agora, usamos o serviço corrigido que filtra pela escola do usuário.
+        instrutores_paginados = InstrutorService.get_all_instrutores(user=user)
         todos_instrutores = [
             {"id": i.id, "nome": i.user.nome_de_guerra or i.user.username}
-            for i in db.session.scalars(
-                select(Instrutor)
-                .options(joinedload(Instrutor.user))
-                .join(User)
-                .order_by(User.nome_de_guerra)
-            ).all()
+            for i in instrutores_paginados.items # .items pois o serviço retorna um objeto de paginação
         ]
+        # --- FIM DA CORREÇÃO ---
 
         return {
             'success': True,
@@ -201,7 +206,7 @@ class HorarioService:
             'pelotao_selecionado': pelotao,
             'semana_selecionada': semana,
             'disciplinas_disponiveis': disciplinas_disponiveis,
-            'todos_instrutores': todos_instrutores,
+            'todos_instrutores': todos_instrutores, # Lista agora está filtrada
             'is_admin': is_admin,
             'instrutor_logado_id': user.instrutor_profile.id if user.instrutor_profile else None,
             'datas_semana': HorarioService.get_datas_da_semana(semana),
@@ -525,7 +530,7 @@ class HorarioService:
             if aula_pendente.group_id:
                 db.session.query(Horario).filter(Horario.group_id == aula_pendente.group_id).delete()
             else:
-                 # Se for uma aula única, mas com o mesmo ID passado no form
+                # Se for uma aula única, mas com o mesmo ID passado no form
                 db.session.delete(aula_pendente) 
             
             db.session.flush() # Aplica a remoção antes de inserir
@@ -561,7 +566,7 @@ class HorarioService:
 
             total_orig = sum(h.duracao for h in db.session.scalars(select(Horario).where(Horario.group_id == aula_pendente.group_id)).all()) if aula_pendente.group_id else aula_pendente.duracao
             if len(periodos_para_aprovar) != total_orig:
-                 message = "Aula parcialmente aprovada com sucesso."
+                message = "Aula parcialmente aprovada com sucesso."
 
             notif_msg_instrutor = f"Sua aula de {aula_pendente.disciplina.materia} foi aprovada."
             notif_msg_alunos = f"Nova aula de {aula_pendente.disciplina.materia} agendada."

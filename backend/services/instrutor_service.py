@@ -128,7 +128,14 @@ class InstrutorService:
     def _visible_school_ids_for(user) -> list[int] | None:
         if getattr(user, "role", None) in ("super_admin", "programador"):
             sid = session.get("view_as_school_id")
-            return [int(sid)] if sid else None
+            
+            # --- LINHA CORRIGIDA ---
+            # Se 'sid' for None (admin não está personificando), retorna [] (lista vazia)
+            # em vez de None. Isso força o 'get_all_instrutores' a não retornar
+            # nada, corrigindo o vazamento de dados.
+            return [int(sid)] if sid else []
+            # --- FIM DA CORREÇÃO ---
+
         ids = [us.school_id for us in getattr(user, "user_schools", [])]
         return ids or []
 

@@ -94,7 +94,31 @@ class DisciplinaService:
             current_app.logger.error(f"Erro ao atualizar disciplina: {e}")
             return False, 'Ocorreu um erro interno ao atualizar a disciplina.'
 
-    # ... (o resto do arquivo, incluindo get_dados_progresso, delete_disciplina, etc., pode permanecer o mesmo)
+    # --- FUNÇÃO ADICIONADA ---
+    # Esta função busca todas as disciplinas de UMA escola, corrigindo o vazamento
+    # de dados que acontece no Quadro de Horário.
+    @staticmethod
+    def get_disciplinas_by_school(school_id):
+        """
+        Busca todas as disciplinas pertencentes a uma escola específica,
+        juntando com as turmas para filtrar pelo school_id.
+        """
+        if not school_id:
+            current_app.logger.warn("Tentativa de buscar disciplinas sem um school_id.")
+            return []
+            
+        try:
+            return db.session.scalars(
+                select(Disciplina)
+                .join(Disciplina.turma)
+                .where(Turma.school_id == school_id)
+                .order_by(Turma.nome, Disciplina.materia)
+            ).all()
+        except Exception as e:
+            current_app.logger.error(f"Erro ao buscar disciplinas por escola: {e}")
+            return []
+    # --- FIM DA FUNÇÃO ADICIONADA ---
+
     @staticmethod
     def get_dados_progresso(disciplina, pelotao_nome=None):
         today = date.today()

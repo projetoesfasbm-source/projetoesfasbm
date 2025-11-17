@@ -25,6 +25,7 @@ from ..services.site_config_service import SiteConfigService
 from utils.decorators import admin_or_programmer_required, can_schedule_classes_required
 from ..services.horario_service import HorarioService
 from ..services.user_service import UserService
+from ..services.turma_service import TurmaService # <-- IMPORT ADICIONADO
 
 horario_bp = Blueprint('horario', __name__, url_prefix='/horario')
 
@@ -70,7 +71,10 @@ def index():
             flash("Nenhuma escola associada ou selecionada.", "warning")
             return redirect(url_for('main.dashboard'))
         
-        todas_as_turmas = db.session.scalars(select(Turma).where(Turma.school_id == school_id).order_by(Turma.nome)).all()
+        # --- REFATORADO ---
+        todas_as_turmas = TurmaService.get_turmas_by_school(school_id)
+        # ------------------
+        
         turma_selecionada_nome = request.args.get('pelotao', session.get('ultima_turma_visualizada'))
         
         if not turma_selecionada_nome and todas_as_turmas:

@@ -91,6 +91,30 @@ class TurmaService:
             current_app.logger.error(f"Erro ao excluir turma: {e}")
             return False, f'Erro ao excluir a turma: {str(e)}'
 
+    # --- FUNÇÃO ADICIONADA ---
+    # Esta função busca turmas filtrando pelo school_id, corrigindo o vazamento
+    # de dados em telas como a de cadastro de aluno.
+    @staticmethod
+    def get_turmas_by_school(school_id):
+        """
+        Busca todas as turmas pertencentes a uma escola específica.
+        Esta é a função correta para preencher dropdowns e listagens.
+        """
+        if not school_id:
+            current_app.logger.warn("Tentativa de buscar turmas sem um school_id.")
+            return []
+            
+        try:
+            return db.session.scalars(
+                select(Turma)
+                .where(Turma.school_id == school_id)
+                .order_by(Turma.nome)
+            ).all()
+        except Exception as e:
+            current_app.logger.error(f"Erro ao buscar turmas por escola: {e}")
+            return []
+    # --- FIM DA FUNÇÃO ADICIONADA ---
+
     @staticmethod
     def get_cargos_da_turma(turma_id, cargos_lista):
         """Busca os cargos de uma turma e garante que todos da lista existam."""
