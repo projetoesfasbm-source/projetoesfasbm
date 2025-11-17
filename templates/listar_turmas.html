@@ -16,8 +16,8 @@
             <a href="{{ url_for('turma.cadastrar_turma') }}" class="btn btn-primary">
                 <span>+</span> Cadastrar Nova Turma
             </a>
-            <button type="button" class="btn btn-warning" data-modal-target="#editModal">Editar Turma</button>
-            <button type="button" class="btn btn-danger" data-modal-target="#deleteModal">Excluir Turma</button>
+            <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#editModal">Editar Turma</button>
+            <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteModal">Excluir Turma</button>
         </div>
         {% endif %}
     </div>
@@ -126,50 +126,67 @@
 </style>
 {% endblock %}
 
+
 {% block modals %}
-<div class="modal-overlay" id="editModal">
-    <div class="modal-content">
-        <h3>Selecione a turma para editar</h3>
-        <div class="form-group">
-            <label for="turmaEditSelect">Turma</label>
-            <select id="turmaEditSelect" class="form-control">
-                <option value="">-- Selecione uma turma --</option>
-                {% for turma in turmas %}
-                <option value="{{ turma.id }}">{{ turma.nome }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="form-actions">
-            <button type="button" class="btn btn-secondary" data-modal-close>Cancelar</button>
-            <button type="button" class="btn btn-primary" onclick="confirmEdit()">Confirmar</button>
+<div class="modal fade" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editModalLabel">Selecione a turma para editar</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="turmaEditSelect">Turma</label>
+                    <select id="turmaEditSelect" class="form-control">
+                        <option value="">-- Selecione uma turma --</option>
+                        {% for turma in turmas %}
+                        <option value="{{ turma.id }}">{{ turma.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="confirmEditButton">Confirmar</button>
+            </div>
         </div>
     </div>
 </div>
 
-<div class="modal-overlay" id="deleteModal">
-    <div class="modal-content">
-        <h3>Selecione a turma para excluir</h3>
-        <form id="deleteForm" method="POST" action="#" onsubmit="return confirm('ATENÇÃO: Excluir esta turma irá desvincular todos os alunos e remover todos os vínculos de disciplinas e cargos associados a ela. Esta ação não pode ser desfeita. Deseja continuar?');">
-            {{ delete_form.hidden_tag() }}
-            <div class="form-group">
-                <label for="turmaDeleteSelect">Turma</label>
-                <select id="turmaDeleteSelect" class="form-control" name="turma_id" required>
-                    <option value="">-- Selecione uma turma --</option>
-                    {% for turma in turmas %}
-                    <option value="{{ turma.id }}">{{ turma.nome }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="form-actions">
-                <button type="button" class="btn btn-secondary" data-modal-close>Cancelar</button>
-                <button type="submit" class="btn btn-danger">Excluir Turma</button>
-            </div>
-        </form>
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form id="deleteForm" method="POST" action="#" onsubmit="return confirm('ATENÇÃO: Excluir esta turma irá desvincular todos os alunos e remover todos os vínculos de disciplinas e cargos associados a ela. Esta ação não pode ser desfeita. Deseja continuar?');">
+                {{ delete_form.hidden_tag() }}
+                <div class="modal-header">
+                    <h5 class="modal-title" id="deleteModalLabel">Selecione a turma para excluir</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="turmaDeleteSelect">Turma</label>
+                        <select id="turmaDeleteSelect" class="form-control" name="turma_id" required>
+                            <option value="">-- Selecione uma turma --</option>
+                            {% for turma in turmas %}
+                            <option value="{{ turma.id }}">{{ turma.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-danger">Excluir Turma</button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    
+    // Função para o botão "Confirmar" do modal de edição
     function confirmEdit() {
         const select = document.getElementById('turmaEditSelect');
         const turmaId = select.value;
@@ -180,17 +197,25 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    document.querySelector('#editModal .btn-primary').addEventListener('click', confirmEdit);
+    // Adiciona o listener ao botão "Confirmar"
+    const confirmEditBtn = document.getElementById('confirmEditButton');
+    if (confirmEditBtn) {
+        confirmEditBtn.addEventListener('click', confirmEdit);
+    }
 
-    document.getElementById('turmaDeleteSelect').addEventListener('change', function() {
-        const turmaId = this.value;
-        const form = document.getElementById('deleteForm');
-        if (turmaId) {
-            form.action = `/turma/excluir/${turmaId}`;
-        } else {
-            form.action = '#';
-        }
-    });
+    // Adiciona o listener ao <select> do modal de exclusão
+    const deleteSelectEl = document.getElementById('turmaDeleteSelect');
+    if (deleteSelectEl) {
+        deleteSelectEl.addEventListener('change', function() {
+            const turmaId = this.value;
+            const form = document.getElementById('deleteForm');
+            if (turmaId) {
+                form.action = `/turma/excluir/${turmaId}`;
+            } else {
+                form.action = '#';
+            }
+        });
+    }
 });
 </script>
 {% endblock %}
