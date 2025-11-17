@@ -5,7 +5,7 @@
 {% block content %}
 <div class="content-header">
     <h1>Editar Turma</h1>
-    <p>Modifique o nome, o ano e os alunos pertencentes à turma.</p>
+    <p>Modifique o nome, o ano, o status e os alunos pertencentes à turma.</p>
 </div>
 
 <div class="table-container" style="max-width: 700px; margin: 0 auto;">
@@ -22,6 +22,12 @@
         <div class="form-group">
             {{ form.ano.label }}
             {{ form.ano(class="form-control") }}
+        </div>
+        
+        <div class="form-group">
+            {{ form.status.label }}
+            {{ form.status(class="form-control") }}
+            <small class="form-text text-muted">Defina se a turma está 'Em Andamento' (ativa) ou 'Concluída' (arquivada).</small>
         </div>
         <div class="form-group">
             {{ form.alunos_ids.label }}
@@ -69,7 +75,6 @@
 }
 </style>
 
-{# --- SCRIPT DE FILTRAGEM ADICIONADO AQUI --- #}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const searchInput = document.getElementById('aluno-search');
