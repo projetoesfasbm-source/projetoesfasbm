@@ -20,15 +20,15 @@
         <div class="header">
             <h2>Decisão de Processo Disciplinar</h2>
         </div>
-        
+
         <div class="content">
             <p>Prezado(a) <strong>{{ user.posto_graduacao or '' }} {{ user.nome_de_guerra or user.nome_completo }}</strong>,</p>
-            
+
             <p>O processo disciplinar <strong>#{{ processo.id }}</strong> foi analisado e finalizado pela administração.</p>
-            
+
             <div class="veredito-box {% if processo.decisao_final == 'Justificado' %}justificado{% else %}nao-justificado{% endif %}">
-                <h3 style="margin-top: 0;">Veredito Final: {{ processo.decisao_final }}</h3>
-                
+                <h3 style="margin-top: 0;">Decisão Final: {{ processo.decisao_final }}</h3>
+
                 <span class="label">Fundamentação da Decisão:</span>
                 <p>{{ processo.fundamentacao }}</p>
 
@@ -39,11 +39,11 @@
             </div>
 
             <p>Este processo foi encerrado e registrado em seu histórico.</p>
-            
+
             <p style="margin-top: 25px;">Atenciosamente,<br>
             Seção de Justiça e Disciplina</p>
             </div>
-        
+
         <div class="footer">
             <p>Este é um e-mail automático, por favor não responda.</p>
             <p>Sistema de Gerenciamento da Escola de Formação e Aperfeiçoamento de Sargentos (EsFAS)</p>
