@@ -88,8 +88,8 @@
                 </div>
                 <div class="form-group">
                     <label for="turma_id">Sua Turma (Seu Pelotão):</label>
-                    <select id="turma_id" name="turma_id" class="form-control" required>
-                        <option value="" disabled selected>-- Selecione sua Turma --</option>
+                    <select id="turma_id" name="turma_id" class="form-control">
+                        <option value="">Não sei ainda / Definir depois</option>
                         {% for turma in turmas %}
                             <option value="{{ turma.id }}">{{ turma.nome }}</option>
                         {% endfor %}
@@ -126,11 +126,11 @@
                     if (roleSelect.value === 'aluno') {
                         alunoFields.style.display = 'block';
                         opmInput.required = true;
-                        turmaSelect.required = true;
+                        // turmaSelect.required = true; // REMOVIDO PARA SER OPCIONAL
                     } else {
                         alunoFields.style.display = 'none';
                         opmInput.required = false;
-                        turmaSelect.required = false;
+                        // turmaSelect.required = false; // JÁ NÃO É REQUIRED
                     }
                 }
 

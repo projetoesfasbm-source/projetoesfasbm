@@ -160,11 +160,10 @@ def register():
 
         if role == "aluno":
             opm_value = form_data.get("opm", "Não informado")
-            # --- LÓGICA DE VÍNCULO DE TURMA ADICIONADA E MODIFICADA ---
+            # --- LÓGICA DE VÍNCULO DE TURMA ALTERADA (AGORA OPCIONAL) ---
             turma_id_value = form_data.get('turma_id')
-            if not turma_id_value:
-                flash("Se você é um aluno, por favor, selecione sua turma.", "danger")
-                return render_template("register.html", form_data=form_data, turmas=turmas)
+            
+            # Se vier vazio, vira None. Se vier valor, converte para int.
             turma_id = int(turma_id_value) if turma_id_value else None
             
             if not user.aluno_profile:
