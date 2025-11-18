@@ -88,7 +88,7 @@ class RelatorioService:
                 User.posto_graduacao, User.matricula, User.nome_completo,
                 Disciplina.materia, Disciplina.carga_horaria_prevista
             )
-            .order_by(User.nome_completo)
+            .order_by(User.matricula.asc())  # Alterado de nome_completo para matricula.asc()
         )
 
         # Aplica filtros opcionais de forma correta
