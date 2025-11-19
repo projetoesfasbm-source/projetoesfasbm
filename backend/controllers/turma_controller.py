@@ -5,12 +5,12 @@ from flask_login import login_required, current_user
 from sqlalchemy import select, or_
 from flask_wtf import FlaskForm
 from wtforms import StringField, IntegerField, SubmitField, SelectMultipleField
-from wtforms import SelectField  # <-- Importação mantida
+from wtforms import SelectField
 from wtforms.validators import DataRequired, Length, NumberRange, Optional
 from wtforms.widgets import CheckboxInput, ListWidget
 
 from ..models.database import db
-from ..models.turma import Turma, TurmaStatus  # <-- Importação mantida
+from ..models.turma import Turma, TurmaStatus
 from ..models.aluno import Aluno
 from ..models.user import User 
 from ..models.user_school import UserSchool
@@ -28,14 +28,12 @@ class TurmaForm(FlaskForm):
     nome = StringField('Nome da Turma', validators=[DataRequired(), Length(max=100)])
     ano = IntegerField('Ano da Turma', validators=[DataRequired(), NumberRange(min=2000, max=2100)])
     
-    # --- (MODIFICADO) CAMPO DE STATUS NO FORMULÁRIO ---
+    # O campo status é obrigatório no formulário
     status = SelectField(
         'Status da Turma',
-        # As 'choices' foram atualizadas para as 2 novas opções
         choices=[(s.value, s.name.replace('_', ' ').title()) for s in TurmaStatus],
         validators=[DataRequired()]
     )
-    # ---------------------------------------------------
 
     alunos_ids = SelectMultipleField('Alunos da Turma', coerce=int, validators=[Optional()],
                                      option_widget=CheckboxInput(), widget=ListWidget(prefix_label=False))
@@ -43,9 +41,6 @@ class TurmaForm(FlaskForm):
 
 class DeleteForm(FlaskForm):
     pass
-
-# --- NENHUMA MUDANÇA NECESSÁRIA NO RESTANTE DO ARQUIVO ---
-# ... (todo o resto do seu controller permanece exatamente igual) ...
 
 @turma_bp.route('/')
 @login_required
@@ -121,6 +116,13 @@ def cadastrar_turma():
         if success:
             return redirect(url_for('turma.listar_turmas'))
     
+    # --- (NOVO) TRATAMENTO DE ERRO SE A VALIDAÇÃO FALHAR ---
+    elif request.method == 'POST':
+        flash('Erro ao cadastrar turma. Verifique os campos destacados.', 'danger')
+        # Opcional: Logar os erros para debug se necessário
+        # current_app.logger.error(f"Erros no formulário de turma: {form.errors}")
+    # -------------------------------------------------------
+
     return render_template('cadastrar_turma.html', form=form)
 
 @turma_bp.route('/editar/<int:turma_id>', methods=['GET', 'POST'])
@@ -150,6 +152,11 @@ def editar_turma(turma_id):
         flash(message, 'success' if success else 'danger')
         if success:
             return redirect(url_for('turma.listar_turmas'))
+            
+    # --- (NOVO) TRATAMENTO DE ERRO PARA A EDIÇÃO TAMBÉM ---
+    elif request.method == 'POST':
+        flash('Erro ao editar turma. Verifique os campos destacados.', 'danger')
+    # -------------------------------------------------------
 
     if request.method == 'GET':
         form.alunos_ids.data = [a.id for a in turma.alunos]

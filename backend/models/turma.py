@@ -3,44 +3,50 @@ from __future__ import annotations
 import typing as t
 from .database import db
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from enum import Enum  # <-- Importação mantida
+from enum import Enum
 
 if t.TYPE_CHECKING:
     from .aluno import Aluno
     from .school import School
     from .disciplina import Disciplina 
 
-# --- (MODIFICADO) ENUM PARA OS STATUS DA TURMA ---
-# Simplificado para apenas dois estados
+# CORREÇÃO: Adicionados status antigos (ativa, cancelada) para não quebrar turmas velhas
 class TurmaStatus(str, Enum):
-    EM_ANDAMENTO = "EM_ANDAMENTO"  # Turma ativa (Default)
-    CONCLUIDA = "CONCLUIDA"        # Turma arquivada
-# --------------------------------------------------
+    # Novos status
+    EM_ANDAMENTO = "EM_ANDAMENTO"
+    CONCLUIDA = "CONCLUIDA"
+    
+    # Status Legados (Mantidos para compatibilidade com o que já existe no banco)
+    ATIVA = "ativa"
+    CANCELADA = "cancelada"
+    CONCLUIDA_OLD = "concluida" 
 
 class Turma(db.Model):
     __tablename__ = 'turmas'
 
     id: Mapped[int] = mapped_column(primary_key=True)
     nome: Mapped[str] = mapped_column(db.String(100), unique=True, nullable=False)
-    ano: Mapped[t.Optional[int]] = mapped_column(nullable=True)
+    
+    # CORREÇÃO: Alterado de int para String(20) para aceitar "2025/1"
+    ano: Mapped[str] = mapped_column(db.String(20), nullable=False)
+    
     school_id: Mapped[int] = mapped_column(db.ForeignKey('schools.id'), nullable=False)
 
-    # --- (MODIFICADO) CAMPO DE STATUS ---
-    # O default foi alterado para EM_ANDAMENTO
     status: Mapped[TurmaStatus] = mapped_column(
         db.String(30), 
         default=TurmaStatus.EM_ANDAMENTO, 
         server_default=TurmaStatus.EM_ANDAMENTO, 
         nullable=False
     )
-    # -----------------------------------------
 
-    # Relações existentes
+    # Relações
     alunos: Mapped[list["Aluno"]] = relationship(back_populates="turma")
     school: Mapped["School"] = relationship(back_populates="turmas")
     disciplinas: Mapped[list["Disciplina"]] = relationship(back_populates="turma", cascade="all, delete-orphan")
+    cargos: Mapped[list["TurmaCargo"]] = relationship(back_populates="turma", cascade="all, delete-orphan")
 
-    def __init__(self, nome: str, ano: t.Optional[int] = None, **kw: t.Any) -> None:
+    # Ajuste no __init__ para aceitar string no ano
+    def __init__(self, nome: str, ano: str, **kw: t.Any) -> None:
         super().__init__(nome=nome, ano=ano, **kw)
 
     def __repr__(self):

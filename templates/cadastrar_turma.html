@@ -9,20 +9,67 @@
 </div>
 
 <div class="table-container" style="max-width: 700px; margin: 0 auto;">
+    
+    {# --- (NOVO) EXIBIR FLASH MESSAGES DO CONTROLLER --- #}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    {# ------------------------------------------------- #}
+
     <form method="POST" action="{{ url_for('turma.cadastrar_turma') }}">
         {{ form.hidden_tag() }}
-        <div class="form-group">
-            {{ form.nome.label }}
+        
+        <div class="form-group mb-3">
+            {{ form.nome.label(class="form-label fw-bold") }}
             {{ form.nome(class="form-control", placeholder="Ex: 1º Pelotão - Turma 2025") }}
+            {# Exibir erros do campo Nome #}
+            {% if form.nome.errors %}
+                <div class="text-danger small mt-1">
+                    {% for error in form.nome.errors %}{{ error }} {% endfor %}
+                </div>
+            {% endif %}
         </div>
-        <div class="form-group">
-            {{ form.ano.label }}
-            {{ form.ano(class="form-control", placeholder="Ex: 2025") }}
+
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <div class="form-group">
+                    {{ form.ano.label(class="form-label fw-bold") }}
+                    {{ form.ano(class="form-control", placeholder="Ex: 2025") }}
+                    {# Exibir erros do campo Ano #}
+                    {% if form.ano.errors %}
+                        <div class="text-danger small mt-1">
+                            {% for error in form.ano.errors %}{{ error }} {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            {# --- (NOVO) CAMPO STATUS ADICIONADO --- #}
+            <div class="col-md-6 mb-3">
+                <div class="form-group">
+                    {{ form.status.label(class="form-label fw-bold") }}
+                    {{ form.status(class="form-select") }}
+                    {# Exibir erros do campo Status #}
+                    {% if form.status.errors %}
+                        <div class="text-danger small mt-1">
+                            {% for error in form.status.errors %}{{ error }} {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            {# -------------------------------------- #}
         </div>
-        <div class="form-group">
-            {{ form.alunos_ids.label }}
+
+        <div class="form-group mb-4">
+            {{ form.alunos_ids.label(class="form-label fw-bold") }}
             
-            {# --- CAIXA DE PESQUISA ADICIONADA AQUI --- #}
             <input type="text" id="aluno-search" class="form-control mb-2" placeholder="Pesquisar por nome ou matrícula...">
 
             <div class="checkbox-list" id="alunos-checkbox-list">
@@ -31,11 +78,14 @@
                         {{ subfield }} {{ subfield.label.text }}
                     </label>
                 {% else %}
-                    <p style="color: #94a3b8; font-style: italic;">Nenhum aluno sem turma encontrado para adicionar.</p>
+                    <p style="color: #94a3b8; font-style: italic; text-align: center; margin-top: 10px;">
+                        Nenhum aluno sem turma encontrado para adicionar.
+                    </p>
                 {% endfor %}
             </div>
         </div>
-        <div class="form-actions">
+
+        <div class="form-actions d-flex justify-content-end gap-2">
             <a href="{{ url_for('turma.listar_turmas') }}" class="btn btn-secondary">Cancelar</a>
             {{ form.submit(class="btn btn-primary") }}
         </div>
@@ -62,9 +112,14 @@
 .checkbox-item:hover {
     background-color: #eef5ff;
 }
+.text-danger {
+    color: #dc3545 !important;
+}
+.small {
+    font-size: 0.875em;
+}
 </style>
 
-{# --- SCRIPT DE FILTRAGEM ADICIONADO AQUI --- #}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const searchInput = document.getElementById('aluno-search');
