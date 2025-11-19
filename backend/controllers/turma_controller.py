@@ -1,12 +1,12 @@
 # backend/controllers/turma_controller.py
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
 from flask_login import login_required, current_user
 from sqlalchemy import select, or_
 from flask_wtf import FlaskForm
-from wtforms import StringField, IntegerField, SubmitField, SelectMultipleField
+from wtforms import StringField, SubmitField, SelectMultipleField
 from wtforms import SelectField
-from wtforms.validators import DataRequired, Length, NumberRange, Optional
+from wtforms.validators import DataRequired, Length, Optional
 from wtforms.widgets import CheckboxInput, ListWidget
 
 from ..models.database import db
@@ -26,9 +26,10 @@ CARGOS_LISTA = [
 
 class TurmaForm(FlaskForm):
     nome = StringField('Nome da Turma', validators=[DataRequired(), Length(max=100)])
-    ano = IntegerField('Ano da Turma', validators=[DataRequired(), NumberRange(min=2000, max=2100)])
     
-    # O campo status é obrigatório no formulário
+    # CORREÇÃO: StringField para aceitar texto/barras no ano
+    ano = StringField('Ano / Edição', validators=[DataRequired(), Length(max=20)])
+    
     status = SelectField(
         'Status da Turma',
         choices=[(s.value, s.name.replace('_', ' ').title()) for s in TurmaStatus],
@@ -53,7 +54,12 @@ def listar_turmas():
         flash('Nenhuma escola associada ou selecionada.', 'warning')
         return redirect(url_for('main.dashboard'))
         
+    # Busca turmas e verifica se veio vazio por erro ou não
     turmas = TurmaService.get_turmas_by_school(school_id)
+    
+    # Debug: Se não houver turmas, verificar logs do servidor
+    if not turmas:
+        current_app.logger.info(f"Nenhuma turma encontrada para escola {school_id}")
 
     if current_user.role == 'aluno' and current_user.aluno_profile and current_user.aluno_profile.turma_id:
         user_turma_id = current_user.aluno_profile.turma_id
@@ -112,16 +118,17 @@ def cadastrar_turma():
 
     if form.validate_on_submit():
         success, message = TurmaService.create_turma(form.data, school_id)
-        flash(message, 'success' if success else 'danger')
         if success:
+            flash(message, 'success')
             return redirect(url_for('turma.listar_turmas'))
+        else:
+            flash(message, 'danger')
     
-    # --- (NOVO) TRATAMENTO DE ERRO SE A VALIDAÇÃO FALHAR ---
     elif request.method == 'POST':
-        flash('Erro ao cadastrar turma. Verifique os campos destacados.', 'danger')
-        # Opcional: Logar os erros para debug se necessário
-        # current_app.logger.error(f"Erros no formulário de turma: {form.errors}")
-    # -------------------------------------------------------
+        flash('Erro na validação do formulário. Verifique os campos.', 'danger')
+        for field, errors in form.errors.items():
+            for error in errors:
+                flash(f"{getattr(form, field).label.text}: {error}", 'warning')
 
     return render_template('cadastrar_turma.html', form=form)
 
@@ -149,14 +156,14 @@ def editar_turma(turma_id):
     
     if form.validate_on_submit():
         success, message = TurmaService.update_turma(turma_id, form.data)
-        flash(message, 'success' if success else 'danger')
         if success:
+            flash(message, 'success')
             return redirect(url_for('turma.listar_turmas'))
+        else:
+            flash(message, 'danger')
             
-    # --- (NOVO) TRATAMENTO DE ERRO PARA A EDIÇÃO TAMBÉM ---
     elif request.method == 'POST':
-        flash('Erro ao editar turma. Verifique os campos destacados.', 'danger')
-    # -------------------------------------------------------
+        flash('Erro na validação do formulário.', 'danger')
 
     if request.method == 'GET':
         form.alunos_ids.data = [a.id for a in turma.alunos]

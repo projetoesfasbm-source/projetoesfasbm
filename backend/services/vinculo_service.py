@@ -12,7 +12,12 @@ from ..models.disciplina import Disciplina
 
 class VinculoService:
     @staticmethod
-    def get_all_vinculos(turma_filtrada_id: int = None):
+    def get_all_vinculos(turma_filtrada_id: int = None, school_id: int = None):
+        """
+        Busca vínculos. 
+        - Se turma_filtrada_id for fornecido, filtra por ela.
+        - Se school_id for fornecido, garante que só traga vínculos dessa escola (segurança/filtro geral).
+        """
         query = db.select(DisciplinaTurma).options(
             joinedload(DisciplinaTurma.instrutor_1).joinedload(Instrutor.user),
             joinedload(DisciplinaTurma.instrutor_2).joinedload(Instrutor.user),
@@ -20,8 +25,14 @@ class VinculoService:
             joinedload(DisciplinaTurma.disciplina).joinedload(Disciplina.turma)
         )
 
+        # Faz o join com Disciplina e Turma para poder filtrar por Escola e Turma
+        query = query.join(DisciplinaTurma.disciplina).join(Disciplina.turma)
+
         if turma_filtrada_id:
-            query = query.join(Disciplina).where(Disciplina.turma_id == turma_filtrada_id)
+            query = query.where(Turma.id == turma_filtrada_id)
+        
+        if school_id:
+            query = query.where(Turma.school_id == school_id)
 
         query = query.order_by(DisciplinaTurma.id.desc())
         return db.session.scalars(query).all()

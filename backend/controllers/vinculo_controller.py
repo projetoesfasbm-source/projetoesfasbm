@@ -17,10 +17,8 @@ from ..models.user import User
 from ..models.ciclo import Ciclo
 from ..services.user_service import UserService 
 from ..services.vinculo_service import VinculoService
-# --- INÍCIO DAS ADIÇÕES ---
 from ..services.instrutor_service import InstrutorService
 from ..services.turma_service import TurmaService
-# --- FIM DAS ADIÇÕES ---
 from utils.decorators import admin_or_programmer_required, school_admin_or_programmer_required
 
 vinculo_bp = Blueprint('vinculo', __name__, url_prefix='/vinculos')
@@ -45,22 +43,19 @@ def gerenciar_vinculos():
         flash("Nenhuma escola associada ou selecionada.", "warning")
         return redirect(url_for('main.dashboard'))
 
-    # --- INÍCIO DA CORREÇÃO ---
-    # O bug estava aqui: get_all_vinculos(None) trazia tudo.
-    # Agora, só buscamos vínculos SE uma turma (da escola correta) for selecionada.
-    vinculos = []
+    # CORREÇÃO:
+    # Se houver filtro de turma, valida se ela pertence à escola.
     if turma_filtrada_id:
-        # Validação de segurança: checa se a turma pedida é da escola logada
         turma_check = db.session.get(Turma, turma_filtrada_id)
-        if turma_check and turma_check.school_id == school_id:
-            vinculos = VinculoService.get_all_vinculos(turma_filtrada_id)
-        else:
+        if not turma_check or turma_check.school_id != school_id:
             flash("Turma selecionada inválida.", "warning")
-            turma_filtrada_id = None # Reseta o filtro se for inválido
+            turma_filtrada_id = None # Reseta o filtro se inválido
+
+    # Chama o serviço passando a turma (se houver) E o ID da escola.
+    # O Service agora sabe filtrar por escola se a turma for None.
+    vinculos = VinculoService.get_all_vinculos(turma_filtrada_id, school_id)
     
-    # Esta consulta já estava correta
     turmas = TurmaService.get_turmas_by_school(school_id)
-    # --- FIM DA CORREÇÃO ---
     
     delete_form = DeleteForm()
     
@@ -77,18 +72,11 @@ def adicionar_vinculo():
     form = VinculoForm()
     school_id = UserService.get_current_school_id()
     
-    # --- INÍCIO DA CORREÇÃO ---
-    # Substituídas as consultas diretas de instrutor e turma pelos serviços filtrados
-    
-    # 1. Busca Instrutores filtrados por escola
     instrutores_paginados = InstrutorService.get_all_instrutores(user=current_user)
     instrutores = instrutores_paginados.items
     
-    # 2. Busca Turmas filtradas por escola
     turmas = TurmaService.get_turmas_by_school(school_id)
-    # --- FIM DA CORREÇÃO ---
 
-    # Esta formatação de choices está correta
     instrutor_choices = []
     for i in instrutores:
         nome = i.user.nome_de_guerra or i.user.username
@@ -101,7 +89,6 @@ def adicionar_vinculo():
     
     if request.method == 'POST':
         turma_id_selecionada = request.form.get('turma_id', type=int)
-        # Validação de segurança: checa se a turma postada pertence à escola
         turma_check = db.session.get(Turma, turma_id_selecionada)
         if turma_id_selecionada and turma_check and turma_check.school_id == school_id:
             disciplinas_da_turma = db.session.scalars(
@@ -133,8 +120,6 @@ def editar_vinculo(vinculo_id):
     school_id = UserService.get_current_school_id()
     vinculo = db.session.get(DisciplinaTurma, vinculo_id)
 
-    # --- INÍCIO DA CORREÇÃO DE SEGURANÇA ---
-    # Valida se o vínculo pertence à escola atual
     if not vinculo:
         flash("Vínculo não encontrado.", "danger")
         return redirect(url_for('vinculo.gerenciar_vinculos'))
@@ -143,15 +128,11 @@ def editar_vinculo(vinculo_id):
     if not turma_atual or turma_atual.school_id != school_id:
         flash("Este vínculo não pertence à sua escola.", "danger")
         return redirect(url_for('vinculo.gerenciar_vinculos'))
-    # --- FIM DA CORREÇÃO DE SEGURANÇA ---
 
     form = VinculoForm(obj=vinculo)
     
-    # --- INÍCIO DA CORREÇÃO DO VAZAMENTO ---
-    # Busca instrutores filtrados por escola
     instrutores_paginados = InstrutorService.get_all_instrutores(user=current_user)
     instrutores = instrutores_paginados.items
-    # --- FIM DA CORREÇÃO DO VAZAMENTO ---
     
     instrutor_choices = []
     for i in instrutores:
@@ -163,7 +144,6 @@ def editar_vinculo(vinculo_id):
     form.instrutor_id_1.choices = [(0, '-- Nenhum --')] + instrutor_choices
     form.instrutor_id_2.choices = [(0, '-- Nenhum --')] + instrutor_choices
 
-    # Esta lógica está correta
     if turma_atual:
         form.disciplina_id.choices = [(d.id, d.materia) for d in turma_atual.disciplinas]
     
@@ -186,7 +166,6 @@ def excluir_vinculo(vinculo_id):
     school_id = UserService.get_current_school_id()
     vinculo = db.session.get(DisciplinaTurma, vinculo_id)
 
-    # --- INÍCIO DA CORREÇÃO DE SEGURANÇA ---
     turma_id_para_redirecionar = None
     if not vinculo:
         flash("Vínculo não encontrado.", "danger")
@@ -198,7 +177,6 @@ def excluir_vinculo(vinculo_id):
         return redirect(url_for('vinculo.gerenciar_vinculos'))
     
     turma_id_para_redirecionar = turma_atual.id
-    # --- FIM DA CORREÇÃO DE SEGURANÇA ---
 
     form = DeleteForm()
     if form.validate_on_submit():
