@@ -9,6 +9,9 @@ from ..models.aluno import Aluno
 from ..models.disciplina_turma import DisciplinaTurma
 from ..models.turma_cargo import TurmaCargo
 from ..models.historico import HistoricoAluno 
+# --- IMPORTAÇÕES NECESSÁRIAS PARA A CORREÇÃO ---
+from ..models.disciplina import Disciplina
+from ..models.horario import Horario
 
 class TurmaService:
     @staticmethod
@@ -108,14 +111,31 @@ class TurmaService:
         try:
             nome_turma_excluida = turma.nome
             
+            # --- CORREÇÃO INÍCIO: Remove dependências de Horário ---
+            # O banco impede excluir a Turma se ela tem Disciplinas que têm Horários vinculados.
+            # Precisamos limpar os horários dessas disciplinas primeiro.
+            
+            # 1. Busca IDs das disciplinas pertencentes a esta turma
+            disciplinas_ids = db.session.scalars(
+                select(Disciplina.id).where(Disciplina.turma_id == turma_id)
+            ).all()
+
+            # 2. Exclui horários vinculados a essas disciplinas
+            if disciplinas_ids:
+                db.session.query(Horario).filter(Horario.disciplina_id.in_(disciplinas_ids)).delete(synchronize_session=False)
+            # --- CORREÇÃO FIM ---
+
+            # Desvincula alunos
             db.session.query(Aluno).filter(Aluno.turma_id == turma_id).update(
                 {"turma_id": None}, 
                 synchronize_session=False
             )
             
+            # Remove cargos e vínculos extras
             db.session.query(TurmaCargo).filter_by(turma_id=turma_id).delete()
             db.session.query(DisciplinaTurma).filter_by(pelotao=turma.nome).delete()
             
+            # Exclui a turma (as disciplinas serão excluídas em cascata pelo banco ou SQLAlchemy)
             db.session.delete(turma)
             db.session.commit()
             return True, f'Turma "{nome_turma_excluida}" e todos os seus vínculos foram excluídos com sucesso!'
@@ -130,7 +150,6 @@ class TurmaService:
             return []
             
         # CORREÇÃO: Removemos o try/except genérico que engolia erros de Enum
-        # Se der erro de banco, é melhor explodir no log do que esconder as turmas
         return db.session.scalars(
             select(Turma)
             .where(Turma.school_id == school_id)
