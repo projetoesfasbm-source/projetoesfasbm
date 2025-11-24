@@ -81,7 +81,8 @@ def clear_data():
     elif action == 'clear_instructors':
         success, message = AdminToolsService.clear_instructors(school_id)
     elif action == 'clear_disciplines':
-        success, message = AdminToolsService.clear_disciplinines(school_id)
+        # CORREÇÃO: Nome do método corrigido (removido o 'ni' extra de disciplinines)
+        success, message = AdminToolsService.clear_disciplines(school_id)
 
     flash(message, 'success' if success else 'danger')
     return redirect(url_for('tools.reset_escola'))

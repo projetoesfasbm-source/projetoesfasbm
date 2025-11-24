@@ -1,13 +1,13 @@
 # backend/services/admin_tools_service.py
 
 from flask import current_app
-from sqlalchemy import select, delete
+from sqlalchemy import select
 
 from ..models.database import db
 from ..models.user import User
 from ..models.user_school import UserSchool
 from ..models.disciplina import Disciplina
-from ..models.turma import Turma # Importar o modelo Turma
+from ..models.turma import Turma
 
 class AdminToolsService:
     @staticmethod
@@ -15,33 +15,33 @@ class AdminToolsService:
         """
         Exclui permanentemente todos os usuários com a função 'aluno'
         associados a uma escola específica.
+        Usa o ORM para garantir que a cascata (exclusão de perfil, notas, histórico) funcione.
         """
         try:
-            # Encontra os IDs dos usuários que são alunos da escola especificada
-            student_user_ids_query = (
-                select(User.id)
+            # Busca os objetos User completos
+            students = db.session.scalars(
+                select(User)
                 .join(UserSchool)
                 .where(
                     User.role == 'aluno',
                     UserSchool.school_id == school_id
                 )
-            )
-            student_user_ids = db.session.scalars(student_user_ids_query).all()
+            ).all()
 
-            if not student_user_ids:
+            if not students:
                 return True, "Nenhum aluno encontrado para excluir."
 
-            # A exclusão do usuário em cascata removerá o perfil do aluno,
-            # o vínculo user_school e outros dados relacionados.
-            stmt = delete(User).where(User.id.in_(student_user_ids))
-            result = db.session.execute(stmt)
+            count = len(students)
+            # Deleta um por um para ativar o 'cascade="all, delete-orphan"' do modelo SQLAlchemy
+            for student in students:
+                db.session.delete(student)
             
             db.session.commit()
-            return True, f"{result.rowcount} aluno(s) foram excluídos com sucesso."
+            return True, f"{count} aluno(s) foram excluídos com sucesso."
         except Exception as e:
             db.session.rollback()
             current_app.logger.error(f"Erro ao limpar alunos: {e}")
-            return False, "Ocorreu um erro ao tentar excluir os alunos."
+            return False, f"Ocorreu um erro ao tentar excluir os alunos: {str(e)}"
 
     @staticmethod
     def clear_instructors(school_id: int):
@@ -50,28 +50,28 @@ class AdminToolsService:
         associados a uma escola específica.
         """
         try:
-            instructor_user_ids_query = (
-                select(User.id)
+            instructors = db.session.scalars(
+                select(User)
                 .join(UserSchool)
                 .where(
                     User.role == 'instrutor',
                     UserSchool.school_id == school_id
                 )
-            )
-            instructor_user_ids = db.session.scalars(instructor_user_ids_query).all()
+            ).all()
 
-            if not instructor_user_ids:
+            if not instructors:
                 return True, "Nenhum instrutor encontrado para excluir."
 
-            stmt = delete(User).where(User.id.in_(instructor_user_ids))
-            result = db.session.execute(stmt)
+            count = len(instructors)
+            for instructor in instructors:
+                db.session.delete(instructor)
             
             db.session.commit()
-            return True, f"{result.rowcount} instrutor(es) foram excluídos com sucesso."
+            return True, f"{count} instrutor(es) foram excluídos com sucesso."
         except Exception as e:
             db.session.rollback()
             current_app.logger.error(f"Erro ao limpar instrutores: {e}")
-            return False, "Ocorreu um erro ao tentar excluir os instrutores."
+            return False, f"Ocorreu um erro ao tentar excluir os instrutores: {str(e)}"
 
     @staticmethod
     def clear_disciplines(school_id: int):
@@ -80,23 +80,24 @@ class AdminToolsService:
         navegando através das turmas.
         """
         try:
-            # 1. Encontrar os IDs de todas as turmas que pertencem à escola.
-            turmas_da_escola_ids = db.session.scalars(
-                select(Turma.id).where(Turma.school_id == school_id)
+            # Busca disciplinas através das turmas da escola
+            # Também usamos o ORM aqui para garantir que Horários e Históricos sejam limpos
+            disciplines = db.session.scalars(
+                select(Disciplina)
+                .join(Turma)
+                .where(Turma.school_id == school_id)
             ).all()
 
-            if not turmas_da_escola_ids:
-                return True, "Nenhuma turma (e, portanto, nenhuma disciplina) encontrada para excluir."
+            if not disciplines:
+                return True, "Nenhuma disciplina encontrada para excluir."
 
-            # 2. Deletar todas as disciplinas cujo turma_id está na lista de turmas da escola.
-            # A exclusão em cascata (configurada no modelo Disciplina) cuidará dos registros
-            # em historico_disciplinas, horarios e disciplina_turmas.
-            stmt = delete(Disciplina).where(Disciplina.turma_id.in_(turmas_da_escola_ids))
-            result = db.session.execute(stmt)
+            count = len(disciplines)
+            for discipline in disciplines:
+                db.session.delete(discipline)
             
             db.session.commit()
-            return True, f"{result.rowcount} disciplina(s) foram excluídas com sucesso."
+            return True, f"{count} disciplina(s) foram excluídas com sucesso."
         except Exception as e:
             db.session.rollback()
             current_app.logger.error(f"Erro ao limpar disciplinas: {e}")
-            return False, "Ocorreu um erro ao tentar excluir as disciplinas."
+            return False, f"Ocorreu um erro ao tentar excluir as disciplinas: {str(e)}"
