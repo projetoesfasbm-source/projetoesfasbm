@@ -77,6 +77,39 @@ class InstrutorService:
             )
 
         return db.paginate(stmt, page=page, per_page=per_page, error_out=False)
+
+    @staticmethod
+    def get_all_instrutores_sem_paginacao(user=None):
+        """
+        Retorna TODOS os instrutores ativos visíveis para o usuário, sem paginação.
+        Usado para preencher listas de seleção (dropdowns/Select2).
+        """
+        stmt = (
+            select(Instrutor)
+            .join(User, Instrutor.user_id == User.id)
+            .join(UserSchool, UserSchool.user_id == User.id)
+            .where(
+                User.is_active.is_(True),
+                User.role == 'instrutor',
+            )
+            .options(joinedload(Instrutor.user))
+            .order_by(User.nome_completo)
+        )
+        
+        if user is not None:
+            school_ids = InstrutorService._visible_school_ids_for(user)
+            # Se não tem escolas visíveis, retorna lista vazia
+            if school_ids == []:
+                return []
+            # Se tem escolas, filtra
+            if school_ids is not None:
+                stmt = stmt.where(UserSchool.school_id.in_(school_ids))
+        
+        # Remove duplicatas que podem ocorrer pelo join se instrutor estiver em múltiplas escolas (distinct)
+        # Mas como filtramos por user_school, o ideal é agrupar ou usar distinct se necessário.
+        # Geralmente Instrutor é único por ID, o SQLAlchemy cuida da identidade.
+        
+        return db.session.scalars(stmt).unique().all()
     
     @staticmethod
     def update_profile_picture(instrutor_id: int, file):

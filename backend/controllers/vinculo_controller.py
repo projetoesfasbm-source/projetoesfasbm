@@ -72,8 +72,8 @@ def adicionar_vinculo():
     form = VinculoForm()
     school_id = UserService.get_current_school_id()
     
-    instrutores_paginados = InstrutorService.get_all_instrutores(user=current_user)
-    instrutores = instrutores_paginados.items
+    # ALTERAÇÃO: Usa o método sem paginação para carregar TODOS os instrutores
+    instrutores = InstrutorService.get_all_instrutores_sem_paginacao(user=current_user)
     
     turmas = TurmaService.get_turmas_by_school(school_id)
 
@@ -131,8 +131,8 @@ def editar_vinculo(vinculo_id):
 
     form = VinculoForm(obj=vinculo)
     
-    instrutores_paginados = InstrutorService.get_all_instrutores(user=current_user)
-    instrutores = instrutores_paginados.items
+    # ALTERAÇÃO: Usa o método sem paginação para carregar TODOS os instrutores na edição também
+    instrutores = InstrutorService.get_all_instrutores_sem_paginacao(user=current_user)
     
     instrutor_choices = []
     for i in instrutores:
