@@ -198,6 +198,18 @@
     padding: 1rem;
     font-size: 1.1rem;
 }
+
+/* === CORREÇÃO ADICIONADA: Estilos para quebra de linha na observação === */
+.slot-observacao {
+    word-break: break-word;      /* Quebra palavras muito longas */
+    overflow-wrap: break-word;   /* Padrão moderno para quebra */
+    white-space: pre-wrap;       /* Mantém quebras de linha manuais, mas quebra automático se necessário */
+    line-height: 1.2;            /* Melhora o espaçamento entre linhas */
+    margin-top: 4px;             /* Espaçamento do instrutor */
+    font-size: 0.85em;           /* Tamanho levemente menor para caber melhor */
+    color: #4b5563;              /* Cor para destaque sutil */
+    max-width: 100%;             /* Garante que não ultrapasse a largura da célula */
+}
 </style>
 {% endblock %}
 
