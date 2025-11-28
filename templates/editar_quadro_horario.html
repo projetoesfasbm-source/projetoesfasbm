@@ -6,16 +6,13 @@
 <div class="content-header">
     <h1>Editar Quadro Horário</h1>
     <p>Você está editando o horário para: <strong>{{ pelotao_selecionado }}</strong> na semana <strong>{{ semana_selecionada.nome }}</strong></p>
-    {% if not is_admin %}
-    <p style="color: #10b981; font-weight: 600;">📌 Como instrutor, você pode agendar apenas suas próprias aulas.</p>
-    {% endif %}
 </div>
 
 <div class="table-wrapper">
-    <table class="horario-table-new editable" id="weekday-table">
+    <table class="horario-table-new editable fixed-layout" id="weekday-table">
         <thead>
             <tr>
-                <th class="header-tempo">Horário</th>
+                <th class="header-tempo" style="width: 70px;">Horário</th>
                 <th class="header-dia">Segunda-feira <br><small>({{ datas_semana.segunda }})</small></th>
                 <th class="header-dia">Terça-feira <br><small>({{ datas_semana.terca }})</small></th>
                 <th class="header-dia">Quarta-feira <br><small>({{ datas_semana.quarta }})</small></th>
@@ -35,7 +32,7 @@
                       (periodo_num == 14 and semana_selecionada.mostrar_periodo_14) or
                       (periodo_num == 15 and semana_selecionada.mostrar_periodo_15) %}
                 
-                <tr class="{% if periodo_num in [3, 6, 9] %}break-after{% endif %}">
+                <tr class="{% if periodo_num in [3, 6, 9] %}break-after{% endif %}" style="height: 1px;">
                     <td class="cell-tempo">
                         <strong>{{ tempos[row_idx][0] }}</strong>
                         <span>{{ tempos[row_idx][1] }}</span>
@@ -59,28 +56,46 @@
 </div>
 
 <style>
-/* --- ESTILOS DOS BOTÕES DE AÇÃO --- */
-.slot-content { display: flex; flex-direction: column; justify-content: space-between; height: 100%; text-align: center; padding: 0.5rem; }
-.slot-info { flex-grow: 1; display: flex; flex-direction: column; justify-content: center; }
-.slot-actions { flex-shrink: 0; margin: 4px auto 0 auto; }
-.slot-actions.approval { display: flex; gap: 0.75rem; padding: 4px; border-radius: 20px; }
-.slot-actions .btn-icon { width: 30px; height: 30px; border-radius: 50%; font-size: 1.3rem; font-weight: bold; color: white; display: flex; align-items: center; justify-content: center; line-height: 1; border: none; cursor: pointer; transition: transform 0.2s ease, background-color 0.2s ease; }
-.slot-actions .btn-icon:hover { transform: scale(1.1); }
-.slot-actions .btn-icon.approve { background-color: var(--color-success); }
-.slot-actions .btn-icon.approve:hover { background-color: #0f9b6b; }
-.slot-actions .btn-icon.deny { background-color: var(--color-danger); }
-.slot-actions .btn-icon.deny:hover { background-color: #d93b3b; }
-.slot-actions .btn-icon.manage { background-color: var(--color-warning); }
-.slot-actions .btn-icon.manage:hover { background-color: #d97706; }
-
-/* --- NOVO ESTILO PARA OS INTERVALOS --- */
-tr.break-after > td {
-    border-bottom: 3px solid #fcd34d; /* Cor amarelada para o intervalo */
+/* --- CONFIGURAÇÃO DA TABELA FIXA --- */
+.horario-table-new.fixed-layout {
+    width: 100%;
+    table-layout: fixed !important;
+    border-collapse: collapse;
 }
-/* --- FIM DOS NOVOS ESTILOS --- */
 
-.no-permission { color: #94a3b8; font-size: 1rem; cursor: not-allowed; }
-.weekend-slot.disabled { background-color: #f1f5f9; cursor: not-allowed; }
+.horario-table-new td {
+    overflow: hidden; 
+}
+
+/* --- ESTILOS DOS BOTÕES DE AÇÃO --- */
+.slot-actions { display: flex; justify-content: center; gap: 4px; margin: 0 auto; pointer-events: auto; }
+.slot-actions.approval { padding: 2px; background-color: rgba(255,255,255,0.95); border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.15); }
+
+.slot-actions .btn-icon { 
+    width: 24px; height: 24px; 
+    border-radius: 4px; 
+    font-size: 0.8rem; 
+    font-weight: bold; 
+    color: white; 
+    display: flex; align-items: center; justify-content: center; 
+    border: none; cursor: pointer; 
+    transition: filter 0.2s ease;
+    padding: 0;
+}
+.slot-actions .btn-icon:hover { filter: brightness(1.1); }
+
+.slot-actions .btn-icon.approve { background-color: #10b981; }
+.slot-actions .btn-icon.deny { background-color: #ef4444; }
+.slot-actions .btn-icon.manage { background-color: #f59e0b; }
+
+tr.break-after > td {
+    border-bottom: 3px solid #fcd34d;
+}
+
+.tooltip-inner {
+    max-width: 300px;
+    text-align: left;
+}
 </style>
 
 <div class="modal-overlay" id="horario-modal-overlay">
@@ -146,15 +161,19 @@ tr.break-after > td {
     const PELOTAO_SELECIONADO = "{{ pelotao_selecionado }}";
     const SEMANA_ID = "{{ semana_selecionada.id }}";
     const IS_ADMIN = {{ is_admin | tojson }};
-    const INSTRUTOR_LOGADO_ID = {{ instrutor_logado_id | tojson }};
 </script>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Inicializa Tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl)
+    });
+
     const horarioModalOverlay = document.getElementById('horario-modal-overlay');
     const approvalModalOverlay = document.getElementById('approval-modal-overlay');
     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-
     const modalForm = document.getElementById('modal-form');
     const disciplinaSelect = document.getElementById('modal-disciplina');
     const instrutorSelect = document.getElementById('modal-instrutor');
@@ -196,8 +215,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const data = await res.json();
                 if(data.success) {
                     disciplinaSelect.value = data.disciplina_id;
-                    await disciplinaSelect.dispatchEvent(new Event('change')); 
-                    instrutorSelect.value = data.instrutor_value;
+                    await carregarInstrutores(data.disciplina_id, data.instrutor_value);
                     document.getElementById('modal-duracao').value = data.duracao;
                     document.getElementById('modal-observacao').value = data.observacao || '';
                 }
@@ -208,109 +226,9 @@ document.addEventListener('DOMContentLoaded', function() {
         openModal(horarioModalOverlay);
     }
 
-    function sendFullApprovalAction(horarioId, action) {
-        const confirmMessage = action === 'negar' ? 'Tem certeza que deseja NEGAR (remover) esta solicitação de aula?' : null;
-        if (confirmMessage && !confirm(confirmMessage)) {
-            return;
-        }
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = '/horario/aprovar';
-        const csrfInput = document.createElement('input');
-        csrfInput.type = 'hidden';
-        csrfInput.name = 'csrf_token';
-        csrfInput.value = csrfToken;
-        const idInput = document.createElement('input');
-        idInput.type = 'hidden';
-        idInput.name = 'horario_id';
-        idInput.value = horarioId;
-        const actionInput = document.createElement('input');
-        actionInput.type = 'hidden';
-        actionInput.name = 'action';
-        actionInput.value = action;
-        form.appendChild(csrfInput);
-        form.appendChild(idInput);
-        form.appendChild(actionInput);
-        document.body.appendChild(form);
-        form.submit();
-    }
-
-
-    async function openApprovalModal(horarioId) {
-        const form = document.getElementById('approval-modal-form');
-        form.reset();
-        document.getElementById('approval-horario-id').value = horarioId;
-        const modalTitle = document.getElementById('approval-modal-title');
-        const infoP = document.getElementById('approval-modal-info');
-        const periodosContainer = document.getElementById('approval-periodos-container');
-        periodosContainer.innerHTML = 'Carregando...';
-        
-        try {
-            const res = await fetch(`/horario/get-aula/${horarioId}`);
-            const data = await res.json();
-            
-            if (data.success) {
-                modalTitle.textContent = `Gerenciar Aula de ${data.materia}`;
-                infoP.textContent = `Solicitada por: ${data.instrutor_nome}`;
-                
-                // CORREÇÃO: Usa data.periodo e data.duracao para iterar corretamente
-                periodosContainer.innerHTML = '<label class="form-label">Selecione os períodos para aprovar:</label>';
-                for (let i = 0; i < data.duracao; i++) {
-                    const periodo = data.periodo + i; // Começa do período inicial do bloco
-                    periodosContainer.innerHTML += `
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="periodos" value="${periodo}" id="periodo-${periodo}" checked>
-                            <label class="form-check-label" for="periodo-${periodo}">${periodo}º Período</label>
-                        </div>`;
-                }
-                openModal(approvalModalOverlay);
-            } else {
-                alert('Erro: ' + data.message);
-            }
-        } catch (error) {
-            alert("Não foi possível carregar os detalhes da aula para aprovação.");
-        }
-    }
-
-    function handleTableClick(e) {
-        const target = e.target.closest('button');
-        if (!target) return;
-        const action = target.dataset.action;
-        const id = target.dataset.id;
-        const slot = target.closest('.schedule-slot');
-
-        if (action === 'add' && slot) {
-            openHorarioModal({ dia: slot.dataset.dia, periodo: slot.dataset.periodo });
-            return;
-        }
-        if (!id) return;
-
-        if (action === 'edit' && slot) {
-            openHorarioModal({ horario_id: id, dia: slot.dataset.dia, periodo: slot.dataset.periodo });
-        } else if (action === 'delete') {
-            if (confirm('Tem certeza que deseja remover esta aula?')) {
-                fetch('/horario/remover-aula', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken }, body: JSON.stringify({ horario_id: id }) }).then(res => res.json()).then(data => { if (data.success) window.location.reload(); else alert('Erro: ' + data.message); });
-            }
-        // --- CORREÇÃO DOS BOTÕES DE APROVAÇÃO RÁPIDA ---
-        } else if (action === 'approve_all') {
-            sendFullApprovalAction(id, 'aprovar');
-        } else if (action === 'manage_approval') {
-            openApprovalModal(id);
-        } else if (action === 'deny_aula') {
-            sendFullApprovalAction(id, 'negar');
-        }
-    }
-
-    document.querySelectorAll('.editable').forEach(table => table.addEventListener('click', handleTableClick));
-    
-    disciplinaSelect.addEventListener('change', async function() {
-        const disciplinaId = this.value;
+    async function carregarInstrutores(disciplinaId, instrutorSelecionado = null) {
+        if (!disciplinaId) return;
         instrutorSelect.innerHTML = '<option value="">Carregando...</option>';
-        if (!disciplinaId) {
-            instrutorSelect.innerHTML = '<option value="">Selecione primeiro a disciplina</option>';
-            instrutorSelect.disabled = true;
-            return;
-        }
         try {
             const res = await fetch(`/horario/api/instrutores-vinculados/${PELOTAO_SELECIONADO}/${disciplinaId}`);
             const instrutores = await res.json();
@@ -321,6 +239,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     instrutorSelect.add(option);
                 });
                 instrutorSelect.disabled = false;
+                if (instrutorSelecionado) instrutorSelect.value = instrutorSelecionado;
             } else {
                  instrutorSelect.innerHTML = '<option value="">Nenhum instrutor vinculado</option>';
                  instrutorSelect.disabled = true;
@@ -330,8 +249,74 @@ document.addEventListener('DOMContentLoaded', function() {
             instrutorSelect.innerHTML = '<option value="">Erro ao carregar</option>';
             instrutorSelect.disabled = true;
         }
-    });
+    }
 
+    disciplinaSelect.addEventListener('change', function() { carregarInstrutores(this.value); });
+
+    function sendFullApprovalAction(horarioId, action) {
+        const confirmMessage = action === 'negar' ? 'Tem certeza que deseja NEGAR (remover) esta solicitação de aula?' : null;
+        if (confirmMessage && !confirm(confirmMessage)) return;
+        
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/horario/aprovar';
+        const inputs = { 'csrf_token': csrfToken, 'horario_id': horarioId, 'action': action };
+        for (const key in inputs) {
+            const input = document.createElement('input');
+            input.type = 'hidden'; input.name = key; input.value = inputs[key];
+            form.appendChild(input);
+        }
+        document.body.appendChild(form);
+        form.submit();
+    }
+
+    async function openApprovalModal(horarioId) {
+        const form = document.getElementById('approval-modal-form');
+        form.reset();
+        document.getElementById('approval-horario-id').value = horarioId;
+        const periodosContainer = document.getElementById('approval-periodos-container');
+        periodosContainer.innerHTML = 'Carregando...';
+        
+        try {
+            const res = await fetch(`/horario/get-aula/${horarioId}`);
+            const data = await res.json();
+            if (data.success) {
+                document.getElementById('approval-modal-title').textContent = `Gerenciar Aula de ${data.materia}`;
+                document.getElementById('approval-modal-info').textContent = `Solicitada por: ${data.instrutor_nome}`;
+                periodosContainer.innerHTML = '<label class="form-label">Selecione os períodos para aprovar:</label>';
+                for (let i = 0; i < data.duracao; i++) {
+                    const periodo = data.periodo + i;
+                    periodosContainer.innerHTML += `
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="periodos" value="${periodo}" id="periodo-${periodo}" checked>
+                            <label class="form-check-label" for="periodo-${periodo}">${periodo}º Período</label>
+                        </div>`;
+                }
+                openModal(approvalModalOverlay);
+            } else { alert('Erro: ' + data.message); }
+        } catch (error) { alert("Não foi possível carregar os detalhes da aula."); }
+    }
+
+    function handleTableClick(e) {
+        const target = e.target.closest('button');
+        if (!target) return;
+        const action = target.dataset.action;
+        const id = target.dataset.id;
+        const slot = target.closest('.schedule-slot');
+
+        if (action === 'add' && slot) openHorarioModal({ dia: slot.dataset.dia, periodo: slot.dataset.periodo });
+        else if (action === 'edit' && slot) openHorarioModal({ horario_id: id, dia: slot.dataset.dia, periodo: slot.dataset.periodo });
+        else if (action === 'delete') {
+            if (confirm('Tem certeza que deseja remover esta aula?')) {
+                fetch('/horario/remover-aula', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken }, body: JSON.stringify({ horario_id: id }) }).then(res => res.json()).then(data => { if (data.success) window.location.reload(); else alert('Erro: ' + data.message); });
+            }
+        } else if (action === 'approve_all') sendFullApprovalAction(id, 'aprovar');
+        else if (action === 'manage_approval') openApprovalModal(id);
+        else if (action === 'deny_aula') sendFullApprovalAction(id, 'negar');
+    }
+
+    document.querySelectorAll('.editable').forEach(table => table.addEventListener('click', handleTableClick));
+    
     modalForm.addEventListener('submit', function(e) {
         e.preventDefault();
         const formData = {
@@ -345,55 +330,21 @@ document.addEventListener('DOMContentLoaded', function() {
             duracao: document.getElementById('modal-duracao').value,
             observacao: document.getElementById('modal-observacao').value
         };
-        fetch('/horario/salvar-aula', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-            body: JSON.stringify(formData)
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (data.success) {
-                window.location.reload();
-            } else {
-                alert('Erro: ' + data.message);
-            }
-        })
-        .catch(error => {
-            console.error("Erro ao salvar aula:", error);
-            alert('Erro de comunicação ao salvar a aula.');
-        });
+        fetch('/horario/salvar-aula', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken }, body: JSON.stringify(formData) }).then(res => res.json()).then(data => { if (data.success) window.location.reload(); else alert('Erro: ' + data.message); });
     });
 
-    // --- FUNÇÃO DE APROVAÇÃO PARCIAL UNIFICADA ---
     function sendPartialApproval(horarioId, periodos) {
-        fetch('/horario/aprovar-parcial', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-            body: JSON.stringify({ horario_id: horarioId, periodos: periodos })
-        }).then(res => res.json()).then(data => {
-            if (data.success) {
-                window.location.reload();
-            } else {
-                alert('Erro: ' + data.message);
-            }
-        });
+        fetch('/horario/aprovar-parcial', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken }, body: JSON.stringify({ horario_id: horarioId, periodos: periodos }) }).then(res => res.json()).then(data => { if (data.success) window.location.reload(); else alert('Erro: ' + data.message); });
     }
 
-    // --- LISTENER PARA O BOTÃO NEGAR DENTRO DO MODAL ---
     document.getElementById('approval-negar').addEventListener('click', function() {
-        const horarioId = document.getElementById('approval-horario-id').value;
-        if (confirm('Tem certeza que deseja NEGAR (remover) esta solicitação de aula?')) {
-             sendPartialApproval(horarioId, []); // Envia lista vazia para negar tudo
-        }
+        if (confirm('Tem certeza?')) sendPartialApproval(document.getElementById('approval-horario-id').value, []);
     });
 
-    // --- ATUALIZAÇÃO DO SUBMIT DO MODAL DE APROVAÇÃO ---
     document.getElementById('approval-modal-form').addEventListener('submit', function(e) {
         e.preventDefault();
-        const horarioId = document.getElementById('approval-horario-id').value;
         const selectedPeriodos = Array.from(document.querySelectorAll('#approval-periodos-container input:checked')).map(cb => parseInt(cb.value));
-        
-        sendPartialApproval(horarioId, selectedPeriodos);
+        sendPartialApproval(document.getElementById('approval-horario-id').value, selectedPeriodos);
     });
     
     document.getElementById('modal-cancel').addEventListener('click', () => closeModal(horarioModalOverlay));

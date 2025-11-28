@@ -1,48 +1,78 @@
-{# backend/services/site_config_service.py #}
-
 {# templates/partials/_horario_slot_edit.html #}
 {% if aula != 'SKIP' %}
     <td class="schedule-slot"
         rowspan="{{ aula.duracao if not aula.is_disposicao else 1 }}"
         data-dia="{{ dia }}"
-        data-periodo="{{ periodo }}">
+        data-periodo="{{ periodo }}"
+        style="vertical-align: middle; position: relative; padding: 0; height: 1px; max-width: 100%;">
 
         {% if aula.is_disposicao %}
-            <button type="button" class="slot-button disponivel" data-action="add">Adicionar</button>
+            <button type="button" class="slot-button disponivel" data-action="add" style="width: 100%; height: 100%; border: none; background: transparent; cursor: pointer; color: #aaa;">
+                <div style="display: flex; align-items: center; justify-content: center; height: 100%;">
+                    <span style="font-size: 1.5rem;">+</span>
+                </div>
+            </button>
         {% else %}
-            <div class="slot-content {% if aula.status == 'pendente' %}pendente{% endif %}">
-                <div class="slot-info">
-                    <div class="disciplina-title">{{ aula.materia }}</div>
+            <div class="slot-content {% if aula.status == 'pendente' %}pendente{% endif %}" 
+                 style="height: 100%; width: 100%; display: flex; flex-direction: column; justify-content: space-between; padding: 4px; box-sizing: border-box; overflow: hidden;">
+                
+                {# CONTEÚDO SUPERIOR (Disciplina, Instrutor, Obs) #}
+                <div class="slot-info" style="flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: flex-start; overflow: hidden;">
+                    
+                    {# --- CORREÇÃO: Permite quebra de linha (até 3 linhas) para não cortar o nome --- #}
+                    <div class="disciplina-title" 
+                         style="font-weight: bold; line-height: 1.1; font-size: 0.85em; margin-bottom: 2px; 
+                                display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; 
+                                overflow: hidden; text-overflow: ellipsis; white-space: normal;" 
+                         title="{{ aula.materia }}">
+                        {{ aula.materia }}
+                    </div>
+                    
                     {% if aula.instrutor %}
-                    <div class="instrutor-name">{{ aula.instrutor }}</div>
+                    <div class="instrutor-name" 
+                         style="font-size: 0.75em; color: #555; margin-bottom: 2px; 
+                                white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" 
+                         title="{{ aula.instrutor }}">
+                        {{ aula.instrutor }}
+                    </div>
                     {% endif %}
+                    
+                    {# Observação mantida compacta (1 linha) para economizar espaço #}
                     {% if aula.observacao %}
-                    <div class="slot-observacao">{{ aula.observacao }}</div>
+                    <div class="slot-observacao-container" 
+                         style="background-color: #f8f9fa; border-radius: 4px; padding: 2px 4px; margin-top: 2px; max-height: 22px; min-height: 20px; flex-shrink: 0;"
+                         data-bs-toggle="tooltip" 
+                         data-bs-placement="top" 
+                         data-bs-html="true"
+                         title="<div class='text-start'><small>{{ aula.observacao }}</small></div>">
+                        
+                        <div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.75em; color: #666; line-height: 1.2;">
+                            <i class="fas fa-info-circle text-primary" style="font-size: 0.9em; margin-right: 2px;"></i>{{ aula.observacao }}
+                        </div>
+                    </div>
                     {% endif %}
                 </div>
 
-                {% if aula.status == 'pendente' and is_admin %}
-                    {# AÇÕES PARA AULAS PENDENTES: MUDANÇA DE LAYOUT PARA HORIZONTAL #}
-                    <div class="slot-actions horizontal-actions approval">
-                        <button class="btn-icon approve" data-action="approve_all" data-id="{{ aula.id }}" data-periodo="{{ aula.periodo }}" data-duracao="{{ aula.duracao }}" title="Aprovar Todos os Períodos">✓</button>
-                        <button class="btn-icon manage" data-action="manage_approval" data-id="{{ aula.id }}" title="Gerenciar Aprovação Parcial">✏️</button>
-                        <button class="btn-icon deny" data-action="deny_aula" data-id="{{ aula.id }}" title="Negar Aula">×</button>
-                    </div>
-                {% elif aula.can_edit and not aula.is_continuation %}
-                    {# AÇÕES PARA AULAS CONFIRMADAS: MUDANÇA DE LAYOUT PARA HORIZONTAL #}
-                    <div class="slot-actions horizontal-actions">
-                        <button class="btn-icon" data-action="edit" data-id="{{ aula.id }}" title="Editar Aula">✏️</button>
-                        <button class="btn-icon" data-action="delete" data-id="{{ aula.id }}" title="Remover Aula">🗑️</button>
-                    </div>
-                {% elif not aula.can_edit and not aula.is_continuation %}
-                    {# AÇÕES PARA AULAS SÓ DE VISUALIZAÇÃO #}
-                    <div class="slot-actions">
-                        <span class="no-permission" title="Você não pode editar esta aula">🔒</span>
-                    </div>
-                {% endif %}
+                {# AÇÕES FIXAS NO RODAPÉ DA CÉLULA (Não serão empurradas) #}
+                <div class="slot-actions-wrapper" style="flex-shrink: 0; margin-top: 2px; height: 28px; display: flex; align-items: center; justify-content: center;">
+                    {% if aula.status == 'pendente' and is_admin %}
+                        <div class="slot-actions horizontal-actions approval">
+                            <button class="btn-icon approve" data-action="approve_all" data-id="{{ aula.id }}" title="Aprovar">✓</button>
+                            <button class="btn-icon manage" data-action="manage_approval" data-id="{{ aula.id }}" title="Gerenciar">✏️</button>
+                            <button class="btn-icon deny" data-action="deny_aula" data-id="{{ aula.id }}" title="Negar">×</button>
+                        </div>
+                    {% elif aula.can_edit and not aula.is_continuation %}
+                        <div class="slot-actions horizontal-actions">
+                            <button class="btn-icon edit" data-action="edit" data-id="{{ aula.id }}" title="Editar" style="background-color: #3b82f6;">✏️</button>
+                            <button class="btn-icon delete" data-action="delete" data-id="{{ aula.id }}" title="Excluir" style="background-color: #ef4444;">🗑️</button>
+                        </div>
+                    {% endif %}
+                </div>
 
                 {% if aula.status == 'pendente' %}
-                    <span class="status-icon" title="Aguardando confirmação">🕐</span>
+                    <div style="position: absolute; top: 2px; right: 2px; background: rgba(255,255,255,0.9); border-radius: 50%; width: 14px; height: 14px; display: flex; align-items: center; justify-content: center;" title="Pendente">
+                        <span style="font-size: 9px;">🕐</span>
+                    </div>
                 {% endif %}
             </div>
         {% endif %}
