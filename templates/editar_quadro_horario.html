@@ -96,6 +96,42 @@ tr.break-after > td {
     max-width: 300px;
     text-align: left;
 }
+
+/* === CONFIGURAÇÃO DO MODAL === */
+.modal-overlay {
+    position: fixed !important; /* Mantém fixo na tela para centralizar */
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    visibility: hidden;
+    opacity: 0;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(2px);
+    /* Removido qualquer bloqueio de pointer-events que pudesse existir */
+}
+
+.modal-overlay.visible {
+    visibility: visible;
+    opacity: 1;
+}
+
+.modal-content {
+    background: #fff;
+    padding: 2rem;
+    border-radius: 12px;
+    width: 95%;
+    max-width: 550px;
+    max-height: 90vh; 
+    overflow-y: auto;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+    position: relative;
+}
 </style>
 
 <div class="modal-overlay" id="horario-modal-overlay">
@@ -182,14 +218,16 @@ document.addEventListener('DOMContentLoaded', function() {
     function openModal(modalOverlay) {
         if (modalOverlay) {
             modalOverlay.classList.add('visible');
-            document.body.style.overflow = 'hidden';
+            // --- REMOVIDO: Travamento da rolagem ---
+            // document.body.style.overflow = 'hidden'; 
         }
     }
 
     function closeModal(modalOverlay) {
         if (modalOverlay) {
             modalOverlay.classList.remove('visible');
-            document.body.style.overflow = '';
+            // --- REMOVIDO: Destravamento da rolagem ---
+            // document.body.style.overflow = '';
         }
     }
 
