@@ -3,7 +3,10 @@
 import os
 import click
 import firebase_admin
-from flask import Flask, render_template, g, session
+# ### INÍCIO DA ALTERAÇÃO ###
+# Adicionado send_from_directory às importações do Flask
+from flask import Flask, render_template, g, session, send_from_directory
+# ### FIM DA ALTERAÇÃO ###
 from flask_login import LoginManager, current_user
 from flask_migrate import Migrate
 from flask_wtf.csrf import CSRFProtect
@@ -109,6 +112,17 @@ def create_app(config_class=Config):
         except Exception as e:
             return str(dt_utc)
     # ### FIM DO FILTRO ###
+    
+    # ### INÍCIO DA ALTERAÇÃO PWA ###
+    # Rota para servir o Service Worker na raiz (obrigatório para PWA funcionar corretamente)
+    @app.route('/sw.js')
+    def service_worker():
+        return send_from_directory(app.static_folder, 'sw.js', mimetype='application/javascript')
+    
+    @app.route('/manifest.json')
+    def manifest():
+        return send_from_directory(app.static_folder, 'manifest.json', mimetype='application/json')
+    # ### FIM DA ALTERAÇÃO PWA ###
 
     db.init_app(app)
     Migrate(app, db)
@@ -251,7 +265,10 @@ def register_handlers_and_processors(app):
             "img-src 'self' data: *",
             "connect-src 'self' https://cdn.jsdelivr.net",
             "object-src 'none'",
-            "frame-ancestors 'self'"
+            "frame-ancestors 'self'",
+            # PWA: permitir manifesto e worker
+            "manifest-src 'self'",
+            "worker-src 'self'"
         ]
         response.headers["Content-Security-Policy"] = "; ".join(csp)
 

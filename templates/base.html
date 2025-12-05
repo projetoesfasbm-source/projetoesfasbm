@@ -2,7 +2,21 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    
+    <link rel="manifest" href="/manifest.json">
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Sistema ESFAS">
+    
+    <meta name="theme-color" content="{{ site_config.primary_color or '#3b82f6' }}">
+    
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/brasao.png', _external=True) }}">
+    <link rel="apple-touch-icon" sizes="152x152" href="{{ url_for('static', filename='img/brasao.png', _external=True) }}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='img/brasao.png', _external=True) }}">
+    <link rel="apple-touch-icon" sizes="167x167" href="{{ url_for('static', filename='img/brasao.png', _external=True) }}">
     <title>{% block title %}Sistema EsFAS{% endblock %}</title>
     <meta name="csrf-token" content="{{ csrf_token() }}">
     
@@ -13,11 +27,10 @@
     <link href="https://fonts.googleapis.com/css2?family=Bree+Serif&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
     <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
-    
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-    
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='3.1') }}">
+    
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='4.0') }}">
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
@@ -25,6 +38,29 @@
         :root {
             --primary-color: {{ site_config.primary_color or '#3b82f6' }};
             --secondary-color: {{ site_config.secondary_color or '#1a232c' }};
+        }
+
+        /* NOVO: Estilo do Botão de Instalar */
+        #btnInstalar {
+            display: none; /* Começa escondido */
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: 600;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            z-index: 9999;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        #btnInstalar:active {
+            transform: translateX(-50%) scale(0.95);
         }
 
         {% if site_config is defined and site_config.site_background %}
@@ -63,11 +99,9 @@
             border-bottom: none;
         }
         
-        /* --- Correção para o modal Select2 --- */
         .select2-container--bootstrap-5 .select2-dropdown {
-            z-index: 2051; /* Garante que o dropdown apareça sobre o modal */
+            z-index: 2051;
         }
-
     </style>
 </head>
 <body class="{% if not current_user.is_authenticated %}no-sidebar{% endif %}">
@@ -87,7 +121,7 @@
                         Sistema de Gerenciamento
                     {% endif %}
                 </div>
-                </div>
+            </div>
             
             <div class="top-navbar-right-items">
                 <div class="dropdown">
@@ -184,7 +218,7 @@
 
                  {% if current_user.role in ['super_admin', 'programador', 'admin_escola'] %}
                     <a href="{{ url_for('tools.index') }}" class="nav-link {% if request.endpoint and ('tools.' in request.endpoint or 'assets.' in request.endpoint or 'customizer.' in request.endpoint) %}active{% endif %}"><div class="nav-icon">🛠️</div> Ferramentas Admin</a>
-                 {% endif %}
+                {% endif %}
             </nav>
             <div class="sidebar-footer"></div>
         </aside>
@@ -252,11 +286,56 @@
 
     {% block modals %}{% endblock %}
     
+    <button id="btnInstalar">📲 Instalar App</button>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
-    
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
     <script>
+        // --- LÓGICA DO BOTÃO DE INSTALAÇÃO E SERVICE WORKER ---
+        
+        // 1. Variável para guardar o evento "beforeinstallprompt"
+        let deferredPrompt;
+        const btnInstalar = document.getElementById('btnInstalar');
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            // Previne que o Chrome mostre a barra mini-infobar automaticamente
+            e.preventDefault();
+            // Salva o evento para ser disparado depois
+            deferredPrompt = e;
+            // Atualiza a UI para notificar o usuário que ele pode adicionar à home screen
+            btnInstalar.style.display = 'block';
+        });
+
+        if (btnInstalar) {
+            btnInstalar.addEventListener('click', async () => {
+                if (deferredPrompt) {
+                    // Mostra o prompt de instalação
+                    deferredPrompt.prompt();
+                    // Espera o usuário responder ao prompt
+                    const { outcome } = await deferredPrompt.userChoice;
+                    console.log(`User response to the install prompt: ${outcome}`);
+                    // O evento não pode ser usado de novo, descarta
+                    deferredPrompt = null;
+                    // Esconde o botão
+                    btnInstalar.style.display = 'none';
+                }
+            });
+        }
+
+        // 2. Registro do Service Worker (ATUALIZADO com v=4.0)
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                // Adicionei ?v=4.0 para garantir que o navegador veja como um arquivo novo
+                navigator.serviceWorker.register('/sw.js?v=4.0').then(function(registration) {
+                    console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                }, function(err) {
+                    console.log('ServiceWorker registration failed: ', err);
+                });
+            });
+        }
+        // --------------------------------------------------------
+
         document.addEventListener('DOMContentLoaded', function() {
             // Script da Sidebar
             const sidebar = document.getElementById('sidebar');
@@ -269,13 +348,7 @@
             if (sidebarToggle) sidebarToggle.addEventListener('click', toggleSidebar);
             if (sidebarOverlay) sidebarOverlay.addEventListener('click', toggleSidebar);
 
-            // --- [CORREÇÃO FINAL]: Removido script de modal customizado ---
-            // O site usa Bootstrap 5 para modais (com data-bs-toggle), 
-            // então o script antigo (que usava 'data-modal-target') foi removido
-            // para evitar conflitos de JavaScript, que era a CAUSA ORIGINAL
-            // do congelamento do modal.
-
-            // Script de Alterar Senha (Existente)
+            // Script de Alterar Senha
             const changePasswordModal = document.getElementById('changePasswordModal');
             if (changePasswordModal) {
                 const savePasswordBtn = document.getElementById('savePasswordBtn');
@@ -327,7 +400,7 @@
                 });
             }
 
-            // Script de Notificações (Existente)
+            // Script de Notificações
             const badge = document.getElementById('notification-badge');
             const list = document.getElementById('notification-list');
             const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
@@ -350,9 +423,8 @@
             function updateNotificationUI(unread_count, notifications) {
                 if (badge) badge.textContent = unread_count;
                 if (badge) badge.style.display = unread_count > 0 ? 'block' : 'none';
-
                 if (list) {
-                    list.innerHTML = ''; 
+                    list.innerHTML = '';
                     if (notifications && notifications.length > 0) {
                         notifications.forEach(n => {
                             const item = document.createElement('li');
@@ -398,8 +470,6 @@
                 });
             }
 
-            // --- [CORREÇÃO FINAL]: Correção do JavaScript fatal ---
-            // Converte o booleano do Python (True) para o do JavaScript (true).
             if ({{ current_user.is_authenticated | tojson }}) {
                 fetchNotifications();
                 setInterval(fetchNotifications, 60000);
