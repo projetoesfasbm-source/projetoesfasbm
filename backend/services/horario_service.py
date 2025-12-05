@@ -18,7 +18,7 @@ from ..models.turma import Turma
 from ..models.user import User
 from .notification_service import NotificationService
 from .instrutor_service import InstrutorService
-from .site_config_service import SiteConfigService  # --- IMPORT NECESSÁRIO ---
+from .site_config_service import SiteConfigService # Mantido caso usado em outras partes, mas não para prioridade
 
 
 class HorarioService:
@@ -292,20 +292,23 @@ class HorarioService:
     @staticmethod
     def save_aula(data, user):
         try:
-            # --- NOVA LÓGICA DE BLOQUEIO POR PRIORIDADE ---
-            # Verifica se o modo de prioridade está ativo
-            is_priority_mode = SiteConfigService.get_config('horario_priority_active') == '1'
+            # --- NOVA LÓGICA DE BLOQUEIO POR PRIORIDADE (VIA MODELO SEMANA) ---
+            # Identifica a semana da data da aula
+            data_aula_str = data.get('dia') # O frontend manda 'dia' como string data ISO? Não, 'dia' é 'segunda', 'terca'...
+            # CORREÇÃO: O save_aula usa 'semana_id' enviado pelo frontend
             
-            if is_priority_mode:
-                disciplina_id_check = int(data.get('disciplina_id', 0))
-                # Busca lista de IDs permitidos
-                allowed_str = SiteConfigService.get_config('horario_priority_list', '')
-                allowed_ids = [int(x) for x in allowed_str.split(',') if x.isdigit()]
+            semana_id = int(data.get('semana_id', 0))
+            if semana_id:
+                # Busca a semana e suas configurações
+                semana = db.session.get(Semana, semana_id)
                 
-                # Se a disciplina atual NÃO estiver na lista de permitidas, bloqueia.
-                # (Admins também obedecem a regra para evitar erros, mas poderiam ser isentos se quisesse)
-                if disciplina_id_check not in allowed_ids:
-                    return False, "⚠️ AGENDAMENTO BLOQUEADO: O quadro está em Modo Prioritário. Apenas as disciplinas selecionadas pela administração podem agendar aulas neste momento.", 403
+                if semana and getattr(semana, 'priority_active', False):
+                    disciplina_id_check = int(data.get('disciplina_id', 0))
+                    allowed_str = getattr(semana, 'priority_disciplines', '') or ''
+                    allowed_ids = [int(x) for x in allowed_str.split(',') if x.strip().isdigit()]
+                    
+                    if disciplina_id_check not in allowed_ids:
+                        return False, "⚠️ AGENDAMENTO BLOQUEADO: O quadro está em Modo Prioritário nesta semana. Apenas as disciplinas selecionadas pela administração podem agendar aulas.", 403
             # -----------------------------------------------
 
             horario_id_raw = data.get('horario_id')
@@ -443,7 +446,6 @@ class HorarioService:
         aula = db.session.get(Horario, int(horario_id))
         if not aula or not HorarioService.can_edit_horario(aula, user):
             return False, 'Aula não encontrada ou sem permissão.'
-
         if aula.group_id:
             db.session.query(Horario).filter(Horario.group_id == aula.group_id).delete()
         else:
@@ -516,7 +518,6 @@ class HorarioService:
         aula_representativa = db.session.get(Horario, int(horario_id))
         if not aula_representativa:
             return False, 'Aula não encontrada.'
-
         if aula_representativa.group_id:
             aulas_para_alterar = db.session.scalars(
                 select(Horario).where(Horario.group_id == aula_representativa.group_id)
@@ -535,7 +536,6 @@ class HorarioService:
             for aula in aulas_para_alterar:
                 aula.status = 'confirmado'
             message = f'Agendamento de {disciplina_materia} aprovado.'
-
             turma = db.session.scalar(select(Turma).where(Turma.nome == turma_nome))
             if turma:
                 notif_url = url_for(
@@ -563,7 +563,6 @@ class HorarioService:
             message = f'Solicitação de aula de {disciplina_materia} foi negada e removida.'
         else:
             return False, 'Ação inválida.'
-
         db.session.commit()
         return True, message
 

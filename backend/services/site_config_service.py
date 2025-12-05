@@ -124,6 +124,7 @@ class SiteConfigService:
                     category=category
                 )
                 db.session.add(config)
+        db.session.commit()
     
     @staticmethod
     def _parse_number_ptbr(value: str):
@@ -136,27 +137,45 @@ class SiteConfigService:
         
     @staticmethod
     def set_config(key: str, value: str, config_type: str = 'text', description: str = None, category: str = 'general', updated_by: int = None):
-        if key not in SiteConfigService._CONFIG_KEYS: raise ValueError(f"Chave de configuração inválida: {key}")
-        expected_type = SiteConfigService._CONFIG_KEYS[key]['type']
-        if config_type != expected_type: raise ValueError(f"Tipo inválido para a chave {key}. Esperado: {expected_type}, Recebido: {config_type}")
-        if expected_type == 'image':
-            if value and not (value.startswith('/static/uploads/') or value.startswith('http://') or value.startswith('https://')): raise ValueError(f"Valor inválido para configuração de imagem: {value}.")
-        elif expected_type == 'color':
-            if value and not re.match(r'^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$', value): raise ValueError(f"Valor inválido para cor: {value}. Esperado formato hexadecimal (#RRGGBB).")
-        elif expected_type == 'number':
+        # --- CORREÇÃO PRINCIPAL: Permite chaves dinâmicas ---
+        # A verificação restritiva foi removida.
+        
+        # Validações por tipo continuam úteis
+        if config_type == 'image':
+            if value and not (value.startswith('/static/uploads/') or value.startswith('http://') or value.startswith('https://')): 
+                raise ValueError(f"Valor inválido para configuração de imagem: {value}.")
+        elif config_type == 'color':
+            if value and not re.match(r'^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$', value): 
+                raise ValueError(f"Valor inválido para cor: {value}. Esperado formato hexadecimal (#RRGGBB).")
+        elif config_type == 'number':
             num = SiteConfigService._parse_number_ptbr(value)
             value = f"{num:.2f}" if num is not None else ""
+            
         config = db.session.execute(select(SiteConfig).where(SiteConfig.config_key == key)).scalar_one_or_none()
         if config:
-            config.config_value, config.config_type, config.description, config.category, config.updated_by = value, config_type, description, category, updated_by
+            config.config_value = value
+            config.config_type = config_type
+            if description: config.description = description
+            if category: config.category = category
+            config.updated_by = updated_by
         else:
-            config = SiteConfig(config_key=key, config_value=value, config_type=config_type, description=description, category=category, updated_by=updated_by)
+            config = SiteConfig(
+                config_key=key, 
+                config_value=value, 
+                config_type=config_type, 
+                description=description or 'Configuração dinâmica', 
+                category=category, 
+                updated_by=updated_by
+            )
             db.session.add(config)
+        
+        db.session.commit() # Salva imediatamente
         return config
 
     @staticmethod
     def delete_all_configs():
         db.session.query(SiteConfig).delete()
+        db.session.commit()
 
     @staticmethod
     def get_valor_hora_aula(default: float = 55.19) -> float:

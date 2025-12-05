@@ -87,6 +87,7 @@ def index():
         todas_as_semanas = db.session.scalars(select(Semana).where(Semana.ciclo_id == ciclo_selecionado_id).order_by(Semana.data_inicio.desc())).all()
     
     semana_id = request.args.get('semana_id')
+    
     semana_selecionada = HorarioService.get_semana_selecionada(semana_id, ciclo_selecionado_id)
     
     horario_matrix = None
@@ -111,20 +112,33 @@ def index():
 
     tempos, intervalos = _get_horario_context_data()
 
-    # --- NOVO: DADOS PARA O MODAL DE PRIORIDADE (CORRIGIDO) ---
-    disciplinas_escola = []
+    # --- DADOS PARA O MODAL DE PRIORIDADE (VIA MODELO SEMANA) ---
+    disciplinas_escola_nomes = []
     if school_id:
-        # CORREÇÃO: Faz join com Turma para acessar school_id
-        disciplinas_escola = db.session.scalars(
-            select(Disciplina)
+        disciplinas_escola_nomes = db.session.scalars(
+            select(Disciplina.materia)
             .join(Turma, Disciplina.turma_id == Turma.id)
             .where(Turma.school_id == school_id)
+            .distinct()
             .order_by(Disciplina.materia)
         ).all()
     
-    priority_active = SiteConfigService.get_config('horario_priority_active') == '1'
-    priority_disciplines_str = SiteConfigService.get_config('horario_priority_list', '')
-    priority_disciplines = [int(x) for x in priority_disciplines_str.split(',') if x.isdigit()]
+    # Carrega dados diretamente da instância da Semana
+    priority_active = False
+    priority_disciplines_names = []
+    
+    if semana_selecionada:
+        # Usa getattr para evitar erro se o campo ainda não existir no objeto em memória
+        priority_active = getattr(semana_selecionada, 'priority_active', False)
+        priority_disciplines_str = getattr(semana_selecionada, 'priority_disciplines', '') or ''
+        
+        priority_ids = [int(x) for x in priority_disciplines_str.split(',') if x.strip().isdigit()]
+        if priority_ids:
+            priority_disciplines_names = db.session.scalars(
+                select(Disciplina.materia)
+                .where(Disciplina.id.in_(priority_ids))
+                .distinct()
+            ).all()
     # -----------------------------------------------
 
     return render_template('quadro_horario.html',
@@ -140,9 +154,9 @@ def index():
                            instrutor_turmas_vinculadas=instrutor_turmas_vinculadas,
                            tempos=tempos,
                            intervalos=intervalos,
-                           disciplinas_escola=disciplinas_escola,
+                           disciplinas_escola_nomes=disciplinas_escola_nomes,
                            priority_active=priority_active,
-                           priority_disciplines=priority_disciplines)
+                           priority_disciplines_names=priority_disciplines_names)
 
 @horario_bp.route('/save-priority-config', methods=['POST'])
 @login_required
@@ -150,12 +164,40 @@ def index():
 def save_priority_config():
     data = request.json
     active = data.get('active', False)
-    disciplines = data.get('disciplines', [])
+    disciplines_names = data.get('disciplines', [])
+    semana_id = data.get('semana_id')
+
+    if not semana_id:
+        return jsonify({'success': False, 'message': 'Semana não identificada.'}), 400
     
-    SiteConfigService.set_config('horario_priority_active', '1' if active else '0')
-    SiteConfigService.set_config('horario_priority_list', ','.join(map(str, disciplines)))
+    semana = db.session.get(Semana, semana_id)
+    if not semana:
+        return jsonify({'success': False, 'message': 'Semana não encontrada.'}), 404
+
+    school_id = UserService.get_current_school_id()
     
-    return jsonify({'success': True})
+    ids_para_salvar = []
+    if disciplines_names and school_id:
+        ids = db.session.scalars(
+            select(Disciplina.id)
+            .join(Turma)
+            .where(
+                Turma.school_id == school_id,
+                Disciplina.materia.in_(disciplines_names)
+            )
+        ).all()
+        ids_para_salvar = ids
+
+    # SALVA DIRETO NA TABELA DA SEMANA
+    semana.priority_active = active
+    semana.priority_disciplines = ','.join(map(str, ids_para_salvar))
+    
+    try:
+        db.session.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': f'Erro ao salvar no banco: {str(e)}'}), 500
 
 @horario_bp.route('/exportar-pdf')
 @login_required
