@@ -205,35 +205,53 @@
     {% if pelotao_selecionado and semana_selecionada %}
     <div class="modal-overlay" id="confirmation-modal-overlay">
         <div class="modal-content" style="max-width: 600px;">
+            
+            <div style="margin-bottom: 1.5rem; background: #f8f9fa; padding: 1rem; border-radius: 8px; border: 1px solid #e9ecef;">
+                <label for="modal-semana-selector" class="form-label" style="font-weight: bold; color: #374151;">
+                    📅 Selecione a Semana para Agendamento:
+                </label>
+                <select id="modal-semana-selector" class="form-select form-control">
+                    {% for semana in todas_as_semanas %}
+                        <option value="{{ semana.id }}" {% if semana.id == semana_selecionada.id %}selected{% endif %}>
+                            {{ semana.nome }} ({{ semana.data_inicio.strftime('%d/%m') }} a {{ semana.data_fim.strftime('%d/%m') }})
+                        </option>
+                    {% endfor %}
+                </select>
+                <small class="text-muted d-block mt-1">
+                    Você pode alterar a semana aqui antes de selecionar a turma.
+                </small>
+            </div>
+
             {% if current_user.role == 'instrutor' %}
-                <h3 id="modal-title">Selecionar Turma para Edição</h3>
-                <p style="margin-top: 1rem; margin-bottom: 1.5rem;">
-                    Você possui vínculos com as seguintes turmas. Selecione qual quadro horário deseja editar:
+                <h3 id="modal-title">Selecionar Turma</h3>
+                <p style="margin-top: 1rem; margin-bottom: 1rem;">
+                    Selecione qual turma você deseja editar para a semana selecionada acima:
                 </p>
                 <div class="turma-selection-buttons">
                     {% for turma in instrutor_turmas_vinculadas %}
-                        <a href="{{ url_for('horario.editar_horario_grid', pelotao=turma.nome, semana_id=semana_selecionada.id, ciclo_id=ciclo_selecionado) }}" class="btn btn-primary btn-turma">
+                        <a href="{{ url_for('horario.editar_horario_grid', pelotao=turma.nome, semana_id=semana_selecionada.id, ciclo_id=ciclo_selecionado) }}" 
+                           class="btn btn-primary btn-turma dynamic-week-link">
                             {{ turma.nome }}
                         </a>
                     {% else %}
-                        <p class="text-muted">Nenhum vínculo encontrado.</p>
+                        <p class="text-muted">Nenhum vínculo encontrado. Você não está vinculado a nenhuma turma para editar horários.</p>
                     {% endfor %}
                 </div>
             {% else %} {# Para admins #}
-                <h3 id="modal-title">Confirmar Edição de Horário</h3>
-                <p style="margin-top: 1rem; margin-bottom: 1.5rem; font-size: 1.1rem;">
-                    Você está prestes a entrar no modo de edição do quadro horário para a turma:
+                <h3 id="modal-title">Confirmar Edição</h3>
+                <p style="margin-top: 1rem; margin-bottom: 1rem; font-size: 1.1rem;">
+                    Editar quadro da turma:
                 </p>
-                <div style="background-color: #f1f5f9; border: 1px solid #e2e8f0; padding: 1rem; border-radius: 8px; text-align: center; margin-bottom: 2rem;">
-                    <strong style="font-size: 1.5rem; color: #1e3a8a;">{{ pelotao_selecionado }}</strong>
+                <div style="background-color: #f1f5f9; border: 1px solid #e2e8f0; padding: 0.5rem; border-radius: 8px; text-align: center; margin-bottom: 1.5rem;">
+                    <strong style="font-size: 1.2rem; color: #1e3a8a;">{{ pelotao_selecionado }}</strong>
                 </div>
-                <p>Deseja continuar?</p>
             {% endif %}
 
             <div class="form-actions" style="justify-content: flex-end; margin-top: 2rem;">
                 <button type="button" class="btn btn-secondary" onclick="closeConfirmationModal()">Cancelar</button>
                 {% if current_user.role != 'instrutor' %}
-                    <a href="{{ url_for('horario.editar_horario_grid', pelotao=pelotao_selecionado, semana_id=semana_selecionada.id, ciclo_id=ciclo_selecionado) }}" class="btn btn-primary">
+                    <a href="{{ url_for('horario.editar_horario_grid', pelotao=pelotao_selecionado, semana_id=semana_selecionada.id, ciclo_id=ciclo_selecionado) }}" 
+                       class="btn btn-primary dynamic-week-link">
                         Confirmar e Continuar
                     </a>
                 {% endif %}
@@ -244,6 +262,7 @@
     
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            // Seletor da página principal
             const semanaSelector = document.getElementById('semana_selector');
             if (semanaSelector) {
                 semanaSelector.addEventListener('change', function() {
@@ -253,6 +272,31 @@
                     window.location.href = `{{ url_for('horario.index') }}?pelotao=${pelotao}&semana_id=${semanaId}&ciclo=${ciclo}`;
                 });
             }
+
+            // --- NOVA LÓGICA DO MODAL ---
+            const modalSemanaSelect = document.getElementById('modal-semana-selector');
+            const weekLinks = document.querySelectorAll('.dynamic-week-link');
+
+            if (modalSemanaSelect) {
+                modalSemanaSelect.addEventListener('change', function() {
+                    const newSemanaId = this.value;
+                    
+                    weekLinks.forEach(link => {
+                        let currentHref = link.getAttribute('href');
+                        // O link padrão é algo como: .../editar/PELOTAO/SEMANA_ID/CICLO_ID
+                        // Vamos usar regex para substituir a parte da SEMANA_ID.
+                        // A regex busca: /editar/ (qualquer coisa exceto barra) / (digitos) / (digitos)
+                        // E substitui o primeiro grupo de digitos pelo novo ID.
+                        
+                        const regex = /(.*\/editar\/[^\/]+\/)(\d+)(\/\d+)/;
+                        if (regex.test(currentHref)) {
+                            const newHref = currentHref.replace(regex, `$1${newSemanaId}$3`);
+                            link.setAttribute('href', newHref);
+                        }
+                    });
+                });
+            }
+            // -----------------------------
 
             const toggleBtn = document.getElementById('weekend-toggle');
             if (toggleBtn) {

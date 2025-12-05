@@ -1,34 +1,91 @@
-<div class="modal-overlay" id="horario-modal-overlay">
-    <div class="modal-content">
-        <h3 id="modal-title">Agendar Aula</h3>
-        <form id="modal-form">
-            <input type="hidden" id="modal-horario-id" name="horario_id">
-            <input type="hidden" id="modal-dia" name="dia">
-            <input type="hidden" id="modal-periodo" name="periodo">
+<div class="modal fade" id="aulaModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="aulaModalLabel">Gerenciar Aula</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formAula">
+                    <input type="hidden" id="horario_id" name="horario_id">
+                    <input type="hidden" id="pelotao" name="pelotao">
+                    <input type="hidden" id="semana_id" name="semana_id">
+                    <input type="hidden" id="dia" name="dia">
+                    <input type="hidden" id="periodo" name="periodo">
 
-            <div class="form-group">
-                <label for="modal-disciplina">Disciplina</label>
-                <select id="modal-disciplina" name="disciplina_id" class="form-control" required>
-                    <option value="">Selecione a disciplina</option>
-                </select>
-            </div>
+                    <div id="modeAlert" class="alert alert-info py-2 mb-3" style="display: none;">
+                        <i class="fas fa-info-circle me-1"></i> <span id="modeText"></span>
+                    </div>
 
-            <div class="form-group">
-                <label for="modal-instrutor">Instrutor</label>
-                <select id="modal-instrutor" name="instrutor_id" class="form-control" required>
-                    <option value="">Selecione primeiro a disciplina</option>
-                </select>
-            </div>
-            
-            <div class="form-group">
-                <label for="modal-duracao">Duração (períodos)</label>
-                <input type="number" id="modal-duracao" name="duracao" class="form-control" value="1" min="1" max="8">
-            </div>
+                    <div class="mb-3">
+                        <label for="disciplina_id" class="form-label fw-bold">Disciplina</label>
+                        <select class="form-select" id="disciplina_id" name="disciplina_id" required onchange="carregarInstrutoresVinculados()">
+                            <option value="">Selecione...</option>
+                            {% for disc in disciplinas_disponiveis %}
+                            <option value="{{ disc.id }}" data-restantes="{{ disc.restantes }}">
+                                {{ disc.nome }} (Restam: {{ disc.restantes }}h)
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text" id="horasRestantesHelp"></div>
+                    </div>
 
-            <div class="form-actions">
-                <button type="button" class="btn btn-secondary" id="modal-cancel">Cancelar</button>
-                <button type="submit" class="btn btn-primary" id="modal-confirm">Confirmar</button>
+                    {% if is_admin %}
+                    <div class="mb-3">
+                        <label for="instrutor_id" class="form-label fw-bold">Instrutor (Admin)</label>
+                        <select class="form-select" id="instrutor_id" name="instrutor_id" required>
+                            <option value="">Carregando...</option>
+                            {% for inst in todos_instrutores %}
+                            <option value="{{ inst.id }}">{{ inst.nome }}</option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">Selecione o instrutor principal ou a dupla vinculada.</small>
+                    </div>
+                    {% else %}
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Instrutor</label>
+                        <input type="text" class="form-control" value="Você" disabled readonly>
+                        <small class="text-muted">Se houver um segundo instrutor vinculado, ele será adicionado automaticamente.</small>
+                    </div>
+                    {% endif %}
+
+                    <div class="mb-3">
+                        <label for="duracao" class="form-label fw-bold">Duração (Períodos)</label>
+                        <select class="form-select" id="duracao" name="duracao" required>
+                            <option value="1">1 Período</option>
+                            <option value="2">2 Períodos</option>
+                            <option value="3">3 Períodos</option>
+                            <option value="4">4 Períodos</option>
+                            <option value="5">5 Períodos</option>
+                            <option value="6">6 Períodos</option>
+                            <option value="7">7 Períodos</option>
+                            <option value="8">8 Períodos</option>
+                            <option value="9">9 Períodos</option>
+                            <option value="10">10 Períodos</option>
+                            <option value="11">11 Períodos</option>
+                            <option value="12">12 Períodos</option>
+                            <option value="13">13 Períodos</option>
+                            <option value="14">14 Períodos</option>
+                            <option value="15">15 Períodos</option>
+                        </select>
+                        <div class="form-text">O sistema ajustará automaticamente os intervalos e limitará conforme o fim do expediente.</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="observacao" class="form-label">Observação (Opcional)</label>
+                        <textarea class="form-control" id="observacao" name="observacao" rows="2" placeholder="Local específico, instruções..."></textarea>
+                    </div>
+                </form>
             </div>
-        </form>
+            <div class="modal-footer justify-content-between">
+                <button type="button" class="btn btn-danger" id="btnRemover" style="display: none;" onclick="removerAula()">
+                    <i class="fas fa-trash"></i> Remover Aula
+                </button>
+                <div class="ms-auto">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" onclick="salvarAula()">Salvar</button>
+                </div>
+            </div>
+        </div>
     </div>
 </div>

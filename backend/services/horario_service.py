@@ -17,10 +17,7 @@ from ..models.semana import Semana
 from ..models.turma import Turma
 from ..models.user import User
 from .notification_service import NotificationService
-# --- IMPORT ADICIONADO ---
-# Importa o serviço de instrutor para usarmos a busca filtrada
-from .instrutor_service import InstrutorService 
-# -------------------------
+from .instrutor_service import InstrutorService
 
 
 class HorarioService:
@@ -157,7 +154,6 @@ class HorarioService:
         if not turma_obj:
             return {'success': False, 'message': 'Turma não encontrada.'}
 
-        # A busca de disciplinas está correta, pois é filtrada pela turma (que é da escola)
         disciplinas_disponiveis = []
         if is_admin:
             disciplinas_da_turma = db.session.scalars(
@@ -190,15 +186,11 @@ class HorarioService:
                     {"id": d.id, "nome": d.materia, "restantes": horas_restantes}
                 )
 
-        # --- CORREÇÃO DO VAZAMENTO DE DADOS ---
-        # A consulta anterior (select(Instrutor).all()) buscava todos os instrutores
-        # do banco. Agora, usamos o serviço corrigido que filtra pela escola do usuário.
         instrutores_paginados = InstrutorService.get_all_instrutores(user=user)
         todos_instrutores = [
             {"id": i.id, "nome": i.user.nome_de_guerra or i.user.username}
-            for i in instrutores_paginados.items # .items pois o serviço retorna um objeto de paginação
+            for i in instrutores_paginados.items
         ]
-        # --- FIM DA CORREÇÃO ---
 
         return {
             'success': True,
@@ -206,7 +198,7 @@ class HorarioService:
             'pelotao_selecionado': pelotao,
             'semana_selecionada': semana,
             'disciplinas_disponiveis': disciplinas_disponiveis,
-            'todos_instrutores': todos_instrutores, # Lista agora está filtrada
+            'todos_instrutores': todos_instrutores,
             'is_admin': is_admin,
             'instrutor_logado_id': user.instrutor_profile.id if user.instrutor_profile else None,
             'datas_semana': HorarioService.get_datas_da_semana(semana),
@@ -219,19 +211,17 @@ class HorarioService:
             return None
 
         duracao_total = aula.duracao
-        periodo_inicio = aula.periodo # Valor padrão
+        periodo_inicio = aula.periodo
 
-        # CORREÇÃO DE LÓGICA: Se for parte de um grupo, calcula a duração total do grupo e encontra o período de início
         if aula.group_id:
             duracao_total = db.session.scalar(
                 select(func.sum(Horario.duracao)).where(Horario.group_id == aula.group_id)
             )
-            # Adicionalmente, pega o período de início do grupo (o menor período)
             periodo_inicio = db.session.scalar(
                 select(func.min(Horario.periodo)).where(Horario.group_id == aula.group_id)
             )
         else:
-            periodo_inicio = aula.periodo # Usa o período de início da aula avulsa
+            periodo_inicio = aula.periodo
 
         instrutor_value = str(aula.instrutor_id)
         if aula.instrutor_id_2:
@@ -240,9 +230,9 @@ class HorarioService:
         return {
             'disciplina_id': aula.disciplina_id,
             'instrutor_value': instrutor_value,
-            'duracao': duracao_total, # Retorna a duração total calculada
+            'duracao': duracao_total,
             'observacao': aula.observacao,
-            'periodo': periodo_inicio, # Retorna o período de início do bloco
+            'periodo': periodo_inicio,
             'materia': aula.disciplina.materia,
             'instrutor_nome': (
                 aula.instrutor.user.nome_de_guerra if aula.instrutor and aula.instrutor.user else ''
@@ -282,28 +272,23 @@ class HorarioService:
             if not instrutor_id_1:
                 return False, 'Instrutor principal não especificado.', 400
 
-            # --- CORREÇÃO: DETECÇÃO AUTOMÁTICA DO SEGUNDO INSTRUTOR (VÍNCULO) ---
-            # Se o segundo instrutor não foi informado (seja por admin selecionando apenas um, 
-            # ou instrutor logado), verificamos se existe um vínculo configurado na turma.
+            # --- CORREÇÃO APLICADA AQUI ---
+            # Busca automática do segundo instrutor (vínculo) corrigida para usar 'pelotao' em vez de 'turma_id'
             if not instrutor_id_2:
-                # 1. Busca a Turma pelo nome (pelotao)
-                turma_busca = db.session.scalar(select(Turma).where(Turma.nome == pelotao))
-                
-                if turma_busca:
-                    # 2. Busca o vínculo (DisciplinaTurma) para essa disciplina nesta turma
-                    vinculo_dt = db.session.scalar(
-                        select(DisciplinaTurma).where(
-                            DisciplinaTurma.disciplina_id == disciplina_id,
-                            DisciplinaTurma.turma_id == turma_busca.id
-                        )
+                # Busca o vínculo na tabela DisciplinaTurma usando 'pelotao' e 'disciplina_id'
+                vinculo_dt = db.session.scalar(
+                    select(DisciplinaTurma).where(
+                        DisciplinaTurma.disciplina_id == disciplina_id,
+                        DisciplinaTurma.pelotao == pelotao # Uso correto do campo que existe no modelo
                     )
-                    
-                    if vinculo_dt:
-                        # 3. Verifica se o instrutor_id_1 faz parte do par e preenche o instrutor_id_2 com o outro
-                        if vinculo_dt.instrutor_id_1 == instrutor_id_1 and vinculo_dt.instrutor_id_2:
-                            instrutor_id_2 = vinculo_dt.instrutor_id_2
-                        elif vinculo_dt.instrutor_id_2 == instrutor_id_1 and vinculo_dt.instrutor_id_1:
-                            instrutor_id_2 = vinculo_dt.instrutor_id_1
+                )
+                
+                if vinculo_dt:
+                    # Verifica se o instrutor_id_1 faz parte do par e preenche o instrutor_id_2 com o outro
+                    if vinculo_dt.instrutor_id_1 == instrutor_id_1 and vinculo_dt.instrutor_id_2:
+                        instrutor_id_2 = vinculo_dt.instrutor_id_2
+                    elif vinculo_dt.instrutor_id_2 == instrutor_id_1 and vinculo_dt.instrutor_id_1:
+                        instrutor_id_2 = vinculo_dt.instrutor_id_1
             # --- FIM DA CORREÇÃO ---
 
             # edição (substituição de grupo)
@@ -317,7 +302,7 @@ class HorarioService:
                     db.session.delete(aula_original)
                 db.session.flush()
 
-            break_points = {3, 6, 9}  # intervalos onde não unir blocos
+            break_points = {3, 6, 9}
             group_id = str(uuid.uuid4()) if duracao > 1 else None
             periodos_restantes = list(range(periodo_inicio, periodo_fim + 1))
 
@@ -356,7 +341,7 @@ class HorarioService:
                     disciplina_id=disciplina_id,
                     observacao=observacao,
                     instrutor_id=instrutor_id_1,
-                    instrutor_id_2=instrutor_id_2,  # Agora corretamente preenchido
+                    instrutor_id_2=instrutor_id_2,
                     status='confirmado' if is_admin else 'pendente',
                     group_id=group_id,
                 )
@@ -364,10 +349,10 @@ class HorarioService:
 
                 periodos_restantes = periodos_restantes[duracao_bloco:]
 
-            # notificação (quando não-admin cria)
+            # notificação
             if not is_admin:
                 disciplina = db.session.get(Disciplina, disciplina_id)
-                # Reutilizando a busca ou buscando se não tiver (mas agora deve ter buscado acima para o vinculo)
+                # Busca Turma apenas para pegar o school_id para notificação
                 turma = db.session.scalar(select(Turma).where(Turma.nome == pelotao))
                 
                 if turma and turma.school_id:
@@ -406,7 +391,6 @@ class HorarioService:
 
     @staticmethod
     def get_aulas_pendentes():
-        """Retorna lista plana de aulas pendentes (para consumo interno)."""
         return db.session.scalars(
             select(Horario)
             .options(
@@ -420,7 +404,6 @@ class HorarioService:
 
     @staticmethod
     def get_aulas_pendentes_agrupadas():
-        """Agrupa pendentes por group_id para exibição consolidada na página de aprovação."""
         aulas_pendentes_flat = HorarioService.get_aulas_pendentes()
         grouped_aulas = defaultdict(list)
         single_aulas = []
@@ -433,7 +416,6 @@ class HorarioService:
 
         aulas_para_template = []
 
-        # Entradas avulsas
         for aula in single_aulas:
             aulas_para_template.append({
                 'aula': aula,
@@ -441,7 +423,6 @@ class HorarioService:
                 'id_para_acao': aula.id,
             })
 
-        # Entradas agrupadas
         for group_id, aulas_no_grupo in grouped_aulas.items():
             if not aulas_no_grupo:
                 continue
@@ -552,17 +533,14 @@ class HorarioService:
         )
 
         try:
-            # Se for uma aula em grupo, remove o grupo inteiro antes de recriar os blocos aprovados
             if aula_pendente.group_id:
                 db.session.query(Horario).filter(Horario.group_id == aula_pendente.group_id).delete()
             else:
-                # Se for uma aula única, mas com o mesmo ID passado no form
-                db.session.delete(aula_pendente) 
+                db.session.delete(aula_pendente)
             
-            db.session.flush() # Aplica a remoção antes de inserir
+            db.session.flush()
             
             if not periodos_para_aprovar:
-                # Negação total: já removemos a aula/grupo acima
                 message = "Aula negada com sucesso."
                 if instrutor_user_id:
                     NotificationService.create_notification(
@@ -573,7 +551,6 @@ class HorarioService:
                 db.session.commit()
                 return True, message
 
-            # Aprovação parcial ou total (recriação de blocos)
             message = "Aula aprovada com sucesso."
             for grupo_inicio, grupo_fim in HorarioService._group_consecutive_periods(periodos_para_aprovar):
                 nova_aula = Horario(

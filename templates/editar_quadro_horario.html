@@ -1,394 +1,393 @@
 {% extends "base.html" %}
 
-{% block title %}Editar Quadro Horário - {{ pelotao_selecionado }}{% endblock %}
+{% block title %}Editar Quadro Horário{% endblock %}
 
 {% block content %}
-<div class="content-header">
-    <h1>Editar Quadro Horário</h1>
-    <p>Você está editando o horário para: <strong>{{ pelotao_selecionado }}</strong> na semana <strong>{{ semana_selecionada.nome }}</strong></p>
-</div>
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h2 class="mb-0">
+                {% if is_admin %}
+                Editando: <span class="text-primary">{{ pelotao_selecionado }}</span>
+                {% else %}
+                Agendamento: <span class="text-primary">{{ pelotao_selecionado }}</span>
+                {% endif %}
+            </h2>
+            <p class="text-muted">
+                Semana: <strong>{{ semana_selecionada.nome }}</strong> ({{ semana_selecionada.data_inicio.strftime('%d/%m') }} a {{ semana_selecionada.data_fim.strftime('%d/%m') }})
+            </p>
+        </div>
+        <div>
+            <button type="button" class="btn btn-secondary me-2" onclick="window.history.back()">Voltar</button>
+            <button type="button" class="btn btn-info me-2" data-bs-toggle="modal" data-bs-target="#ajudaModal">
+                <i class="fas fa-question-circle"></i> Ajuda
+            </button>
+        </div>
+    </div>
 
-<div class="table-wrapper">
-    <table class="horario-table-new editable fixed-layout" id="weekday-table">
-        <thead>
-            <tr>
-                <th class="header-tempo" style="width: 70px;">Horário</th>
-                <th class="header-dia">Segunda-feira <br><small>({{ datas_semana.segunda }})</small></th>
-                <th class="header-dia">Terça-feira <br><small>({{ datas_semana.terca }})</small></th>
-                <th class="header-dia">Quarta-feira <br><small>({{ datas_semana.quarta }})</small></th>
-                <th class="header-dia">Quinta-feira <br><small>({{ datas_semana.quinta }})</small></th>
-                <th class="header-dia">Sexta-feira <br><small>({{ datas_semana.sexta }})</small></th>
-            </tr>
-        </thead>
-        <tbody>
-            {% set dias = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'] %}
+    <div class="card mb-3 shadow-sm" style="border: 1px solid #000;">
+        <div class="card-body py-2">
+            <div class="d-flex gap-4 align-items-center flex-wrap">
+                <span class="badge bg-white text-dark border border-dark"><i class="fas fa-plus me-1"></i> Disponível</span>
+                <span class="badge bg-success border border-dark">Confirmado (Seu/Admin)</span>
+                <span class="badge bg-warning text-dark border border-dark">Pendente (Aguardando)</span>
+                <span class="badge bg-danger border border-dark">Bloqueado (Outro Instrutor)</span>
+            </div>
+        </div>
+    </div>
 
-            {% for row_idx in range(15) %}
-                {% set periodo_num = row_idx + 1 %}
+    {% set max_periodo_semana = 12 %}
+    {% if semana_selecionada.mostrar_periodo_15 %}
+        {% set max_periodo_semana = 15 %}
+    {% elif semana_selecionada.mostrar_periodo_14 %}
+        {% set max_periodo_semana = 14 %}
+    {% elif semana_selecionada.mostrar_periodo_13 %}
+        {% set max_periodo_semana = 13 %}
+    {% endif %}
 
-                {% if (current_user.role in ['admin', 'programador', 'super_admin']) or
-                      (periodo_num <= 12) or
-                      (periodo_num == 13 and semana_selecionada.mostrar_periodo_13) or
-                      (periodo_num == 14 and semana_selecionada.mostrar_periodo_14) or
-                      (periodo_num == 15 and semana_selecionada.mostrar_periodo_15) %}
-                
-                <tr class="{% if periodo_num in [3, 6, 9] %}break-after{% endif %}" style="height: 1px;">
-                    <td class="cell-tempo">
-                        <strong>{{ tempos[row_idx][0] }}</strong>
-                        <span>{{ tempos[row_idx][1] }}</span>
-                    </td>
-                    {% for col_idx in range(5) %}
-                        {% set aula = horario_matrix[row_idx][col_idx] %}
-                        {% set dia = dias[col_idx] %}
-                        {% set periodo = row_idx + 1 %}
-                        {% include 'partials/_horario_slot_edit.html' %}
+    <div class="table-responsive">
+        <table class="table table-bordered table-bordered-black text-center align-middle horario-grid-editor">
+            <thead class="table-dark">
+                <tr>
+                    <th style="width: 100px; border: 1px solid #fff;">Horário</th>
+                    {% for dia in datas_semana %}
+                    <th style="border: 1px solid #fff;">
+                        {{ dia|capitalize }}
+                        <br>
+                        <small class="text-white-50">{{ datas_semana[dia] }}</small>
+                    </th>
                     {% endfor %}
                 </tr>
+            </thead>
+            <tbody>
+                {% for row_idx in range(15) %}
+                
+                {% set periodo_atual = row_idx + 1 %}
+                {% if periodo_atual <= max_periodo_semana %}
+                
+                <tr>
+                    <td class="bg-light fw-bold text-dark">
+                        <div class="small">{{ tempos[row_idx][0] }}</div>
+                        <div class="text-muted" style="font-size: 0.75rem;">{{ tempos[row_idx][1] }}</div>
+                    </td>
 
+                    {% for col_idx in range(7) %} {% set aula = horario_matrix[row_idx][col_idx] %}
+                        
+                        {% if aula == 'SKIP' %}
+                            <td style="display: none;"></td>
+                        
+                        {% else %}
+                            {% set cell_class = '' %}
+                            {% set cell_onclick = '' %}
+                            {% set cell_content = '' %}
+                            {% set rowspan_val = aula.duracao %}
+
+                            {% if aula.is_disposicao %}
+                                {% set cell_class = 'cell-disponivel' %}
+                                {% set cell_onclick = "openAgendarModal('" ~ pelotao_selecionado ~ "', " ~ semana_selecionada.id ~ ", '" ~ ['segunda','terca','quarta','quinta','sexta','sabado','domingo'][col_idx] ~ "', " ~ (row_idx + 1) ~ ")" %}
+                                {% set cell_content = '<i class="fas fa-plus fa-lg text-secondary"></i>' %}
+                            
+                            {% else %}
+                                {% if aula.can_edit %}
+                                    {% if aula.status == 'pendente' %}
+                                        {% set cell_class = 'cell-pendente' %}
+                                        {% set cell_content = aula.materia ~ '<br><small>(Pendente)</small>' %}
+                                    {% else %}
+                                        {% set cell_class = 'cell-confirmada' %}
+                                        {% set cell_content = aula.materia %}
+                                    {% endif %}
+                                    {% set cell_onclick = "openEditarModal(" ~ aula.id ~ ", '" ~ aula.materia ~ "', " ~ aula.duracao ~ ", '" ~ aula.status ~ "')" %}
+                                
+                                {% else %}
+                                    {% set cell_class = 'cell-bloqueada' %}
+                                    {% set cell_content = aula.materia ~ '<br><small class="text-dark-50">' ~ (aula.instrutor or 'Outro') ~ '</small>' %}
+                                {% endif %}
+                            {% endif %}
+
+                            <td rowspan="{{ rowspan_val }}" 
+                                class="{{ cell_class }}" 
+                                onclick="{{ cell_onclick }}"
+                                style="cursor: pointer; height: 50px;">
+                                <div class="cell-content">
+                                    {{ cell_content|safe }}
+                                </div>
+                            </td>
+                        {% endif %}
+                    {% endfor %}
+                </tr>
+                
+                {% if row_idx == 2 or row_idx == 5 or row_idx == 8 %}
+                <tr class="intervalo-row">
+                    <td colspan="8" class="bg-secondary text-white py-1 border-black" style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; font-weight: bold;">
+                        {% if row_idx == 2 %}Intervalo Manhã ({{ intervalos.intervalo_1 }}){% endif %}
+                        {% if row_idx == 5 %}Almoço ({{ intervalos.almoco }}){% endif %}
+                        {% if row_idx == 8 %}Intervalo Tarde ({{ intervalos.intervalo_2 }}){% endif %}
+                    </td>
+                </tr>
                 {% endif %}
-            {% endfor %}
-        </tbody>
-    </table>
+                
+                {% endif %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
 
-<div class="form-actions">
-    <a href="{{ url_for('horario.index', pelotao=pelotao_selecionado, semana_id=semana_selecionada.id, ciclo=semana_selecionada.ciclo_id) }}" class="btn btn-secondary">Voltar para Visualização</a>
+{% include '_horario_modal.html' %}
+
+<div class="modal fade" id="ajudaModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Como usar o Agendador</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <ul>
+                    <li><strong>Agendar:</strong> Clique no símbolo <i class="fas fa-plus"></i> para adicionar uma aula.</li>
+                    <li><strong>Editar/Remover:</strong> Clique em uma célula colorida que você tenha permissão.</li>
+                    <li><strong>Blocos:</strong> Ao selecionar mais de 1 período, o sistema agrupa automaticamente.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
 </div>
 
 <style>
-/* --- CONFIGURAÇÃO DA TABELA FIXA --- */
-.horario-table-new.fixed-layout {
-    width: 100%;
-    table-layout: fixed !important;
-    border-collapse: collapse;
-}
+    /* ESTILOS DE BORDA FORTE PARA VISUALIZAÇÃO E IMPRESSÃO */
+    .table-bordered-black, 
+    .table-bordered-black th, 
+    .table-bordered-black td {
+        border: 1px solid #000 !important; /* Borda PRETA Sólida */
+    }
+    
+    .horario-grid-editor th, .horario-grid-editor td {
+        vertical-align: middle;
+        position: relative;
+    }
+    
+    /* Cores das Células */
+    .cell-disponivel { background-color: #fff; } /* Branco limpo */
+    .cell-disponivel:hover { background-color: #f0f0f0; }
+    
+    .cell-confirmada { background-color: #d1e7dd; color: #0f5132; }
+    .cell-pendente { background-color: #fff3cd; color: #664d03; }
+    .cell-bloqueada { background-color: #f8d7da; color: #842029; opacity: 0.9; }
 
-.horario-table-new td {
-    overflow: hidden; 
-}
-
-/* --- ESTILOS DOS BOTÕES DE AÇÃO --- */
-.slot-actions { display: flex; justify-content: center; gap: 4px; margin: 0 auto; pointer-events: auto; }
-.slot-actions.approval { padding: 2px; background-color: rgba(255,255,255,0.95); border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.15); }
-
-.slot-actions .btn-icon { 
-    width: 24px; height: 24px; 
-    border-radius: 4px; 
-    font-size: 0.8rem; 
-    font-weight: bold; 
-    color: white; 
-    display: flex; align-items: center; justify-content: center; 
-    border: none; cursor: pointer; 
-    transition: filter 0.2s ease;
-    padding: 0;
-}
-.slot-actions .btn-icon:hover { filter: brightness(1.1); }
-
-.slot-actions .btn-icon.approve { background-color: #10b981; }
-.slot-actions .btn-icon.deny { background-color: #ef4444; }
-.slot-actions .btn-icon.manage { background-color: #f59e0b; }
-
-tr.break-after > td {
-    border-bottom: 3px solid #fcd34d;
-}
-
-.tooltip-inner {
-    max-width: 300px;
-    text-align: left;
-}
-
-/* === CONFIGURAÇÃO DO MODAL === */
-.modal-overlay {
-    position: fixed !important; /* Mantém fixo na tela para centralizar */
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(0, 0, 0, 0.5);
-    z-index: 9999;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    visibility: hidden;
-    opacity: 0;
-    transition: all 0.3s ease;
-    backdrop-filter: blur(2px);
-    /* Removido qualquer bloqueio de pointer-events que pudesse existir */
-}
-
-.modal-overlay.visible {
-    visibility: visible;
-    opacity: 1;
-}
-
-.modal-content {
-    background: #fff;
-    padding: 2rem;
-    border-radius: 12px;
-    width: 95%;
-    max-width: 550px;
-    max-height: 90vh; 
-    overflow-y: auto;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.3);
-    position: relative;
-}
+    /* Centralização do conteúdo */
+    .cell-content {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        height: 100%;
+        width: 100%;
+        min-height: 40px;
+        font-weight: 500;
+    }
+    
+    /* Destaque para o separador de intervalo */
+    .intervalo-row td {
+        border-top: 2px solid #000 !important;
+        border-bottom: 2px solid #000 !important;
+        background-color: #6c757d !important;
+        color: #fff !important;
+    }
 </style>
 
-<div class="modal-overlay" id="horario-modal-overlay">
-    <div class="modal-content">
-        <h3 id="modal-title">Agendar Aula</h3>
-        <form id="modal-form">
-            <input type="hidden" id="modal-horario-id" name="horario_id">
-            <input type="hidden" id="modal-dia" name="dia">
-            <input type="hidden" id="modal-periodo" name="periodo">
-
-            <div class="form-group">
-                <label for="modal-disciplina">Disciplina</label>
-                <select id="modal-disciplina" name="disciplina_id" class="form-control" required>
-                    <option value="">Selecione a disciplina</option>
-                </select>
-            </div>
-
-            <div class="form-group">
-                <label for="modal-instrutor">Instrutor</label>
-                <select id="modal-instrutor" name="instrutor_id" class="form-control" required>
-                    <option value="">Selecione primeiro a disciplina</option>
-                </select>
-            </div>
-            
-            <div class="form-group">
-                <label for="modal-duracao">Duração (períodos)</label>
-                <input type="number" id="modal-duracao" name="duracao" class="form-control" value="1" min="1" max="8">
-            </div>
-
-            <div class="form-group">
-                <label for="modal-observacao">Observação (Opcional)</label>
-                <textarea id="modal-observacao" name="observacao" class="form-control" rows="2" placeholder="Ex: Avaliação, Aula Inaugural..."></textarea>
-            </div>
-
-            <div class="form-actions">
-                <button type="button" class="btn btn-secondary" id="modal-cancel">Cancelar</button>
-                <button type="submit" class="btn btn-primary" id="modal-confirm">Confirmar</button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<div class="modal-overlay" id="approval-modal-overlay">
-    <div class="modal-content">
-        <h3 id="approval-modal-title">Gerenciar Aula Pendente</h3>
-        <p id="approval-modal-info" class="text-muted"></p>
-        <form id="approval-modal-form">
-            <input type="hidden" id="approval-horario-id" name="horario_id">
-            <div id="approval-periodos-container" class="form-group">
-            </div>
-            <div class="form-actions" style="justify-content: space-between; margin-top: 1.5rem; padding-top: 0;">
-                <button type="button" class="btn btn-secondary" id="approval-modal-cancel">Cancelar</button>
-                <div class="btn-group">
-                    <button type="button" class="btn btn-danger" id="approval-negar">Negar Aula</button>
-                    <button type="submit" class="btn btn-primary">Confirmar Aprovação</button>
-                </div>
-            </div>
-        </form>
-    </div>
-</div>
-
 <script>
-    const PELOTAO_SELECIONADO = "{{ pelotao_selecionado }}";
-    const SEMANA_ID = "{{ semana_selecionada.id }}";
-    const IS_ADMIN = {{ is_admin | tojson }};
-</script>
+    // Variáveis globais de controle
+    let modalAula = null;
+    let formAula = null;
+    let instrutorSelect = null;
+    let btnRemover = null;
+    let modalTitle = null;
 
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Inicializa Tooltips
-    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl)
+    // Configuração vinda do Backend
+    const isAdmin = {{ 'true' if is_admin else 'false' }};
+    const pelotaoAtual = "{{ pelotao_selecionado }}";
+    const MAX_PERIODO_SEMANA = {{ max_periodo_semana }};
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const modalElement = document.getElementById('aulaModal');
+        if (modalElement) {
+            document.body.appendChild(modalElement);
+            modalAula = new bootstrap.Modal(modalElement, {
+                backdrop: 'static',
+                keyboard: false
+            });
+        }
+        formAula = document.getElementById('formAula');
+        btnRemover = document.getElementById('btnRemover');
+        modalTitle = document.getElementById('aulaModalLabel');
+        instrutorSelect = document.getElementById('instrutor_id');
     });
 
-    const horarioModalOverlay = document.getElementById('horario-modal-overlay');
-    const approvalModalOverlay = document.getElementById('approval-modal-overlay');
-    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-    const modalForm = document.getElementById('modal-form');
-    const disciplinaSelect = document.getElementById('modal-disciplina');
-    const instrutorSelect = document.getElementById('modal-instrutor');
-    const disciplinasDisponiveis = {{ disciplinas_disponiveis | tojson }};
+    function atualizarOpcoesDuracao(periodoInicial) {
+        const selectDuracao = document.getElementById('duracao');
+        if (!selectDuracao) return; 
 
-    function openModal(modalOverlay) {
-        if (modalOverlay) {
-            modalOverlay.classList.add('visible');
-            // --- REMOVIDO: Travamento da rolagem ---
-            // document.body.style.overflow = 'hidden'; 
-        }
-    }
+        const options = selectDuracao.options;
+        const maxDuracaoPossivel = (MAX_PERIODO_SEMANA - periodoInicial) + 1;
 
-    function closeModal(modalOverlay) {
-        if (modalOverlay) {
-            modalOverlay.classList.remove('visible');
-            // --- REMOVIDO: Destravamento da rolagem ---
-            // document.body.style.overflow = '';
-        }
-    }
-
-    async function openHorarioModal(config) {
-        modalForm.reset();
-        document.getElementById('modal-horario-id').value = config.horario_id || '';
-        document.getElementById('modal-dia').value = config.dia;
-        document.getElementById('modal-periodo').value = config.periodo;
-
-        disciplinaSelect.innerHTML = '<option value="">Selecione a disciplina</option>';
-        disciplinasDisponiveis.forEach(d => {
-            const option = new Option(`${d.nome} (${d.restantes}h restantes)`, d.id);
-            disciplinaSelect.add(option);
-        });
-        
-        instrutorSelect.innerHTML = '<option value="">Selecione primeiro a disciplina</option>';
-        instrutorSelect.disabled = true;
-
-        if (config.horario_id) {
-            document.getElementById('modal-title').textContent = 'Editar Aula';
-            try {
-                const res = await fetch(`/horario/get-aula/${config.horario_id}`);
-                const data = await res.json();
-                if(data.success) {
-                    disciplinaSelect.value = data.disciplina_id;
-                    await carregarInstrutores(data.disciplina_id, data.instrutor_value);
-                    document.getElementById('modal-duracao').value = data.duracao;
-                    document.getElementById('modal-observacao').value = data.observacao || '';
-                }
-            } catch (e) { console.error("Erro ao buscar detalhes da aula:", e); }
-        } else {
-            document.getElementById('modal-title').textContent = 'Agendar Aula';
-        }
-        openModal(horarioModalOverlay);
-    }
-
-    async function carregarInstrutores(disciplinaId, instrutorSelecionado = null) {
-        if (!disciplinaId) return;
-        instrutorSelect.innerHTML = '<option value="">Carregando...</option>';
-        try {
-            const res = await fetch(`/horario/api/instrutores-vinculados/${PELOTAO_SELECIONADO}/${disciplinaId}`);
-            const instrutores = await res.json();
-            instrutorSelect.innerHTML = '';
-            if (instrutores.length > 0) {
-                instrutores.forEach(i => {
-                    const option = new Option(i.nome, i.id);
-                    instrutorSelect.add(option);
-                });
-                instrutorSelect.disabled = false;
-                if (instrutorSelecionado) instrutorSelect.value = instrutorSelecionado;
+        for (let i = 0; i < options.length; i++) {
+            const valor = parseInt(options[i].value);
+            if (valor > maxDuracaoPossivel) {
+                options[i].style.display = 'none'; 
+                options[i].disabled = true;        
             } else {
-                 instrutorSelect.innerHTML = '<option value="">Nenhum instrutor vinculado</option>';
-                 instrutorSelect.disabled = true;
+                options[i].style.display = 'block';
+                options[i].disabled = false;
             }
-        } catch(e) {
-            console.error("Erro ao buscar instrutores:", e);
-            instrutorSelect.innerHTML = '<option value="">Erro ao carregar</option>';
-            instrutorSelect.disabled = true;
+        }
+        
+        if (parseInt(selectDuracao.value) > maxDuracaoPossivel) {
+            selectDuracao.value = "1";
         }
     }
 
-    disciplinaSelect.addEventListener('change', function() { carregarInstrutores(this.value); });
-
-    function sendFullApprovalAction(horarioId, action) {
-        const confirmMessage = action === 'negar' ? 'Tem certeza que deseja NEGAR (remover) esta solicitação de aula?' : null;
-        if (confirmMessage && !confirm(confirmMessage)) return;
+    // Expondo funções globalmente
+    window.openAgendarModal = function(pelotao, semanaId, dia, periodo) {
+        if (!modalAula) { alert('Erro: Modal não carregado.'); return; }
         
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = '/horario/aprovar';
-        const inputs = { 'csrf_token': csrfToken, 'horario_id': horarioId, 'action': action };
-        for (const key in inputs) {
-            const input = document.createElement('input');
-            input.type = 'hidden'; input.name = key; input.value = inputs[key];
-            form.appendChild(input);
-        }
-        document.body.appendChild(form);
-        form.submit();
+        if(formAula) formAula.reset();
+        
+        const elHorarioId = document.getElementById('horario_id');
+        const elPelotao = document.getElementById('pelotao');
+        const elSemanaId = document.getElementById('semana_id');
+        const elDia = document.getElementById('dia');
+        const elPeriodo = document.getElementById('periodo');
+
+        if(elHorarioId) elHorarioId.value = '';
+        if(elPelotao) elPelotao.value = pelotao;
+        if(elSemanaId) elSemanaId.value = semanaId;
+        if(elDia) elDia.value = dia;
+        if(elPeriodo) elPeriodo.value = periodo;
+
+        atualizarOpcoesDuracao(periodo);
+
+        if(modalTitle) modalTitle.innerText = 'Novo Agendamento';
+        if(btnRemover) btnRemover.style.display = 'none';
+        
+        modalAula.show();
     }
 
-    async function openApprovalModal(horarioId) {
-        const form = document.getElementById('approval-modal-form');
-        form.reset();
-        document.getElementById('approval-horario-id').value = horarioId;
-        const periodosContainer = document.getElementById('approval-periodos-container');
-        periodosContainer.innerHTML = 'Carregando...';
-        
-        try {
-            const res = await fetch(`/horario/get-aula/${horarioId}`);
-            const data = await res.json();
-            if (data.success) {
-                document.getElementById('approval-modal-title').textContent = `Gerenciar Aula de ${data.materia}`;
-                document.getElementById('approval-modal-info').textContent = `Solicitada por: ${data.instrutor_nome}`;
-                periodosContainer.innerHTML = '<label class="form-label">Selecione os períodos para aprovar:</label>';
-                for (let i = 0; i < data.duracao; i++) {
-                    const periodo = data.periodo + i;
-                    periodosContainer.innerHTML += `
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="periodos" value="${periodo}" id="periodo-${periodo}" checked>
-                            <label class="form-check-label" for="periodo-${periodo}">${periodo}º Período</label>
-                        </div>`;
+    window.openEditarModal = function(id, materia, duracao, status) {
+        if (!modalAula) return;
+
+        fetch(`/horario/get-aula/${id}`)
+            .then(r => r.json())
+            .then(data => {
+                if(data.success) {
+                    const elHorarioId = document.getElementById('horario_id');
+                    const elPelotao = document.getElementById('pelotao');
+                    const elSemanaId = document.getElementById('semana_id');
+                    const elDia = document.getElementById('dia');
+                    const elPeriodo = document.getElementById('periodo');
+                    const elDisciplina = document.getElementById('disciplina_id');
+                    const elDuracao = document.getElementById('duracao');
+                    const elObs = document.getElementById('observacao');
+
+                    if(elHorarioId) elHorarioId.value = id;
+                    if(elPelotao) elPelotao.value = "{{ pelotao_selecionado }}";
+                    if(elSemanaId) elSemanaId.value = "{{ semana_selecionada.id }}";
+                    if(elDia) elDia.value = ''; 
+                    if(elPeriodo) elPeriodo.value = data.periodo; 
+
+                    atualizarOpcoesDuracao(data.periodo);
+
+                    if(elDisciplina) elDisciplina.value = data.disciplina_id;
+                    if(elDuracao) elDuracao.value = data.duracao;
+                    if(elObs) elObs.value = data.observacao || '';
+
+                    if(isAdmin && instrutorSelect) {
+                        verificarEAdicionarOpcaoInstrutor(data.instrutor_value, data.instrutor_nome);
+                        instrutorSelect.value = data.instrutor_value;
+                    }
+                    
+                    if(modalTitle) modalTitle.innerText = 'Editar Agendamento';
+                    if(btnRemover) btnRemover.style.display = 'block';
+                    modalAula.show();
+                } else {
+                    alert('Erro ao carregar dados da aula.');
                 }
-                openModal(approvalModalOverlay);
-            } else { alert('Erro: ' + data.message); }
-        } catch (error) { alert("Não foi possível carregar os detalhes da aula."); }
+            });
     }
 
-    function handleTableClick(e) {
-        const target = e.target.closest('button');
-        if (!target) return;
-        const action = target.dataset.action;
-        const id = target.dataset.id;
-        const slot = target.closest('.schedule-slot');
-
-        if (action === 'add' && slot) openHorarioModal({ dia: slot.dataset.dia, periodo: slot.dataset.periodo });
-        else if (action === 'edit' && slot) openHorarioModal({ horario_id: id, dia: slot.dataset.dia, periodo: slot.dataset.periodo });
-        else if (action === 'delete') {
-            if (confirm('Tem certeza que deseja remover esta aula?')) {
-                fetch('/horario/remover-aula', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken }, body: JSON.stringify({ horario_id: id }) }).then(res => res.json()).then(data => { if (data.success) window.location.reload(); else alert('Erro: ' + data.message); });
+    window.verificarEAdicionarOpcaoInstrutor = function(value, text) {
+        if (!instrutorSelect) return;
+        let exists = false;
+        for (let i = 0; i < instrutorSelect.options.length; i++) {
+            if (instrutorSelect.options[i].value == value) {
+                exists = true;
+                break;
             }
-        } else if (action === 'approve_all') sendFullApprovalAction(id, 'aprovar');
-        else if (action === 'manage_approval') openApprovalModal(id);
-        else if (action === 'deny_aula') sendFullApprovalAction(id, 'negar');
+        }
+        if (!exists) {
+            let opt = document.createElement('option');
+            opt.value = value;
+            opt.innerHTML = text; 
+            instrutorSelect.appendChild(opt);
+        }
     }
 
-    document.querySelectorAll('.editable').forEach(table => table.addEventListener('click', handleTableClick));
-    
-    modalForm.addEventListener('submit', function(e) {
-        e.preventDefault();
-        const formData = {
-            horario_id: document.getElementById('modal-horario-id').value,
-            pelotao: PELOTAO_SELECIONADO,
-            semana_id: SEMANA_ID,
-            dia: document.getElementById('modal-dia').value,
-            periodo: document.getElementById('modal-periodo').value,
-            disciplina_id: disciplinaSelect.value,
-            instrutor_id: instrutorSelect.value,
-            duracao: document.getElementById('modal-duracao').value,
-            observacao: document.getElementById('modal-observacao').value
-        };
-        fetch('/horario/salvar-aula', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken }, body: JSON.stringify(formData) }).then(res => res.json()).then(data => { if (data.success) window.location.reload(); else alert('Erro: ' + data.message); });
-    });
+    window.carregarInstrutoresVinculados = function() {
+        if (!isAdmin) return; 
+        const elDisciplina = document.getElementById('disciplina_id');
+        if (!elDisciplina || !elDisciplina.value) return;
 
-    function sendPartialApproval(horarioId, periodos) {
-        fetch('/horario/aprovar-parcial', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken }, body: JSON.stringify({ horario_id: horarioId, periodos: periodos }) }).then(res => res.json()).then(data => { if (data.success) window.location.reload(); else alert('Erro: ' + data.message); });
+        fetch(`/horario/api/instrutores-vinculados/${pelotaoAtual}/${elDisciplina.value}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.length > 0 && instrutorSelect) {
+                   data.forEach(item => {
+                       verificarEAdicionarOpcaoInstrutor(item.id, item.nome);
+                   });
+                   instrutorSelect.value = data[data.length - 1].id; 
+                }
+            });
     }
 
-    document.getElementById('approval-negar').addEventListener('click', function() {
-        if (confirm('Tem certeza?')) sendPartialApproval(document.getElementById('approval-horario-id').value, []);
-    });
+    window.salvarAula = function() {
+        if(!formAula) return;
+        const formData = new FormData(formAula);
+        const data = Object.fromEntries(formData.entries());
+        data.semana_id = parseInt(data.semana_id);
+        
+        fetch('/horario/salvar-aula', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}'},
+            body: JSON.stringify(data)
+        })
+        .then(response => response.json())
+        .then(result => {
+            if (result.success) {
+                location.reload();
+            } else {
+                alert('Erro: ' + result.message);
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            alert('Erro ao comunicar com o servidor.');
+        });
+    }
 
-    document.getElementById('approval-modal-form').addEventListener('submit', function(e) {
-        e.preventDefault();
-        const selectedPeriodos = Array.from(document.querySelectorAll('#approval-periodos-container input:checked')).map(cb => parseInt(cb.value));
-        sendPartialApproval(document.getElementById('approval-horario-id').value, selectedPeriodos);
-    });
-    
-    document.getElementById('modal-cancel').addEventListener('click', () => closeModal(horarioModalOverlay));
-    document.getElementById('approval-modal-cancel').addEventListener('click', () => closeModal(approvalModalOverlay));
-    if (horarioModalOverlay) { horarioModalOverlay.addEventListener('click', (e) => { if (e.target === horarioModalOverlay) closeModal(horarioModalOverlay); }); }
-    if (approvalModalOverlay) { approvalModalOverlay.addEventListener('click', (e) => { if (e.target === approvalModalOverlay) closeModal(approvalModalOverlay); }); }
-});
+    window.removerAula = function() {
+        if(!confirm('Tem certeza que deseja remover esta aula?')) return;
+        const elHorarioId = document.getElementById('horario_id');
+        if(!elHorarioId) return;
+
+        fetch('/horario/remover-aula', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}'},
+            body: JSON.stringify({ horario_id: elHorarioId.value })
+        })
+        .then(r => r.json())
+        .then(result => {
+            if (result.success) location.reload();
+            else alert(result.message);
+        });
+    }
 </script>
 {% endblock %}
