@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     
-    <link rel="manifest" href="/manifest.json">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json', v='6.0') }}">
     
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
@@ -13,10 +13,11 @@
     
     <meta name="theme-color" content="{{ site_config.primary_color or '#3b82f6' }}">
     
-    <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/brasao.png', _external=True) }}">
-    <link rel="apple-touch-icon" sizes="152x152" href="{{ url_for('static', filename='img/brasao.png', _external=True) }}">
-    <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='img/brasao.png', _external=True) }}">
-    <link rel="apple-touch-icon" sizes="167x167" href="{{ url_for('static', filename='img/brasao.png', _external=True) }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/brasaoappcel.png', v='6.0') }}">
+    <link rel="apple-touch-icon" sizes="152x152" href="{{ url_for('static', filename='img/brasaoappcel.png', v='6.0') }}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='img/brasaoappcel.png', v='6.0') }}">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/brasaoappcel.png', v='6.0') }}">
+
     <title>{% block title %}Sistema EsFAS{% endblock %}</title>
     <meta name="csrf-token" content="{{ csrf_token() }}">
     
@@ -30,7 +31,7 @@
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
     
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='4.0') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='6.0') }}">
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
@@ -40,9 +41,9 @@
             --secondary-color: {{ site_config.secondary_color or '#1a232c' }};
         }
 
-        /* NOVO: Estilo do Botão de Instalar */
+        /* Botão de instalar */
         #btnInstalar {
-            display: none; /* Começa escondido */
+            display: none;
             position: fixed;
             bottom: 20px;
             left: 50%;
@@ -57,10 +58,6 @@
             box-shadow: 0 4px 15px rgba(0,0,0,0.3);
             z-index: 9999;
             cursor: pointer;
-            transition: transform 0.2s;
-        }
-        #btnInstalar:active {
-            transform: translateX(-50%) scale(0.95);
         }
 
         {% if site_config is defined and site_config.site_background %}
