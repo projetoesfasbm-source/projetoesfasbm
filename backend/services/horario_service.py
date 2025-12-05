@@ -282,6 +282,30 @@ class HorarioService:
             if not instrutor_id_1:
                 return False, 'Instrutor principal não especificado.', 400
 
+            # --- CORREÇÃO: DETECÇÃO AUTOMÁTICA DO SEGUNDO INSTRUTOR (VÍNCULO) ---
+            # Se o segundo instrutor não foi informado (seja por admin selecionando apenas um, 
+            # ou instrutor logado), verificamos se existe um vínculo configurado na turma.
+            if not instrutor_id_2:
+                # 1. Busca a Turma pelo nome (pelotao)
+                turma_busca = db.session.scalar(select(Turma).where(Turma.nome == pelotao))
+                
+                if turma_busca:
+                    # 2. Busca o vínculo (DisciplinaTurma) para essa disciplina nesta turma
+                    vinculo_dt = db.session.scalar(
+                        select(DisciplinaTurma).where(
+                            DisciplinaTurma.disciplina_id == disciplina_id,
+                            DisciplinaTurma.turma_id == turma_busca.id
+                        )
+                    )
+                    
+                    if vinculo_dt:
+                        # 3. Verifica se o instrutor_id_1 faz parte do par e preenche o instrutor_id_2 com o outro
+                        if vinculo_dt.instrutor_id_1 == instrutor_id_1 and vinculo_dt.instrutor_id_2:
+                            instrutor_id_2 = vinculo_dt.instrutor_id_2
+                        elif vinculo_dt.instrutor_id_2 == instrutor_id_1 and vinculo_dt.instrutor_id_1:
+                            instrutor_id_2 = vinculo_dt.instrutor_id_1
+            # --- FIM DA CORREÇÃO ---
+
             # edição (substituição de grupo)
             if horario_id:
                 aula_original = db.session.get(Horario, horario_id)
@@ -332,7 +356,7 @@ class HorarioService:
                     disciplina_id=disciplina_id,
                     observacao=observacao,
                     instrutor_id=instrutor_id_1,
-                    instrutor_id_2=instrutor_id_2,
+                    instrutor_id_2=instrutor_id_2,  # Agora corretamente preenchido
                     status='confirmado' if is_admin else 'pendente',
                     group_id=group_id,
                 )
@@ -343,7 +367,9 @@ class HorarioService:
             # notificação (quando não-admin cria)
             if not is_admin:
                 disciplina = db.session.get(Disciplina, disciplina_id)
+                # Reutilizando a busca ou buscando se não tiver (mas agora deve ter buscado acima para o vinculo)
                 turma = db.session.scalar(select(Turma).where(Turma.nome == pelotao))
+                
                 if turma and turma.school_id:
                     message = (
                         f"O instrutor {user.nome_de_guerra} agendou uma nova aula de "
