@@ -18,6 +18,7 @@ from ..models.turma import Turma
 from ..models.user import User
 from .notification_service import NotificationService
 from .instrutor_service import InstrutorService
+from .site_config_service import SiteConfigService  # --- IMPORT NECESSÁRIO ---
 
 
 class HorarioService:
@@ -246,10 +247,8 @@ class HorarioService:
         idênticos (mesma disciplina, instrutores, observação) que podem ser unidos,
         respeitando os break_points (intervalos).
         """
-        # Pontos de quebra onde NÃO se deve unir aulas (ex: recreios)
         break_points = {3, 6, 9}
 
-        # Busca todas as aulas do dia ordenadas pelo período
         aulas = db.session.scalars(
             select(Horario)
             .where(
@@ -263,21 +262,16 @@ class HorarioService:
         if not aulas:
             return
 
-        # Itera sobre a lista verificando pares adjacentes
         i = 0
         while i < len(aulas) - 1:
             atual = aulas[i]
             proximo = aulas[i+1]
 
-            # 1. Verifica Adjacência Temporal
             fim_atual = atual.periodo + atual.duracao - 1
             inicio_proximo = proximo.periodo
             sao_adjacentes = (fim_atual + 1) == inicio_proximo
-
-            # 2. Verifica Break Points (se o atual termina num break point, não une)
             respeita_intervalo = fim_atual not in break_points
 
-            # 3. Verifica Atributos Idênticos (Mesma Disciplina, Instrutores e Obs)
             mesmos_atributos = (
                 atual.disciplina_id == proximo.disciplina_id and
                 atual.instrutor_id == proximo.instrutor_id and
@@ -287,26 +281,33 @@ class HorarioService:
             )
 
             if sao_adjacentes and respeita_intervalo and mesmos_atributos:
-                # Realiza a Fusão (Merge)
                 atual.duracao += proximo.duracao
-                
-                # Garante group_id unificado
                 if not atual.group_id:
                     atual.group_id = proximo.group_id or str(uuid.uuid4())
-                
-                # Remove o bloco redundante do banco
                 db.session.delete(proximo)
-                
-                # Remove da lista em memória para continuar a verificação com o bloco estendido
                 aulas.pop(i+1)
-                
-                # Não incrementa 'i', pois o 'atual' (agora maior) pode se unir com o próximo da fila
             else:
                 i += 1
 
     @staticmethod
     def save_aula(data, user):
         try:
+            # --- NOVA LÓGICA DE BLOQUEIO POR PRIORIDADE ---
+            # Verifica se o modo de prioridade está ativo
+            is_priority_mode = SiteConfigService.get_config('horario_priority_active') == '1'
+            
+            if is_priority_mode:
+                disciplina_id_check = int(data.get('disciplina_id', 0))
+                # Busca lista de IDs permitidos
+                allowed_str = SiteConfigService.get_config('horario_priority_list', '')
+                allowed_ids = [int(x) for x in allowed_str.split(',') if x.isdigit()]
+                
+                # Se a disciplina atual NÃO estiver na lista de permitidas, bloqueia.
+                # (Admins também obedecem a regra para evitar erros, mas poderiam ser isentos se quisesse)
+                if disciplina_id_check not in allowed_ids:
+                    return False, "⚠️ AGENDAMENTO BLOQUEADO: O quadro está em Modo Prioritário. Apenas as disciplinas selecionadas pela administração podem agendar aulas neste momento.", 403
+            # -----------------------------------------------
+
             horario_id_raw = data.get('horario_id')
             horario_id = int(horario_id_raw) if horario_id_raw else None
 
@@ -428,13 +429,8 @@ class HorarioService:
                         notification_url,
                     )
 
-            # Aplica alterações iniciais para garantir que os novos registros existam antes de consolidar
             db.session.flush() 
-            
-            # --- AUTO-MERGE (Mesclar aulas sequenciais) ---
             HorarioService._consolidar_aulas_adjacentes(pelotao, semana_id, dia)
-            # -----------------------------------------------
-
             db.session.commit()
             return True, 'Aula salva com sucesso!', 200
         except Exception as e:

@@ -188,7 +188,8 @@
                     <input type="hidden" id="pelotao" name="pelotao">
                     <input type="hidden" id="semana_id" name="semana_id">
                     <input type="hidden" id="dia" name="dia">
-                    <input type="hidden" id="periodo" name="periodo">
+                    <input type="hidden" id="periodo" name="periodo"> 
+                    <input type="hidden" id="duracao" name="duracao"> 
 
                     <div class="mb-3">
                         <label for="disciplina_id" class="form-label fw-bold">Disciplina</label>
@@ -218,24 +219,27 @@
                     {% endif %}
 
                     <div class="mb-3">
-                        <label for="duracao" class="form-label fw-bold">Duração (Períodos)</label>
-                        <select class="form-select" id="duracao" name="duracao" required>
-                            <option value="1">1 Período</option>
-                            <option value="2">2 Períodos</option>
-                            <option value="3">3 Períodos</option>
-                            <option value="4">4 Períodos</option>
-                            <option value="5">5 Períodos</option>
-                            <option value="6">6 Períodos</option>
-                            <option value="7">7 Períodos</option>
-                            <option value="8">8 Períodos</option>
-                            <option value="9">9 Períodos</option>
-                            <option value="10">10 Períodos</option>
-                            <option value="11">11 Períodos</option>
-                            <option value="12">12 Períodos</option>
-                            <option value="13">13 Períodos</option>
-                            <option value="14">14 Períodos</option>
-                            <option value="15">15 Períodos</option>
-                        </select>
+                        <label class="form-label fw-bold">Períodos da Aula</label>
+                        <div class="p-3 border rounded bg-light" style="max-height: 300px; overflow-y: auto;">
+                            <small class="d-block mb-2 text-muted">Marque os tempos que deseja incluir nesta aula:</small>
+                            <div class="row g-2">
+                                {% for i in range(1, 16) %}
+                                <div class="col-6 col-sm-4 periodo-check-wrapper" id="check_wrapper_{{ i }}" 
+                                     {% if i > max_periodo_semana %}style="display:none;"{% endif %}>
+                                    <div class="form-check">
+                                        <input class="form-check-input periodo-checkbox" type="checkbox" value="{{ i }}" id="periodo_check_{{ i }}"
+                                               {% if i > max_periodo_semana %}disabled{% endif %}>
+                                        <label class="form-check-label" for="periodo_check_{{ i }}">
+                                            <strong>{{ i }}º Tempo</strong>
+                                            <div style="font-size: 0.75rem; color: #666;">
+                                                {{ tempos[i-1][1] }}
+                                            </div>
+                                        </label>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
                     </div>
 
                     <div class="mb-3">
@@ -257,7 +261,26 @@
     </div>
 </div>
 
+<div class="modal fade" id="ajudaModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Como usar o Agendador</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <ul>
+                    <li><strong>Agendar:</strong> Clique no símbolo <strong>+</strong> para adicionar uma aula.</li>
+                    <li><strong>Editar/Remover:</strong> Clique na aula colorida.</li>
+                    <li><strong>Períodos:</strong> Use as caixas de seleção para escolher exatamente quais horários fazem parte da aula. Se deixar espaços vazios, serão criadas aulas separadas.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
 <style>
+    /* ESTILOS DE BORDA FORTE */
     .table-bordered-black, .table-bordered-black th, .table-bordered-black td { border: 1px solid #000 !important; }
     .horario-grid-editor th, .horario-grid-editor td { vertical-align: middle; position: relative; }
     .cell-disponivel { background-color: #fff !important; transition: background-color 0.2s; } 
@@ -284,6 +307,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const instrutorSelect = document.getElementById('instrutor_id');
     const disciplinaSelect = document.getElementById('disciplina_id');
     
+    // Lista de todas as checkboxes
+    const allCheckboxes = document.querySelectorAll('.periodo-checkbox');
+    
     const isAdmin = {{ 'true' if is_admin else 'false' }};
     const pelotaoAtual = "{{ pelotao_selecionado|escape }}";
     const semanaIdAtual = "{{ semana_selecionada.id }}";
@@ -294,31 +320,57 @@ document.addEventListener('DOMContentLoaded', function() {
         return string.charAt(0).toUpperCase() + string.slice(1);
     }
 
-    function atualizarOpcoesDuracao(periodoInicial) {
-        const selectDuracao = document.getElementById('duracao');
-        const options = selectDuracao.options;
-        const maxDuracaoPossivel = (maxPeriodoSemana - periodoInicial) + 1;
-
-        for (let i = 0; i < options.length; i++) {
-            const valor = parseInt(options[i].value);
-            if (valor > maxDuracaoPossivel) {
-                options[i].style.display = 'none'; 
-                options[i].disabled = true;        
-            } else {
-                options[i].style.display = 'block';
-                options[i].disabled = false;
+    // Marca as checkboxes (Limpa tudo antes)
+    function setCheckboxes(periodoInicial, duracao) {
+        allCheckboxes.forEach(cb => cb.checked = false);
+        
+        const periodoFinal = periodoInicial + duracao - 1;
+        for (let i = periodoInicial; i <= periodoFinal; i++) {
+            if (i > maxPeriodoSemana) continue;
+            const cb = document.getElementById(`periodo_check_${i}`);
+            if (cb && !cb.disabled) {
+                cb.checked = true;
             }
         }
-        if (parseInt(selectDuracao.value) > maxDuracaoPossivel) selectDuracao.value = "1";
     }
 
-    // --- FUNÇÃO CORRIGIDA PARA FILTRAGEM AUTOMÁTICA ---
-    // Agora aceita um parametro opcional para pré-selecionar o instrutor após carregar
+    // Algoritmo para separar as checkboxes marcadas em BLOCOS CONTÍNUOS
+    function getSelectedBlocks() {
+        let selecionados = [];
+        allCheckboxes.forEach(cb => {
+            if (cb.checked && !cb.disabled) {
+                selecionados.push(parseInt(cb.value));
+            }
+        });
+
+        if (selecionados.length === 0) return [];
+
+        selecionados.sort((a, b) => a - b);
+        
+        let blocks = [];
+        let currentStart = selecionados[0];
+        let currentLength = 1;
+
+        for (let i = 1; i < selecionados.length; i++) {
+            if (selecionados[i] === selecionados[i-1] + 1) {
+                // É contínuo (ex: 1 e 2)
+                currentLength++;
+            } else {
+                // Buraco detectado (ex: 1 e 3) - Finaliza o bloco anterior
+                blocks.push({ periodo: currentStart, duracao: currentLength });
+                currentStart = selecionados[i];
+                currentLength = 1;
+            }
+        }
+        // Adiciona o último bloco
+        blocks.push({ periodo: currentStart, duracao: currentLength });
+        
+        return blocks;
+    }
+
     window.carregarInstrutoresVinculados = function(instrutorSelecionadoId = null) {
         if (!isAdmin) return; 
         const discId = disciplinaSelect.value;
-        
-        // Limpa opções atuais
         instrutorSelect.innerHTML = '<option value="">Carregando...</option>';
 
         if (!discId) {
@@ -329,8 +381,7 @@ document.addEventListener('DOMContentLoaded', function() {
         fetch(`/horario/api/instrutores-vinculados/${pelotaoAtual}/${discId}`)
             .then(r => r.json())
             .then(data => {
-                instrutorSelect.innerHTML = ''; // Limpa "Carregando..."
-                
+                instrutorSelect.innerHTML = ''; 
                 if (data.length === 0) {
                     instrutorSelect.innerHTML = '<option value="">Nenhum instrutor vinculado encontrado</option>';
                 } else {
@@ -338,21 +389,15 @@ document.addEventListener('DOMContentLoaded', function() {
                         let opt = new Option(item.nome, item.id);
                         instrutorSelect.add(opt);
                     });
-
-                    // Se foi passado um ID específico (edição), tenta selecionar ele
                     if (instrutorSelecionadoId) {
                         instrutorSelect.value = instrutorSelecionadoId;
-                        // Se o valor não existir na lista filtrada (caso raro de erro de dados),
-                        // podemos adicionar manualmente ou avisar, mas aqui vamos assumir consistência.
-                        // Caso a atribuição falhe (valor não na lista), ele fica no primeiro.
                     } else {
-                        // Novo agendamento: Seleciona o último (padrão do sistema)
                         instrutorSelect.value = data[data.length - 1].id;
                     }
                 }
             })
             .catch(err => {
-                console.error("Erro ao buscar instrutores:", err);
+                console.error("Erro:", err);
                 instrutorSelect.innerHTML = '<option value="">Erro ao carregar</option>';
             });
     }
@@ -375,10 +420,10 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         formAula.reset();
-        atualizarOpcoesDuracao(periodo);
-
+        
         document.getElementById('pelotao').value = pelotaoAtual;
         document.getElementById('semana_id').value = semanaIdAtual;
+        document.getElementById('dia').value = dia;
         
         const tituloComData = `${capitalize(dia)} (${dataFormatada})`;
 
@@ -386,12 +431,11 @@ document.addEventListener('DOMContentLoaded', function() {
             modalTitle.innerText = `Novo Agendamento - ${tituloComData}`;
             btnRemover.style.display = 'none';
             document.getElementById('horario_id').value = '';
-            document.getElementById('dia').value = dia;
-            document.getElementById('periodo').value = periodo;
             
-            // Limpa o select de instrutores ao abrir novo
+            // Marca APENAS o período clicado
+            setCheckboxes(periodo, 1);
+            
             if(isAdmin) instrutorSelect.innerHTML = '<option value="">Selecione a Disciplina primeiro...</option>';
-            
             modalAula.show();
 
         } else if (type === 'edit') {
@@ -403,21 +447,16 @@ document.addEventListener('DOMContentLoaded', function() {
                         btnRemover.style.display = 'block';
 
                         document.getElementById('horario_id').value = aulaId;
-                        document.getElementById('dia').value = '';
-                        document.getElementById('periodo').value = data.periodo;
-
-                        atualizarOpcoesDuracao(data.periodo);
+                        
+                        // Marca os períodos existentes
+                        setCheckboxes(data.periodo, data.duracao);
 
                         document.getElementById('disciplina_id').value = data.disciplina_id;
-                        document.getElementById('duracao').value = data.duracao;
                         document.getElementById('observacao').value = data.observacao || '';
 
-                        // LÓGICA CRÍTICA PARA ADMIN: Carrega instrutores filtrados E seleciona o correto
                         if(isAdmin) {
-                            // Chama a função passando o ID que veio do banco para ser selecionado após o carregamento
                             carregarInstrutoresVinculados(data.instrutor_value);
                         }
-                        
                         modalAula.show();
                     } else {
                         alert('Erro ao carregar: ' + data.message);
@@ -428,26 +467,60 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     btnSalvar.addEventListener('click', function() {
-        const formData = new FormData(formAula);
-        const data = Object.fromEntries(formData.entries());
-        data.semana_id = parseInt(data.semana_id);
-        
-        if (!data.disciplina_id || !data.duracao) {
-            alert('Preencha os campos obrigatórios.');
+        const blocks = getSelectedBlocks();
+        if (blocks.length === 0) {
+            alert("Selecione pelo menos um período.");
             return;
         }
 
-        fetch('/horario/salvar-aula', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}'},
-            body: JSON.stringify(data)
-        })
-        .then(r => r.json())
-        .then(result => {
-            if (result.success) location.reload();
-            else alert('Erro: ' + result.message);
-        })
-        .catch(err => alert('Erro ao salvar.'));
+        const formData = new FormData(formAula);
+        // Cria um objeto base com os dados do formulário
+        const baseData = Object.fromEntries(formData.entries());
+        baseData.semana_id = parseInt(baseData.semana_id);
+        
+        if (!baseData.disciplina_id) {
+            alert('Selecione a disciplina.');
+            return;
+        }
+
+        // Prepara uma lista de promessas (requisições)
+        const promises = blocks.map((block, index) => {
+            const data = { ...baseData }; // Copia os dados
+            data.periodo = block.periodo;
+            data.duracao = block.duracao;
+            
+            // Lógica IMPORTANTE para Edição:
+            // Se estamos editando (temos um ID original), o PRIMEIRO bloco usa esse ID para substituir a aula antiga.
+            // Os DEMAIS blocos (se o usuário dividiu a aula) são criados como novos (ID nulo).
+            // Se estamos criando do zero, todos os blocos têm ID nulo.
+            
+            if (index > 0) {
+                data.horario_id = null; // Força criação de nova aula para os blocos extras
+            }
+            // (Para o index 0, ele mantém o horario_id que estava no form, seja ele preenchido ou vazio)
+
+            return fetch('/horario/salvar-aula', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}'},
+                body: JSON.stringify(data)
+            }).then(r => r.json());
+        });
+
+        // Envia todas as requisições
+        Promise.all(promises)
+            .then(results => {
+                // Verifica se alguma falhou
+                const errors = results.filter(r => !r.success);
+                if (errors.length > 0) {
+                    alert('Alguns blocos não puderam ser salvos: ' + errors[0].message);
+                } else {
+                    location.reload();
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert('Erro de comunicação ao salvar.');
+            });
     });
 
     btnRemover.addEventListener('click', function() {

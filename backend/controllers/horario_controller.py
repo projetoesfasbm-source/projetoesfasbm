@@ -25,7 +25,7 @@ from ..services.site_config_service import SiteConfigService
 from utils.decorators import admin_or_programmer_required, can_schedule_classes_required
 from ..services.horario_service import HorarioService
 from ..services.user_service import UserService
-from ..services.turma_service import TurmaService # <-- IMPORT ADICIONADO
+from ..services.turma_service import TurmaService
 
 horario_bp = Blueprint('horario', __name__, url_prefix='/horario')
 
@@ -35,10 +35,6 @@ class AprovarHorarioForm(FlaskForm):
     submit = SubmitField('Enviar')
 
 def _get_horario_context_data():
-    """
-    Busca e prepara os dados de horários e intervalos usando o método
-    robusto get_config para cada item.
-    """
     tempos = []
     for i in range(1, 16):
         key = f"horario_periodo_{i:02d}"
@@ -71,9 +67,7 @@ def index():
             flash("Nenhuma escola associada ou selecionada.", "warning")
             return redirect(url_for('main.dashboard'))
         
-        # --- REFATORADO ---
         todas_as_turmas = TurmaService.get_turmas_by_school(school_id)
-        # ------------------
         
         turma_selecionada_nome = request.args.get('pelotao', session.get('ultima_turma_visualizada'))
         
@@ -117,6 +111,22 @@ def index():
 
     tempos, intervalos = _get_horario_context_data()
 
+    # --- NOVO: DADOS PARA O MODAL DE PRIORIDADE (CORRIGIDO) ---
+    disciplinas_escola = []
+    if school_id:
+        # CORREÇÃO: Faz join com Turma para acessar school_id
+        disciplinas_escola = db.session.scalars(
+            select(Disciplina)
+            .join(Turma, Disciplina.turma_id == Turma.id)
+            .where(Turma.school_id == school_id)
+            .order_by(Disciplina.materia)
+        ).all()
+    
+    priority_active = SiteConfigService.get_config('horario_priority_active') == '1'
+    priority_disciplines_str = SiteConfigService.get_config('horario_priority_list', '')
+    priority_disciplines = [int(x) for x in priority_disciplines_str.split(',') if x.isdigit()]
+    # -----------------------------------------------
+
     return render_template('quadro_horario.html',
                            horario_matrix=horario_matrix,
                            pelotao_selecionado=turma_selecionada_nome,
@@ -129,7 +139,23 @@ def index():
                            can_schedule_in_this_turma=can_schedule_in_this_turma,
                            instrutor_turmas_vinculadas=instrutor_turmas_vinculadas,
                            tempos=tempos,
-                           intervalos=intervalos)
+                           intervalos=intervalos,
+                           disciplinas_escola=disciplinas_escola,
+                           priority_active=priority_active,
+                           priority_disciplines=priority_disciplines)
+
+@horario_bp.route('/save-priority-config', methods=['POST'])
+@login_required
+@admin_or_programmer_required
+def save_priority_config():
+    data = request.json
+    active = data.get('active', False)
+    disciplines = data.get('disciplines', [])
+    
+    SiteConfigService.set_config('horario_priority_active', '1' if active else '0')
+    SiteConfigService.set_config('horario_priority_list', ','.join(map(str, disciplines)))
+    
+    return jsonify({'success': True})
 
 @horario_bp.route('/exportar-pdf')
 @login_required
@@ -184,8 +210,6 @@ def get_aula_details(horario_id):
 @horario_bp.route('/api/instrutores-vinculados/<pelotao>/<int:disciplina_id>')
 @login_required
 def get_instrutores_vinculados(pelotao, disciplina_id):
-    # --- CORREÇÃO APLICADA AQUI ---
-    # Corrigido o joinedload para usar o nome do relacionamento ('instrutor_2') em vez do campo ('instrutor_id_2')
     vinculo = db.session.scalar(
         select(DisciplinaTurma).options(
             joinedload(DisciplinaTurma.instrutor_1).joinedload(Instrutor.user), 

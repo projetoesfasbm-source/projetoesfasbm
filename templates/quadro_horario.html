@@ -4,6 +4,17 @@
 
 {% block content %}
 <div class="horario-header-container">
+    
+    {% if priority_active %}
+    <div class="alert alert-danger d-flex align-items-center mb-3" role="alert">
+        <i class="fas fa-lock me-2 fa-2x"></i>
+        <div>
+            <h5 class="alert-heading mb-0">Modo de Agendamento Prioritário Ativo</h5>
+            <small>O quadro está bloqueado. Apenas as disciplinas selecionadas pela administração podem realizar agendamentos no momento.</small>
+        </div>
+    </div>
+    {% endif %}
+
     <div class="page-title-with-controls">
         <div class="title-group">
             <h1>Quadro Horário</h1>
@@ -13,6 +24,11 @@
         {% if semana_selecionada and current_user.role in ['programador', 'admin_escola', 'instrutor', 'super_admin'] %}
         <div class="controls-group d-flex gap-2">
             {% if current_user.role in ['programador', 'admin_escola', 'super_admin'] %}
+            
+            <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#priorityModal">
+                <i class="fas fa-star me-1"></i> Gerenciar Prioridade
+            </button>
+
             <a href="{{ url_for('horario.exportar_pdf', pelotao=pelotao_selecionado, semana_id=semana_selecionada.id) }}" class="btn btn-danger" target="_blank">
                 Exportar PDF
             </a>
@@ -155,6 +171,48 @@
     </div>
 {% endif %}
 
+{% if current_user.role in ['programador', 'admin_escola', 'super_admin'] %}
+<div class="modal fade" id="priorityModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title text-dark">Gerenciar Prioridade de Agendamento</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>
+                    Utilize este recurso para <strong>bloquear agendamentos gerais</strong> e permitir apenas
+                    que disciplinas específicas (como AMT, APH, etc) sejam agendadas.
+                </p>
+                
+                <div class="form-check form-switch mb-3 p-3 bg-light border rounded">
+                    <input class="form-check-input" type="checkbox" id="priorityActive" {% if priority_active %}checked{% endif %}>
+                    <label class="form-check-label fw-bold" for="priorityActive">ATIVAR MODO DE PRIORIDADE</label>
+                    <div class="form-text">Quando ativo, apenas as disciplinas marcadas abaixo poderão agendar aulas.</div>
+                </div>
+
+                <label class="form-label fw-bold">Disciplinas Permitidas:</label>
+                <div class="priority-list-container border rounded p-3" style="max-height: 300px; overflow-y: auto;">
+                    {% for disc in disciplinas_escola %}
+                    <div class="form-check">
+                        <input class="form-check-input priority-disc-check" type="checkbox" value="{{ disc.id }}" id="pd_{{ disc.id }}"
+                               {% if disc.id in priority_disciplines %}checked{% endif %}>
+                        <label class="form-check-label" for="pd_{{ disc.id }}">
+                            {{ disc.materia }}
+                        </label>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-primary" onclick="savePriorityConfig()">Salvar Configurações</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <style>
 .horario-header-container { background-color: var(--color-white); border-radius: var(--border-radius); padding: 1.5rem 2rem; margin-bottom: 1.5rem; box-shadow: var(--shadow-soft); }
 .horario-selectors { margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--color-border); }
@@ -237,7 +295,7 @@
                         <p class="text-muted">Nenhum vínculo encontrado. Você não está vinculado a nenhuma turma para editar horários.</p>
                     {% endfor %}
                 </div>
-            {% else %} {# Para admins #}
+            {% else %} 
                 <h3 id="modal-title">Confirmar Edição</h3>
                 <p style="margin-top: 1rem; margin-bottom: 1rem; font-size: 1.1rem;">
                     Editar quadro da turma:
@@ -262,7 +320,6 @@
     
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // Seletor da página principal
             const semanaSelector = document.getElementById('semana_selector');
             if (semanaSelector) {
                 semanaSelector.addEventListener('change', function() {
@@ -273,21 +330,14 @@
                 });
             }
 
-            // --- NOVA LÓGICA DO MODAL ---
             const modalSemanaSelect = document.getElementById('modal-semana-selector');
             const weekLinks = document.querySelectorAll('.dynamic-week-link');
 
             if (modalSemanaSelect) {
                 modalSemanaSelect.addEventListener('change', function() {
                     const newSemanaId = this.value;
-                    
                     weekLinks.forEach(link => {
                         let currentHref = link.getAttribute('href');
-                        // O link padrão é algo como: .../editar/PELOTAO/SEMANA_ID/CICLO_ID
-                        // Vamos usar regex para substituir a parte da SEMANA_ID.
-                        // A regex busca: /editar/ (qualquer coisa exceto barra) / (digitos) / (digitos)
-                        // E substitui o primeiro grupo de digitos pelo novo ID.
-                        
                         const regex = /(.*\/editar\/[^\/]+\/)(\d+)(\/\d+)/;
                         if (regex.test(currentHref)) {
                             const newHref = currentHref.replace(regex, `$1${newSemanaId}$3`);
@@ -296,7 +346,6 @@
                     });
                 });
             }
-            // -----------------------------
 
             const toggleBtn = document.getElementById('weekend-toggle');
             if (toggleBtn) {
@@ -326,6 +375,30 @@
             confirmationModal.addEventListener('click', (e) => {
                 if (e.target === confirmationModal) {
                     closeConfirmationModal();
+                }
+            });
+        }
+
+        // --- FUNÇÃO PARA SALVAR PRIORIDADE ---
+        function savePriorityConfig() {
+            const active = document.getElementById('priorityActive').checked;
+            const checks = document.querySelectorAll('.priority-disc-check:checked');
+            const ids = Array.from(checks).map(c => parseInt(c.value));
+
+            fetch('/horario/save-priority-config', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token() }}'
+                },
+                body: JSON.stringify({ active: active, disciplines: ids })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.success) {
+                    location.reload();
+                } else {
+                    alert('Erro ao salvar configurações.');
                 }
             });
         }
