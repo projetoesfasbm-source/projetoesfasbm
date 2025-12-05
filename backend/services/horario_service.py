@@ -240,6 +240,71 @@ class HorarioService:
         }
 
     @staticmethod
+    def _consolidar_aulas_adjacentes(pelotao, semana_id, dia_semana):
+        """
+        Percorre as aulas do dia para verificar se existem blocos adjacentes
+        idênticos (mesma disciplina, instrutores, observação) que podem ser unidos,
+        respeitando os break_points (intervalos).
+        """
+        # Pontos de quebra onde NÃO se deve unir aulas (ex: recreios)
+        break_points = {3, 6, 9}
+
+        # Busca todas as aulas do dia ordenadas pelo período
+        aulas = db.session.scalars(
+            select(Horario)
+            .where(
+                Horario.pelotao == pelotao,
+                Horario.semana_id == semana_id,
+                Horario.dia_semana == dia_semana
+            )
+            .order_by(Horario.periodo)
+        ).all()
+
+        if not aulas:
+            return
+
+        # Itera sobre a lista verificando pares adjacentes
+        i = 0
+        while i < len(aulas) - 1:
+            atual = aulas[i]
+            proximo = aulas[i+1]
+
+            # 1. Verifica Adjacência Temporal
+            fim_atual = atual.periodo + atual.duracao - 1
+            inicio_proximo = proximo.periodo
+            sao_adjacentes = (fim_atual + 1) == inicio_proximo
+
+            # 2. Verifica Break Points (se o atual termina num break point, não une)
+            respeita_intervalo = fim_atual not in break_points
+
+            # 3. Verifica Atributos Idênticos (Mesma Disciplina, Instrutores e Obs)
+            mesmos_atributos = (
+                atual.disciplina_id == proximo.disciplina_id and
+                atual.instrutor_id == proximo.instrutor_id and
+                atual.instrutor_id_2 == proximo.instrutor_id_2 and
+                atual.status == proximo.status and
+                (atual.observacao or '') == (proximo.observacao or '')
+            )
+
+            if sao_adjacentes and respeita_intervalo and mesmos_atributos:
+                # Realiza a Fusão (Merge)
+                atual.duracao += proximo.duracao
+                
+                # Garante group_id unificado
+                if not atual.group_id:
+                    atual.group_id = proximo.group_id or str(uuid.uuid4())
+                
+                # Remove o bloco redundante do banco
+                db.session.delete(proximo)
+                
+                # Remove da lista em memória para continuar a verificação com o bloco estendido
+                aulas.pop(i+1)
+                
+                # Não incrementa 'i', pois o 'atual' (agora maior) pode se unir com o próximo da fila
+            else:
+                i += 1
+
+    @staticmethod
     def save_aula(data, user):
         try:
             horario_id_raw = data.get('horario_id')
@@ -272,24 +337,20 @@ class HorarioService:
             if not instrutor_id_1:
                 return False, 'Instrutor principal não especificado.', 400
 
-            # --- CORREÇÃO APLICADA AQUI ---
-            # Busca automática do segundo instrutor (vínculo) corrigida para usar 'pelotao' em vez de 'turma_id'
+            # Busca automática do segundo instrutor (vínculo)
             if not instrutor_id_2:
-                # Busca o vínculo na tabela DisciplinaTurma usando 'pelotao' e 'disciplina_id'
                 vinculo_dt = db.session.scalar(
                     select(DisciplinaTurma).where(
                         DisciplinaTurma.disciplina_id == disciplina_id,
-                        DisciplinaTurma.pelotao == pelotao # Uso correto do campo que existe no modelo
+                        DisciplinaTurma.pelotao == pelotao
                     )
                 )
                 
                 if vinculo_dt:
-                    # Verifica se o instrutor_id_1 faz parte do par e preenche o instrutor_id_2 com o outro
                     if vinculo_dt.instrutor_id_1 == instrutor_id_1 and vinculo_dt.instrutor_id_2:
                         instrutor_id_2 = vinculo_dt.instrutor_id_2
                     elif vinculo_dt.instrutor_id_2 == instrutor_id_1 and vinculo_dt.instrutor_id_1:
                         instrutor_id_2 = vinculo_dt.instrutor_id_1
-            # --- FIM DA CORREÇÃO ---
 
             # edição (substituição de grupo)
             if horario_id:
@@ -352,7 +413,6 @@ class HorarioService:
             # notificação
             if not is_admin:
                 disciplina = db.session.get(Disciplina, disciplina_id)
-                # Busca Turma apenas para pegar o school_id para notificação
                 turma = db.session.scalar(select(Turma).where(Turma.nome == pelotao))
                 
                 if turma and turma.school_id:
@@ -367,6 +427,13 @@ class HorarioService:
                         message,
                         notification_url,
                     )
+
+            # Aplica alterações iniciais para garantir que os novos registros existam antes de consolidar
+            db.session.flush() 
+            
+            # --- AUTO-MERGE (Mesclar aulas sequenciais) ---
+            HorarioService._consolidar_aulas_adjacentes(pelotao, semana_id, dia)
+            # -----------------------------------------------
 
             db.session.commit()
             return True, 'Aula salva com sucesso!', 200
