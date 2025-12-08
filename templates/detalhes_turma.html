@@ -55,11 +55,16 @@
                         <span class="text-muted">-- Vago --</span>
                     {% endif %}
                 </div>
+                
                 {% if current_user.role in ['programador', 'admin_escola'] %}
-                <button class="btn btn-sm btn-secondary" 
-                        data-modal-target="#cargoModal"
+                <button type="button" 
+                        class="btn btn-sm btn-secondary" 
+                        data-bs-toggle="modal" 
+                        data-bs-target="#cargoModal"
                         data-cargo="{{ cargo }}"
-                        data-aluno-id="{{ aluno_id or '' }}">Gerenciar</button>
+                        data-aluno-id="{{ aluno_id or '' }}">
+                    Gerenciar
+                </button>
                 {% endif %}
             </div>
             {% endfor %}
@@ -84,56 +89,79 @@
 {% endblock %}
 
 {% block modals %}
-<div class="modal-overlay" id="cargoModal">
-    <div class="modal-content">
-        <form id="cargoForm" method="POST" action="{{ url_for('turma.salvar_cargos_turma', turma_id=turma.id) }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="cargo_nome" id="modalCargoNome">
-            <h3 id="modalTitle">Gerenciar Cargo</h3>
-            <div class="form-group">
-                <label for="modalAlunoSelect">Aluno</label>
-                <select id="modalAlunoSelect" name="aluno_id" class="form-control">
-                    <option value="">-- Remover do Cargo (Vago) --</option>
-                    {% for aluno in turma.alunos | sort(attribute='user.nome_completo') %}
-                        <option value="{{ aluno.id }}">{{ aluno.user.nome_completo }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="form-group">
-                <label for="modalDataEvento" id="modalDataLabel">Data</label>
-                <input type="date" id="modalDataEvento" name="data_evento" class="form-control" required>
-            </div>
-            <div class="form-actions">
-                <button type="button" class="btn btn-secondary" data-modal-close>Cancelar</button>
-                <button type="submit" class="btn btn-primary">Salvar Alteração</button>
-            </div>
-        </form>
+<div class="modal fade" id="cargoModal" tabindex="-1" aria-labelledby="cargoModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="cargoForm" method="POST" action="{{ url_for('turma.salvar_cargos_turma', turma_id=turma.id) }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="cargoModalLabel">Gerenciar Cargo</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                
+                <div class="modal-body">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="cargo_nome" id="modalCargoNome">
+                    
+                    <div class="mb-3">
+                        <label for="modalAlunoSelect" class="form-label">Aluno Responsável</label>
+                        <select id="modalAlunoSelect" name="aluno_id" class="form-select">
+                            <option value="">-- Ninguém (Cargo Vago) --</option>
+                            {% for aluno in turma.alunos | sort(attribute='user.nome_completo') %}
+                                <option value="{{ aluno.id }}">{{ aluno.user.nome_completo }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="modalDataEvento" id="modalDataLabel" class="form-label">Data de Início/Fim</label>
+                        <input type="date" id="modalDataEvento" name="data_evento" class="form-control" required>
+                    </div>
+                </div>
+                
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar Alteração</button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const modalAlunoSelect = document.getElementById('modalAlunoSelect');
-    const modalDataLabel = document.getElementById('modalDataLabel');
+    var cargoModal = document.getElementById('cargoModal');
+    var modalAlunoSelect = document.getElementById('modalAlunoSelect');
+    var modalDataLabel = document.getElementById('modalDataLabel');
+    var modalCargoNome = document.getElementById('modalCargoNome');
+    var modalTitle = document.getElementById('cargoModalLabel');
+    var modalDataEvento = document.getElementById('modalDataEvento');
 
+    // Atualiza o texto da data conforme a seleção
     function updateDateLabel() {
         modalDataLabel.textContent = (modalAlunoSelect.value === "") ? "Data de Fim da Função" : "Data de Início da Função";
     }
-    
     modalAlunoSelect.addEventListener('change', updateDateLabel);
 
-    document.addEventListener('modal:open', function(event) {
-        if (event.detail.modal.id === 'cargoModal') {
-            const trigger = event.detail.trigger;
-            const cargo = trigger.dataset.cargo;
-            const alunoId = trigger.dataset.alunoId;
+    // Evento do Bootstrap que dispara quando a modal está prestes a abrir
+    cargoModal.addEventListener('show.bs.modal', function (event) {
+        // Botão que acionou a modal
+        var button = event.relatedTarget;
+        
+        // Extrai informações dos atributos data-*
+        var cargo = button.getAttribute('data-cargo');
+        var alunoId = button.getAttribute('data-aluno-id');
 
-            document.getElementById('modalTitle').textContent = `Gerenciar Cargo: ${cargo}`;
-            document.getElementById('modalCargoNome').value = cargo;
-            modalAlunoSelect.value = alunoId;
-            document.getElementById('modalDataEvento').valueAsDate = new Date();
-            updateDateLabel();
+        // Atualiza o conteúdo da modal
+        modalTitle.textContent = 'Gerenciar Cargo: ' + cargo;
+        modalCargoNome.value = cargo;
+        modalAlunoSelect.value = alunoId;
+        
+        // Define a data de hoje como padrão
+        if (!modalDataEvento.value) {
+            modalDataEvento.valueAsDate = new Date();
         }
+        
+        updateDateLabel();
     });
 });
 </script>

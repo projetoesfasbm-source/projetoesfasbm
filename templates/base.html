@@ -199,6 +199,11 @@
 
                 {% if current_user.role in ['super_admin', 'programador', 'admin_escola'] %}
                     <a href="{{ url_for('horario.aprovar_horarios') }}" class="nav-link {% if request.endpoint == 'horario.aprovar_horarios' %}active{% endif %}"><div class="nav-icon">👍</div> Aprovar Aulas</a>
+                    
+                    {# --- LINK ADICIONADO AQUI: DIÁRIOS DE CLASSE --- #}
+                    <a href="{{ url_for('admin_escola.espelho_diarios') }}" class="nav-link {% if request.endpoint == 'admin_escola.espelho_diarios' %}active{% endif %}"><div class="nav-icon">📖</div> Diários de Classe</a>
+                    {# ----------------------------------------------- #}
+                    
                     <a href="{{ url_for('relatorios.index') }}" class="nav-link {% if request.endpoint and 'relatorios.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📊</div> Relatórios</a>
                     <a href="{{ url_for('questionario.index') }}" class="nav-link {% if request.endpoint and 'questionario.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📝</div> Questionário Alunos</a>
                 {% endif %}
@@ -206,6 +211,9 @@
                 {% if current_user.role == 'aluno' and current_user.aluno_profile %}
                     <div class="nav-separator">PORTAL DO ALUNO</div>
                     <a href="{{ url_for('historico.index') }}" class="nav-link {% if request.endpoint and 'historico.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📊</div> Meu CTSP</a>
+                    
+                    {# Link visível apenas se o aluno for CHEFE (Lógica no controller do backend redireciona se não for) #}
+                    <a href="{{ url_for('chefe.painel') }}" class="nav-link {% if request.endpoint and 'chefe.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📋</div> Painel do Chefe</a>
                 {% endif %}
 
                  {% if current_user.role == 'super_admin' %}

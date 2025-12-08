@@ -1,0 +1,76 @@
+<div class="text-center mb-4">
+    <h4 class="text-primary">{{ data.strftime('%d/%m/%Y') }}</h4>
+    <span class="badge bg-secondary">{{ data.strftime('%A') }}</span>
+</div>
+
+{% if not diarios %}
+    <div class="text-center py-5">
+        <div class="mb-3 text-muted" style="opacity: 0.5;">
+            <i class="fas fa-clipboard fa-4x"></i>
+        </div>
+        <h5 class="text-muted">Nenhum registro encontrado</h5>
+        <p class="small text-muted">O Chefe de Turma ainda não realizou o preenchimento para este dia.</p>
+    </div>
+{% else %}
+
+<div class="accordion" id="accordionDiarios">
+    {% for diario in diarios %}
+    <div class="accordion-item mb-3 border-primary" style="border: 1px solid rgba(13, 110, 253, 0.3);">
+        <h2 class="accordion-header" id="heading{{ diario.id }}">
+            <button class="accordion-button {% if loop.index > 1 %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ diario.id }}" aria-expanded="{{ 'true' if loop.index == 1 else 'false' }}">
+                <strong>{{ diario.disciplina.nome }}</strong>
+                <span class="ms-auto me-2 badge bg-light text-dark">Resp: {{ diario.responsavel.nome_guerra }}</span>
+            </button>
+        </h2>
+        <div id="collapse{{ diario.id }}" class="accordion-collapse collapse {% if loop.index == 1 %}show{% endif %}" data-bs-parent="#accordionDiarios">
+            <div class="accordion-body">
+                
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <label class="fw-bold small text-muted">Conteúdo Ministrado:</label>
+                        <p class="mb-2 p-2 bg-light rounded">{{ diario.conteudo_ministrado or 'Não informado.' }}</p>
+                    </div>
+                    <div class="col-md-12">
+                        <label class="fw-bold small text-muted">Observações / Ocorrências:</label>
+                        {% if diario.observacoes %}
+                            <div class="alert alert-warning py-2 mb-0">{{ diario.observacoes }}</div>
+                        {% else %}
+                            <p class="text-muted fst-italic">Nenhuma observação.</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <hr>
+
+                <h6 class="text-danger fw-bold"><i class="fas fa-user-times"></i> Faltas Registradas:</h6>
+                
+                {% set faltas = [] %}
+                {% for freq in diario.frequencias %}
+                    {% if not freq.presente %}
+                        {% set _ = faltas.append(freq) %}
+                    {% endif %}
+                {% endfor %}
+
+                {% if faltas %}
+                    <ul class="list-group">
+                        {% for falta in faltas %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center list-group-item-danger">
+                            <div>
+                                <span class="fw-bold">{{ falta.aluno.num_aluno }}</span> - {{ falta.aluno.user.nome_guerra }}
+                            </div>
+                            <span class="badge bg-danger rounded-pill">FALTA</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <div class="alert alert-success text-center mb-0">
+                        <i class="fas fa-check-circle"></i> Todos os alunos presentes.
+                    </div>
+                {% endif %}
+
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}

@@ -2,93 +2,179 @@
 
 {% block content %}
 <div class="container-fluid mt-4">
-    <div class="row mb-4">
-        <div class="col-12">
-            <h2><i class="fas fa-book-open"></i> Espelho de Diários de Classe</h2>
-            <p class="text-muted">Visualize o preenchimento realizado pelos Chefes de Turma.</p>
+    <div class="row mb-4 align-items-center">
+        <div class="col-md-6">
+            <h2><i class="fas fa-calendar-alt"></i> Espelho de Frequência</h2>
+            <p class="text-muted">Acompanhamento mensal. Dias em <strong class="text-secondary">cinza</strong> indicam falta de preenchimento.</p>
         </div>
-    </div>
-    
-    <div class="card shadow-sm mb-4">
-        <div class="card-body bg-light">
-            <form method="GET" class="row g-3 align-items-end">
-                <div class="col-md-4">
-                    <label class="form-label fw-bold">Selecione a Turma</label>
-                    <select name="turma_id" class="form-select" required>
-                        <option value="">-- Selecione --</option>
-                        {% for t in turmas %}
-                        <option value="{{ t.id }}" {% if t.id == selected_turma %}selected{% endif %}>{{ t.nome }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label fw-bold">Data da Aula</label>
-                    <input type="date" name="data" class="form-control" value="{{ selected_data }}" required>
-                </div>
-                <div class="col-md-2">
-                    <button type="submit" class="btn btn-primary w-100">
-                        <i class="fas fa-search"></i> Buscar
-                    </button>
-                </div>
+        <div class="col-md-6 text-md-end">
+            <form method="GET" class="d-flex justify-content-end align-items-center gap-2">
+                <input type="hidden" name="mes" value="{{ mes }}">
+                <input type="hidden" name="ano" value="{{ ano }}">
+                <label class="fw-bold">Turma:</label>
+                <select name="turma_id" class="form-select w-auto" onchange="this.form.submit()">
+                    <option value="">-- Selecione --</option>
+                    {% for t in turmas %}
+                    <option value="{{ t.id }}" {% if t.id == selected_turma %}selected{% endif %}>{{ t.nome }}</option>
+                    {% endfor %}
+                </select>
             </form>
         </div>
     </div>
 
-    {% if diarios %}
-        <div class="row">
-            {% for diario in diarios %}
-            <div class="col-md-6 mb-4">
-                <div class="card h-100 border-primary shadow-sm">
-                    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0">{{ diario.disciplina.nome }}</h5>
-                        <span class="badge bg-light text-dark">ID: {{ diario.id }}</span>
-                    </div>
-                    <div class="card-body">
-                        <p class="mb-1"><strong><i class="fas fa-user-edit"></i> Registrado por:</strong> {{ diario.responsavel.nome_guerra }}</p>
-                        <p class="mb-3 text-muted small">Em: {{ diario.created_at.strftime('%d/%m/%Y às %H:%M') }}</p>
-                        
-                        <div class="mb-3 p-2 bg-light rounded border">
-                            <strong>Conteúdo:</strong><br>
-                            {{ diario.conteudo_ministrado or 'Não informado.' }}
-                        </div>
-                        
-                        <div class="mb-3 p-2 bg-light rounded border">
-                            <strong>Observações:</strong><br>
-                            {{ diario.observacoes or 'Nenhuma observação.' }}
-                        </div>
+    {% if not selected_turma %}
+    <div class="alert alert-warning text-center p-5">
+        <h4>Selecione uma turma acima para visualizar o calendário.</h4>
+    </div>
+    {% else %}
 
-                        <hr>
-                        
-                        <h6><i class="fas fa-user-times"></i> Registro de Faltas:</h6>
-                        <ul class="list-group list-group-flush">
-                            {% set tem_falta = false %}
-                            {% for freq in diario.frequencias %}
-                                {% if not freq.presente %}
-                                    {% set tem_falta = true %}
-                                    <li class="list-group-item list-group-item-danger d-flex justify-content-between align-items-center">
-                                        <span>{{ freq.aluno.num_aluno }} - {{ freq.aluno.user.nome_guerra }}</span>
-                                        <span class="badge bg-danger">FALTA</span>
-                                    </li>
+    <div class="d-flex justify-content-between align-items-center mb-3 bg-white p-3 rounded shadow-sm">
+        <a href="{{ url_for('admin_escola.espelho_diarios', turma_id=selected_turma, mes=prev_m, ano=prev_a) }}" class="btn btn-outline-secondary">
+            <i class="fas fa-chevron-left"></i> Anterior
+        </a>
+        <h3 class="mb-0 text-capitalize">{{ mes }}/{{ ano }}</h3>
+        <a href="{{ url_for('admin_escola.espelho_diarios', turma_id=selected_turma, mes=next_m, ano=next_a) }}" class="btn btn-outline-secondary">
+            Próximo <i class="fas fa-chevron-right"></i>
+        </a>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <div class="calendar-grid">
+                <div class="cal-header">Dom</div>
+                <div class="cal-header">Seg</div>
+                <div class="cal-header">Ter</div>
+                <div class="cal-header">Qua</div>
+                <div class="cal-header">Qui</div>
+                <div class="cal-header">Sex</div>
+                <div class="cal-header">Sáb</div>
+
+                {% for week in calendar_matrix %}
+                    {% for day_info in week %}
+                        {% if day_info.day == 0 %}
+                            <div class="cal-day pad bg-light"></div>
+                        {% else %}
+                            <div class="cal-day {{ day_info.class }} clickable"
+                                 onclick="abrirDetalhesDia('{{ day_info.day }}')">
+                                
+                                <span class="day-number">{{ day_info.day }}</span>
+                                
+                                {% if day_info.status == 'success' %}
+                                    <div class="status-badge"><i class="fas fa-check-circle"></i> 100%</div>
+                                {% elif day_info.status == 'danger' %}
+                                    <div class="status-badge"><i class="fas fa-exclamation-circle"></i> Faltas</div>
+                                {% elif day_info.status == 'empty' %}
+                                    <div class="status-badge text-white"><i class="fas fa-clock"></i> Pendente</div>
                                 {% endif %}
-                            {% endfor %}
-                            
-                            {% if not tem_falta %}
-                                <li class="list-group-item list-group-item-success text-center">
-                                    <i class="fas fa-check-circle"></i> 100% de Presença
-                                </li>
-                            {% endif %}
-                        </ul>
-                    </div>
-                </div>
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                {% endfor %}
             </div>
-            {% endfor %}
         </div>
-    {% elif selected_data %}
-        <div class="alert alert-warning text-center mt-5">
-            <i class="fas fa-exclamation-triangle fa-2x mb-3"></i>
-            <h4>Nenhum diário encontrado.</h4>
-            <p>Não há registros para a turma e data selecionadas.</p>
+    </div>
+    
+    <div class="mt-3 d-flex gap-3 justify-content-center small text-muted flex-wrap">
+        <div class="d-flex align-items-center gap-1">
+            <div style="width: 15px; height: 15px; border: 2px solid #198754; background: #d1e7dd;"></div> 100% Presença
         </div>
+        <div class="d-flex align-items-center gap-1">
+            <div style="width: 15px; height: 15px; border: 2px solid #dc3545; background: #f8d7da;"></div> Com Faltas
+        </div>
+        <div class="d-flex align-items-center gap-1">
+            <div style="width: 15px; height: 15px; background: #6c757d; opacity: 0.8;"></div> Pendente (Sem Registro)
+        </div>
+    </div>
+
     {% endif %}
 </div>
+
+<div class="modal fade" id="detalhesDiaModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Detalhes do Dia</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="detalhesDiaConteudo">
+                </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        border: 1px solid #dee2e6;
+    }
+    .cal-header {
+        background-color: #f8f9fa;
+        font-weight: bold;
+        text-align: center;
+        padding: 10px;
+        border-right: 1px solid #dee2e6;
+        border-bottom: 1px solid #dee2e6;
+    }
+    .cal-day {
+        min-height: 100px;
+        border-right: 1px solid #dee2e6;
+        border-bottom: 1px solid #dee2e6;
+        padding: 8px;
+        position: relative;
+        background-color: #fff;
+        transition: all 0.2s;
+    }
+    .cal-day.clickable:hover {
+        cursor: pointer;
+        filter: brightness(0.95);
+        z-index: 2;
+        box-shadow: inset 0 0 10px rgba(0,0,0,0.1);
+    }
+    
+    /* Estilos Específicos */
+    .cal-day.bg-light-success { background-color: #d1e7dd !important; border: 2px solid #198754 !important; }
+    .cal-day.bg-light-danger { background-color: #f8d7da !important; border: 2px solid #dc3545 !important; }
+    
+    /* Estilo Cinza para vazio */
+    .cal-day.bg-secondary { 
+        background-color: #6c757d !important; 
+        color: white !important;
+        border: 1px solid #545b62 !important;
+    }
+    .cal-day.bg-secondary .day-number { color: white !important; }
+
+    .day-number { font-size: 1.1rem; font-weight: 600; color: #495057; }
+    .status-badge { margin-top: 8px; font-size: 0.85rem; font-weight: 500; text-align: center; }
+</style>
+
+<script>
+    var detalheModal = new bootstrap.Modal(document.getElementById('detalhesDiaModal'));
+
+    function abrirDetalhesDia(dia) {
+        document.getElementById('detalhesDiaConteudo').innerHTML = `
+            <div class="text-center py-4">
+                <div class="spinner-border text-primary" role="status"></div>
+                <p class="mt-2">Carregando...</p>
+            </div>
+        `;
+        detalheModal.show();
+
+        const turmaId = "{{ selected_turma }}";
+        const mes = "{{ mes }}";
+        const ano = "{{ ano }}";
+        
+        fetch(`{{ url_for('admin_escola.detalhes_diario_ajax') }}?turma_id=${turmaId}&dia=${dia}&mes=${mes}&ano=${ano}`)
+            .then(response => response.text())
+            .then(html => {
+                document.getElementById('detalhesDiaConteudo').innerHTML = html;
+            })
+            .catch(err => {
+                document.getElementById('detalhesDiaConteudo').innerHTML = '<div class="alert alert-danger">Erro ao carregar dados.</div>';
+            });
+    }
+</script>
 {% endblock %}
