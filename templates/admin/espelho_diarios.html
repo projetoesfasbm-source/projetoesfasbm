@@ -5,7 +5,7 @@
     <div class="row mb-4 align-items-center">
         <div class="col-md-6">
             <h2><i class="fas fa-calendar-alt"></i> Espelho de Frequência</h2>
-            <p class="text-muted">Acompanhamento mensal. Dias em <strong class="text-secondary">cinza</strong> indicam falta de preenchimento.</p>
+            <p class="text-muted">Dias em <strong class="text-secondary">cinza</strong> indicam falta de preenchimento.</p>
         </div>
         <div class="col-md-6 text-md-end">
             <form method="GET" class="d-flex justify-content-end align-items-center gap-2">
@@ -32,7 +32,7 @@
         <a href="{{ url_for('admin_escola.espelho_diarios', turma_id=selected_turma, mes=prev_m, ano=prev_a) }}" class="btn btn-outline-secondary">
             <i class="fas fa-chevron-left"></i> Anterior
         </a>
-        <h3 class="mb-0 text-capitalize">{{ mes }}/{{ ano }}</h3>
+        <h3 class="mb-0 text-capitalize">{{ mes_nome }} / {{ ano }}</h3>
         <a href="{{ url_for('admin_escola.espelho_diarios', turma_id=selected_turma, mes=next_m, ano=next_a) }}" class="btn btn-outline-secondary">
             Próximo <i class="fas fa-chevron-right"></i>
         </a>
@@ -52,10 +52,10 @@
                 {% for week in calendar_matrix %}
                     {% for day_info in week %}
                         {% if day_info.day == 0 %}
-                            <div class="cal-day pad bg-light"></div>
+                            <div class="cal-day empty bg-light"></div>
                         {% else %}
                             <div class="cal-day {{ day_info.class }} clickable"
-                                 onclick="abrirDetalhesDia('{{ day_info.day }}')">
+                                 onclick="carregarDetalhes('{{ day_info.day }}')">
                                 
                                 <span class="day-number">{{ day_info.day }}</span>
                                 
@@ -73,36 +73,7 @@
             </div>
         </div>
     </div>
-    
-    <div class="mt-3 d-flex gap-3 justify-content-center small text-muted flex-wrap">
-        <div class="d-flex align-items-center gap-1">
-            <div style="width: 15px; height: 15px; border: 2px solid #198754; background: #d1e7dd;"></div> 100% Presença
-        </div>
-        <div class="d-flex align-items-center gap-1">
-            <div style="width: 15px; height: 15px; border: 2px solid #dc3545; background: #f8d7da;"></div> Com Faltas
-        </div>
-        <div class="d-flex align-items-center gap-1">
-            <div style="width: 15px; height: 15px; background: #6c757d; opacity: 0.8;"></div> Pendente (Sem Registro)
-        </div>
-    </div>
-
     {% endif %}
-</div>
-
-<div class="modal fade" id="detalhesDiaModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Detalhes do Dia</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body" id="detalhesDiaConteudo">
-                </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
-            </div>
-        </div>
-    </div>
 </div>
 
 <style>
@@ -127,19 +98,18 @@
         position: relative;
         background-color: #fff;
         transition: all 0.2s;
+        cursor: pointer; /* Garante o cursor de mãozinha */
     }
-    .cal-day.clickable:hover {
-        cursor: pointer;
-        filter: brightness(0.95);
-        z-index: 2;
+    .cal-day:hover {
+        background-color: #f1f1f1;
+        z-index: 5;
         box-shadow: inset 0 0 10px rgba(0,0,0,0.1);
     }
     
-    /* Estilos Específicos */
+    /* Cores de Status */
     .cal-day.bg-light-success { background-color: #d1e7dd !important; border: 2px solid #198754 !important; }
     .cal-day.bg-light-danger { background-color: #f8d7da !important; border: 2px solid #dc3545 !important; }
     
-    /* Estilo Cinza para vazio */
     .cal-day.bg-secondary { 
         background-color: #6c757d !important; 
         color: white !important;
@@ -150,30 +120,83 @@
     .day-number { font-size: 1.1rem; font-weight: 600; color: #495057; }
     .status-badge { margin-top: 8px; font-size: 0.85rem; font-weight: 500; text-align: center; }
 </style>
+{% endblock %}
+
+{% block modals %}
+<div class="modal fade" id="detalhesDiaModal" tabindex="-1" aria-hidden="true" style="z-index: 1055;">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Detalhes do Dia</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="detalhesDiaConteudo">
+                </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <script>
-    var detalheModal = new bootstrap.Modal(document.getElementById('detalhesDiaModal'));
+    // Variável global para a modal
+    let detalheModal;
 
-    function abrirDetalhesDia(dia) {
-        document.getElementById('detalhesDiaConteudo').innerHTML = `
+    document.addEventListener('DOMContentLoaded', function() {
+        // Inicializa a modal usando o Bootstrap carregado no base.html
+        const modalEl = document.getElementById('detalhesDiaModal');
+        if (modalEl) {
+            detalheModal = new bootstrap.Modal(modalEl);
+        }
+    });
+
+    function carregarDetalhes(dia) {
+        console.log("Clicou no dia:", dia); // Para debug
+
+        const conteudoDiv = document.getElementById('detalhesDiaConteudo');
+        
+        // 1. Mostrar loading
+        conteudoDiv.innerHTML = `
             <div class="text-center py-4">
                 <div class="spinner-border text-primary" role="status"></div>
-                <p class="mt-2">Carregando...</p>
+                <p class="mt-2">Carregando informações...</p>
             </div>
         `;
-        detalheModal.show();
+        
+        // 2. Abrir Modal
+        if (detalheModal) {
+            detalheModal.show();
+        } else {
+            alert("Erro: Componente Modal não inicializado.");
+            return;
+        }
 
+        // 3. Buscar dados via AJAX
         const turmaId = "{{ selected_turma }}";
         const mes = "{{ mes }}";
         const ano = "{{ ano }}";
-        
-        fetch(`{{ url_for('admin_escola.detalhes_diario_ajax') }}?turma_id=${turmaId}&dia=${dia}&mes=${mes}&ano=${ano}`)
-            .then(response => response.text())
+        const url = `{{ url_for('admin_escola.detalhes_diario_ajax') }}?turma_id=${turmaId}&dia=${dia}&mes=${mes}&ano=${ano}`;
+
+        console.log("Buscando URL:", url);
+
+        fetch(url)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error("Erro na rede: " + response.status);
+                }
+                return response.text();
+            })
             .then(html => {
-                document.getElementById('detalhesDiaConteudo').innerHTML = html;
+                conteudoDiv.innerHTML = html;
             })
             .catch(err => {
-                document.getElementById('detalhesDiaConteudo').innerHTML = '<div class="alert alert-danger">Erro ao carregar dados.</div>';
+                console.error("Erro fetch:", err);
+                conteudoDiv.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle"></i> Erro ao carregar dados.<br>
+                        <small>${err}</small>
+                    </div>`;
             });
     }
 </script>
