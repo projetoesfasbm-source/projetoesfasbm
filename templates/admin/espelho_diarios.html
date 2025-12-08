@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2><i class="fas fa-book-open"></i> Espelho de Diários de Classe</h2>
+            <p class="text-muted">Visualize o preenchimento realizado pelos Chefes de Turma.</p>
+        </div>
+    </div>
+    
+    <div class="card shadow-sm mb-4">
+        <div class="card-body bg-light">
+            <form method="GET" class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">Selecione a Turma</label>
+                    <select name="turma_id" class="form-select" required>
+                        <option value="">-- Selecione --</option>
+                        {% for t in turmas %}
+                        <option value="{{ t.id }}" {% if t.id == selected_turma %}selected{% endif %}>{{ t.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Data da Aula</label>
+                    <input type="date" name="data" class="form-control" value="{{ selected_data }}" required>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-search"></i> Buscar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% if diarios %}
+        <div class="row">
+            {% for diario in diarios %}
+            <div class="col-md-6 mb-4">
+                <div class="card h-100 border-primary shadow-sm">
+                    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">{{ diario.disciplina.nome }}</h5>
+                        <span class="badge bg-light text-dark">ID: {{ diario.id }}</span>
+                    </div>
+                    <div class="card-body">
+                        <p class="mb-1"><strong><i class="fas fa-user-edit"></i> Registrado por:</strong> {{ diario.responsavel.nome_guerra }}</p>
+                        <p class="mb-3 text-muted small">Em: {{ diario.created_at.strftime('%d/%m/%Y às %H:%M') }}</p>
+                        
+                        <div class="mb-3 p-2 bg-light rounded border">
+                            <strong>Conteúdo:</strong><br>
+                            {{ diario.conteudo_ministrado or 'Não informado.' }}
+                        </div>
+                        
+                        <div class="mb-3 p-2 bg-light rounded border">
+                            <strong>Observações:</strong><br>
+                            {{ diario.observacoes or 'Nenhuma observação.' }}
+                        </div>
+
+                        <hr>
+                        
+                        <h6><i class="fas fa-user-times"></i> Registro de Faltas:</h6>
+                        <ul class="list-group list-group-flush">
+                            {% set tem_falta = false %}
+                            {% for freq in diario.frequencias %}
+                                {% if not freq.presente %}
+                                    {% set tem_falta = true %}
+                                    <li class="list-group-item list-group-item-danger d-flex justify-content-between align-items-center">
+                                        <span>{{ freq.aluno.num_aluno }} - {{ freq.aluno.user.nome_guerra }}</span>
+                                        <span class="badge bg-danger">FALTA</span>
+                                    </li>
+                                {% endif %}
+                            {% endfor %}
+                            
+                            {% if not tem_falta %}
+                                <li class="list-group-item list-group-item-success text-center">
+                                    <i class="fas fa-check-circle"></i> 100% de Presença
+                                </li>
+                            {% endif %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    {% elif selected_data %}
+        <div class="alert alert-warning text-center mt-5">
+            <i class="fas fa-exclamation-triangle fa-2x mb-3"></i>
+            <h4>Nenhum diário encontrado.</h4>
+            <p>Não há registros para a turma e data selecionadas.</p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

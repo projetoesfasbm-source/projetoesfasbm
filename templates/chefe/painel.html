@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="text-primary"><i class="fas fa-user-graduate"></i> Painel do Chefe de Turma</h2>
+            <h4 class="text-muted">{{ aluno.turma.nome }}</h4>
+        </div>
+        <div class="text-end">
+            <span class="badge bg-secondary fs-6">{{ data_hoje.strftime('%d/%m/%Y') }}</span>
+            <div class="text-muted small mt-1">{{ data_hoje.strftime('%A') }}</div>
+        </div>
+    </div>
+
+    <div class="alert alert-info">
+        <i class="fas fa-info-circle"></i> Utilize este painel para registrar a presença da turma e ocorrências diárias.
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-header bg-dark text-white">
+            <h5 class="mb-0"><i class="fas fa-chalkboard-teacher"></i> Aulas de Hoje</h5>
+        </div>
+        <div class="list-group list-group-flush">
+            {% for aula in aulas %}
+                <div class="list-group-item d-flex justify-content-between align-items-center p-3">
+                    <div>
+                        <h5 class="mb-1 fw-bold text-primary">{{ aula.disciplina.nome }}</h5>
+                        <div class="text-muted">
+                            <i class="far fa-clock"></i> {{ aula.hora_inicio }} às {{ aula.hora_fim }}
+                            <span class="mx-2">|</span>
+                            <i class="fas fa-user-tie"></i> {{ aula.instrutor.nome_guerra if aula.instrutor else 'Instrutor N/A' }}
+                        </div>
+                    </div>
+                    
+                    <div>
+                        {% if aula.disciplina_id in feitos %}
+                            <button class="btn btn-success disabled" disabled>
+                                <i class="fas fa-check-circle"></i> Chamada Realizada
+                            </button>
+                        {% else %}
+                            <a href="{{ url_for('chefe.registrar_aula', horario_id=aula.id) }}" class="btn btn-primary">
+                                <i class="fas fa-edit"></i> Realizar Chamada
+                            </a>
+                        {% endif %}
+                    </div>
+                </div>
+            {% else %}
+                <div class="list-group-item text-center py-5 text-muted">
+                    <i class="fas fa-calendar-times fa-3x mb-3"></i>
+                    <p class="mb-0">Nenhuma aula cadastrada para hoje nesta turma.</p>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

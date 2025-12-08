@@ -1,52 +1,151 @@
-from flask import Blueprint, render_template, request, flash, redirect, url_for
+# backend/controllers/admin_controller.py
+
+from flask import Blueprint, render_template, request, flash, redirect, url_for, g, current_app
 from flask_login import login_required, current_user
+from werkzeug.security import generate_password_hash
 from backend.models.database import db
-from backend.models.school import School
 from backend.models.user import User
-from utils.decorators import admin_or_programmer_required
-from ..services.user_service import UserService
+from backend.models.user_school import UserSchool
+from backend.models.school import School
+from backend.models.turma import Turma
+from backend.services.email_service import EmailService
+from backend.models.diario_classe import DiarioClasse
 
-admin_escola_bp = Blueprint('admin_escola', __name__, url_prefix='/admin-escola')
+admin_escola_bp = Blueprint('admin_escola', __name__, url_prefix='/admin/escola')
 
-@admin_escola_bp.route('/pre-cadastro', methods=['GET', 'POST'])
+@admin_escola_bp.before_request
 @login_required
-@admin_or_programmer_required
-def pre_cadastro():
+def check_admin_permission():
+    """
+    Verifica se o usuário logado é um Administrador de Escola ('admin').
+    Caso contrário, redireciona para a página inicial.
+    """
+    if not current_user.is_authenticated or current_user.role != 'admin':
+         flash('Acesso não autorizado.', 'danger')
+         return redirect(url_for('main.index'))
+
+@admin_escola_bp.route('/criar', methods=['GET', 'POST'])
+def criar_admin():
+    """
+    Cria um novo usuário Administrador para a Escola ATIVA (g.active_school).
+    """
+    if not g.active_school:
+        flash("Nenhuma escola ativa selecionada para vincular o administrador.", "warning")
+        return redirect(url_for('main.index'))
+
     if request.method == 'POST':
-        id_funcs_raw = request.form.get('id_funcs')
-        role = request.form.get('role')
-        school_id = request.form.get('school_id') # Usado pelo Super Admin
+        matricula = request.form.get('matricula')
+        username = request.form.get('username') # Nome de Guerra
+        email = request.form.get('email')
+        password = request.form.get('password') # Opcional
+        
+        # Validar duplicidade básica
+        if db.session.query(User).filter((User.matricula == matricula) | (User.email == email)).first():
+            flash('Matrícula ou Email já cadastrado.', 'danger')
+            return redirect(url_for('admin_escola.criar_admin'))
 
-        # --- LÓGICA DE VINCULAÇÃO AUTOMÁTICA ---
-        # Se o usuário logado for um admin de escola, usa a escola dele.
-        if current_user.role == 'admin_escola':
-            if current_user.user_schools:
-                school_id = current_user.user_schools[0].school_id
-            else:
-                flash('Você não está associado a nenhuma escola para realizar o pré-cadastro.', 'danger')
-                return redirect(url_for('main.dashboard'))
-        # --- FIM DA LÓGICA ---
-        
-        # Validações
-        if not id_funcs_raw or not role or not school_id:
-            flash('Por favor, preencha todos os campos, incluindo a escola.', 'danger')
-            return redirect(url_for('admin_escola.pre_cadastro'))
-
-        id_funcs = [m.strip() for m in id_funcs_raw.replace(',', ' ').replace(';', ' ').split() if m.strip()]
-        
-        # Passa o school_id para o serviço de pré-cadastro em lote
-        success, new_users_count, existing_users_count = UserService.batch_pre_register_users(id_funcs, role, school_id)
-        
-        if success:
-            if new_users_count > 0:
-                flash(f'{new_users_count} novo(s) usuário(s) pré-cadastrado(s) com sucesso na escola correta!', 'success')
-            if existing_users_count > 0:
-                flash(f'{existing_users_count} identificador(es) já existia(m) e foram ignorado(s).', 'info')
+        # Criar User
+        new_admin = User(
+            matricula=matricula,
+            username=username, # Nome de Guerra
+            email=email,
+            role='admin',
+            is_active=True 
+        )
+        if password:
+            new_admin.set_password(password)
         else:
-            flash(f'Erro ao pré-cadastrar usuários.', 'danger')
+             # Senha padrão se não fornecida
+             new_admin.set_password("Mudar@123") 
 
-        return redirect(url_for('main.dashboard'))
+        db.session.add(new_admin)
+        db.session.flush() # Para ter o ID
 
-    # Para a requisição GET, busca as escolas para o super admin selecionar
-    schools = db.session.query(School).order_by(School.nome).all()
-    return render_template('pre_cadastro.html', schools=schools)
+        # Vincular à Escola Ativa
+        link = UserSchool(user_id=new_admin.id, school_id=g.active_school.id)
+        db.session.add(link)
+
+        db.session.commit()
+        
+        flash(f'Administrador {username} criado com sucesso para a escola {g.active_school.nome}!', 'success')
+        return redirect(url_for('admin_escola.listar_admins'))
+
+    return render_template('criar_admin_escola.html')
+
+@admin_escola_bp.route('/listar')
+def listar_admins():
+    if not g.active_school:
+        flash("Selecione uma escola.", "warning")
+        return redirect(url_for('main.index'))
+
+    # Buscar users que são 'admin' e têm vínculo com a escola ativa
+    admins = db.session.query(User).join(UserSchool).filter(
+        UserSchool.school_id == g.active_school.id,
+        User.role == 'admin'
+    ).all()
+
+    return render_template('listar_admins_escola.html', admins=admins)
+
+@admin_escola_bp.route('/editar/<int:user_id>', methods=['GET', 'POST'])
+def editar_admin(user_id):
+    # Verificar se o user pertence à escola ativa
+    user = db.session.get(User, user_id)
+    if not user:
+        flash("Usuário não encontrado.", "danger")
+        return redirect(url_for('admin_escola.listar_admins'))
+    
+    # Verificar vinculo
+    link = db.session.query(UserSchool).filter_by(user_id=user.id, school_id=g.active_school.id).first()
+    if not link:
+        flash("Este usuário não pertence à escola ativa.", "danger")
+        return redirect(url_for('admin_escola.listar_admins'))
+
+    if request.method == 'POST':
+        user.username = request.form.get('username')
+        user.email = request.form.get('email')
+        
+        new_pass = request.form.get('password')
+        if new_pass:
+            user.set_password(new_pass)
+
+        db.session.commit()
+        flash("Dados atualizados.", "success")
+        return redirect(url_for('admin_escola.listar_admins'))
+
+    return render_template('criar_admin_escola.html', user=user, edit_mode=True)
+
+@admin_escola_bp.route('/remover/<int:user_id>', methods=['POST'])
+def remover_admin(user_id):
+    user = db.session.get(User, user_id)
+    if user:
+         link = db.session.query(UserSchool).filter_by(user_id=user.id, school_id=g.active_school.id).first()
+         if link:
+             db.session.delete(link)
+             db.session.commit()
+             flash("Vínculo removido.", "success")
+    return redirect(url_for('admin_escola.listar_admins'))
+
+# --- ROTA PARA O ESPELHO DO DIÁRIO ---
+@admin_escola_bp.route('/diarios/espelho', methods=['GET'])
+def espelho_diarios():
+    # Filtros via Query String (GET)
+    turma_id = request.args.get('turma_id', type=int)
+    data_filtro = request.args.get('data')
+    
+    diarios = []
+    
+    # Se filtros foram preenchidos, busca os dados
+    if turma_id and data_filtro:
+        diarios = db.session.query(DiarioClasse).filter_by(
+            turma_id=turma_id, 
+            data_aula=data_filtro
+        ).all()
+    
+    # Lista turmas da escola ativa para preencher o select
+    turmas = db.session.query(Turma).filter_by(school_id=g.active_school.id).all()
+    
+    return render_template('admin/espelho_diarios.html', 
+                           diarios=diarios, 
+                           turmas=turmas,
+                           selected_turma=turma_id,
+                           selected_data=data_filtro)

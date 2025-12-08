@@ -44,10 +44,10 @@ from backend.models.site_config import SiteConfig
 from backend.models.turma import Turma
 from backend.models.turma_cargo import TurmaCargo
 from backend.models.user_school import UserSchool
-# ### INÍCIO DA ALTERAÇÃO ###
-# Adicionada a importação do novo modelo para o Alembic/Migrate
 from backend.models.fada_avaliacao import FadaAvaliacao
-# ### FIM DA ALTERAÇÃO ###
+# ### NOVOS MODELOS CHEFE DE TURMA ###
+from backend.models.diario_classe import DiarioClasse
+from backend.models.frequencia import FrequenciaAluno
 # ------------------------------------------------------------
 from datetime import datetime, timezone
 try:
@@ -86,7 +86,7 @@ def create_app(config_class=Config):
         app.logger.error(f"ERRO ao inicializar o Firebase Admin SDK: {e}")
     # --- FIM DA INICIALIZAÇÃO ---
 
-    # ### FILTRO DE FUSO HORÁRIO (JÁ ESTAVA CORRETO) ###
+    # ### FILTRO DE FUSO HORÁRIO ###
     @app.template_filter('br_time')
     def format_datetime_as_brt(dt_utc, format_str=None):
         """
@@ -113,8 +113,7 @@ def create_app(config_class=Config):
             return str(dt_utc)
     # ### FIM DO FILTRO ###
     
-    # ### INÍCIO DA ALTERAÇÃO PWA ###
-    # Rota para servir o Service Worker na raiz (obrigatório para PWA funcionar corretamente)
+    # ### PWA ###
     @app.route('/sw.js')
     def service_worker():
         return send_from_directory(app.static_folder, 'sw.js', mimetype='application/javascript')
@@ -122,7 +121,7 @@ def create_app(config_class=Config):
     @app.route('/manifest.json')
     def manifest():
         return send_from_directory(app.static_folder, 'manifest.json', mimetype='application/json')
-    # ### FIM DA ALTERAÇÃO PWA ###
+    # ### FIM PWA ###
 
     db.init_app(app)
     Migrate(app, db)
@@ -170,6 +169,8 @@ def register_blueprints(app):
     from backend.controllers.turma_controller import turma_bp
     from backend.controllers.user_controller import user_bp
     from backend.controllers.vinculo_controller import vinculo_bp
+    # Importar controller do Chefe
+    from backend.controllers.chefe_turma_controller import chefe_bp
 
     app.register_blueprint(admin_escola_bp)
     app.register_blueprint(tools_bp)
@@ -193,8 +194,8 @@ def register_blueprints(app):
     app.register_blueprint(turma_bp)
     app.register_blueprint(user_bp)
     app.register_blueprint(vinculo_bp)
-
-# ### INÍCIO DA SEÇÃO CORRIGIDA ###
+    # Registrar blueprint do Chefe
+    app.register_blueprint(chefe_bp)
 
 def register_handlers_and_processors(app):
 
@@ -231,18 +232,15 @@ def register_handlers_and_processors(app):
             if school_id_to_load:
                 g.active_school = db.session.get(School, school_id_to_load)
         
-        # Ao final desta função, g.site_config e g.active_school 
-        # já estão disponíveis para todas as rotas.
 
     @app.context_processor
     def inject_globals_to_template():
         """
         Injeta as variáveis globais (que já foram carregadas) nos templates HTML.
         """
-        # Esta função agora apenas lê os valores de 'g'
         return {
             'site_config': g.get('site_config'),
-            'active_school': g.get('active_school') # Passa a escola (ou None) para os templates
+            'active_school': g.get('active_school')
         }
 
     @app.after_request
@@ -256,7 +254,7 @@ def register_handlers_and_processors(app):
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
 
-        # Política de Segurança de Conteúdo (CSP) (mantida do seu original)
+        # Política de Segurança de Conteúdo (CSP)
         csp = [
             "default-src 'self'",
             "script-src 'self' https://code.jquery.com https://cdn.jsdelivr.net 'unsafe-eval' 'unsafe-inline'",
@@ -266,7 +264,6 @@ def register_handlers_and_processors(app):
             "connect-src 'self' https://cdn.jsdelivr.net",
             "object-src 'none'",
             "frame-ancestors 'self'",
-            # PWA: permitir manifesto e worker
             "manifest-src 'self'",
             "worker-src 'self'"
         ]
@@ -280,13 +277,10 @@ def register_handlers_and_processors(app):
 
     @app.errorhandler(500)
     def internal_error(error):
-        db.session.rollback() # Garante rollback em caso de erro no banco
+        db.session.rollback()
         return render_template('500.html'), 500
 
-# ### FIM DA SEÇÃO CORRIGIDA ###
-
 def register_cli_commands(app):
-    # (Seus comandos CLI originais permanecem aqui, sem alterações)
     @app.cli.command("create-super-admin")
     def create_super_admin():
         with app.app_context():
