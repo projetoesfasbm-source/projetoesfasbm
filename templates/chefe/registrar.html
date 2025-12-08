@@ -2,96 +2,193 @@
 
 {% block content %}
 <div class="container mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h3><i class="fas fa-clipboard-check"></i> Registrar Chamada</h3>
-        <a href="{{ url_for('chefe.painel') }}" class="btn btn-outline-secondary btn-sm">
-            <i class="fas fa-arrow-left"></i> Voltar
-        </a>
-    </div>
-
-    <div class="card mb-4 border-primary">
-        <div class="card-body bg-light">
-            <div class="row">
-                <div class="col-md-6">
-                    <h5 class="text-primary">{{ horario.disciplina.nome }}</h5>
-                    <p class="mb-0"><strong>Horário:</strong> {{ horario.hora_inicio }} - {{ horario.hora_fim }}</p>
-                </div>
-                <div class="col-md-6 text-md-end">
-                    <p class="mb-0"><strong>Data:</strong> {{ data_hoje.strftime('%d/%m/%Y') }}</p>
-                    <p class="mb-0"><strong>Instrutor:</strong> {{ horario.instrutor.nome_guerra if horario.instrutor else 'N/A' }}</p>
+    <div class="card border-0 shadow-sm mb-4 bg-white border-top border-primary border-5">
+        <div class="card-body p-4 d-flex justify-content-between align-items-center">
+            <div>
+                <h6 class="text-uppercase text-muted fw-bold mb-1" style="font-size: 0.8rem;">Registro de Frequência</h6>
+                <h2 class="fw-bold mb-1 text-dark">{{ disciplina.nome }}</h2>
+                <div class="d-flex align-items-center gap-3 text-secondary mt-2">
+                    <span><i class="fas fa-chalkboard-teacher"></i> {{ nome_instrutor }}</span>
+                    <span><i class="far fa-calendar-alt"></i> {{ data_aula.strftime('%d/%m/%Y') }}</span>
+                    <span class="badge bg-primary text-white">{{ horarios|length }} Tempos</span>
                 </div>
             </div>
+            <a href="{{ url_for('chefe.painel', data=data_aula) }}" class="btn btn-outline-secondary fw-bold">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
         </div>
     </div>
 
     <form method="POST">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         
-        <div class="row">
-            <div class="col-lg-8">
-                <div class="card shadow-sm mb-4">
-                    <div class="card-header bg-white">
-                        <h5 class="mb-0">Lista de Presença</h5>
-                        <small class="text-muted">Desmarque a caixa para registrar FALTA.</small>
-                    </div>
-                    <div class="card-body p-0">
-                        <div class="table-responsive">
-                            <table class="table table-striped table-hover mb-0 align-middle">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th class="ps-4" style="width: 80px;">Nº</th>
-                                        <th>Nome de Guerra</th>
-                                        <th class="text-center" style="width: 150px;">Presença</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for aluno in alunos %}
-                                    <tr>
-                                        <td class="ps-4 fw-bold">{{ aluno.num_aluno }}</td>
-                                        <td>
-                                            {{ aluno.user.nome_guerra }} 
-                                            <span class="text-muted small">({{ aluno.user.matricula }})</span>
-                                        </td>
-                                        <td class="text-center">
-                                            <div class="form-check form-switch d-flex justify-content-center">
-                                                <input class="form-check-input" type="checkbox" style="transform: scale(1.3);" 
-                                                       name="presenca_{{ aluno.id }}" checked>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
+        <div class="row g-4">
             <div class="col-lg-4">
-                <div class="card shadow-sm mb-3">
-                    <div class="card-header bg-white">
-                        <h5 class="mb-0">Detalhes da Aula</h5>
+                <div class="card shadow-sm border-0 h-100 bg-white">
+                    <div class="card-header bg-light border-bottom fw-bold text-dark">
+                        <i class="fas fa-info-circle me-1"></i> Detalhes da Aula
                     </div>
                     <div class="card-body">
                         <div class="mb-3">
-                            <label class="form-label fw-bold">Conteúdo Ministrado</label>
-                            <textarea name="conteudo" class="form-control" rows="3" placeholder="Descreva brevemente o conteúdo..."></textarea>
+                            <label class="form-label fw-bold text-dark small">Conteúdo Ministrado</label>
+                            <textarea name="conteudo" class="form-control bg-light text-dark" rows="4" placeholder="Descreva o que foi passado em aula..." required></textarea>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label fw-bold">Observações / Ocorrências</label>
-                            <textarea name="observacoes" class="form-control" rows="4" placeholder="Alguma alteração, problema com material, aluno passou mal, etc..."></textarea>
+                            <label class="form-label fw-bold text-dark small">Observações / Ocorrências</label>
+                            <textarea name="observacoes" class="form-control bg-light text-dark" rows="3" placeholder="Algum aluno passou mal? Atraso do instrutor?"></textarea>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                <div class="d-grid gap-2">
-                    <button type="submit" class="btn btn-success btn-lg">
-                        <i class="fas fa-save"></i> Salvar Chamada
-                    </button>
-                    <a href="{{ url_for('chefe.painel') }}" class="btn btn-secondary">Cancelar</a>
+            <div class="col-lg-8">
+                <div class="card shadow-sm border-0 bg-white">
+                    <div class="card-header bg-light border-bottom d-flex justify-content-between align-items-center py-3">
+                        <h5 class="mb-0 fw-bold text-dark"><i class="fas fa-users text-primary"></i> Lista de Alunos</h5>
+                        <button type="button" class="btn btn-sm btn-outline-primary fw-bold" onclick="marcarTodos(true)">
+                            <i class="fas fa-check-double"></i> Marcar Todos Presentes
+                        </button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="bg-light text-dark">
+                                <tr>
+                                    <th class="ps-3 text-dark">Aluno</th>
+                                    <th class="text-center text-dark" style="width: 140px;">Status</th>
+                                    <th class="text-center text-dark">Ajuste de Períodos</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for aluno in alunos %}
+                                <tr id="row-{{ aluno.id }}" class="bg-white">
+                                    <td class="ps-3">
+                                        <div class="fw-bold text-dark">{{ aluno.user.nome_de_guerra }}</div>
+                                        <small class="text-muted">{{ aluno.num_aluno }} - {{ aluno.user.nome_completo }}</small>
+                                    </td>
+                                    
+                                    <td class="text-center">
+                                        <div class="form-check form-switch d-flex justify-content-center">
+                                            <input class="form-check-input scale-125" type="checkbox" 
+                                                   id="master-{{ aluno.id }}" 
+                                                   checked
+                                                   onchange="toggleMaster('{{ aluno.id }}')">
+                                        </div>
+                                        <small class="fw-bold text-success" id="label-master-{{ aluno.id }}">PRESENTE</small>
+                                    </td>
+
+                                    <td class="text-center">
+                                        <div id="periods-msg-{{ aluno.id }}" class="text-muted small">
+                                            <span class="badge bg-light text-success border border-success">
+                                                <i class="fas fa-check"></i> Presença Integral
+                                            </span>
+                                        </div>
+
+                                        <div id="periods-{{ aluno.id }}" class="d-none d-flex flex-wrap gap-1 justify-content-center align-items-center">
+                                            {% for h in horarios %}
+                                                <input type="checkbox" class="btn-check" 
+                                                       name="presenca_{{ aluno.id }}_{{ h.periodo }}" 
+                                                       id="btn-check-{{ aluno.id }}-{{ h.periodo }}" 
+                                                       autocomplete="off" checked>
+                                                
+                                                <label class="btn btn-outline-primary btn-sm fw-bold shadow-none" 
+                                                       for="btn-check-{{ aluno.id }}-{{ h.periodo }}"
+                                                       style="width: 40px; height: 32px; display: flex; align-items: center; justify-content: center;">
+                                                    {{ h.periodo }}º
+                                                </label>
+                                            {% endfor %}
+                                        </div>
+                                        
+                                        <div id="periods-help-{{ aluno.id }}" class="d-none mt-1">
+                                            <small class="text-danger" style="font-size: 0.7rem;">Desmarque os tempos de falta</small>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
+
+        <div class="d-grid gap-2 mt-4 mb-5">
+            <button type="submit" class="btn btn-success btn-lg shadow fw-bold">
+                <i class="fas fa-save me-2"></i> Confirmar e Salvar Chamada
+            </button>
+        </div>
     </form>
 </div>
+
+<style>
+    .scale-125 { transform: scale(1.4); cursor: pointer; }
+    .bg-white { background-color: #ffffff !important; }
+    .text-dark { color: #212529 !important; }
+    
+    .table-danger-custom { background-color: #fff5f5 !important; }
+    .table-danger-custom td { color: #842029 !important; }
+    .table-danger-custom small.text-muted { color: #842029 !important; opacity: 0.8; }
+
+    /* Estilo para os botões de período */
+    .btn-check:checked + .btn-outline-primary {
+        background-color: #0d6efd;
+        color: white;
+        border-color: #0d6efd;
+    }
+    .btn-check:not(:checked) + .btn-outline-primary {
+        background-color: white;
+        color: #dc3545; /* Vermelho para indicar falta quando desmarcado */
+        border-color: #dee2e6;
+        opacity: 0.6;
+    }
+    .btn-check:not(:checked) + .btn-outline-primary:hover {
+        border-color: #dc3545;
+        opacity: 1;
+    }
+</style>
+
+<script>
+    function toggleMaster(alunoId) {
+        const masterCheck = document.getElementById(`master-${alunoId}`);
+        const periodsDiv = document.getElementById(`periods-${alunoId}`);
+        const periodsHelp = document.getElementById(`periods-help-${alunoId}`);
+        const msgDiv = document.getElementById(`periods-msg-${alunoId}`);
+        const label = document.getElementById(`label-master-${alunoId}`);
+        const row = document.getElementById(`row-${alunoId}`);
+        
+        // Seleciona todos os inputs btn-check
+        const subChecks = periodsDiv.querySelectorAll('input.btn-check');
+
+        if (masterCheck.checked) {
+            // PRESENTE TOTAL
+            periodsDiv.classList.add('d-none');
+            periodsHelp.classList.add('d-none');
+            msgDiv.classList.remove('d-none');
+            
+            label.textContent = "PRESENTE";
+            label.className = "fw-bold text-success";
+            
+            row.classList.remove('table-danger-custom');
+            
+            // Marca todos automaticamente
+            subChecks.forEach(ch => ch.checked = true);
+        } else {
+            // FALTA OU PARCIAL (Habilita edição)
+            periodsDiv.classList.remove('d-none');
+            periodsHelp.classList.remove('d-none');
+            msgDiv.classList.add('d-none');
+            
+            label.textContent = "EDITAR";
+            label.className = "fw-bold text-danger";
+            
+            row.classList.add('table-danger-custom');
+        }
+    }
+
+    function marcarTodos(estado) {
+        document.querySelectorAll('[id^="master-"]').forEach(m => {
+            m.checked = estado;
+            m.dispatchEvent(new Event('change'));
+        });
+    }
+</script>
 {% endblock %}
