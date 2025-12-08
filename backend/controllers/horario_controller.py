@@ -113,7 +113,7 @@ def index():
 
     tempos, intervalos = _get_horario_context_data()
 
-    # --- LÓGICA DE PRIORIDADE ---
+    # --- LÓGICA DE PRIORIDADE CORRIGIDA E ROBUSTA ---
     all_disciplinas_names = []
     if school_id:
         all_disciplinas_names = db.session.scalars(
@@ -137,27 +137,41 @@ def index():
             except:
                 priority_names_list = []
 
-    # --- VERIFICAÇÃO DE PERMISSÃO ROBUSTA (STRIP + LOWER) ---
+    # --- DEBUG NO TERMINAL ---
+    if priority_active and current_user.role == 'instrutor':
+        print(f"\n--- DEBUG PRIORIDADE ({current_user.nome_guerra}) ---")
+        print(f"Modo Ativo: Sim")
+        print(f"Pode agendar (Geral): {can_schedule_in_this_turma}")
+    
+    # Validação de Permissão Específica
     if priority_active and current_user.role == 'instrutor' and can_schedule_in_this_turma:
-        # Busca todas as matérias que o instrutor dá nesta turma
+        # Busca todas as matérias que este instrutor dá NESTA turma
         disciplinas_instrutor_nomes = db.session.scalars(
             select(Disciplina.materia)
             .join(DisciplinaTurma, Disciplina.id == DisciplinaTurma.disciplina_id)
             .where(
                 DisciplinaTurma.pelotao == turma_selecionada_nome,
-                or_(DisciplinaTurma.instrutor_id_1 == current_user.instrutor_profile.id,
-                    DisciplinaTurma.instrutor_id_2 == current_user.instrutor_profile.id)
+                or_(
+                    DisciplinaTurma.instrutor_id_1 == current_user.instrutor_profile.id,
+                    DisciplinaTurma.instrutor_id_2 == current_user.instrutor_profile.id
+                )
             )
         ).all()
         
-        # Cria sets normalizados (remove espaços e deixa minusculo) para comparação precisa
+        # Normalização (Strip + Lower) para garantir match
         p_set = {str(p).strip().lower() for p in priority_names_list if p}
         i_set = {str(d).strip().lower() for d in disciplinas_instrutor_nomes if d}
         
-        # Se NÃO houver intersecção (nenhuma matéria em comum), bloqueia
+        print(f"Lista Prioritária (Normalizada): {p_set}")
+        print(f"Matérias do Instrutor na Turma (Normalizada): {i_set}")
+        
+        # Se não houver intersecção, bloqueia
         if p_set.isdisjoint(i_set):
+            print(">>> BLOQUEADO: Nenhuma matéria coincide.")
             can_schedule_in_this_turma = False
-    # --------------------------------------------------------
+        else:
+            print(">>> LIBERADO: Encontrou matéria coincidente.")
+    # ----------------------------------------------------
 
     return render_template('quadro_horario.html',
                            horario_matrix=horario_matrix,
