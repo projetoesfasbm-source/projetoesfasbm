@@ -25,203 +25,173 @@
         <div class="controls-group d-flex gap-2">
             {% if current_user.role in ['programador', 'admin_escola', 'super_admin'] %}
             
-            <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#priorityModal">
-                <i class="fas fa-star me-1"></i> Gerenciar Prioridade
+            <button type="button" class="btn {% if priority_active %}btn-danger text-white{% else %}btn-warning{% endif %} fw-bold shadow-sm" 
+                    data-bs-toggle="modal" data-bs-target="#priorityModal">
+                <i class="fas fa-star me-1"></i> 
+                {% if priority_active %}Prioridade ATIVA{% else %}Configurar Prioridade{% endif %}
             </button>
 
             <a href="{{ url_for('horario.exportar_pdf', pelotao=pelotao_selecionado, semana_id=semana_selecionada.id) }}" class="btn btn-danger" target="_blank">
-                Exportar PDF
+                <i class="fas fa-file-pdf me-1"></i> PDF
             </a>
             {% endif %}
             
+            {% if can_schedule_in_this_turma %}
             <button type="button" class="btn btn-primary" onclick="openConfirmationModal()">
                 Agendar/Desmarcar Aulas
             </button>
+            {% else %}
+                {% if current_user.role == 'instrutor' and priority_active %}
+                <button class="btn btn-secondary" disabled title="Bloqueado pelo modo de prioridade">
+                    <i class="fas fa-lock"></i> Agendamento Bloqueado
+                </button>
+                {% endif %}
+            {% endif %}
         </div>
         {% endif %}
     </div>
 
-    <div class="ciclo-selector">
-        <strong>Ciclo:</strong>
-        <div class="filter-buttons">
-            {% for ciclo in ciclos %}
-            <a href="{{ url_for('horario.index', ciclo=ciclo.id, pelotao=pelotao_selecionado, semana_id=semana_selecionada.id if semana_selecionada else '') }}"
-               class="btn btn-sm {% if ciclo_selecionado == ciclo.id %}btn-warning{% else %}btn-secondary{% endif %}">
-                {{ ciclo.nome }}
-            </a>
-            {% endfor %}
-        </div>
-    </div>
-    
-    <div class="horario-selectors">
-        <div class="pelotao-pills">
-            {% for turma in todas_as_turmas %}
-                <a href="{{ url_for('horario.index', pelotao=turma.nome, semana_id=semana_selecionada.id if semana_selecionada else '', ciclo=ciclo_selecionado) }}"
-                   class="btn btn-sm {% if turma.nome == pelotao_selecionado %}btn-primary{% else %}btn-secondary{% endif %}">
-                    {{ turma.nome }}
-                </a>
-            {% endfor %}
-        </div>
-        <div class="semana-selector-wrapper">
-            <label for="semana_selector">Semana:</label>
-            <select id="semana_selector" name="semana" class="form-control" {% if not todas_as_semanas %}disabled{% endif %}>
-                {% if todas_as_semanas %}
-                    {% for semana in todas_as_semanas %}
-                        <option value="{{ semana.id }}" {% if semana_selecionada and semana.id == semana_selecionada.id %}selected{% endif %}>
-                            {{ semana.nome }} ({{ semana.data_inicio.strftime('%d/%m') }} a {{ semana.data_fim.strftime('%d/%m') }})
-                        </option>
+    <div class="filters-bar card p-3 mb-4 shadow-sm">
+        <form method="GET" action="{{ url_for('horario.index') }}" class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label for="ciclo_id" class="form-label fw-bold">Ciclo</label>
+                <select name="ciclo_id" id="ciclo_id" class="form-select" onchange="this.form.submit()">
+                    {% for ciclo in ciclos %}
+                    <option value="{{ ciclo.id }}" {% if ciclo.id == ciclo_selecionado %}selected{% endif %}>{{ ciclo.nome }}</option>
                     {% endfor %}
-                {% else %}
-                    <option>Nenhuma semana cadastrada para este ciclo</option>
-                {% endif %}
-            </select>
-            {% if current_user.role in ['admin_escola', 'programador'] %}
-            <a href="{{ url_for('semana.gerenciar_semanas') }}" class="btn btn-sm btn-info">
-                Gerenciar Semanas
-            </a>
-            {% endif %}
-        </div>
+                </select>
+            </div>
+
+            <div class="col-md-4">
+                <label for="semana_id" class="form-label fw-bold">Semana</label>
+                <select name="semana_id" id="semana_id" class="form-select" onchange="this.form.submit()">
+                    {% for semana in todas_as_semanas %}
+                    <option value="{{ semana.id }}" {% if semana_selecionada and semana.id == semana_selecionada.id %}selected{% endif %}>
+                        {{ semana.nome }} ({{ semana.data_inicio.strftime('%d/%m') }} a {{ semana.data_fim.strftime('%d/%m') }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-md-3">
+                <label for="pelotao" class="form-label fw-bold">Pelotão</label>
+                <select name="pelotao" id="pelotao" class="form-select" onchange="this.form.submit()">
+                    {% for turma in todas_as_turmas %}
+                    <option value="{{ turma.nome }}" {% if turma.nome == pelotao_selecionado %}selected{% endif %}>{{ turma.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="col-md-2">
+               <button type="submit" class="btn btn-primary w-100"><i class="fas fa-sync-alt"></i> Atualizar</button>
+            </div>
+        </form>
     </div>
 </div>
 
-{% if horario_matrix and semana_selecionada %}
-    <div class="table-wrapper">
-        <table class="horario-table-new">
-            <thead>
-                <tr>
-                    <th class="header-tempo">Horário</th>
-                    <th class="header-dia">Segunda-feira <br><small>({{ datas_semana.segunda }})</small></th>
-                    <th class="header-dia">Terça-feira <br><small>({{ datas_semana.terca }})</small></th>
-                    <th class="header-dia">Quarta-feira <br><small>({{ datas_semana.quarta }})</small></th>
-                    <th class="header-dia">Quinta-feira <br><small>({{ datas_semana.quinta }})</small></th>
-                    <th class="header-dia">Sexta-feira <br><small>({{ datas_semana.sexta }})</small></th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for row_idx in range(15) %}
-                    {% set periodo_num = row_idx + 1 %}
-                    {% if (periodo_num <= 12) or 
-                          (periodo_num == 13 and semana_selecionada.mostrar_periodo_13) or
-                          (periodo_num == 14 and semana_selecionada.mostrar_periodo_14) or
-                          (periodo_num == 15 and semana_selecionada.mostrar_periodo_15) %}
-                    
-                    <tr class="periodo-row">
-                        <td class="cell-tempo"><strong>{{ tempos[row_idx][0] }}</strong><span>{{ tempos[row_idx][1] }}</span></td>
-                        {% for col_idx in range(5) %}
-                            {% set aula = horario_matrix[row_idx][col_idx] %}
-                            {% include 'partials/_horario_slot_view.html' %}
-                        {% endfor %}
-                    </tr>
-                    
-                    {% endif %}
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-
-    {% if semana_selecionada.mostrar_sabado or semana_selecionada.mostrar_domingo %}
-    <button class="weekend-toggle-btn" id="weekend-toggle">
-        <span>Fim de Semana</span>
-    </button>
-    
-    <div class="weekend-panel" id="weekend-panel">
+<div class="horario-content">
+    {% if not horario_matrix %}
+        <div class="empty-state">
+            <div class="empty-icon">📅</div>
+            <h3>Nenhum horário para exibir</h3>
+            <p>Selecione um pelotão e uma semana válida para carregar a grade horária.</p>
+        </div>
+    {% else %}
         <div class="table-wrapper">
-            <table class="horario-table-new weekend-table">
+            <table class="horario-table-new">
                 <thead>
                     <tr>
                         <th class="header-tempo">Horário</th>
-                        {% if semana_selecionada.mostrar_sabado %}<th class="header-dia weekend">Sábado <br><small>({{ datas_semana.sabado }})</small></th>{% endif %}
-                        {% if semana_selecionada.mostrar_domingo %}<th class="header-dia weekend">Domingo <br><small>({{ datas_semana.domingo }})</small></th>{% endif %}
+                        <th class="header-dia">Segunda-feira <br><small>({{ datas_semana.segunda }})</small></th>
+                        <th class="header-dia">Terça-feira <br><small>({{ datas_semana.terca }})</small></th>
+                        <th class="header-dia">Quarta-feira <br><small>({{ datas_semana.quarta }})</small></th>
+                        <th class="header-dia">Quinta-feira <br><small>({{ datas_semana.quinta }})</small></th>
+                        <th class="header-dia">Sexta-feira <br><small>({{ datas_semana.sexta }})</small></th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for row_idx in range(15) %}
-                        {% if (semana_selecionada.mostrar_sabado and loop.index <= semana_selecionada.periodos_sabado) or
-                              (semana_selecionada.mostrar_domingo and loop.index <= semana_selecionada.periodos_domingo) %}
+                        {% set periodo_num = row_idx + 1 %}
+                        {% if (periodo_num <= 12) or 
+                              (periodo_num == 13 and semana_selecionada.mostrar_periodo_13) or
+                              (periodo_num == 14 and semana_selecionada.mostrar_periodo_14) or
+                              (periodo_num == 15 and semana_selecionada.mostrar_periodo_15) %}
+                        
                         <tr class="periodo-row">
                             <td class="cell-tempo"><strong>{{ tempos[row_idx][0] }}</strong><span>{{ tempos[row_idx][1] }}</span></td>
-                            {% if semana_selecionada.mostrar_sabado %}
-                                {% set aula = horario_matrix[row_idx][5] %}
-                                {% include 'partials/_horario_slot_view.html' %}
-                            {% endif %}
-                            {% if semana_selecionada.mostrar_domingo %}
-                                {% set aula = horario_matrix[row_idx][6] %}
-                                {% include 'partials/_horario_slot_view.html' %}
-                            {% endif %}
+                            {% for col_idx in range(5) %}
+                                {% set aula = horario_matrix[row_idx][col_idx] %}
+                                
+                                {% if aula %}
+                                    {% include 'partials/_horario_slot_view.html' %}
+                                {% else %}
+                                    <td class="schedule-slot free {% if priority_active and not can_schedule_in_this_turma %}blocked-slot{% endif %}"></td>
+                                {% endif %}
+                                
+                            {% endfor %}
                         </tr>
+                        
                         {% endif %}
                     {% endfor %}
                 </tbody>
             </table>
         </div>
-    </div>
-    {% endif %}
 
-{% else %}
-    <div class="empty-state" style="margin-top: 2rem;">
-        <div class="empty-icon">📅</div>
-        <h2>Quadro Horário Indisponível</h2>
-        {% if not todas_as_turmas %}
-            <p>Nenhuma turma foi cadastrada. Por favor, vá para a seção "Turmas" para criar a primeira.</p>
-        {% elif not todas_as_semanas %}
-            <p>Nenhuma semana foi cadastrada para o <strong>Ciclo {{ ciclo_selecionado }}</strong>. Utilize o botão "Gerenciar Semanas" acima para começar.</p>
-        {% else %}
-            <p>Não foi possível carregar o quadro de horários. Verifique se há turmas e semanas cadastradas.</p>
+        {% if semana_selecionada.mostrar_sabado or semana_selecionada.mostrar_domingo %}
+        <button class="weekend-toggle-btn" id="weekend-toggle">
+            <span>Fim de Semana</span>
+        </button>
+        
+        <div class="weekend-panel" id="weekend-panel">
+            <div class="table-wrapper">
+                <table class="horario-table-new weekend-table">
+                    <thead>
+                        <tr>
+                            <th class="header-tempo">Horário</th>
+                            {% if semana_selecionada.mostrar_sabado %}<th class="header-dia weekend">Sábado <br><small>({{ datas_semana.sabado }})</small></th>{% endif %}
+                            {% if semana_selecionada.mostrar_domingo %}<th class="header-dia weekend">Domingo <br><small>({{ datas_semana.domingo }})</small></th>{% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row_idx in range(15) %}
+                            {% if (semana_selecionada.mostrar_sabado and loop.index <= semana_selecionada.periodos_sabado) or
+                                  (semana_selecionada.mostrar_domingo and loop.index <= semana_selecionada.periodos_domingo) %}
+                            <tr class="periodo-row">
+                                <td class="cell-tempo"><strong>{{ tempos[row_idx][0] }}</strong><span>{{ tempos[row_idx][1] }}</span></td>
+                                
+                                {% if semana_selecionada.mostrar_sabado %}
+                                    {% set aula = horario_matrix[row_idx][5] %}
+                                    {% if aula %}
+                                        {% include 'partials/_horario_slot_view.html' %}
+                                    {% else %}
+                                        <td class="schedule-slot free weekend-slot {% if priority_active and not can_schedule_in_this_turma %}blocked-slot{% endif %}"></td>
+                                    {% endif %}
+                                {% endif %}
+                                
+                                {% if semana_selecionada.mostrar_domingo %}
+                                    {% set aula = horario_matrix[row_idx][6] %}
+                                    {% if aula %}
+                                        {% include 'partials/_horario_slot_view.html' %}
+                                    {% else %}
+                                        <td class="schedule-slot free weekend-slot {% if priority_active and not can_schedule_in_this_turma %}blocked-slot{% endif %}"></td>
+                                    {% endif %}
+                                {% endif %}
+                            </tr>
+                            {% endif %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
         {% endif %}
-    </div>
-{% endif %}
-
-<style>
-.horario-header-container { background-color: var(--color-white); border-radius: var(--border-radius); padding: 1.5rem 2rem; margin-bottom: 1.5rem; box-shadow: var(--shadow-soft); }
-.horario-selectors { margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--color-border); }
-.pelotao-pills { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.5rem; }
-.semana-selector-wrapper { display: flex; align-items: center; gap: 1rem; max-width: 500px; }
-.semana-selector-wrapper label { font-weight: 600; white-space: nowrap; }
-.slot-content.disposicao .disciplina-title { color: #94a3b8; font-style: italic; font-size: 0.75rem; }
-.horario-actions { display: flex; justify-content: center; margin-top: 1.5rem; }
-.ciclo-selector {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    padding: 1rem;
-    background-color: var(--color-background);
-    border-radius: 8px;
-    border: 1px solid var(--color-border);
-    margin-top: 1rem;
-}
-.btn.btn-warning {
-    background-color: var(--color-warning);
-    color: var(--color-white);
-}
-.header-dia small {
-    font-weight: 400;
-    font-size: 0.8em;
-    opacity: 0.8;
-}
-.weekend-slot.disabled {
-    background-color: #f1f5f9;
-    cursor: not-allowed;
-}
-.turma-selection-buttons {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1rem;
-    justify-content: center;
-    padding: 1rem 0;
-}
-.btn-turma {
-    flex-grow: 1;
-    padding: 1rem;
-    font-size: 1.1rem;
-}
-</style>
+    {% endif %}
+</div>
 {% endblock %}
 
 {% block modals %}
     {% if pelotao_selecionado and semana_selecionada %}
     <div class="modal-overlay" id="confirmation-modal-overlay">
         <div class="modal-content" style="max-width: 600px;">
-            
             <div style="margin-bottom: 1.5rem; background: #f8f9fa; padding: 1rem; border-radius: 8px; border: 1px solid #e9ecef;">
                 <label for="modal-semana-selector" class="form-label" style="font-weight: bold; color: #374151;">
                     📅 Selecione a Semana para Agendamento:
@@ -233,16 +203,10 @@
                         </option>
                     {% endfor %}
                 </select>
-                <small class="text-muted d-block mt-1">
-                    Você pode alterar a semana aqui antes de selecionar a turma.
-                </small>
             </div>
 
             {% if current_user.role == 'instrutor' %}
                 <h3 id="modal-title">Selecionar Turma</h3>
-                <p style="margin-top: 1rem; margin-bottom: 1rem;">
-                    Selecione qual turma você deseja editar para a semana selecionada acima:
-                </p>
                 <div class="turma-selection-buttons">
                     {% for turma in instrutor_turmas_vinculadas %}
                         <a href="{{ url_for('horario.editar_horario_grid', pelotao=turma.nome, semana_id=semana_selecionada.id, ciclo_id=ciclo_selecionado) }}" 
@@ -250,15 +214,12 @@
                             {{ turma.nome }}
                         </a>
                     {% else %}
-                        <p class="text-muted">Nenhum vínculo encontrado. Você não está vinculado a nenhuma turma para editar horários.</p>
+                        <p class="text-muted">Nenhum vínculo encontrado.</p>
                     {% endfor %}
                 </div>
             {% else %} 
                 <h3 id="modal-title">Confirmar Edição</h3>
-                <p style="margin-top: 1rem; margin-bottom: 1rem; font-size: 1.1rem;">
-                    Editar quadro da turma:
-                </p>
-                <div style="background-color: #f1f5f9; border: 1px solid #e2e8f0; padding: 0.5rem; border-radius: 8px; text-align: center; margin-bottom: 1.5rem;">
+                <div style="background-color: #f1f5f9; padding: 0.5rem; border-radius: 8px; text-align: center; margin-bottom: 1.5rem;">
                     <strong style="font-size: 1.2rem; color: #1e3a8a;">{{ pelotao_selecionado }}</strong>
                 </div>
             {% endif %}
@@ -285,26 +246,22 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <p class="text-muted small mb-3">
-                        Quando ativo, apenas as disciplinas selecionadas poderão agendar aulas nesta semana.
-                    </p>
-                    
                     <div class="form-check form-switch p-3 bg-light border rounded mb-3">
-                        <input class="form-check-input" type="checkbox" id="priorityActive" {% if priority_active %}checked{% endif %}>
+                        <input class="form-check-input scale-125" type="checkbox" id="priorityActive" {% if priority_active %}checked{% endif %}>
                         <label class="form-check-label fw-bold ms-2" for="priorityActive">Ativar Modo Prioridade</label>
                     </div>
 
                     <div id="priorityListContainer" class="{% if not priority_active %}opacity-50{% endif %}" style="transition: opacity 0.3s;">
                         <label class="form-label fw-bold mb-2">Selecione as Disciplinas Prioritárias:</label>
                         <div class="border rounded p-2" style="max-height: 250px; overflow-y: auto;">
-                            {% if all_disciplinas %}
-                                {% for disc in all_disciplinas %}
+                            {% if all_disciplinas_names %}
+                                {% for nome_materia in all_disciplinas_names %}
                                 <div class="form-check">
                                     <input class="form-check-input priority-disc-check" type="checkbox" 
-                                           value="{{ disc.id }}" id="disc-{{ disc.id }}"
-                                           {% if disc.id in priority_ids_list %}checked{% endif %}>
-                                    <label class="form-check-label" for="disc-{{ disc.id }}">
-                                        {{ disc.nome }} <small class="text-muted">({{ disc.materia }})</small>
+                                           value="{{ nome_materia }}" id="disc-{{ loop.index }}"
+                                           {% if nome_materia in priority_names_list %}checked{% endif %}>
+                                    <label class="form-check-label" for="disc-{{ loop.index }}">
+                                        {{ nome_materia }}
                                     </label>
                                 </div>
                                 {% endfor %}
@@ -391,25 +348,25 @@
         }
 
         // --- FUNÇÃO PARA SALVAR PRIORIDADE ---
-        // Adicionada para suportar o novo modal
-        
-        function selectAllPriority(state) {
-            document.querySelectorAll('.priority-disc-check').forEach(ch => ch.checked = state);
-        }
-
         const priorityActive = document.getElementById('priorityActive');
         if(priorityActive){
             priorityActive.addEventListener('change', function() {
                 const container = document.getElementById('priorityListContainer');
-                container.style.opacity = this.checked ? '1' : '0.5';
-                container.style.pointerEvents = this.checked ? 'auto' : 'none';
+                if (container) {
+                    container.style.opacity = this.checked ? '1' : '0.5';
+                    container.style.pointerEvents = this.checked ? 'auto' : 'none';
+                }
             });
+        }
+
+        function selectAllPriority(state) {
+            document.querySelectorAll('.priority-disc-check').forEach(ch => ch.checked = state);
         }
 
         function savePriorityConfig() {
             const active = document.getElementById('priorityActive').checked;
             const checks = document.querySelectorAll('.priority-disc-check:checked');
-            const ids = Array.from(checks).map(c => parseInt(c.value));
+            const names = Array.from(checks).map(c => c.value);
 
             const btn = document.querySelector('#priorityModal .btn-primary');
             const originalText = btn.innerHTML;
@@ -422,7 +379,7 @@
                     'Content-Type': 'application/json',
                     'X-CSRFToken': '{{ csrf_token() }}'
                 },
-                body: JSON.stringify({ active: active, disciplinas: ids })
+                body: JSON.stringify({ status: active, disciplinas: names })
             })
             .then(res => res.json())
             .then(data => {
@@ -442,4 +399,20 @@
             });
         }
     </script>
+    <style>
+        .scale-125 { transform: scale(1.4); cursor: pointer; }
+        .opacity-50 { opacity: 0.5; pointer-events: none; }
+        .blocked-slot { background-color: #fee2e2 !important; cursor: not-allowed; } 
+        .horario-header-container { background-color: var(--color-white); border-radius: var(--border-radius); padding: 1.5rem 2rem; margin-bottom: 1.5rem; box-shadow: var(--shadow-soft); }
+        .horario-selectors { margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--color-border); }
+        .pelotao-pills { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.5rem; }
+        .semana-selector-wrapper { display: flex; align-items: center; gap: 1rem; max-width: 500px; }
+        .semana-selector-wrapper label { font-weight: 600; white-space: nowrap; }
+        .horario-actions { display: flex; justify-content: center; margin-top: 1.5rem; }
+        .ciclo-selector { display: flex; align-items: center; gap: 1rem; padding: 1rem; background-color: var(--color-background); border-radius: 8px; border: 1px solid var(--color-border); margin-top: 1rem; }
+        .header-dia small { font-weight: 400; font-size: 0.8em; opacity: 0.8; }
+        .weekend-slot.disabled { background-color: #f1f5f9; cursor: not-allowed; }
+        .turma-selection-buttons { display: flex; flex-wrap: wrap; gap: 1rem; justify-content: center; padding: 1rem 0; }
+        .btn-turma { flex-grow: 1; padding: 1rem; font-size: 1.1rem; }
+    </style>
 {% endblock %}

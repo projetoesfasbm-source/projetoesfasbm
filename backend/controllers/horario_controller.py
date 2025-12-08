@@ -11,6 +11,7 @@ from wtforms.validators import DataRequired
 from weasyprint import HTML
 from urllib.parse import quote
 from collections import defaultdict
+import json # Adicionado para ler a prioridade
 
 from ..models.database import db
 from ..models.horario import Horario
@@ -112,33 +113,50 @@ def index():
 
     tempos, intervalos = _get_horario_context_data()
 
-    # --- INÍCIO DO BLOCO ADICIONADO PARA PRIORIDADE ---
-    # Carrega TODAS as disciplinas para popular o modal
-    all_disciplinas = []
+    # --- CORREÇÃO: PRIORIDADE POR NOME ÚNICO ---
+    all_disciplinas_names = []
     if school_id:
-        # Busca todas as disciplinas da escola para listar no modal
-        all_disciplinas = db.session.scalars(
-            select(Disciplina)
+        # Busca apenas os NOMES únicos das matérias, ordenados
+        all_disciplinas_names = db.session.scalars(
+            select(Disciplina.materia)
             .join(Turma)
             .where(Turma.school_id == school_id)
-            .order_by(Disciplina.nome)
-        ).unique().all()
+            .distinct()
+            .order_by(Disciplina.materia)
+        ).all()
         
-    # Verifica status atual da semana
     priority_active = False
-    priority_ids_list = []
+    priority_names_list = []
     
     if semana_selecionada:
-        # Tenta ler os atributos de prioridade
         priority_active = getattr(semana_selecionada, 'priority_active', False)
-        raw_ids = getattr(semana_selecionada, 'priority_disciplines', '') or ''
+        raw_data = getattr(semana_selecionada, 'priority_disciplines', '') or ''
         
-        if raw_ids:
+        if raw_data:
             try:
-                priority_ids_list = [int(x) for x in raw_ids.split(',') if x.strip().isdigit()]
+                priority_names_list = json.loads(raw_data) # Lê lista de strings
             except:
-                priority_ids_list = []
-    # --- FIM DO BLOCO ADICIONADO ---
+                priority_names_list = []
+
+    # --- APLICAR RESTRICAO AO INSTRUTOR (POR NOME DA MATÉRIA) ---
+    if priority_active and current_user.role == 'instrutor' and can_schedule_in_this_turma:
+        # Busca QUAIS matérias (nomes) esse instrutor dá aula NESTA turma
+        disciplinas_instrutor_nomes = db.session.scalars(
+            select(Disciplina.materia)
+            .join(DisciplinaTurma, Disciplina.id == DisciplinaTurma.disciplina_id)
+            .where(
+                DisciplinaTurma.pelotao == turma_selecionada_nome,
+                or_(DisciplinaTurma.instrutor_id_1 == current_user.instrutor_profile.id,
+                    DisciplinaTurma.instrutor_id_2 == current_user.instrutor_profile.id)
+            )
+        ).all()
+        
+        # Verifica se alguma das matérias dele está na lista permitida
+        tem_permissao = any(name in priority_names_list for name in disciplinas_instrutor_nomes)
+        
+        if not tem_permissao:
+            can_schedule_in_this_turma = False
+    # ----------------------------------------------------
 
     return render_template('quadro_horario.html',
                            horario_matrix=horario_matrix,
@@ -153,18 +171,15 @@ def index():
                            instrutor_turmas_vinculadas=instrutor_turmas_vinculadas,
                            tempos=tempos,
                            intervalos=intervalos,
-                           # NOVAS VARIÁVEIS PASSADAS AO TEMPLATE
-                           all_disciplinas=all_disciplinas,
+                           # NOVAS VARIÁVEIS
+                           all_disciplinas_names=all_disciplinas_names,
                            priority_active=priority_active,
-                           priority_ids_list=priority_ids_list)
+                           priority_names_list=priority_names_list)
 
-# (O resto do arquivo continua exatamente igual ao seu original)
 @horario_bp.route('/save-priority-config', methods=['POST'])
 @login_required
 @admin_or_programmer_required
 def save_priority_config():
-    # Rota legada/placeholder - redirecionando para a rota do semana_controller
-    # Na prática o JS vai chamar a rota do semana_controller diretamente
     return jsonify({'success': False, 'message': 'Use a rota /semana/<id>/salvar-prioridade'}), 404
 
 @horario_bp.route('/exportar-pdf')

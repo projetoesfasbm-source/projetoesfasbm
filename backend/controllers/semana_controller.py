@@ -7,7 +7,7 @@ from datetime import datetime
 from flask_wtf import FlaskForm
 from wtforms import StringField, DateField, SubmitField, SelectField, BooleanField, IntegerField
 from wtforms.validators import DataRequired, Optional, NumberRange
-import json # Adicionado
+import json
 
 from ..models.database import db
 from ..models.semana import Semana
@@ -15,6 +15,7 @@ from ..models.horario import Horario
 from ..models.ciclo import Ciclo
 from utils.decorators import admin_or_programmer_required, school_admin_or_programmer_required
 from ..services.semana_service import SemanaService
+from ..services.user_service import UserService
 
 semana_bp = Blueprint('semana', __name__, url_prefix='/semana')
 
@@ -95,10 +96,15 @@ def editar_semana(semana_id):
         flash("Semana não encontrada.", "danger")
         return redirect(url_for('semana.gerenciar_semanas'))
 
-    if request.method == 'POST':
-        semana.nome = request.form['nome']
+    form = AddSemanaForm(obj=semana)
+    ciclos = db.session.execute(select(Ciclo).order_by(Ciclo.nome)).scalars().all()
+    form.ciclo_id.choices = [(c.id, c.nome) for c in ciclos]
+
+    if form.validate_on_submit():
+        semana.nome = form.nome.data
         semana.data_inicio = datetime.strptime(request.form['data_inicio'], '%Y-%m-%d').date()
         semana.data_fim = datetime.strptime(request.form['data_fim'], '%Y-%m-%d').date()
+        semana.ciclo_id = form.ciclo_id.data
         semana.mostrar_periodo_13 = 'mostrar_periodo_13' in request.form
         semana.mostrar_periodo_14 = 'mostrar_periodo_14' in request.form
         semana.mostrar_periodo_15 = 'mostrar_periodo_15' in request.form
@@ -161,10 +167,10 @@ def deletar_ciclo(ciclo_id):
         flash("Ciclo não encontrado.", "danger")
     return redirect(url_for('semana.gerenciar_semanas'))
 
-# --- NOVA ROTA ADICIONADA: SALVAR PRIORIDADE ---
+# --- ROTA PARA SALVAR A PRIORIDADE (JSON/NAMES) ---
 @semana_bp.route('/<int:semana_id>/salvar-prioridade', methods=['POST'])
 @login_required
-@admin_or_programmer_required
+@school_admin_or_programmer_required
 def salvar_prioridade(semana_id):
     try:
         semana = db.session.get(Semana, semana_id)
@@ -173,33 +179,12 @@ def salvar_prioridade(semana_id):
 
         data = request.get_json()
         
-        # Usa getattr/setattr para segurança caso a coluna ainda não exista
-        # Mas como rodamos o script de DB, deve existir.
+        # Atualiza o status
+        semana.priority_active = data.get('status', False)
         
-        # Status (Ligado/Desligado)
-        status = data.get('status', False)
-        # Disciplinas (Lista de IDs)
+        # Atualiza a lista de nomes das disciplinas (salva como JSON string)
         disciplinas = data.get('disciplinas', [])
-        
-        # Salva no banco
-        # OBS: Se seu model Semana ainda não tem os campos explicitos no arquivo .py,
-        # o SQLAlchemy pode reclamar se não fizermos via SQL ou atualizar o model.
-        # Assumindo que você rodou o script de DB, vamos tentar atualizar o objeto.
-        # Se der erro de atributo, usamos setattr dinâmico.
-        
-        if hasattr(semana, 'priority_active'):
-            semana.priority_active = status
-            semana.priority_disciplines = ",".join(map(str, disciplinas))
-        else:
-            # Fallback seguro caso o model.py não tenha sido atualizado mas o banco sim
-            # (Geralmente requer atualizar o model.py, mas vamos tentar via SQL direto se falhar)
-            pass 
-            # O ideal é você ter atualizado o model Semana também. 
-            # Vou assumir que o model.py foi atualizado ou que o SQLAlchemy reflete o banco.
-            
-            # Forçando a atualização dos atributos caso o Python não os "veja" estaticamente
-            setattr(semana, 'priority_active', status)
-            setattr(semana, 'priority_disciplines', ",".join(map(str, disciplinas)))
+        semana.priority_disciplines = json.dumps(disciplinas)
 
         db.session.commit()
         return jsonify({'success': True})
