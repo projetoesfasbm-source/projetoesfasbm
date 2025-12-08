@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="card border-0 shadow-sm bg-white mb-4">
+        <div class="card-body p-4 d-flex justify-content-between align-items-center">
+            <div>
+                <h6 class="text-uppercase text-muted fw-bold mb-1">Edição Administrativa</h6>
+                <h2 class="fw-bold text-dark mb-0">{{ ref.disciplina.nome }}</h2>
+                <small class="text-muted">Data: {{ ref.data_aula.strftime('%d/%m/%Y') }} | Turma: {{ ref.turma.nome }}</small>
+            </div>
+            <a href="{{ url_for('admin_escola.espelho_diarios', turma_id=ref.turma_id, mes=ref.data_aula.month, ano=ref.data_aula.year) }}" class="btn btn-secondary">
+                Cancelar e Voltar
+            </a>
+        </div>
+    </div>
+
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="row g-4">
+            <div class="col-lg-4">
+                <div class="card border-0 shadow-sm bg-white h-100">
+                    <div class="card-header bg-light fw-bold text-dark">Dados da Aula</div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold text-dark">Conteúdo Ministrado</label>
+                            <textarea name="conteudo" class="form-control" rows="5">{{ ref.conteudo_ministrado }}</textarea>
+                            <small class="text-muted">Alterar aqui mudará em todos os tempos desta disciplina no dia.</small>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold text-dark">Observações</label>
+                            <textarea name="observacoes" class="form-control" rows="3">{{ ref.observacoes }}</textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100 fw-bold">
+                            <i class="fas fa-save"></i> Salvar Alterações
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-8">
+                <div class="card border-0 shadow-sm bg-white">
+                    <div class="card-header bg-light fw-bold text-dark d-flex justify-content-between align-items-center">
+                        <span>Controle de Frequência</span>
+                        <span class="badge bg-white text-dark border">{{ diarios|length }} Tempos Registrados</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="bg-light text-dark">
+                                <tr>
+                                    <th class="ps-3">Aluno</th>
+                                    {% for d in diarios %}
+                                    <th class="text-center">Tempo {{ loop.index }}</th>
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for aluno in alunos %}
+                                <tr>
+                                    <td class="ps-3 fw-bold text-dark">
+                                        {{ aluno.num_aluno }} - {{ aluno.user.nome_de_guerra }}
+                                    </td>
+                                    
+                                    {% for diario in diarios %}
+                                        {% set freq = diario.frequencias | selectattr('aluno_id', 'equalto', aluno.id) | first %}
+                                        
+                                        <td class="text-center">
+                                            <div class="form-check d-flex justify-content-center">
+                                                <input class="form-check-input border-secondary" type="checkbox" 
+                                                       name="presenca_{{ aluno.id }}_{{ diario.id }}"
+                                                       {% if freq and freq.presente %}checked{% endif %}>
+                                            </div>
+                                        </td>
+                                    {% endfor %}
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}

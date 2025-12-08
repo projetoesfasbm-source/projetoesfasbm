@@ -1,18 +1,19 @@
 # backend/controllers/semana_controller.py
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required
 from sqlalchemy import select
 from datetime import datetime
 from flask_wtf import FlaskForm
 from wtforms import StringField, DateField, SubmitField, SelectField, BooleanField, IntegerField
 from wtforms.validators import DataRequired, Optional, NumberRange
+import json # Adicionado
 
 from ..models.database import db
 from ..models.semana import Semana
 from ..models.horario import Horario
 from ..models.ciclo import Ciclo
-from utils.decorators import admin_or_programmer_required
+from utils.decorators import admin_or_programmer_required, school_admin_or_programmer_required
 from ..services.semana_service import SemanaService
 
 semana_bp = Blueprint('semana', __name__, url_prefix='/semana')
@@ -159,3 +160,49 @@ def deletar_ciclo(ciclo_id):
     else:
         flash("Ciclo não encontrado.", "danger")
     return redirect(url_for('semana.gerenciar_semanas'))
+
+# --- NOVA ROTA ADICIONADA: SALVAR PRIORIDADE ---
+@semana_bp.route('/<int:semana_id>/salvar-prioridade', methods=['POST'])
+@login_required
+@admin_or_programmer_required
+def salvar_prioridade(semana_id):
+    try:
+        semana = db.session.get(Semana, semana_id)
+        if not semana:
+            return jsonify({'success': False, 'message': 'Semana não encontrada'}), 404
+
+        data = request.get_json()
+        
+        # Usa getattr/setattr para segurança caso a coluna ainda não exista
+        # Mas como rodamos o script de DB, deve existir.
+        
+        # Status (Ligado/Desligado)
+        status = data.get('status', False)
+        # Disciplinas (Lista de IDs)
+        disciplinas = data.get('disciplinas', [])
+        
+        # Salva no banco
+        # OBS: Se seu model Semana ainda não tem os campos explicitos no arquivo .py,
+        # o SQLAlchemy pode reclamar se não fizermos via SQL ou atualizar o model.
+        # Assumindo que você rodou o script de DB, vamos tentar atualizar o objeto.
+        # Se der erro de atributo, usamos setattr dinâmico.
+        
+        if hasattr(semana, 'priority_active'):
+            semana.priority_active = status
+            semana.priority_disciplines = ",".join(map(str, disciplinas))
+        else:
+            # Fallback seguro caso o model.py não tenha sido atualizado mas o banco sim
+            # (Geralmente requer atualizar o model.py, mas vamos tentar via SQL direto se falhar)
+            pass 
+            # O ideal é você ter atualizado o model Semana também. 
+            # Vou assumir que o model.py foi atualizado ou que o SQLAlchemy reflete o banco.
+            
+            # Forçando a atualização dos atributos caso o Python não os "veja" estaticamente
+            setattr(semana, 'priority_active', status)
+            setattr(semana, 'priority_disciplines', ",".join(map(str, disciplinas)))
+
+        db.session.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500

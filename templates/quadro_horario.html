@@ -276,42 +276,53 @@
     </div>
     {% endif %}
 
-    {% if current_user.role in ['programador', 'admin_escola', 'super_admin'] %}
-    <div class="modal fade" id="priorityModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
+    {% if semana_selecionada and current_user.role in ['programador', 'admin_escola', 'super_admin'] %}
+    <div class="modal fade" id="priorityModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
             <div class="modal-content">
-                <div class="modal-header bg-warning">
-                    <h5 class="modal-title text-dark">Gerenciar Prioridade de Agendamento</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold"><i class="fas fa-star text-warning"></i> Configurar Prioridade</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <p>
-                        Utilize este recurso para <strong>bloquear agendamentos gerais</strong> e permitir apenas
-                        que disciplinas específicas (como AMT, APH, etc) sejam agendadas.
+                    <p class="text-muted small mb-3">
+                        Quando ativo, apenas as disciplinas selecionadas poderão agendar aulas nesta semana.
                     </p>
                     
-                    <div class="form-check form-switch mb-3 p-3 bg-light border rounded">
+                    <div class="form-check form-switch p-3 bg-light border rounded mb-3">
                         <input class="form-check-input" type="checkbox" id="priorityActive" {% if priority_active %}checked{% endif %}>
-                        <label class="form-check-label fw-bold" for="priorityActive">ATIVAR MODO DE PRIORIDADE</label>
-                        <div class="form-text">Quando ativo, apenas as disciplinas marcadas abaixo poderão agendar aulas.</div>
+                        <label class="form-check-label fw-bold ms-2" for="priorityActive">Ativar Modo Prioridade</label>
                     </div>
 
-                    <label class="form-label fw-bold">Disciplinas Permitidas (Regra aplicada a todas as turmas):</label>
-                    <div class="priority-list-container border rounded p-3" style="max-height: 300px; overflow-y: auto;">
-                        {% for materia in disciplinas_escola_nomes %}
-                        <div class="form-check">
-                            <input class="form-check-input priority-disc-check" type="checkbox" value="{{ materia }}" id="pd_{{ loop.index }}"
-                                   {% if materia in priority_disciplines_names %}checked{% endif %}>
-                            <label class="form-check-label" for="pd_{{ loop.index }}">
-                                {{ materia }}
-                            </label>
+                    <div id="priorityListContainer" class="{% if not priority_active %}opacity-50{% endif %}" style="transition: opacity 0.3s;">
+                        <label class="form-label fw-bold mb-2">Selecione as Disciplinas Prioritárias:</label>
+                        <div class="border rounded p-2" style="max-height: 250px; overflow-y: auto;">
+                            {% if all_disciplinas %}
+                                {% for disc in all_disciplinas %}
+                                <div class="form-check">
+                                    <input class="form-check-input priority-disc-check" type="checkbox" 
+                                           value="{{ disc.id }}" id="disc-{{ disc.id }}"
+                                           {% if disc.id in priority_ids_list %}checked{% endif %}>
+                                    <label class="form-check-label" for="disc-{{ disc.id }}">
+                                        {{ disc.nome }} <small class="text-muted">({{ disc.materia }})</small>
+                                    </label>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <div class="text-center text-muted py-3">Nenhuma disciplina encontrada na escola.</div>
+                            {% endif %}
                         </div>
-                        {% endfor %}
+                        <div class="d-flex justify-content-between mt-1">
+                            <small class="text-muted">Marque as disciplinas liberadas.</small>
+                            <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none" onclick="selectAllPriority(true)">Todas</button>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
-                    <button type="button" class="btn btn-primary" onclick="savePriorityConfig()">Salvar Configurações</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary fw-bold" onclick="savePriorityConfig()">
+                        <i class="fas fa-save me-1"></i> Salvar
+                    </button>
                 </div>
             </div>
         </div>
@@ -380,27 +391,54 @@
         }
 
         // --- FUNÇÃO PARA SALVAR PRIORIDADE ---
+        // Adicionada para suportar o novo modal
+        
+        function selectAllPriority(state) {
+            document.querySelectorAll('.priority-disc-check').forEach(ch => ch.checked = state);
+        }
+
+        const priorityActive = document.getElementById('priorityActive');
+        if(priorityActive){
+            priorityActive.addEventListener('change', function() {
+                const container = document.getElementById('priorityListContainer');
+                container.style.opacity = this.checked ? '1' : '0.5';
+                container.style.pointerEvents = this.checked ? 'auto' : 'none';
+            });
+        }
+
         function savePriorityConfig() {
             const active = document.getElementById('priorityActive').checked;
             const checks = document.querySelectorAll('.priority-disc-check:checked');
-            // Agora enviamos nomes (strings)
-            const names = Array.from(checks).map(c => c.value);
+            const ids = Array.from(checks).map(c => parseInt(c.value));
 
-            fetch('/horario/save-priority-config', {
+            const btn = document.querySelector('#priorityModal .btn-primary');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = 'Salvando...';
+            btn.disabled = true;
+
+            fetch('/semana/{{ semana_selecionada.id }}/salvar-prioridade', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRFToken': '{{ csrf_token() }}'
                 },
-                body: JSON.stringify({ active: active, disciplines: names })
+                body: JSON.stringify({ active: active, disciplinas: ids })
             })
             .then(res => res.json())
             .then(data => {
                 if(data.success) {
                     location.reload();
                 } else {
-                    alert('Erro ao salvar configurações.');
+                    alert('Erro ao salvar: ' + (data.message || 'Erro desconhecido'));
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
                 }
+            })
+            .catch(err => {
+                console.error(err);
+                alert('Erro de conexão.');
+                btn.innerHTML = originalText;
+                btn.disabled = false;
             });
         }
     </script>

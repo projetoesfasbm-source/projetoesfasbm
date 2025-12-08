@@ -1,80 +1,58 @@
 <div class="text-center mb-4">
-    <h4 class="text-primary">{{ data.strftime('%d/%m/%Y') }}</h4>
+    <h4 class="text-dark fw-bold">{{ data.strftime('%d/%m/%Y') }}</h4>
     <span class="badge bg-secondary">{{ data.strftime('%A') }}</span>
 </div>
 
-{% if not diarios %}
+{% if not grupos %}
     <div class="text-center py-5">
-        <div class="mb-3 text-muted" style="opacity: 0.5;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" fill="currentColor" class="bi bi-calendar-x" viewBox="0 0 16 16">
-              <path d="M6.146 7.146a.5.5 0 0 1 .708 0L8 8.293l1.146-1.147a.5.5 0 1 1 .708.708L8.707 9l1.147 1.146a.5.5 0 0 1-.708.708L8 9.707l-1.146 1.147a.5.5 0 0 1-.708-.708L7.293 9 6.146 7.854a.5.5 0 0 1 0-.708z"/>
-              <path d="M3.5 0a.5.5 0 0 1 .5.5V1h8V.5a.5.5 0 0 1 1 0V1h1a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2h1V.5a.5.5 0 0 1 .5-.5zM1 4v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V4H1z"/>
-            </svg>
+        <div class="mb-3 text-muted opacity-50">
+            <i class="fas fa-folder-open fa-4x"></i>
         </div>
         <h5 class="text-muted">Nenhum registro encontrado</h5>
-        <p class="small text-muted">O Chefe de Turma ainda não realizou o preenchimento para este dia.</p>
+        <p class="small text-muted">O Chefe de Turma não enviou dados para este dia.</p>
     </div>
 {% else %}
 
-<div class="accordion" id="accordionDiarios">
-    {% for diario in diarios %}
-    <div class="accordion-item mb-3 border-primary" style="border: 1px solid rgba(13, 110, 253, 0.3);">
-        <h2 class="accordion-header" id="heading{{ diario.id }}">
-            <button class="accordion-button {% if loop.index > 1 %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ diario.id }}" aria-expanded="{{ 'true' if loop.index == 1 else 'false' }}">
-                <strong>{{ diario.disciplina.nome }}</strong>
-                <span class="ms-auto me-2 badge bg-light text-dark">Resp: {{ diario.responsavel.nome_guerra }}</span>
-            </button>
-        </h2>
-        <div id="collapse{{ diario.id }}" class="accordion-collapse collapse {% if loop.index == 1 %}show{% endif %}" data-bs-parent="#accordionDiarios">
-            <div class="accordion-body">
-                
-                <div class="row mb-3">
-                    <div class="col-md-12 mb-2">
-                        <label class="fw-bold small text-muted">Conteúdo Ministrado:</label>
-                        <div class="p-2 bg-light rounded border-start border-4 border-info">
-                            {{ diario.conteudo_ministrado or 'Não informado.' }}
-                        </div>
+<div class="row g-3">
+    {% for grupo in grupos %}
+    <div class="col-12">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body border-start border-5 {% if grupo.tem_falta %}border-danger{% else %}border-success{% endif %}">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h5 class="card-title fw-bold text-dark mb-1">{{ grupo.disciplina.nome }}</h5>
+                        <small class="text-muted">
+                            <i class="fas fa-user-edit"></i> Resp: {{ grupo.responsavel.nome_de_guerra }}
+                        </small>
                     </div>
-                    <div class="col-md-12">
-                        <label class="fw-bold small text-muted">Observações / Ocorrências:</label>
-                        {% if diario.observacoes %}
-                            <div class="alert alert-warning py-2 mb-0 border-start border-4 border-warning text-dark">
-                                {{ diario.observacoes }}
-                            </div>
-                        {% else %}
-                            <p class="text-muted fst-italic ms-2">Nenhuma observação.</p>
-                        {% endif %}
-                    </div>
+                    {% if grupo.tem_falta %}
+                        <span class="badge bg-danger">Com Faltas</span>
+                    {% else %}
+                        <span class="badge bg-success">100% Presença</span>
+                    {% endif %}
                 </div>
 
-                <hr>
-
-                <h6 class="text-danger fw-bold"><i class="fas fa-user-times"></i> Faltas Registradas:</h6>
-                
-                {% set faltas = [] %}
-                {% for freq in diario.frequencias %}
-                    {% if not freq.presente %}
-                        {% set _ = faltas.append(freq) %}
+                <div class="mt-3 p-2 bg-light rounded text-dark border">
+                    <p class="mb-1 small fw-bold text-muted">Conteúdo:</p>
+                    <p class="mb-2 small">{{ grupo.conteudo or 'Não informado' }}</p>
+                    
+                    {% if grupo.observacoes %}
+                    <hr class="my-1">
+                    <p class="mb-1 small fw-bold text-muted">Obs:</p>
+                    <p class="mb-0 small text-danger">{{ grupo.observacoes }}</p>
                     {% endif %}
-                {% endfor %}
+                </div>
 
-                {% if faltas %}
-                    <ul class="list-group">
-                        {% for falta in faltas %}
-                        <li class="list-group-item d-flex justify-content-between align-items-center list-group-item-danger">
-                            <div>
-                                <span class="fw-bold">{{ falta.aluno.num_aluno }}</span> - {{ falta.aluno.user.nome_guerra }}
-                            </div>
-                            <span class="badge bg-danger rounded-pill">FALTA</span>
-                        </li>
-                        {% endfor %}
-                    </ul>
-                {% else %}
-                    <div class="alert alert-success text-center mb-0">
-                        <i class="fas fa-check-circle"></i> Todos os alunos presentes.
-                    </div>
-                {% endif %}
-
+                <div class="d-flex justify-content-between align-items-center mt-3">
+                    <span class="badge bg-white text-dark border">
+                        {{ grupo.qtd_registros }} Tempos de Aula
+                    </span>
+                    
+                    <a href="{{ url_for('admin_escola.editar_diario_bloco', diario_ref_id=grupo.exemplo_id) }}" 
+                       class="btn btn-outline-primary btn-sm fw-bold">
+                        <i class="fas fa-edit"></i> Editar Diário
+                    </a>
+                </div>
             </div>
         </div>
     </div>

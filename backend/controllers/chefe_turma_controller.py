@@ -75,7 +75,7 @@ def painel():
         # Set de IDs de disciplina que já têm diário
         disciplinas_concluidas = set([d.disciplina_id for d in diarios_hoje])
 
-        # --- NOVA LÓGICA: AGRUPAMENTO CONSIDERANDO DURAÇÃO ---
+        # --- AGRUPAMENTO CONSIDERANDO DURAÇÃO ---
         grupos_dict = {}
         
         if horarios:
@@ -93,8 +93,8 @@ def painel():
                     grupos_dict[disc_id] = {
                         'disciplina': h.disciplina,
                         'nome_instrutor': nome_instrutor,
-                        'horarios_reais': [], # Objetos Horario do banco
-                        'periodos_expandidos': [], # Lista de inteiros (10, 11, 12)
+                        'horarios_reais': [], 
+                        'periodos_expandidos': [], 
                         'status': 'pendente',
                         'primeiro_horario_id': h.id
                     }
@@ -102,21 +102,19 @@ def painel():
                 # Adiciona o objeto Horario
                 grupos_dict[disc_id]['horarios_reais'].append(h)
                 
-                # EXPANDIR A DURAÇÃO (Aqui está a correção!)
-                # Se periodo=10 e duracao=3 -> adiciona 10, 11, 12 na lista visual
+                # EXPANDIR A DURAÇÃO
                 duracao = h.duracao if h.duracao and h.duracao > 0 else 1
                 for i in range(duracao):
                     periodo_real = h.periodo + i
                     grupos_dict[disc_id]['periodos_expandidos'].append(periodo_real)
                 
-                # Verifica status: se o horário está 'concluido' OU se já existe diário no banco
+                # Verifica status
                 if h.status == 'concluido' or disc_id in disciplinas_concluidas:
                     grupos_dict[disc_id]['status'] = 'concluido'
 
             # Ordena e ajusta estrutura para o template
             aulas_agrupadas = []
             for g in sorted(grupos_dict.values(), key=lambda x: min(x['periodos_expandidos'])):
-                # Substitui a chave 'periodos' que o template espera pela lista expandida
                 g['periodos'] = sorted(list(set(g['periodos_expandidos'])))
                 aulas_agrupadas.append(g)
 
@@ -145,7 +143,6 @@ def registrar_aula(primeiro_horario_id):
         data_str = request.args.get('data')
         data_aula = datetime.strptime(data_str, '%Y-%m-%d').date() if data_str else date.today()
 
-        # Busca todos os registros de Horario desta disciplina no dia
         horarios_db = db.session.query(Horario).filter_by(
             pelotao=aluno_chefe.turma.nome,
             semana_id=horario_base.semana_id,
@@ -154,7 +151,6 @@ def registrar_aula(primeiro_horario_id):
         ).order_by(Horario.periodo).all()
 
         # EXPANDIR HORÁRIOS PARA O FORMULÁRIO
-        # Precisamos criar uma lista de "sub-horários" virtuais para gerar os checkboxes
         horarios_expandidos = []
         for h in horarios_db:
             duracao = h.duracao if h.duracao and h.duracao > 0 else 1
@@ -162,42 +158,36 @@ def registrar_aula(primeiro_horario_id):
                 p = h.periodo + i
                 horarios_expandidos.append({
                     'periodo': p,
-                    'horario_pai_id': h.id, # ID do registro real no banco
+                    'horario_pai_id': h.id, 
                     'obj': h
                 })
         
-        # Ordena pelos períodos virtuais (10, 11, 12...)
         horarios_expandidos.sort(key=lambda x: x['periodo'])
 
         alunos_turma = db.session.query(Aluno).filter_by(turma_id=aluno_chefe.turma_id).order_by(Aluno.num_aluno).all()
 
         if request.method == 'POST':
             try:
-                # Ao salvar, vamos iterar sobre os HORÁRIOS EXPANDIDOS (virtuais)
-                # e criar um Diário de Classe para CADA período virtual.
-                
-                # Precisamos atualizar o status dos horários "pais" (reais do banco) para 'concluido'
                 ids_horarios_pais_atualizados = set()
 
                 for h_virt in horarios_expandidos:
                     periodo_atual = h_virt['periodo']
                     horario_pai = h_virt['obj']
 
-                    # 1. Cria Diário para este período específico
+                    # 1. Cria Diário (SEM PREFIXO AUTOMÁTICO NA OBS)
                     novo_diario = DiarioClasse(
                         data_aula=data_aula,
                         turma_id=aluno_chefe.turma_id,
                         disciplina_id=horario_pai.disciplina_id,
                         responsavel_id=current_user.id,
-                        observacoes=f"[P{periodo_atual}] " + (request.form.get('observacoes') or ""),
+                        observacoes=request.form.get('observacoes'), # CORREÇÃO AQUI
                         conteudo_ministrado=request.form.get('conteudo')
                     )
                     db.session.add(novo_diario)
                     db.session.flush()
 
-                    # 2. Registra presenças para este período
+                    # 2. Registra presenças
                     for aluno in alunos_turma:
-                        # O checkbox vem com o periodo virtual: presenca_{id}_{periodo}
                         key = f"presenca_{aluno.id}_{periodo_atual}"
                         presente = request.form.get(key) == 'on'
                         
@@ -207,7 +197,7 @@ def registrar_aula(primeiro_horario_id):
                             presente=presente
                         ))
                     
-                    # 3. Marca o Horário Pai como concluído (apenas uma vez por ID)
+                    # 3. Atualiza status do horário original
                     if horario_pai.id not in ids_horarios_pais_atualizados:
                         horario_pai.status = 'concluido'
                         db.session.add(horario_pai)
@@ -220,15 +210,13 @@ def registrar_aula(primeiro_horario_id):
                 db.session.rollback()
                 flash(f"Erro ao salvar: {str(e)}", "danger")
 
-        # Dados para o template
         nome_instrutor = "N/A"
         if horario_base.instrutor:
              if hasattr(horario_base.instrutor, 'user') and horario_base.instrutor.user:
                  nome_instrutor = horario_base.instrutor.user.nome_de_guerra
         
-        # Passamos 'horarios_expandidos' no lugar de 'horarios' para o template renderizar os botões corretos
         return render_template('chefe/registrar.html', 
-                               horarios=horarios_expandidos, # IMPORTANTE: Lista expandida
+                               horarios=horarios_expandidos, 
                                disciplina=horario_base.disciplina,
                                nome_instrutor=nome_instrutor, 
                                alunos=alunos_turma, 
