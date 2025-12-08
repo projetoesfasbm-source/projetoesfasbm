@@ -6,11 +6,13 @@
 <div class="horario-header-container">
     
     {% if priority_active %}
-    <div class="alert alert-danger d-flex align-items-center mb-3" role="alert">
-        <i class="fas fa-lock me-2 fa-2x"></i>
+    <div class="alert alert-danger d-flex align-items-center mb-3 shadow-sm border-danger" role="alert">
+        <div class="me-3 bg-danger text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 50px; height: 50px;">
+            <i class="fas fa-lock fa-lg"></i>
+        </div>
         <div>
-            <h5 class="alert-heading mb-0">Modo de Agendamento Prioritário Ativo</h5>
-            <small>O quadro está bloqueado. Apenas as disciplinas selecionadas pela administração podem realizar agendamentos no momento.</small>
+            <h5 class="alert-heading mb-0 fw-bold">Modo de Agendamento Prioritário Ativo</h5>
+            <small>O quadro desta semana está <strong>bloqueado</strong>. Apenas as disciplinas selecionadas abaixo podem realizar agendamentos.</small>
         </div>
     </div>
     {% endif %}
@@ -25,7 +27,7 @@
         <div class="controls-group d-flex gap-2">
             {% if current_user.role in ['programador', 'admin_escola', 'super_admin'] %}
             
-            <button type="button" class="btn {% if priority_active %}btn-danger text-white{% else %}btn-warning{% endif %} fw-bold shadow-sm" 
+            <button type="button" class="btn {% if priority_active %}btn-danger{% else %}btn-warning{% endif %} fw-bold shadow-sm" 
                     data-bs-toggle="modal" data-bs-target="#priorityModal">
                 <i class="fas fa-star me-1"></i> 
                 {% if priority_active %}Prioridade ATIVA{% else %}Configurar Prioridade{% endif %}
@@ -246,21 +248,40 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="form-check form-switch p-3 bg-light border rounded mb-3">
-                        <input class="form-check-input scale-125" type="checkbox" id="priorityActive" {% if priority_active %}checked{% endif %}>
-                        <label class="form-check-label fw-bold ms-2" for="priorityActive">Ativar Modo Prioridade</label>
+                    
+                    <div class="mb-4">
+                        <label class="form-label text-muted fw-bold small">CONFIGURAÇÃO PARA A SEMANA:</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-white"><i class="far fa-calendar-alt"></i></span>
+                            <input type="text" class="form-control fw-bold bg-white text-dark" 
+                                   value="{{ semana_selecionada.nome }} ({{ semana_selecionada.data_inicio.strftime('%d/%m') }} a {{ semana_selecionada.data_fim.strftime('%d/%m') }})" 
+                                   disabled readonly>
+                        </div>
+                        <div class="form-text">Esta configuração afetará <strong>apenas</strong> esta semana específica.</div>
                     </div>
 
-                    <div id="priorityListContainer" class="{% if not priority_active %}opacity-50{% endif %}" style="transition: opacity 0.3s;">
-                        <label class="form-label fw-bold mb-2">Selecione as Disciplinas Prioritárias:</label>
-                        <div class="border rounded p-2" style="max-height: 250px; overflow-y: auto;">
+                    <div class="d-flex align-items-center justify-content-between p-3 bg-light border rounded mb-3">
+                        <div>
+                            <label class="form-check-label fw-bold mb-0 text-dark" for="priorityActive">Ativar Modo Prioridade</label>
+                            <div class="small text-muted" style="font-size: 0.85rem;">Bloqueia agendamentos de não listados.</div>
+                        </div>
+                        <div class="form-check form-switch m-0">
+                            <input class="form-check-input scale-125" type="checkbox" id="priorityActive" 
+                                   style="width: 3em; height: 1.5em;"
+                                   {% if priority_active %}checked{% endif %}>
+                        </div>
+                    </div>
+
+                    <div id="priorityListContainer">
+                        <label class="form-label fw-bold mb-2">Disciplinas Permitidas:</label>
+                        <div class="border rounded p-2 bg-white" style="max-height: 250px; overflow-y: auto;">
                             {% if all_disciplinas_names %}
                                 {% for nome_materia in all_disciplinas_names %}
-                                <div class="form-check">
+                                <div class="form-check border-bottom py-2 position-relative">
                                     <input class="form-check-input priority-disc-check" type="checkbox" 
                                            value="{{ nome_materia }}" id="disc-{{ loop.index }}"
                                            {% if nome_materia in priority_names_list %}checked{% endif %}>
-                                    <label class="form-check-label" for="disc-{{ loop.index }}">
+                                    <label class="form-check-label w-100 stretched-link" for="disc-{{ loop.index }}" style="cursor: pointer;">
                                         {{ nome_materia }}
                                     </label>
                                 </div>
@@ -269,16 +290,16 @@
                                 <div class="text-center text-muted py-3">Nenhuma disciplina encontrada na escola.</div>
                             {% endif %}
                         </div>
-                        <div class="d-flex justify-content-between mt-1">
-                            <small class="text-muted">Marque as disciplinas liberadas.</small>
-                            <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none" onclick="selectAllPriority(true)">Todas</button>
+                        <div class="d-flex justify-content-between mt-2 px-1">
+                            <small class="text-muted">Marque as disciplinas que terão permissão.</small>
+                            <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none fw-bold" onclick="selectAllPriority(true)">Marcar Todas</button>
                         </div>
                     </div>
                 </div>
-                <div class="modal-footer">
+                <div class="modal-footer bg-light">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn btn-primary fw-bold" onclick="savePriorityConfig()">
-                        <i class="fas fa-save me-1"></i> Salvar
+                    <button type="button" class="btn btn-success fw-bold px-4" onclick="savePriorityConfig()">
+                        <i class="fas fa-save me-1"></i> Salvar Alterações
                     </button>
                 </div>
             </div>
@@ -349,15 +370,7 @@
 
         // --- FUNÇÃO PARA SALVAR PRIORIDADE ---
         const priorityActive = document.getElementById('priorityActive');
-        if(priorityActive){
-            priorityActive.addEventListener('change', function() {
-                const container = document.getElementById('priorityListContainer');
-                if (container) {
-                    container.style.opacity = this.checked ? '1' : '0.5';
-                    container.style.pointerEvents = this.checked ? 'auto' : 'none';
-                }
-            });
-        }
+        // Removido listener de opacidade para manter sempre editável
 
         function selectAllPriority(state) {
             document.querySelectorAll('.priority-disc-check').forEach(ch => ch.checked = state);
@@ -368,7 +381,7 @@
             const checks = document.querySelectorAll('.priority-disc-check:checked');
             const names = Array.from(checks).map(c => c.value);
 
-            const btn = document.querySelector('#priorityModal .btn-primary');
+            const btn = document.querySelector('#priorityModal .btn-success');
             const originalText = btn.innerHTML;
             btn.innerHTML = 'Salvando...';
             btn.disabled = true;
@@ -401,7 +414,6 @@
     </script>
     <style>
         .scale-125 { transform: scale(1.4); cursor: pointer; }
-        .opacity-50 { opacity: 0.5; pointer-events: none; }
         .blocked-slot { background-color: #fee2e2 !important; cursor: not-allowed; } 
         .horario-header-container { background-color: var(--color-white); border-radius: var(--border-radius); padding: 1.5rem 2rem; margin-bottom: 1.5rem; box-shadow: var(--shadow-soft); }
         .horario-selectors { margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--color-border); }
