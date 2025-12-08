@@ -6,13 +6,13 @@
 <div class="horario-header-container">
     
     {% if priority_active %}
-    <div class="alert alert-danger d-flex align-items-center mb-3 shadow-sm border-danger" role="alert">
+    <div class="alert alert-danger d-flex align-items-center mb-3 shadow-sm border-danger" role="alert" style="background-color: #fee2e2;">
         <div class="me-3 bg-danger text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 50px; height: 50px;">
             <i class="fas fa-lock fa-lg"></i>
         </div>
         <div>
-            <h5 class="alert-heading mb-0 fw-bold">Modo de Agendamento Prioritário Ativo</h5>
-            <small>O quadro desta semana está <strong>bloqueado</strong>. Apenas as disciplinas selecionadas abaixo podem realizar agendamentos.</small>
+            <h5 class="alert-heading mb-0 fw-bold text-danger">Modo de Agendamento Prioritário Ativo</h5>
+            <small class="text-dark">O quadro desta semana está <strong>bloqueado</strong>. Apenas as disciplinas selecionadas abaixo podem realizar agendamentos.</small>
         </div>
     </div>
     {% endif %}
@@ -27,7 +27,7 @@
         <div class="controls-group d-flex gap-2">
             {% if current_user.role in ['programador', 'admin_escola', 'super_admin'] %}
             
-            <button type="button" class="btn {% if priority_active %}btn-danger{% else %}btn-warning{% endif %} fw-bold shadow-sm" 
+            <button type="button" class="btn {% if priority_active %}btn-danger text-white{% else %}btn-warning{% endif %} fw-bold shadow-sm" 
                     data-bs-toggle="modal" data-bs-target="#priorityModal">
                 <i class="fas fa-star me-1"></i> 
                 {% if priority_active %}Prioridade ATIVA{% else %}Configurar Prioridade{% endif %}
@@ -205,6 +205,9 @@
                         </option>
                     {% endfor %}
                 </select>
+                <small class="text-muted d-block mt-1">
+                    Você pode alterar a semana aqui antes de selecionar a turma.
+                </small>
             </div>
 
             {% if current_user.role == 'instrutor' %}
@@ -257,7 +260,6 @@
                                    value="{{ semana_selecionada.nome }} ({{ semana_selecionada.data_inicio.strftime('%d/%m') }} a {{ semana_selecionada.data_fim.strftime('%d/%m') }})" 
                                    disabled readonly>
                         </div>
-                        <div class="form-text">Esta configuração afetará <strong>apenas</strong> esta semana específica.</div>
                     </div>
 
                     <div class="d-flex align-items-center justify-content-between p-3 bg-light border rounded mb-3">
@@ -370,7 +372,9 @@
 
         // --- FUNÇÃO PARA SALVAR PRIORIDADE ---
         const priorityActive = document.getElementById('priorityActive');
-        // Removido listener de opacidade para manter sempre editável
+        if(priorityActive){
+            // Listener removido para manter lista sempre ativa
+        }
 
         function selectAllPriority(state) {
             document.querySelectorAll('.priority-disc-check').forEach(ch => ch.checked = state);

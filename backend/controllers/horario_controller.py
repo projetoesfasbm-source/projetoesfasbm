@@ -11,7 +11,7 @@ from wtforms.validators import DataRequired
 from weasyprint import HTML
 from urllib.parse import quote
 from collections import defaultdict
-import json # Adicionado para ler a prioridade
+import json
 
 from ..models.database import db
 from ..models.horario import Horario
@@ -113,10 +113,9 @@ def index():
 
     tempos, intervalos = _get_horario_context_data()
 
-    # --- CORREÇÃO: PRIORIDADE POR NOME ÚNICO ---
+    # --- LÓGICA DE PRIORIDADE ---
     all_disciplinas_names = []
     if school_id:
-        # Busca apenas os NOMES únicos das matérias, ordenados
         all_disciplinas_names = db.session.scalars(
             select(Disciplina.materia)
             .join(Turma)
@@ -134,13 +133,13 @@ def index():
         
         if raw_data:
             try:
-                priority_names_list = json.loads(raw_data) # Lê lista de strings
+                priority_names_list = json.loads(raw_data)
             except:
                 priority_names_list = []
 
-    # --- APLICAR RESTRICAO AO INSTRUTOR (POR NOME DA MATÉRIA) ---
+    # --- VERIFICAÇÃO DE PERMISSÃO ROBUSTA (STRIP + LOWER) ---
     if priority_active and current_user.role == 'instrutor' and can_schedule_in_this_turma:
-        # Busca QUAIS matérias (nomes) esse instrutor dá aula NESTA turma
+        # Busca todas as matérias que o instrutor dá nesta turma
         disciplinas_instrutor_nomes = db.session.scalars(
             select(Disciplina.materia)
             .join(DisciplinaTurma, Disciplina.id == DisciplinaTurma.disciplina_id)
@@ -151,12 +150,14 @@ def index():
             )
         ).all()
         
-        # Verifica se alguma das matérias dele está na lista permitida
-        tem_permissao = any(name in priority_names_list for name in disciplinas_instrutor_nomes)
+        # Cria sets normalizados (remove espaços e deixa minusculo) para comparação precisa
+        p_set = {str(p).strip().lower() for p in priority_names_list if p}
+        i_set = {str(d).strip().lower() for d in disciplinas_instrutor_nomes if d}
         
-        if not tem_permissao:
+        # Se NÃO houver intersecção (nenhuma matéria em comum), bloqueia
+        if p_set.isdisjoint(i_set):
             can_schedule_in_this_turma = False
-    # ----------------------------------------------------
+    # --------------------------------------------------------
 
     return render_template('quadro_horario.html',
                            horario_matrix=horario_matrix,
@@ -171,7 +172,6 @@ def index():
                            instrutor_turmas_vinculadas=instrutor_turmas_vinculadas,
                            tempos=tempos,
                            intervalos=intervalos,
-                           # NOVAS VARIÁVEIS
                            all_disciplinas_names=all_disciplinas_names,
                            priority_active=priority_active,
                            priority_names_list=priority_names_list)
