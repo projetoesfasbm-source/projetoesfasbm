@@ -6,13 +6,13 @@
 <div class="horario-header-container">
     
     {% if priority_active %}
-    <div class="alert alert-danger d-flex align-items-center mb-3 shadow-sm border-danger" role="alert" style="background-color: #fee2e2;">
+    <div class="alert alert-danger d-flex align-items-center mb-3 shadow-sm border-danger" role="alert">
         <div class="me-3 bg-danger text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 50px; height: 50px;">
             <i class="fas fa-lock fa-lg"></i>
         </div>
         <div>
-            <h5 class="alert-heading mb-0 fw-bold text-danger">Modo de Agendamento Prioritário Ativo</h5>
-            <small class="text-dark">O quadro desta semana está <strong>bloqueado</strong>. Apenas as disciplinas selecionadas abaixo podem realizar agendamentos.</small>
+            <h5 class="alert-heading mb-0 fw-bold">Modo de Agendamento Prioritário Ativo</h5>
+            <small>O quadro desta semana está <strong>bloqueado</strong>. Apenas as disciplinas selecionadas abaixo podem realizar agendamentos.</small>
         </div>
     </div>
     {% endif %}
@@ -27,7 +27,7 @@
         <div class="controls-group d-flex gap-2">
             {% if current_user.role in ['programador', 'admin_escola', 'super_admin'] %}
             
-            <button type="button" class="btn {% if priority_active %}btn-danger text-white{% else %}btn-warning{% endif %} fw-bold shadow-sm" 
+            <button type="button" class="btn {% if priority_active %}btn-danger{% else %}btn-warning{% endif %} fw-bold shadow-sm" 
                     data-bs-toggle="modal" data-bs-target="#priorityModal">
                 <i class="fas fa-star me-1"></i> 
                 {% if priority_active %}Prioridade ATIVA{% else %}Configurar Prioridade{% endif %}
@@ -383,6 +383,7 @@
         function savePriorityConfig() {
             const active = document.getElementById('priorityActive').checked;
             const checks = document.querySelectorAll('.priority-disc-check:checked');
+            // AGORA ENVIA NOMES (STRINGS)
             const names = Array.from(checks).map(c => c.value);
 
             const btn = document.querySelector('#priorityModal .btn-success');

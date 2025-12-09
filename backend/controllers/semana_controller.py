@@ -37,59 +37,48 @@ class AddSemanaForm(FlaskForm):
 class DeleteForm(FlaskForm):
     pass
 
-@semana_bp.route('/gerenciar')
+@semana_bp.route('/')
 @login_required
-@admin_or_programmer_required
-def gerenciar_semanas():
-    ciclo_selecionado_id = request.args.get('ciclo_id', type=int)
-    todos_os_ciclos = db.session.scalars(select(Ciclo).order_by(Ciclo.nome)).all()
+def index():
+    return gerenciar_semanas(None)
 
-    if not ciclo_selecionado_id and todos_os_ciclos:
-        ciclo_selecionado_id = todos_os_ciclos[0].id
-    
-    semanas = []
-    if ciclo_selecionado_id:
-        semanas = db.session.scalars(
-            select(Semana).where(Semana.ciclo_id == ciclo_selecionado_id).order_by(Semana.data_inicio.desc())
-        ).all()
-    
-    add_form = AddSemanaForm()
-    if todos_os_ciclos:
-        add_form.ciclo_id.choices = [(c.id, c.nome) for c in todos_os_ciclos]
-    
-    delete_form = DeleteForm()
-    
-    return render_template('gerenciar_semanas.html', 
-                           semanas=semanas, 
-                           todos_os_ciclos=todos_os_ciclos, 
-                           ciclo_selecionado_id=ciclo_selecionado_id,
-                           add_form=add_form,
-                           delete_form=delete_form)
-
-@semana_bp.route('/adicionar', methods=['POST'])
+@semana_bp.route('/gerenciar', defaults={'ciclo_id': None}, methods=['GET', 'POST'])
+@semana_bp.route('/gerenciar/<int:ciclo_id>', methods=['GET', 'POST'])
 @login_required
-@admin_or_programmer_required
-def adicionar_semana():
+@school_admin_or_programmer_required
+def gerenciar_semanas(ciclo_id):
     form = AddSemanaForm()
-    ciclos = db.session.scalars(select(Ciclo).order_by(Ciclo.nome)).all()
+    
+    # Carregar ciclos para o select do formulário
+    ciclos = db.session.execute(select(Ciclo).order_by(Ciclo.nome)).scalars().all()
     form.ciclo_id.choices = [(c.id, c.nome) for c in ciclos]
+
+    # Lógica de Filtro por Ciclo
+    query = select(Semana).order_by(Semana.data_inicio.desc())
+    if ciclo_id:
+        query = query.where(Semana.ciclo_id == ciclo_id)
+        # Pré-seleciona o ciclo no formulário se estiver filtrando
+        form.ciclo_id.data = ciclo_id
+    
+    semanas = db.session.execute(query).scalars().all()
 
     if form.validate_on_submit():
         success, message = SemanaService.add_semana(form.data)
-        flash(message, 'success' if success else 'danger')
-    else:
-        for field, errors in form.errors.items():
-            for error in errors:
-                flash(f"Erro no campo '{getattr(form, field).label.text}': {error}", 'danger')
-        if not form.errors:
-            flash('Erro no formulário. Verifique os dados inseridos.', 'danger')
-        
-    return redirect(url_for('semana.gerenciar_semanas', ciclo_id=form.ciclo_id.data))
+        if success:
+            flash(message, 'success')
+            return redirect(url_for('semana.gerenciar_semanas', ciclo_id=ciclo_id))
+        else:
+            flash(message, 'danger')
 
+    return render_template('gerenciar_semanas.html', 
+                           semanas=semanas, 
+                           form=form, 
+                           ciclos=ciclos, 
+                           ciclo_selecionado=ciclo_id)
 
 @semana_bp.route('/editar/<int:semana_id>', methods=['GET', 'POST'])
 @login_required
-@admin_or_programmer_required
+@school_admin_or_programmer_required
 def editar_semana(semana_id):
     semana = db.session.get(Semana, semana_id)
     if not semana:
@@ -122,7 +111,7 @@ def editar_semana(semana_id):
 
 @semana_bp.route('/deletar/<int:semana_id>', methods=['POST'])
 @login_required
-@admin_or_programmer_required
+@school_admin_or_programmer_required
 def deletar_semana(semana_id):
     form = DeleteForm()
     if form.validate_on_submit():
@@ -167,7 +156,7 @@ def deletar_ciclo(ciclo_id):
         flash("Ciclo não encontrado.", "danger")
     return redirect(url_for('semana.gerenciar_semanas'))
 
-# --- ROTA PARA SALVAR A PRIORIDADE (JSON/NAMES) ---
+# --- ROTA PARA SALVAR A PRIORIDADE (JSON/STRINGS) ---
 @semana_bp.route('/<int:semana_id>/salvar-prioridade', methods=['POST'])
 @login_required
 @school_admin_or_programmer_required
@@ -182,7 +171,7 @@ def salvar_prioridade(semana_id):
         # Atualiza o status
         semana.priority_active = data.get('status', False)
         
-        # Atualiza a lista de NOMES (agora salvamos JSON)
+        # Atualiza a lista de nomes (salva strings)
         disciplinas = data.get('disciplinas', [])
         semana.priority_disciplines = json.dumps(disciplinas)
 
