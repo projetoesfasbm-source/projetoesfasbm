@@ -18,8 +18,7 @@ from ..models.turma import Turma
 from ..models.user import User
 from .notification_service import NotificationService
 from .instrutor_service import InstrutorService
-from .site_config_service import SiteConfigService # Mantido caso usado em outras partes, mas não para prioridade
-
+from .site_config_service import SiteConfigService
 
 class HorarioService:
 
@@ -242,11 +241,6 @@ class HorarioService:
 
     @staticmethod
     def _consolidar_aulas_adjacentes(pelotao, semana_id, dia_semana):
-        """
-        Percorre as aulas do dia para verificar se existem blocos adjacentes
-        idênticos (mesma disciplina, instrutores, observação) que podem ser unidos,
-        respeitando os break_points (intervalos).
-        """
         break_points = {3, 6, 9}
 
         aulas = db.session.scalars(
@@ -292,35 +286,46 @@ class HorarioService:
     @staticmethod
     def save_aula(data, user):
         try:
-            # --- NOVA LÓGICA DE BLOQUEIO POR PRIORIDADE (VIA MODELO SEMANA) ---
-            # Identifica a semana da data da aula
-            data_aula_str = data.get('dia') # O frontend manda 'dia' como string data ISO? Não, 'dia' é 'segunda', 'terca'...
-            # CORREÇÃO: O save_aula usa 'semana_id' enviado pelo frontend
-            
+            # 1. Definir is_admin no início
+            is_admin = user.role in ['super_admin', 'programador', 'admin_escola']
+
+            # 2. Dados básicos e conversão segura para int
+            pelotao = data['pelotao']
             semana_id = int(data.get('semana_id', 0))
-            if semana_id:
-                # Busca a semana e suas configurações
+            disciplina_id = int(data.get('disciplina_id', 0))
+            dia = data['dia']
+            periodo_inicio = int(data['periodo'])
+            duracao = int(data.get('duracao', 1))
+            periodo_fim = periodo_inicio + duracao - 1
+            observacao = data.get('observacao', '').strip() or None
+            
+            # --- LÓGICA DE BLOQUEIO POR PRIORIDADE (AGORA POR NOME) ---
+            if semana_id and not is_admin:
                 semana = db.session.get(Semana, semana_id)
-                
                 if semana and getattr(semana, 'priority_active', False):
-                    disciplina_id_check = int(data.get('disciplina_id', 0))
+                    # Recupera lista de NOMES permitidos
                     allowed_str = getattr(semana, 'priority_disciplines', '') or ''
-                    allowed_ids = [int(x) for x in allowed_str.split(',') if x.strip().isdigit()]
+                    allowed_names = []
                     
-                    if disciplina_id_check not in allowed_ids:
-                        return False, "⚠️ AGENDAMENTO BLOQUEADO: O quadro está em Modo Prioritário nesta semana. Apenas as disciplinas selecionadas pela administração podem agendar aulas.", 403
+                    if allowed_str:
+                        # Limpa colchetes, aspas e espaços
+                        clean_str = allowed_str.replace('[', '').replace(']', '').replace('"', '').replace("'", "")
+                        # Cria lista de strings (nomes das matérias)
+                        allowed_names = [x.strip() for x in clean_str.split(',') if x.strip()]
+                    
+                    # Busca a disciplina que está sendo salva para saber o NOME dela
+                    disciplina_atual = db.session.get(Disciplina, disciplina_id)
+                    
+                    if not disciplina_atual:
+                         return False, "Erro: Disciplina não encontrada.", 404
+
+                    # Verifica se o NOME da disciplina está na lista permitida
+                    if not allowed_names or disciplina_atual.materia not in allowed_names:
+                        return False, "⚠️ AGENDAMENTO BLOQUEADO: Esta semana está em Modo Prioritário. Apenas as disciplinas selecionadas podem ser agendadas.", 403
             # -----------------------------------------------
 
             horario_id_raw = data.get('horario_id')
             horario_id = int(horario_id_raw) if horario_id_raw else None
-
-            pelotao, semana_id, dia = data['pelotao'], int(data['semana_id']), data['dia']
-            periodo_inicio, duracao = int(data['periodo']), int(data.get('duracao', 1))
-            periodo_fim = periodo_inicio + duracao - 1
-            observacao = data.get('observacao', '').strip() or None
-
-            is_admin = user.role in ['super_admin', 'programador', 'admin_escola']
-            disciplina_id = int(data['disciplina_id'])
 
             # instrutor(es)
             instrutor_id_1, instrutor_id_2 = None, None

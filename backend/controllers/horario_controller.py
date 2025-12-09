@@ -2,7 +2,7 @@
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session, Response
 from flask_login import login_required, current_user
-from sqlalchemy import select, or_, text
+from sqlalchemy import select, or_, text, and_
 from sqlalchemy.orm import joinedload
 from datetime import date
 from flask_wtf import FlaskForm
@@ -98,97 +98,77 @@ def index():
         horario_matrix = HorarioService.construir_matriz_horario(turma_selecionada_nome, semana_selecionada.id, current_user)
         datas_semana = HorarioService.get_datas_da_semana(semana_selecionada)
 
+    # --- PERMISSÕES E LÓGICA DE PRIORIDADE (AGORA POR NOME) ---
     can_schedule_in_this_turma = False
-    instrutor_turmas_vinculadas = [] 
+    instrutor_turmas_vinculadas = []
+    priority_active = False
+    priority_allowed_names = [] # Lista de NOMES permitidos (ex: "Matemática", "Português")
 
-    # --- PERMISSÃO PADRÃO (SEM PRIORIDADE) ---
+    # 1. Carrega configuração de prioridade
+    if semana_selecionada:
+        priority_active = getattr(semana_selecionada, 'priority_active', False)
+        raw_config = getattr(semana_selecionada, 'priority_disciplines', '') or ''
+        
+        if raw_config:
+            try:
+                # Limpa a string e separa por vírgula para obter nomes
+                clean_str = raw_config.replace('[', '').replace(']', '').replace('"', '').replace("'", "")
+                if clean_str.strip():
+                    priority_allowed_names = [x.strip() for x in clean_str.split(',') if x.strip()]
+            except Exception as e:
+                print(f"Erro ao parsear prioridade: {e}")
+                priority_allowed_names = []
+
+    # 2. Define Permissão
     if current_user.role in ['programador', 'admin_escola', 'super_admin']:
         can_schedule_in_this_turma = True
+        
     elif current_user.role == 'instrutor' and current_user.instrutor_profile:
         instrutor_id = current_user.instrutor_profile.id
+        
+        # Busca turmas onde ele é titular
         pelotao_names = db.session.scalars(select(DisciplinaTurma.pelotao).where(or_(DisciplinaTurma.instrutor_id_1 == instrutor_id, DisciplinaTurma.instrutor_id_2 == instrutor_id)).distinct()).all()
+        
         if pelotao_names:
             instrutor_turmas_vinculadas = db.session.scalars(select(Turma).where(Turma.nome.in_(pelotao_names)).order_by(Turma.nome)).all()
-        if turma_selecionada_nome in pelotao_names:
-            can_schedule_in_this_turma = True
+        
+        # Verifica acesso base à turma
+        is_vinculado_turma = turma_selecionada_nome in pelotao_names
+
+        if is_vinculado_turma:
+            if not priority_active:
+                can_schedule_in_this_turma = True
+            else:
+                if not priority_allowed_names:
+                    # Lista vazia = bloqueio total
+                    can_schedule_in_this_turma = False
+                else:
+                    # Verifica se o instrutor leciona ALGUMA das matérias permitidas (PELO NOME) nesta turma
+                    # Faz join com Disciplina para filtrar pelo nome da matéria
+                    query_match = select(DisciplinaTurma).join(Disciplina).where(
+                        DisciplinaTurma.pelotao == turma_selecionada_nome,
+                        Disciplina.materia.in_(priority_allowed_names), # Filtra pelos nomes permitidos
+                        or_(
+                            DisciplinaTurma.instrutor_id_1 == instrutor_id,
+                            DisciplinaTurma.instrutor_id_2 == instrutor_id
+                        )
+                    )
+                    has_match = db.session.execute(query_match).first() is not None
+                    
+                    can_schedule_in_this_turma = has_match
 
     tempos, intervalos = _get_horario_context_data()
 
-    # --- DADOS DO MODAL (CARREGA OBJETOS COMPLETOS PARA TER ID E NOME) ---
-    all_disciplinas = []
+    # --- QUERY NOVA PARA O MODAL: Nomes Únicos de Matérias ---
+    all_materias_names = []
     if school_id:
-        all_disciplinas = db.session.scalars(
-            select(Disciplina)
+        all_materias_names = db.session.scalars(
+            select(Disciplina.materia)
             .join(Turma)
             .where(Turma.school_id == school_id)
+            .distinct()
             .order_by(Disciplina.materia)
-        ).unique().all()
-        
-    priority_active = False
-    priority_ids_list = []
-    
-    if semana_selecionada:
-        priority_active = getattr(semana_selecionada, 'priority_active', False)
-        raw_ids = getattr(semana_selecionada, 'priority_disciplines', '') or ''
-        
-        if raw_ids:
-            try:
-                priority_ids_list = json.loads(raw_ids) # Espera lista de IDs [1, 2]
-                priority_ids_list = [int(x) for x in priority_ids_list]
-            except:
-                priority_ids_list = []
-
-    # --- LÓGICA DE BLOQUEIO / PRIORIDADE ---
-    if priority_active and current_user.role == 'instrutor':
-        
-        print("\n=== DEBUG PRIORIDADE ===")
-        print(f"Instrutor: {current_user.nome_de_guerra} (ID Perfil: {current_user.instrutor_profile.id})")
-        print(f"Prioridade Ativa: SIM")
-        print(f"Disciplinas Permitidas (IDs): {priority_ids_list}")
-
-        # Se a lista de prioridade estiver vazia, ninguém marca
-        if not priority_ids_list:
-            can_schedule_in_this_turma = False
-            print(">>> BLOQUEADO: Lista de prioridade vazia.")
-        
-        # Se o instrutor já não podia agendar nessa turma (por não ter vínculo), continua bloqueado
-        elif not can_schedule_in_this_turma:
-            print(">>> BLOQUEADO: Instrutor não tem vínculo com esta turma.")
-            
-        else:
-            # AQUI ESTÁ A LÓGICA INFALÍVEL
-            # Verifica se este instrutor tem vínculo com ALGUMA das disciplinas permitidas
-            # Ignora turma, verifica GLOBALMENTE se ele é professor da matéria X, Y ou Z.
-            # Se quiser restringir à turma, adicione: and_(DisciplinaTurma.pelotao == turma_selecionada_nome)
-            
-            tem_permissao = False
-            
-            # Busca todas as matérias que ele dá aula NESTA TURMA
-            minhas_materias_na_turma = db.session.scalars(
-                select(DisciplinaTurma.disciplina_id)
-                .where(
-                    DisciplinaTurma.pelotao == turma_selecionada_nome,
-                    or_(
-                        DisciplinaTurma.instrutor_id_1 == current_user.instrutor_profile.id,
-                        DisciplinaTurma.instrutor_id_2 == current_user.instrutor_profile.id
-                    )
-                )
-            ).all()
-            
-            print(f"Minhas Matérias na Turma {turma_selecionada_nome} (IDs): {minhas_materias_na_turma}")
-            
-            # Intersecção: Minhas matérias X Matérias permitidas
-            # Se houver qualquer numero em comum, libera.
-            comum = set(minhas_materias_na_turma).intersection(set(priority_ids_list))
-            
-            if comum:
-                tem_permissao = True
-                print(f">>> LIBERADO: Matéria(s) coincidente(s): {comum}")
-            else:
-                tem_permissao = False
-                print(">>> BLOQUEADO: Nenhuma das suas matérias está na lista prioritária.")
-            
-            can_schedule_in_this_turma = tem_permissao
+        ).all()
 
     return render_template('quadro_horario.html',
                            horario_matrix=horario_matrix,
@@ -203,10 +183,9 @@ def index():
                            instrutor_turmas_vinculadas=instrutor_turmas_vinculadas,
                            tempos=tempos,
                            intervalos=intervalos,
-                           # Passa objetos para o template (para ter ID e Nome)
-                           all_disciplinas=all_disciplinas,
+                           all_materias_names=all_materias_names, # Lista de Strings Únicas
                            priority_active=priority_active,
-                           priority_ids_list=priority_ids_list)
+                           priority_allowed_names=priority_allowed_names) # Lista de Strings Permitidas
 
 @horario_bp.route('/save-priority-config', methods=['POST'])
 @login_required

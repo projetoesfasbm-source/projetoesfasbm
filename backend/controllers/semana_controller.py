@@ -156,7 +156,7 @@ def deletar_ciclo(ciclo_id):
         flash("Ciclo não encontrado.", "danger")
     return redirect(url_for('semana.gerenciar_semanas'))
 
-# --- ROTA PARA SALVAR A PRIORIDADE (JSON/STRINGS) ---
+# --- ROTA PARA SALVAR A PRIORIDADE (JSON/NOMES) ---
 @semana_bp.route('/<int:semana_id>/salvar-prioridade', methods=['POST'])
 @login_required
 @school_admin_or_programmer_required
@@ -167,11 +167,9 @@ def salvar_prioridade(semana_id):
             return jsonify({'success': False, 'message': 'Semana não encontrada'}), 404
 
         data = request.get_json()
-        
-        # Atualiza o status
         semana.priority_active = data.get('status', False)
         
-        # Atualiza a lista de nomes (salva strings)
+        # Atualiza a lista de NOMES (strings)
         disciplinas = data.get('disciplinas', [])
         semana.priority_disciplines = json.dumps(disciplinas)
 

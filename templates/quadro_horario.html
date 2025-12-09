@@ -6,14 +6,27 @@
 <div class="horario-header-container">
     
     {% if priority_active %}
-    <div class="alert alert-danger d-flex align-items-center mb-3 shadow-sm border-danger" role="alert">
-        <div class="me-3 bg-danger text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 50px; height: 50px;">
-            <i class="fas fa-lock fa-lg"></i>
+    <div class="alert alert-danger d-flex flex-column mb-3 shadow-sm border-danger" role="alert">
+        <div class="d-flex align-items-center mb-2">
+            <div class="me-3 bg-danger text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 50px; height: 50px;">
+                <i class="fas fa-lock fa-lg"></i>
+            </div>
+            <div>
+                <h5 class="alert-heading mb-0 fw-bold">Modo de Agendamento Prioritário Ativo</h5>
+                <small>O quadro desta semana está <strong>bloqueado</strong>. Apenas as disciplinas selecionadas abaixo podem realizar agendamentos (em qualquer turma).</small>
+            </div>
         </div>
-        <div>
-            <h5 class="alert-heading mb-0 fw-bold">Modo de Agendamento Prioritário Ativo</h5>
-            <small>O quadro desta semana está <strong>bloqueado</strong>. Apenas as disciplinas selecionadas abaixo podem realizar agendamentos.</small>
+        
+        {% if priority_allowed_names %}
+        <div class="mt-2 ms-5 ps-2">
+            <strong>Disciplinas Permitidas:</strong>
+            <ul class="mb-0 mt-1">
+                {% for nome in priority_allowed_names %}
+                    <li>{{ nome }}</li>
+                {% endfor %}
+            </ul>
         </div>
+        {% endif %}
     </div>
     {% endif %}
 
@@ -27,7 +40,7 @@
         <div class="controls-group d-flex gap-2">
             {% if current_user.role in ['programador', 'admin_escola', 'super_admin'] %}
             
-            <button type="button" class="btn {% if priority_active %}btn-danger{% else %}btn-warning{% endif %} fw-bold shadow-sm" 
+            <button type="button" class="btn {% if priority_active %}btn-danger text-white{% else %}btn-warning{% endif %} fw-bold shadow-sm" 
                     data-bs-toggle="modal" data-bs-target="#priorityModal">
                 <i class="fas fa-star me-1"></i> 
                 {% if priority_active %}Prioridade ATIVA{% else %}Configurar Prioridade{% endif %}
@@ -43,8 +56,8 @@
                 Agendar/Desmarcar Aulas
             </button>
             {% else %}
-                {% if current_user.role == 'instrutor' and priority_active %}
-                <button class="btn btn-secondary" disabled title="Bloqueado pelo modo de prioridade">
+                {% if current_user.role == 'instrutor' %}
+                <button class="btn btn-secondary" disabled title="Você não tem permissão nesta turma ou o modo prioridade está ativo para outras disciplinas.">
                     <i class="fas fa-lock"></i> Agendamento Bloqueado
                 </button>
                 {% endif %}
@@ -57,7 +70,7 @@
         <form method="GET" action="{{ url_for('horario.index') }}" class="row g-3 align-items-end">
             <div class="col-md-3">
                 <label for="ciclo_id" class="form-label fw-bold">Ciclo</label>
-                <select name="ciclo_id" id="ciclo_id" class="form-select" onchange="this.form.submit()">
+                <select name="ciclo" id="ciclo_id" class="form-select" onchange="this.form.submit()">
                     {% for ciclo in ciclos %}
                     <option value="{{ ciclo.id }}" {% if ciclo.id == ciclo_selecionado %}selected{% endif %}>{{ ciclo.nome }}</option>
                     {% endfor %}
@@ -70,6 +83,7 @@
                     {% for semana in todas_as_semanas %}
                     <option value="{{ semana.id }}" {% if semana_selecionada and semana.id == semana_selecionada.id %}selected{% endif %}>
                         {{ semana.nome }} ({{ semana.data_inicio.strftime('%d/%m') }} a {{ semana.data_fim.strftime('%d/%m') }})
+                        {% if semana.priority_active %} 🔒 {% endif %}
                     </option>
                     {% endfor %}
                 </select>
@@ -132,6 +146,11 @@
                                 
                             {% endfor %}
                         </tr>
+                        
+                        {# Intervalos #}
+                        {% if row_idx == 2 %}<tr class="table-secondary"><td colspan="6" class="py-1 text-center small fw-bold text-uppercase">{{ intervalos.intervalo_1 }}</td></tr>{% endif %}
+                        {% if row_idx == 5 %}<tr class="table-secondary"><td colspan="6" class="py-1 text-center small fw-bold text-uppercase">{{ intervalos.almoco }}</td></tr>{% endif %}
+                        {% if row_idx == 9 %}<tr class="table-secondary"><td colspan="6" class="py-1 text-center small fw-bold text-uppercase">{{ intervalos.intervalo_2 }}</td></tr>{% endif %}
                         
                         {% endif %}
                     {% endfor %}
@@ -219,7 +238,7 @@
                             {{ turma.nome }}
                         </a>
                     {% else %}
-                        <p class="text-muted">Nenhum vínculo encontrado.</p>
+                        <p class="text-muted">Nenhum vínculo encontrado. (Ou bloqueio de prioridade ativo)</p>
                     {% endfor %}
                 </div>
             {% else %} 
@@ -242,6 +261,7 @@
     </div>
     {% endif %}
 
+    {# --- MODAL DE PRIORIDADE (LISTANDO NOMES ÚNICOS) --- #}
     {% if semana_selecionada and current_user.role in ['programador', 'admin_escola', 'super_admin'] %}
     <div class="modal fade" id="priorityModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog">
@@ -275,16 +295,17 @@
                     </div>
 
                     <div id="priorityListContainer">
-                        <label class="form-label fw-bold mb-2">Disciplinas Permitidas:</label>
+                        <label class="form-label fw-bold mb-2">Disciplinas Permitidas (Nomes Únicos):</label>
                         <div class="border rounded p-2 bg-white" style="max-height: 250px; overflow-y: auto;">
-                            {% if all_disciplinas_names %}
-                                {% for nome_materia in all_disciplinas_names %}
+                            {% if all_materias_names %}
+                                {% for materia_nome in all_materias_names %}
                                 <div class="form-check border-bottom py-2 position-relative">
+                                    {# Value = Nome da Matéria #}
                                     <input class="form-check-input priority-disc-check" type="checkbox" 
-                                           value="{{ nome_materia }}" id="disc-{{ loop.index }}"
-                                           {% if nome_materia in priority_names_list %}checked{% endif %}>
+                                           value="{{ materia_nome }}" id="disc-{{ loop.index }}"
+                                           {% if materia_nome in priority_allowed_names %}checked{% endif %}>
                                     <label class="form-check-label w-100 stretched-link" for="disc-{{ loop.index }}" style="cursor: pointer;">
-                                        {{ nome_materia }}
+                                        {{ materia_nome }}
                                     </label>
                                 </div>
                                 {% endfor %}
@@ -293,7 +314,7 @@
                             {% endif %}
                         </div>
                         <div class="d-flex justify-content-between mt-2 px-1">
-                            <small class="text-muted">Marque as disciplinas que terão permissão.</small>
+                            <small class="text-muted">Marque os nomes das disciplinas que terão permissão em TODAS as turmas.</small>
                             <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none fw-bold" onclick="selectAllPriority(true)">Marcar Todas</button>
                         </div>
                     </div>
@@ -311,6 +332,7 @@
     
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            // Seletor de mudança de semana/ciclo na barra superior
             const semanaSelector = document.getElementById('semana_selector');
             if (semanaSelector) {
                 semanaSelector.addEventListener('change', function() {
@@ -321,6 +343,7 @@
                 });
             }
 
+            // Atualização dinâmica dos links no modal de confirmação
             const modalSemanaSelect = document.getElementById('modal-semana-selector');
             const weekLinks = document.querySelectorAll('.dynamic-week-link');
 
@@ -329,6 +352,7 @@
                     const newSemanaId = this.value;
                     weekLinks.forEach(link => {
                         let currentHref = link.getAttribute('href');
+                        // Substitui o ID da semana na URL (espera padrão /editar/PELOTAO/ID_SEMANA/ID_CICLO)
                         const regex = /(.*\/editar\/[^\/]+\/)(\d+)(\/\d+)/;
                         if (regex.test(currentHref)) {
                             const newHref = currentHref.replace(regex, `$1${newSemanaId}$3`);
@@ -338,6 +362,7 @@
                 });
             }
 
+            // Toggle para fim de semana
             const toggleBtn = document.getElementById('weekend-toggle');
             if (toggleBtn) {
                 toggleBtn.addEventListener('click', function() {
@@ -346,6 +371,7 @@
             }
         });
 
+        // Controle do Modal de Confirmação (Agendar/Desmarcar)
         const confirmationModal = document.getElementById('confirmation-modal-overlay');
 
         function openConfirmationModal() {
@@ -370,12 +396,8 @@
             });
         }
 
-        // --- FUNÇÃO PARA SALVAR PRIORIDADE ---
-        const priorityActive = document.getElementById('priorityActive');
-        if(priorityActive){
-            // Listener removido para manter lista sempre ativa
-        }
-
+        // --- FUNÇÃO PARA SALVAR PRIORIDADE (NOMES) ---
+        
         function selectAllPriority(state) {
             document.querySelectorAll('.priority-disc-check').forEach(ch => ch.checked = state);
         }
@@ -383,7 +405,7 @@
         function savePriorityConfig() {
             const active = document.getElementById('priorityActive').checked;
             const checks = document.querySelectorAll('.priority-disc-check:checked');
-            // AGORA ENVIA NOMES (STRINGS)
+            // AGORA ENVIA UMA LISTA DE NOMES (STRINGS)
             const names = Array.from(checks).map(c => c.value);
 
             const btn = document.querySelector('#priorityModal .btn-success');
