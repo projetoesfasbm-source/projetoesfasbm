@@ -5,6 +5,7 @@
 {% block content %}
 <div class="horario-header-container">
     
+    {# --- ALERTA DE PRIORIDADE (CORRIGIDO PARA EXIBIR NOMES) --- #}
     {% if priority_active %}
     <div class="alert alert-danger d-flex flex-column mb-3 shadow-sm border-danger" role="alert">
         <div class="d-flex align-items-center mb-2">
@@ -13,15 +14,15 @@
             </div>
             <div>
                 <h5 class="alert-heading mb-0 fw-bold">Modo de Agendamento Prioritário Ativo</h5>
-                <small>O quadro desta semana está <strong>bloqueado</strong>. Apenas as disciplinas selecionadas abaixo podem realizar agendamentos (em qualquer turma).</small>
+                <small>O quadro desta semana está <strong>bloqueado</strong>. Apenas as disciplinas selecionadas abaixo podem realizar agendamentos.</small>
             </div>
         </div>
         
-        {% if priority_allowed_names %}
+        {% if priority_disciplinas_names %}
         <div class="mt-2 ms-5 ps-2">
             <strong>Disciplinas Permitidas:</strong>
             <ul class="mb-0 mt-1">
-                {% for nome in priority_allowed_names %}
+                {% for nome in priority_disciplinas_names %}
                     <li>{{ nome }}</li>
                 {% endfor %}
             </ul>
@@ -51,6 +52,7 @@
             </a>
             {% endif %}
             
+            {# BOTÃO DE AGENDAMENTO COM LÓGICA DE BLOQUEIO VISUAL #}
             {% if can_schedule_in_this_turma %}
             <button type="button" class="btn btn-primary" onclick="openConfirmationModal()">
                 Agendar/Desmarcar Aulas
@@ -261,7 +263,7 @@
     </div>
     {% endif %}
 
-    {# --- MODAL DE PRIORIDADE (LISTANDO NOMES ÚNICOS) --- #}
+    {# --- MODAL DE PRIORIDADE (CORRIGIDO PARA USAR IDs NO VALUE E NOMES NO LABEL) --- #}
     {% if semana_selecionada and current_user.role in ['programador', 'admin_escola', 'super_admin'] %}
     <div class="modal fade" id="priorityModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog">
@@ -295,17 +297,17 @@
                     </div>
 
                     <div id="priorityListContainer">
-                        <label class="form-label fw-bold mb-2">Disciplinas Permitidas (Nomes Únicos):</label>
+                        <label class="form-label fw-bold mb-2">Disciplinas Permitidas:</label>
                         <div class="border rounded p-2 bg-white" style="max-height: 250px; overflow-y: auto;">
-                            {% if all_materias_names %}
-                                {% for materia_nome in all_materias_names %}
+                            {% if all_disciplinas %}
+                                {% for disciplina in all_disciplinas %}
                                 <div class="form-check border-bottom py-2 position-relative">
-                                    {# Value = Nome da Matéria #}
+                                    {# CORREÇÃO: O value é o ID, o Label é o nome #}
                                     <input class="form-check-input priority-disc-check" type="checkbox" 
-                                           value="{{ materia_nome }}" id="disc-{{ loop.index }}"
-                                           {% if materia_nome in priority_allowed_names %}checked{% endif %}>
+                                           value="{{ disciplina.id }}" id="disc-{{ loop.index }}"
+                                           {% if disciplina.id in priority_ids_list %}checked{% endif %}>
                                     <label class="form-check-label w-100 stretched-link" for="disc-{{ loop.index }}" style="cursor: pointer;">
-                                        {{ materia_nome }}
+                                        {{ disciplina.materia }}
                                     </label>
                                 </div>
                                 {% endfor %}
@@ -314,7 +316,7 @@
                             {% endif %}
                         </div>
                         <div class="d-flex justify-content-between mt-2 px-1">
-                            <small class="text-muted">Marque os nomes das disciplinas que terão permissão em TODAS as turmas.</small>
+                            <small class="text-muted">Marque as disciplinas que terão permissão.</small>
                             <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none fw-bold" onclick="selectAllPriority(true)">Marcar Todas</button>
                         </div>
                     </div>
@@ -396,7 +398,7 @@
             });
         }
 
-        // --- FUNÇÃO PARA SALVAR PRIORIDADE (NOMES) ---
+        // --- FUNÇÃO PARA SALVAR PRIORIDADE ---
         
         function selectAllPriority(state) {
             document.querySelectorAll('.priority-disc-check').forEach(ch => ch.checked = state);
@@ -405,8 +407,8 @@
         function savePriorityConfig() {
             const active = document.getElementById('priorityActive').checked;
             const checks = document.querySelectorAll('.priority-disc-check:checked');
-            // AGORA ENVIA UMA LISTA DE NOMES (STRINGS)
-            const names = Array.from(checks).map(c => c.value);
+            // AGORA ENVIA IDs (como strings numéricas '5', '10') para bater com o banco
+            const ids = Array.from(checks).map(c => c.value);
 
             const btn = document.querySelector('#priorityModal .btn-success');
             const originalText = btn.innerHTML;
@@ -419,7 +421,7 @@
                     'Content-Type': 'application/json',
                     'X-CSRFToken': '{{ csrf_token() }}'
                 },
-                body: JSON.stringify({ status: active, disciplinas: names })
+                body: JSON.stringify({ status: active, disciplinas: ids })
             })
             .then(res => res.json())
             .then(data => {

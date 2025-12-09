@@ -299,28 +299,23 @@ class HorarioService:
             periodo_fim = periodo_inicio + duracao - 1
             observacao = data.get('observacao', '').strip() or None
             
-            # --- LÓGICA DE BLOQUEIO POR PRIORIDADE (AGORA POR NOME) ---
+            # --- LÓGICA DE BLOQUEIO POR PRIORIDADE ---
+            # Só executa se NÃO for admin. Admins sempre passam.
             if semana_id and not is_admin:
                 semana = db.session.get(Semana, semana_id)
                 if semana and getattr(semana, 'priority_active', False):
-                    # Recupera lista de NOMES permitidos
+                    # Recupera lista de IDs permitidos de forma robusta
                     allowed_str = getattr(semana, 'priority_disciplines', '') or ''
-                    allowed_names = []
+                    allowed_ids = []
                     
                     if allowed_str:
-                        # Limpa colchetes, aspas e espaços
+                        # Limpa colchetes, aspas e espaços. Ex: "[1, 2]" -> "1, 2"
                         clean_str = allowed_str.replace('[', '').replace(']', '').replace('"', '').replace("'", "")
-                        # Cria lista de strings (nomes das matérias)
-                        allowed_names = [x.strip() for x in clean_str.split(',') if x.strip()]
+                        # Cria lista de inteiros
+                        allowed_ids = [int(x.strip()) for x in clean_str.split(',') if x.strip().isdigit()]
                     
-                    # Busca a disciplina que está sendo salva para saber o NOME dela
-                    disciplina_atual = db.session.get(Disciplina, disciplina_id)
-                    
-                    if not disciplina_atual:
-                         return False, "Erro: Disciplina não encontrada.", 404
-
-                    # Verifica se o NOME da disciplina está na lista permitida
-                    if not allowed_names or disciplina_atual.materia not in allowed_names:
+                    # Se a lista de permitidos estiver vazia OU a disciplina não estiver nela
+                    if not allowed_ids or disciplina_id not in allowed_ids:
                         return False, "⚠️ AGENDAMENTO BLOQUEADO: Esta semana está em Modo Prioritário. Apenas as disciplinas selecionadas podem ser agendadas.", 403
             # -----------------------------------------------
 

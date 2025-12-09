@@ -98,56 +98,67 @@ def index():
         horario_matrix = HorarioService.construir_matriz_horario(turma_selecionada_nome, semana_selecionada.id, current_user)
         datas_semana = HorarioService.get_datas_da_semana(semana_selecionada)
 
-    # --- PERMISSÕES E LÓGICA DE PRIORIDADE (AGORA POR NOME) ---
+    # --- PERMISSÕES E LÓGICA DE PRIORIDADE ---
     can_schedule_in_this_turma = False
     instrutor_turmas_vinculadas = []
     priority_active = False
-    priority_allowed_names = [] # Lista de NOMES permitidos (ex: "Matemática", "Português")
+    priority_ids_list = []
+    priority_disciplinas_names = [] # Lista de nomes para exibir na tela
 
-    # 1. Carrega configuração de prioridade
+    # 1. Carrega dados de prioridade se houver semana selecionada
     if semana_selecionada:
         priority_active = getattr(semana_selecionada, 'priority_active', False)
-        raw_config = getattr(semana_selecionada, 'priority_disciplines', '') or ''
+        raw_ids = getattr(semana_selecionada, 'priority_disciplines', '') or ''
         
-        if raw_config:
+        if raw_ids:
             try:
-                # Limpa a string e separa por vírgula para obter nomes
-                clean_str = raw_config.replace('[', '').replace(']', '').replace('"', '').replace("'", "")
+                # Normaliza a string para remover colchetes e aspas, garantindo lista limpa
+                clean_str = raw_ids.replace('[', '').replace(']', '').replace('"', '').replace("'", "")
                 if clean_str.strip():
-                    priority_allowed_names = [x.strip() for x in clean_str.split(',') if x.strip()]
+                    priority_ids_list = [int(x.strip()) for x in clean_str.split(',') if x.strip().isdigit()]
             except Exception as e:
                 print(f"Erro ao parsear prioridade: {e}")
-                priority_allowed_names = []
+                priority_ids_list = []
+        
+        # Se tiver prioridade ativa e IDs, busca os NOMES para exibir na tela (não IDs)
+        if priority_active and priority_ids_list:
+            nomes_query = select(Disciplina.materia).where(Disciplina.id.in_(priority_ids_list))
+            priority_disciplinas_names = db.session.scalars(nomes_query).all()
+
 
     # 2. Define Permissão
+    # ADMINS: Acesso total sempre
     if current_user.role in ['programador', 'admin_escola', 'super_admin']:
         can_schedule_in_this_turma = True
         
+    # INSTRUTORES: Verifica vínculos e prioridade
     elif current_user.role == 'instrutor' and current_user.instrutor_profile:
         instrutor_id = current_user.instrutor_profile.id
         
         # Busca turmas onde ele é titular
         pelotao_names = db.session.scalars(select(DisciplinaTurma.pelotao).where(or_(DisciplinaTurma.instrutor_id_1 == instrutor_id, DisciplinaTurma.instrutor_id_2 == instrutor_id)).distinct()).all()
         
+        # Preenche lista lateral
         if pelotao_names:
             instrutor_turmas_vinculadas = db.session.scalars(select(Turma).where(Turma.nome.in_(pelotao_names)).order_by(Turma.nome)).all()
         
-        # Verifica acesso base à turma
+        # Verifica acesso base à turma atual
         is_vinculado_turma = turma_selecionada_nome in pelotao_names
 
         if is_vinculado_turma:
             if not priority_active:
+                # Sem prioridade ativa -> Libera geral se tiver vínculo
                 can_schedule_in_this_turma = True
             else:
-                if not priority_allowed_names:
-                    # Lista vazia = bloqueio total
+                # Com prioridade ativa -> Verifica se ele dá aula de UMA DAS disciplinas permitidas
+                if not priority_ids_list:
+                    # Lista vazia = ninguém agenda
                     can_schedule_in_this_turma = False
                 else:
-                    # Verifica se o instrutor leciona ALGUMA das matérias permitidas (PELO NOME) nesta turma
-                    # Faz join com Disciplina para filtrar pelo nome da matéria
-                    query_match = select(DisciplinaTurma).join(Disciplina).where(
+                    # Verifica interseção: Disciplinas que ele dá na turma VS Disciplinas prioritárias
+                    query_match = select(DisciplinaTurma).where(
                         DisciplinaTurma.pelotao == turma_selecionada_nome,
-                        Disciplina.materia.in_(priority_allowed_names), # Filtra pelos nomes permitidos
+                        DisciplinaTurma.disciplina_id.in_(priority_ids_list), # Filtra pelas permitidas
                         or_(
                             DisciplinaTurma.instrutor_id_1 == instrutor_id,
                             DisciplinaTurma.instrutor_id_2 == instrutor_id
@@ -155,20 +166,22 @@ def index():
                     )
                     has_match = db.session.execute(query_match).first() is not None
                     
-                    can_schedule_in_this_turma = has_match
+                    if has_match:
+                        can_schedule_in_this_turma = True
+                    else:
+                        can_schedule_in_this_turma = False
 
     tempos, intervalos = _get_horario_context_data()
 
-    # --- QUERY NOVA PARA O MODAL: Nomes Únicos de Matérias ---
-    all_materias_names = []
+    # Carrega disciplinas para o modal (se necessário filtrar no front também)
+    all_disciplinas = []
     if school_id:
-        all_materias_names = db.session.scalars(
-            select(Disciplina.materia)
+        all_disciplinas = db.session.scalars(
+            select(Disciplina)
             .join(Turma)
             .where(Turma.school_id == school_id)
-            .distinct()
             .order_by(Disciplina.materia)
-        ).all()
+        ).unique().all()
 
     return render_template('quadro_horario.html',
                            horario_matrix=horario_matrix,
@@ -183,9 +196,10 @@ def index():
                            instrutor_turmas_vinculadas=instrutor_turmas_vinculadas,
                            tempos=tempos,
                            intervalos=intervalos,
-                           all_materias_names=all_materias_names, # Lista de Strings Únicas
+                           all_disciplinas=all_disciplinas,
                            priority_active=priority_active,
-                           priority_allowed_names=priority_allowed_names) # Lista de Strings Permitidas
+                           priority_ids_list=priority_ids_list,
+                           priority_disciplinas_names=priority_disciplinas_names) # Passa os nomes para o template
 
 @horario_bp.route('/save-priority-config', methods=['POST'])
 @login_required
