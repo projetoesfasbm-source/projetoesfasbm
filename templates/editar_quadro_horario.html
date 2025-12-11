@@ -448,8 +448,24 @@ document.addEventListener('DOMContentLoaded', function() {
 
                         document.getElementById('horario_id').value = aulaId;
                         
-                        // Marca os períodos existentes
-                        setCheckboxes(data.periodo, data.duracao);
+                        // --- CORREÇÃO: Marca apenas os períodos exatos retornados ---
+                        
+                        // 1. Limpa todas as checkboxes primeiro
+                        allCheckboxes.forEach(cb => cb.checked = false);
+
+                        // 2. Se o backend mandou a lista exata (nova lógica)
+                        if (data.periodos && Array.isArray(data.periodos)) {
+                            data.periodos.forEach(p => {
+                                const cb = document.getElementById(`periodo_check_${p}`);
+                                if (cb && !cb.disabled) {
+                                    cb.checked = true;
+                                }
+                            });
+                        } else {
+                            // Fallback para lógica antiga (caso o cache do navegador segure o JS velho)
+                            setCheckboxes(data.periodo, data.duracao);
+                        }
+                        // -----------------------------------------------------------
 
                         document.getElementById('disciplina_id').value = data.disciplina_id;
                         document.getElementById('observacao').value = data.observacao || '';
@@ -462,7 +478,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         alert('Erro ao carregar: ' + data.message);
                     }
                 })
-                .catch(err => alert('Erro de comunicação.'));
+                .catch(err => {
+                    console.error(err);
+                    alert('Erro de comunicação.');
+                });
         }
     });
 

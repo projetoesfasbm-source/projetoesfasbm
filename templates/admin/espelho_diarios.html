@@ -1,203 +1,249 @@
 {% extends "base.html" %}
 
+{% block title %}Painel de Risco Acadêmico{% endblock %}
+
 {% block content %}
 <div class="container-fluid mt-4">
     <div class="row mb-4 align-items-center">
-        <div class="col-md-6">
-            <h2><i class="fas fa-calendar-alt"></i> Espelho de Frequência</h2>
-            <p class="text-muted">Dias em <strong class="text-secondary">cinza</strong> indicam falta de preenchimento.</p>
+        <div class="col-md-7">
+            <h2 class="mb-0 text-danger fw-bold">
+                <i class="fas fa-radiation me-2"></i>Painel de Risco Acadêmico
+            </h2>
+            <p class="text-muted mb-0">
+                Monitoramento automático de frequência. 
+                <span class="badge bg-danger">30% Faltas = Reprovação</span>
+            </p>
         </div>
-        <div class="col-md-6 text-md-end">
-            <form method="GET" class="d-flex justify-content-end align-items-center gap-2">
-                <input type="hidden" name="mes" value="{{ mes }}">
-                <input type="hidden" name="ano" value="{{ ano }}">
-                <label class="fw-bold">Turma:</label>
-                <select name="turma_id" class="form-select w-auto" onchange="this.form.submit()">
-                    <option value="">-- Selecione --</option>
-                    {% for t in turmas %}
-                    <option value="{{ t.id }}" {% if t.id == selected_turma %}selected{% endif %}>{{ t.nome }}</option>
-                    {% endfor %}
-                </select>
-            </form>
+        <div class="col-md-5">
+            <div class="input-group shadow-sm">
+                <span class="input-group-text bg-white"><i class="fas fa-search"></i></span>
+                <input type="text" id="searchAluno" class="form-control" placeholder="Buscar aluno..." onkeyup="filtrarAlunos()">
+            </div>
         </div>
     </div>
 
-    {% if not selected_turma %}
-    <div class="alert alert-warning text-center p-5">
-        <h4>Selecione uma turma acima para visualizar o calendário.</h4>
-    </div>
-    {% else %}
-
-    <div class="d-flex justify-content-between align-items-center mb-3 bg-white p-3 rounded shadow-sm">
-        <a href="{{ url_for('admin_escola.espelho_diarios', turma_id=selected_turma, mes=prev_m, ano=prev_a) }}" class="btn btn-outline-secondary">
-            <i class="fas fa-chevron-left"></i> Anterior
-        </a>
-        <h3 class="mb-0 text-capitalize">{{ mes_nome }} / {{ ano }}</h3>
-        <a href="{{ url_for('admin_escola.espelho_diarios', turma_id=selected_turma, mes=next_m, ano=next_a) }}" class="btn btn-outline-secondary">
-            Próximo <i class="fas fa-chevron-right"></i>
-        </a>
-    </div>
-
-    <div class="card shadow-sm">
-        <div class="card-body p-0">
-            <div class="calendar-grid">
-                <div class="cal-header">Dom</div>
-                <div class="cal-header">Seg</div>
-                <div class="cal-header">Ter</div>
-                <div class="cal-header">Qua</div>
-                <div class="cal-header">Qui</div>
-                <div class="cal-header">Sex</div>
-                <div class="cal-header">Sáb</div>
-
-                {% for week in calendar_matrix %}
-                    {% for day_info in week %}
-                        {% if day_info.day == 0 %}
-                            <div class="cal-day empty bg-light"></div>
-                        {% else %}
-                            <div class="cal-day {{ day_info.class }} clickable"
-                                 onclick="carregarDetalhes('{{ day_info.day }}')">
-                                
-                                <span class="day-number">{{ day_info.day }}</span>
-                                
-                                {% if day_info.status == 'success' %}
-                                    <div class="status-badge"><i class="fas fa-check-circle"></i> 100%</div>
-                                {% elif day_info.status == 'danger' %}
-                                    <div class="status-badge"><i class="fas fa-exclamation-circle"></i> Faltas</div>
-                                {% elif day_info.status == 'empty' %}
-                                    <div class="status-badge text-white"><i class="fas fa-clock"></i> Pendente</div>
-                                {% endif %}
+    <div id="painelAlertas">
+        {% if not alunos_alertas %}
+            <div class="card border-success border-2 shadow-sm mb-4">
+                <div class="card-body text-center py-5 text-success">
+                    <i class="fas fa-graduation-cap fa-4x mb-3"></i>
+                    <h4>Situação Regular!</h4>
+                    <p class="mb-0">Nenhum aluno atingiu níveis críticos ou de alerta nas faltas até o momento.</p>
+                </div>
+            </div>
+        {% else %}
+            <div class="row g-3" id="cardsContainer">
+                {% for aluno in alunos_alertas %}
+                <div class="col-12 col-md-6 col-lg-4 col-xl-3 aluno-card-item" 
+                     data-search="{{ aluno.nome }} {{ aluno.matricula }} {{ aluno.turma }}">
+                    
+                    <div class="card h-100 shadow-sm border-0 position-relative alert-card-{{ aluno.gravidade }}">
+                        
+                        <div class="card-body pb-0">
+                            <div class="d-flex align-items-center mb-3">
+                                <div class="flex-shrink-0 position-relative">
+                                    {% if aluno.foto %}
+                                        <img src="{{ url_for('static', filename='uploads/profile_pics/' + aluno.foto) }}" class="rounded-circle border border-2 border-white shadow-sm" style="width: 55px; height: 55px; object-fit: cover;">
+                                    {% else %}
+                                        <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center fw-bold shadow-sm" style="width: 55px; height: 55px;">
+                                            {{ aluno.nome[:2].upper() }}
+                                        </div>
+                                    {% endif %}
+                                    
+                                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-dark border border-white">
+                                        {{ aluno.total_faltas }}
+                                    </span>
+                                </div>
+                                <div class="ms-3 overflow-hidden">
+                                    <h6 class="card-title mb-0 text-truncate fw-bold">{{ aluno.nome }}</h6>
+                                    <small class="text-muted d-block">{{ aluno.turma }}</small>
+                                    <small class="text-secondary" style="font-size: 0.75rem;">{{ aluno.matricula }}</small>
+                                </div>
                             </div>
-                        {% endif %}
-                    {% endfor %}
+
+                            {% if aluno.riscos %}
+                                <div class="alert-section mt-2 bg-white rounded p-2 border">
+                                    <small class="text-uppercase fw-bold text-muted" style="font-size: 0.7rem;">Disciplinas Críticas:</small>
+                                    
+                                    {% for risco in aluno.riscos %}
+                                        <div class="mt-2 mb-1">
+                                            <div class="d-flex justify-content-between align-items-end" style="font-size: 0.8rem;">
+                                                <span class="fw-bold text-truncate" style="max-width: 65%;">{{ risco.materia }}</span>
+                                                <span class="{% if risco.status == 'reprovado' %}text-danger fw-bold{% else %}text-warning{% endif %}">
+                                                    {{ risco.porcentagem }}%
+                                                </span>
+                                            </div>
+                                            
+                                            <div class="progress" style="height: 6px;">
+                                                <div class="progress-bar {% if risco.status == 'reprovado' %}bg-danger{% else %}bg-warning{% endif %}" 
+                                                     role="progressbar" 
+                                                     style="width: {{ risco.porcentagem }}%;" 
+                                                     aria-valuenow="{{ risco.porcentagem }}" aria-valuemin="0" aria-valuemax="100"></div>
+                                            </div>
+                                            
+                                            {% if risco.status == 'reprovado' %}
+                                                <div class="text-center mt-1">
+                                                    <span class="badge bg-danger" style="font-size: 0.65rem;">REPROVADO POR FALTAS</span>
+                                                </div>
+                                            {% else %}
+                                                <div class="text-end text-muted" style="font-size: 0.65rem;">
+                                                    {{ risco.faltas }}/{{ risco.limite }} para reprovar
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="alert alert-light border text-center p-2 mb-0">
+                                    <small class="text-muted">Faltas dispersas. Nenhuma matéria atingiu 20%.</small>
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <div class="card-footer bg-transparent border-0 pt-2 pb-3">
+                            <button class="btn btn-outline-dark btn-sm w-100 rounded-pill" onclick="verDetalhesFaltas({{ aluno.id }})">
+                                <i class="fas fa-list-alt me-1"></i> Ver Histórico
+                            </button>
+                        </div>
+                    </div>
+                </div>
                 {% endfor %}
             </div>
+        {% endif %}
+    </div>
+
+    <div class="mt-5 pb-5">
+        <div class="d-grid gap-2">
+            <button class="btn btn-light border text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#listaCompleta">
+                <i class="fas fa-users me-2"></i> Visualizar Todos os Alunos da Escola
+            </button>
+        </div>
+        
+        <div class="collapse mt-3" id="listaCompleta">
+            <div class="card shadow-sm border-0">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="ps-3">Aluno</th>
+                                    <th>Turma</th>
+                                    <th class="text-center">Total Faltas</th>
+                                    <th>Ação</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabelaTodosAlunos"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
-    {% endif %}
 </div>
 
-<style>
-    .calendar-grid {
-        display: grid;
-        grid-template-columns: repeat(7, 1fr);
-        border: 1px solid #dee2e6;
-    }
-    .cal-header {
-        background-color: #f8f9fa;
-        font-weight: bold;
-        text-align: center;
-        padding: 10px;
-        border-right: 1px solid #dee2e6;
-        border-bottom: 1px solid #dee2e6;
-    }
-    .cal-day {
-        min-height: 100px;
-        border-right: 1px solid #dee2e6;
-        border-bottom: 1px solid #dee2e6;
-        padding: 8px;
-        position: relative;
-        background-color: #fff;
-        transition: all 0.2s;
-        cursor: pointer; /* Garante o cursor de mãozinha */
-    }
-    .cal-day:hover {
-        background-color: #f1f1f1;
-        z-index: 5;
-        box-shadow: inset 0 0 10px rgba(0,0,0,0.1);
-    }
-    
-    /* Cores de Status */
-    .cal-day.bg-light-success { background-color: #d1e7dd !important; border: 2px solid #198754 !important; }
-    .cal-day.bg-light-danger { background-color: #f8d7da !important; border: 2px solid #dc3545 !important; }
-    
-    .cal-day.bg-secondary { 
-        background-color: #6c757d !important; 
-        color: white !important;
-        border: 1px solid #545b62 !important;
-    }
-    .cal-day.bg-secondary .day-number { color: white !important; }
-
-    .day-number { font-size: 1.1rem; font-weight: 600; color: #495057; }
-    .status-badge { margin-top: 8px; font-size: 0.85rem; font-weight: 500; text-align: center; }
-</style>
-{% endblock %}
-
-{% block modals %}
-<div class="modal fade" id="detalhesDiaModal" tabindex="-1" aria-hidden="true" style="z-index: 1055;">
-    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Detalhes do Dia</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+<div class="modal fade" id="modalDetalhesFaltas" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" id="modalConteudo">
             </div>
-            <div class="modal-body" id="detalhesDiaConteudo">
-                </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
-            </div>
-        </div>
     </div>
 </div>
 
 <script>
-    // Variável global para a modal
-    let detalheModal;
+    const todosAlunosData = {{ todos_alunos|tojson }};
 
-    document.addEventListener('DOMContentLoaded', function() {
-        // Inicializa a modal usando o Bootstrap carregado no base.html
-        const modalEl = document.getElementById('detalhesDiaModal');
-        if (modalEl) {
-            detalheModal = new bootstrap.Modal(modalEl);
-        }
-    });
+    function renderizarTabelaCompleta() {
+        const tbody = document.getElementById('tabelaTodosAlunos');
+        let html = '';
+        todosAlunosData.forEach(aluno => {
+            let badgeInfo = aluno.faltas > 0 
+                ? `<span class="badge bg-secondary">${aluno.faltas}</span>` 
+                : `<span class="badge bg-success"><i class="fas fa-check"></i> 100%</span>`;
+            
+            html += `
+                <tr class="aluno-row-item" data-search="${aluno.nome.toLowerCase()} ${aluno.matricula} ${aluno.turma.toLowerCase()}">
+                    <td class="ps-3">
+                        <div class="fw-bold text-dark">${aluno.nome}</div>
+                        <small class="text-muted">${aluno.matricula}</small>
+                    </td>
+                    <td>${aluno.turma}</td>
+                    <td class="text-center">${badgeInfo}</td>
+                    <td>
+                        <button class="btn btn-sm btn-link text-decoration-none" onclick="verDetalhesFaltas(${aluno.id})">
+                            Detalhes
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+        tbody.innerHTML = html;
+    }
 
-    function carregarDetalhes(dia) {
-        console.log("Clicou no dia:", dia); // Para debug
-
-        const conteudoDiv = document.getElementById('detalhesDiaConteudo');
+    function filtrarAlunos() {
+        const termo = document.getElementById('searchAluno').value.toLowerCase();
         
-        // 1. Mostrar loading
-        conteudoDiv.innerHTML = `
-            <div class="text-center py-4">
-                <div class="spinner-border text-primary" role="status"></div>
-                <p class="mt-2">Carregando informações...</p>
+        // Filtra Cards
+        document.querySelectorAll('.aluno-card-item').forEach(card => {
+            const texto = card.getAttribute('data-search').toLowerCase();
+            card.style.display = texto.includes(termo) ? 'block' : 'none';
+        });
+
+        // Filtra e Abre Tabela
+        const rows = document.querySelectorAll('.aluno-row-item');
+        const collapseElement = document.getElementById('listaCompleta');
+        const bsCollapse = new bootstrap.Collapse(collapseElement, {toggle: false});
+
+        if (termo.length > 0) {
+            bsCollapse.show();
+            rows.forEach(row => {
+                const texto = row.getAttribute('data-search');
+                row.style.display = texto.includes(termo) ? '' : 'none';
+            });
+        } else {
+            rows.forEach(row => row.style.display = '');
+        }
+    }
+
+    function verDetalhesFaltas(alunoId) {
+        const modal = new bootstrap.Modal(document.getElementById('modalDetalhesFaltas'));
+        const content = document.getElementById('modalConteudo');
+        
+        content.innerHTML = `
+            <div class="modal-body text-center py-5">
+                <div class="spinner-border text-danger" role="status"></div>
+                <p class="mt-2 text-muted">Carregando dossiê do aluno...</p>
             </div>
         `;
-        
-        // 2. Abrir Modal
-        if (detalheModal) {
-            detalheModal.show();
-        } else {
-            alert("Erro: Componente Modal não inicializado.");
-            return;
-        }
+        modal.show();
 
-        // 3. Buscar dados via AJAX
-        const turmaId = "{{ selected_turma }}";
-        const mes = "{{ mes }}";
-        const ano = "{{ ano }}";
-        const url = `{{ url_for('admin_escola.detalhes_diario_ajax') }}?turma_id=${turmaId}&dia=${dia}&mes=${mes}&ano=${ano}`;
-
-        console.log("Buscando URL:", url);
-
-        fetch(url)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error("Erro na rede: " + response.status);
-                }
-                return response.text();
-            })
-            .then(html => {
-                conteudoDiv.innerHTML = html;
-            })
-            .catch(err => {
-                console.error("Erro fetch:", err);
-                conteudoDiv.innerHTML = `
-                    <div class="alert alert-danger">
-                        <i class="fas fa-exclamation-triangle"></i> Erro ao carregar dados.<br>
-                        <small>${err}</small>
-                    </div>`;
-            });
+        fetch(`/admin-escola/detalhe-faltas/${alunoId}`)
+            .then(r => r.text())
+            .then(html => content.innerHTML = html)
+            .catch(err => content.innerHTML = '<div class="p-3 text-danger">Erro ao carregar dados.</div>');
     }
+
+    document.addEventListener('DOMContentLoaded', renderizarTabelaCompleta);
 </script>
+
+<style>
+    /* Cores de Gravidade baseadas em % */
+    .alert-card-critico { /* >= 30% - REPROVADO */
+        border-left: 5px solid #dc3545 !important;
+        background: linear-gradient(to right, #fff5f5, #fff);
+    }
+    .alert-card-atencao { /* >= 20% - RISCO */
+        border-left: 5px solid #ffc107 !important;
+        background: linear-gradient(to right, #fff9f2, #fff);
+    }
+    .alert-card-moderado { /* < 20% */
+        border-left: 5px solid #6c757d !important;
+    }
+
+    .aluno-card-item .card {
+        transition: all 0.3s ease;
+    }
+    .aluno-card-item .card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important;
+    }
+</style>
 {% endblock %}

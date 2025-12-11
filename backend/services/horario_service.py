@@ -210,18 +210,24 @@ class HorarioService:
         if not aula or not HorarioService.can_edit_horario(aula, user):
             return None
 
-        duracao_total = aula.duracao
-        periodo_inicio = aula.periodo
-
+        # --- LÓGICA CORRIGIDA: Buscar lista exata de períodos ---
+        periodos_ocupados = []
+        
         if aula.group_id:
-            duracao_total = db.session.scalar(
-                select(func.sum(Horario.duracao)).where(Horario.group_id == aula.group_id)
-            )
-            periodo_inicio = db.session.scalar(
-                select(func.min(Horario.periodo)).where(Horario.group_id == aula.group_id)
-            )
+            # Busca todos os fragmentos dessa aula agrupada
+            blocos = db.session.scalars(
+                select(Horario).where(Horario.group_id == aula.group_id)
+            ).all()
         else:
-            periodo_inicio = aula.periodo
+            blocos = [aula]
+
+        # Monta a lista de todos os tempos ocupados (ex: [1, 2, 4])
+        for bloco in blocos:
+            for i in range(bloco.duracao):
+                periodos_ocupados.append(bloco.periodo + i)
+        
+        periodos_ocupados.sort()
+        # -------------------------------------------------------
 
         instrutor_value = str(aula.instrutor_id)
         if aula.instrutor_id_2:
@@ -230,13 +236,15 @@ class HorarioService:
         return {
             'disciplina_id': aula.disciplina_id,
             'instrutor_value': instrutor_value,
-            'duracao': duracao_total,
+            'periodos': periodos_ocupados,  # Nova lista enviada para o front
             'observacao': aula.observacao,
-            'periodo': periodo_inicio,
             'materia': aula.disciplina.materia,
             'instrutor_nome': (
                 aula.instrutor.user.nome_de_guerra if aula.instrutor and aula.instrutor.user else ''
             ),
+            # Mantemos estes campos para retrocompatibilidade, se necessário
+            'periodo': periodos_ocupados[0] if periodos_ocupados else aula.periodo,
+            'duracao': len(periodos_ocupados)
         }
 
     @staticmethod
