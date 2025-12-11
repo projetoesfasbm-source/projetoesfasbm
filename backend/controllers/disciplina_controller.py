@@ -14,7 +14,7 @@ from ..models.disciplina import Disciplina
 from ..models.ciclo import Ciclo
 from ..models.turma import Turma
 from ..services.disciplina_service import DisciplinaService
-from ..services.turma_service import TurmaService # <-- IMPORT ADICIONADO
+from ..services.turma_service import TurmaService
 from ..services.user_service import UserService
 from utils.decorators import admin_or_programmer_required, school_admin_or_programmer_required, can_view_management_pages_required
 
@@ -43,26 +43,23 @@ def listar_disciplinas():
         
     turma_selecionada_id = request.args.get('turma_id', type=int)
     
-    # --- REFATORADO ---
     # Busca turmas e disciplinas usando os serviços
     turmas_disponiveis = TurmaService.get_turmas_by_school(school_id)
     todas_disciplinas = DisciplinaService.get_disciplinas_by_school(school_id)
 
     disciplinas_filtradas = []
     if turma_selecionada_id:
-        # Filtra a lista em Python
+        # Filtra a lista em Python para evitar múltiplas queries
         disciplinas_filtradas = [d for d in todas_disciplinas if d.turma_id == turma_selecionada_id]
     else:
         # Mostra todas as disciplinas da escola
         disciplinas_filtradas = todas_disciplinas
 
-    # Processa apenas a lista filtrada
+    # Processa apenas a lista filtrada para exibir o progresso
     disciplinas_com_progresso = []
     for d in disciplinas_filtradas:
-        # d.turma já deve estar carregado (ou será pego da sessão do db)
         progresso = DisciplinaService.get_dados_progresso(d, d.turma.nome) 
         disciplinas_com_progresso.append({'disciplina': d, 'progresso': progresso})
-    # --- FIM DA REFATORAÇÃO ---
 
     delete_form = DeleteForm()
     
@@ -85,17 +82,13 @@ def adicionar_disciplina():
     ciclos = db.session.scalars(select(Ciclo).order_by(Ciclo.nome)).all()
     form.ciclo_id.choices = [(c.id, c.nome) for c in ciclos]
     
-    # --- REFATORADO ---
     turmas = TurmaService.get_turmas_by_school(school_id)
-    # ------------------
-    
     form.turma_ids.choices = [(t.id, t.nome) for t in turmas]
     
     if form.validate_on_submit():
         success, message = DisciplinaService.create_disciplina(form.data, school_id)
         flash(message, 'success' if success else 'danger')
         if success:
-            # Redireciona para a visão geral após o cadastro em lote
             return redirect(url_for('disciplina.listar_disciplinas'))
 
     return render_template('adicionar_disciplina.html', form=form)
@@ -110,7 +103,7 @@ def editar_disciplina(disciplina_id):
         flash('Disciplina não encontrada.', 'danger')
         return redirect(url_for('disciplina.listar_disciplinas'))
 
-    # Usa o formulário antigo para edição individual
+    # Formulário local para edição única (sem seleção múltipla de turmas)
     class EditDisciplinaForm(FlaskForm):
         materia = StringField('Matéria', validators=[DataRequired(), Length(min=3, max=100)])
         carga_horaria_prevista = IntegerField('Carga Horária Total Prevista', validators=[DataRequired(), NumberRange(min=1)])
@@ -155,3 +148,22 @@ def api_disciplinas_por_turma(turma_id):
 
     disciplinas = sorted(turma.disciplinas, key=lambda d: d.materia)
     return jsonify([{'id': d.id, 'materia': d.materia} for d in disciplinas])
+
+# --- NOVA ROTA DE SINCRONIZAÇÃO ---
+@disciplina_bp.route('/sincronizar-progresso', methods=['POST'])
+@login_required
+@school_admin_or_programmer_required
+def sincronizar_progresso():
+    school_id = UserService.get_current_school_id()
+    if not school_id:
+        flash('Escola não identificada.', 'danger')
+        return redirect(url_for('disciplina.listar_disciplinas'))
+
+    success, message = DisciplinaService.sincronizar_progresso_aulas(school_id)
+    
+    if success:
+        flash(f'Sincronização concluída: {message}', 'success')
+    else:
+        flash(f'Erro ao sincronizar: {message}', 'danger')
+        
+    return redirect(request.referrer or url_for('disciplina.listar_disciplinas'))

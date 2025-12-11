@@ -1,61 +1,115 @@
-<div class="text-center mb-4">
-    <h4 class="text-dark fw-bold">{{ data.strftime('%d/%m/%Y') }}</h4>
-    <span class="badge bg-secondary">{{ data.strftime('%A') }}</span>
+<div class="modal-header bg-light">
+    <h5 class="modal-title">
+        <i class="fas fa-user-graduate me-2"></i>Dossiê de Frequência
+    </h5>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
 </div>
 
-{% if not grupos %}
-    <div class="text-center py-5">
-        <div class="mb-3 text-muted opacity-50">
-            <i class="fas fa-folder-open fa-4x"></i>
-        </div>
-        <h5 class="text-muted">Nenhum registro encontrado</h5>
-        <p class="small text-muted">O Chefe de Turma não enviou dados para este dia.</p>
-    </div>
-{% else %}
-
-<div class="row g-3">
-    {% for grupo in grupos %}
-    <div class="col-12">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-body border-start border-5 {% if grupo.tem_falta %}border-danger{% else %}border-success{% endif %}">
-                <div class="d-flex justify-content-between align-items-start">
-                    <div>
-                        <h5 class="card-title fw-bold text-dark mb-1">{{ grupo.disciplina.nome }}</h5>
-                        <small class="text-muted">
-                            <i class="fas fa-user-edit"></i> Resp: {{ grupo.responsavel.nome_de_guerra }}
-                        </small>
+<div class="modal-body p-0">
+    <div class="p-4 border-bottom bg-white">
+        <div class="d-flex align-items-center">
+            <div class="flex-shrink-0">
+                {% if aluno.foto_perfil %}
+                    <img src="{{ url_for('static', filename='uploads/profile_pics/' + aluno.foto_perfil) }}" 
+                         class="rounded-circle border shadow-sm" 
+                         style="width: 70px; height: 70px; object-fit: cover;">
+                {% else %}
+                    <div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center text-white fw-bold shadow-sm" 
+                         style="width: 70px; height: 70px; font-size: 1.5rem;">
+                        {% if aluno.user and aluno.user.nome_completo %}
+                            {{ aluno.user.nome_completo[:2].upper() }}
+                        {% else %}
+                            AL
+                        {% endif %}
                     </div>
-                    {% if grupo.tem_falta %}
-                        <span class="badge bg-danger">Com Faltas</span>
+                {% endif %}
+            </div>
+            <div class="ms-3">
+                <h5 class="mb-1 fw-bold">
+                    {% if aluno.user %}
+                        {{ aluno.user.nome_completo or aluno.user.nome_de_guerra or aluno.user.username }}
                     {% else %}
-                        <span class="badge bg-success">100% Presença</span>
+                        Aluno sem usuário vinculado
                     {% endif %}
+                </h5>
+                <div class="text-muted small mb-1">
+                    <i class="fas fa-id-card me-1"></i> Matrícula: 
+                    <strong>
+                        {% if aluno.user %}
+                            {{ aluno.user.matricula }}
+                        {% else %}
+                            N/D
+                        {% endif %}
+                    </strong>
                 </div>
-
-                <div class="mt-3 p-2 bg-light rounded text-dark border">
-                    <p class="mb-1 small fw-bold text-muted">Conteúdo:</p>
-                    <p class="mb-2 small">{{ grupo.conteudo or 'Não informado' }}</p>
-                    
-                    {% if grupo.observacoes %}
-                    <hr class="my-1">
-                    <p class="mb-1 small fw-bold text-muted">Obs:</p>
-                    <p class="mb-0 small text-danger">{{ grupo.observacoes }}</p>
-                    {% endif %}
-                </div>
-
-                <div class="d-flex justify-content-between align-items-center mt-3">
-                    <span class="badge bg-white text-dark border">
-                        {{ grupo.qtd_registros }} Tempos de Aula
-                    </span>
-                    
-                    <a href="{{ url_for('admin_escola.editar_diario_bloco', diario_ref_id=grupo.exemplo_id) }}" 
-                       class="btn btn-outline-primary btn-sm fw-bold">
-                        <i class="fas fa-edit"></i> Editar Diário
-                    </a>
+                <div class="text-muted small">
+                    <i class="fas fa-users me-1"></i> Turma: 
+                    <strong>{{ aluno.turma.nome if aluno.turma else 'Sem Turma' }}</strong>
                 </div>
             </div>
         </div>
     </div>
-    {% endfor %}
+
+    <div class="accordion accordion-flush" id="accordionFaltas">
+        {% if resumo %}
+            {% for item in resumo %}
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="heading{{ loop.index }}">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ loop.index }}" aria-expanded="false">
+                            <div class="w-100 me-3">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <span class="fw-bold text-dark">{{ item.disciplina }}</span>
+                                    
+                                    {% if item.status == 'danger' %}
+                                        <span class="badge bg-danger">REPROVADO ({{ item.percentual }}%)</span>
+                                    {% elif item.status == 'warning' %}
+                                        <span class="badge bg-warning text-dark">ALERTA ({{ item.percentual }}%)</span>
+                                    {% else %}
+                                        <span class="badge bg-success">{{ item.percentual }}%</span>
+                                    {% endif %}
+                                </div>
+                                
+                                <div class="progress" style="height: 6px;">
+                                    <div class="progress-bar bg-{{ item.status }}" role="progressbar" 
+                                         style="width: {{ item.percentual }}%" 
+                                         aria-valuenow="{{ item.percentual }}" aria-valuemin="0" aria-valuemax="100"></div>
+                                </div>
+                                <div class="d-flex justify-content-between mt-1" style="font-size: 0.75rem;">
+                                    <span class="text-muted">{{ item.total_faltas }} faltas acumuladas</span>
+                                    <span class="text-muted">Limite: {{ item.limite_reprovacao }}</span>
+                                </div>
+                            </div>
+                        </button>
+                    </h2>
+                    <div id="collapse{{ loop.index }}" class="accordion-collapse collapse" data-bs-parent="#accordionFaltas">
+                        <div class="accordion-body bg-light">
+                            <h6 class="text-muted small text-uppercase mb-2 fw-bold">Histórico de Ausências:</h6>
+                            <ul class="list-group list-group-flush border rounded">
+                                {% for dia in item.dias %}
+                                    <li class="list-group-item d-flex justify-content-between align-items-center bg-white">
+                                        <div>
+                                            <i class="far fa-calendar-alt text-secondary me-2"></i>
+                                            <strong>{{ dia.data }}</strong>
+                                        </div>
+                                        <span class="text-muted small fst-italic text-end" style="max-width: 60%;">
+                                            {{ dia.justificativa }}
+                                        </span>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <div class="text-center py-5 text-muted">
+                <i class="fas fa-check-circle fa-3x mb-3 text-success"></i>
+                <h5>Nenhuma falta registrada.</h5>
+                <p class="small">Este aluno possui 100% de frequência em todas as matérias.</p>
+            </div>
+        {% endif %}
+    </div>
 </div>
-{% endif %}
+<div class="modal-footer bg-light">
+    <button type="button" class="btn btn-secondary w-100" data-bs-dismiss="modal">Fechar</button>
+</div>

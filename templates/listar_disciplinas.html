@@ -3,9 +3,22 @@
 {% block title %}Lista de Disciplinas{% endblock %}
 
 {% block content %}
-<div class="content-header">
-    <h1>Disciplinas</h1>
-    <p>Gerencie as matérias e seus respectivos instrutores por turma.</p>
+<div class="content-header d-flex justify-content-between align-items-center">
+    <div>
+        <h1>Disciplinas</h1>
+        <p>Gerencie as matérias e seus respectivos instrutores por turma.</p>
+    </div>
+    
+    {% if current_user.role in ['programador', 'admin_escola'] %}
+    <div>
+        <form action="{{ url_for('disciplina.sincronizar_progresso') }}" method="POST" onsubmit="return confirm('Isso irá recalcular o progresso de TODAS as disciplinas da escola baseado nos diários de classe lançados e na carga horária do quadro. O processo pode levar alguns segundos. Deseja continuar?');" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-warning text-dark shadow-sm">
+                <i class="fas fa-sync-alt me-1"></i> Sincronizar Progresso
+            </button>
+        </form>
+    </div>
+    {% endif %}
 </div>
 
 <div class="table-filters">
@@ -52,7 +65,9 @@
                 <tbody>
                     {% for item in disciplinas_com_progresso %}
                     <tr>
-                        <td data-label="Matéria">{{ item.disciplina.materia }}</td>
+                        <td data-label="Matéria">
+                            <strong>{{ item.disciplina.materia }}</strong>
+                        </td>
                         <td data-label="Carga Horária">{{ item.disciplina.carga_horaria_prevista }}h</td>
                         <td data-label="Progresso">
                             <div class="progress-bar-container">
@@ -93,6 +108,13 @@
 {% endif %}
 
 <style>
+/* Ajuste para o botão no cabeçalho */
+.content-header {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #dee2e6;
+}
+
 .progress-bar-container {
     position: relative;
     display: flex;
@@ -118,8 +140,8 @@
     z-index: 1;
     font-weight: 600;
     font-size: 0.8rem;
-    color: white;
-    mix-blend-mode: difference; /* Efeito que inverte a cor do texto com base no fundo */
+    color: #333; /* Alterado para cor escura para melhor contraste em barras vazias */
+    text-shadow: 0 0 2px rgba(255,255,255,0.8);
     padding: 0 10px;
     white-space: nowrap;
 }

@@ -3,6 +3,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
 from flask_login import login_required
 from sqlalchemy import select, func, case, desc
+from sqlalchemy.orm import joinedload
 from collections import defaultdict
 
 from backend.models.database import db
@@ -12,6 +13,7 @@ from backend.models.aluno import Aluno
 from backend.models.disciplina import Disciplina
 from backend.models.diario_classe import DiarioClasse
 from backend.models.frequencia import FrequenciaAluno
+from backend.models.user import User
 from backend.services.user_service import UserService
 from utils.decorators import admin_escola_required
 
@@ -34,8 +36,7 @@ def espelho_diarios():
         flash("Escola não encontrada.", "danger")
         return redirect(url_for('main.dashboard'))
 
-    # 1. Busca estatísticas detalhadas de faltas por Disciplina
-    # Agrupa por Aluno e Disciplina para calcular a % específica
+    # 1. Busca estatísticas
     stats_query = db.session.execute(
         select(
             Aluno,
@@ -48,6 +49,7 @@ def espelho_diarios():
         .join(FrequenciaAluno, Aluno.id == FrequenciaAluno.aluno_id)
         .join(DiarioClasse, FrequenciaAluno.diario_id == DiarioClasse.id)
         .join(Disciplina, DiarioClasse.disciplina_id == Disciplina.id)
+        .options(joinedload(Aluno.user)) 
         .where(
             Turma.school_id == school_id,
             FrequenciaAluno.presente == False
@@ -55,38 +57,32 @@ def espelho_diarios():
         .group_by(Aluno.id, Turma.nome, Disciplina.id)
     ).all()
 
-    # Dicionário para agregar dados por aluno
     alunos_map = defaultdict(lambda: {
         'obj': None, 
         'turma': '', 
         'total_global_faltas': 0, 
         'disciplinas_risco': [],
-        'max_gravidade': 0 # 0: Ok, 1: Alerta, 2: Crítico/Reprovado
+        'max_gravidade': 0
     })
 
-    # Processa os dados
     for row in stats_query:
         aluno = row[0]
         turma_nome = row[1]
         materia = row[2]
-        carga_total = row[3] or 1 # Evita divisão por zero
+        carga_total = row[3] or 1 
         faltas = row[4]
 
-        # Calcula porcentagem de faltas nesta matéria
         porcentagem = (faltas / carga_total) * 100
         
-        # Define status da matéria
         status_materia = 'normal'
+        nivel_gravidade = 0
         if porcentagem >= 30:
             status_materia = 'reprovado'
             nivel_gravidade = 2
-        elif porcentagem >= 20: # Alerta se estiver perto (20% a 29%)
+        elif porcentagem >= 20: 
             status_materia = 'alerta'
             nivel_gravidade = 1
-        else:
-            nivel_gravidade = 0
-
-        # Atualiza dados do aluno no mapa
+        
         data = alunos_map[aluno.id]
         if not data['obj']:
             data['obj'] = aluno
@@ -94,63 +90,71 @@ def espelho_diarios():
         
         data['total_global_faltas'] += faltas
         
-        # Se houver risco (Alerta ou Reprovado), adiciona à lista de destaque
         if status_materia in ['reprovado', 'alerta']:
             data['disciplinas_risco'].append({
                 'materia': materia,
                 'faltas': faltas,
-                'limite': int(carga_total * 0.3), # Quantas faltas reprovam
+                'limite': int(carga_total * 0.3), 
                 'porcentagem': round(porcentagem, 1),
                 'status': status_materia
             })
             
-            # Atualiza gravidade máxima do aluno (para ordenar cards depois)
             if nivel_gravidade > data['max_gravidade']:
                 data['max_gravidade'] = nivel_gravidade
 
-    # Transforma em lista e ordena: Reprovados primeiro, depois Alertas
     alunos_alertas = []
     for uid, data in alunos_map.items():
-        # Só adiciona no painel de cards se tiver alguma matéria em risco ou muitas faltas globais
         if data['disciplinas_risco'] or data['total_global_faltas'] >= 5:
             gravidade_str = 'moderado'
-            if data['max_gravidade'] == 2: gravidade_str = 'critico' # Reprovado
-            elif data['max_gravidade'] == 1: gravidade_str = 'atencao' # Quase lá
+            if data['max_gravidade'] == 2: gravidade_str = 'critico'
+            elif data['max_gravidade'] == 1: gravidade_str = 'atencao'
             
+            aluno_obj = data['obj']
+            nome_display = "Sem Nome"
+            matricula_display = "N/D"
+            if aluno_obj.user:
+                nome_display = aluno_obj.user.nome_completo or aluno_obj.user.nome_de_guerra or "Sem Nome"
+                matricula_display = aluno_obj.user.matricula or "N/D"
+
             alunos_alertas.append({
-                'id': data['obj'].id,
-                'nome': data['obj'].nome_completo or data['obj'].nome_de_guerra,
-                'matricula': data['obj'].matricula,
+                'id': aluno_obj.id,
+                'nome': nome_display,
+                'matricula': matricula_display,
                 'turma': data['turma'],
-                'foto': data['obj'].foto_perfil,
+                'foto': aluno_obj.foto_perfil,
                 'total_faltas': data['total_global_faltas'],
-                'riscos': data['disciplinas_risco'], # Lista de matérias com problema
+                'riscos': data['disciplinas_risco'], 
                 'gravidade': gravidade_str
             })
 
-    # Ordena: Crítico -> Atenção -> Moderado -> Total de faltas
     alunos_alertas.sort(key=lambda x: (
         {'critico': 0, 'atencao': 1, 'moderado': 2}[x['gravidade']], 
         -x['total_faltas']
     ))
 
-    # 2. Busca lista completa simples para a tabela de pesquisa geral (sem processamento pesado)
     todos_alunos_query = db.session.execute(
         select(Aluno, Turma.nome)
         .join(Turma)
+        .join(User, Aluno.user_id == User.id)
         .where(Turma.school_id == school_id)
-        .order_by(Turma.nome, Aluno.nome_completo)
+        .order_by(Turma.nome, User.nome_completo)
     ).all()
 
     todos_alunos_json = []
     for row in todos_alunos_query:
         a, t_nome = row
+        
+        nome_display = "Sem Nome"
+        matricula_display = "N/D"
+        if a.user:
+             nome_display = a.user.nome_completo or a.user.nome_de_guerra or "Sem Nome"
+             matricula_display = a.user.matricula or "N/D"
+
         todos_alunos_json.append({
             'id': a.id,
-            'nome': a.nome_completo or a.nome_de_guerra,
-            'matricula': a.matricula,
+            'nome': nome_display,
+            'matricula': matricula_display,
             'turma': t_nome,
-            # Se ele estiver na lista de alertas, pegamos as faltas de lá, senão 0
             'faltas': alunos_map[a.id]['total_global_faltas'] if a.id in alunos_map else 0
         })
 
@@ -164,37 +168,70 @@ def espelho_diarios():
 @login_required
 @admin_escola_required
 def detalhe_faltas_aluno(aluno_id):
-    aluno = db.session.get(Aluno, aluno_id)
+    # Carrega aluno com User E Turma
+    aluno = db.session.scalar(
+        select(Aluno)
+        .options(
+            joinedload(Aluno.user),
+            joinedload(Aluno.turma)
+        )
+        .where(Aluno.id == aluno_id)
+    )
     if not aluno:
         return "Aluno não encontrado", 404
 
-    # Busca faltas detalhadas
-    faltas = db.session.scalars(
+    # Busca todas as faltas (ordenadas por disciplina e data)
+    faltas_query = db.session.scalars(
         select(FrequenciaAluno)
-        .join(DiarioClasse) # Garante join
-        .join(Disciplina)   # Garante join
+        .join(DiarioClasse)
+        .join(Disciplina)
         .where(
             FrequenciaAluno.aluno_id == aluno_id,
             FrequenciaAluno.presente == False
         )
-        .order_by(FrequenciaAluno.diario_id.desc()) # Ordena por ID do diário (cronológico reverso aproximado)
+        .order_by(Disciplina.materia, DiarioClasse.data_aula.desc())
     ).all()
     
-    detalhes = []
-    for f in faltas:
-        # Acesso seguro às relações
-        disciplina_nome = "N/D"
-        data_aula = "N/D"
+    # --- AGRUPAMENTO POR DISCIPLINA ---
+    disciplinas_map = {}
+    
+    for f in faltas_query:
+        disc = f.diario.disciplina
+        if disc.id not in disciplinas_map:
+            disciplinas_map[disc.id] = {
+                'nome': disc.materia,
+                'carga_horaria': disc.carga_horaria_prevista or 1, # Evita divisão por 0
+                'total_faltas': 0,
+                'dias': []
+            }
         
-        if f.diario:
-            data_aula = f.diario.data_aula.strftime('%d/%m/%Y')
-            if f.diario.disciplina:
-                disciplina_nome = f.diario.disciplina.materia
-            
-        detalhes.append({
-            'data': data_aula,
-            'disciplina': disciplina_nome,
-            'observacao': f.observacao or ""
+        disciplinas_map[disc.id]['total_faltas'] += 1
+        disciplinas_map[disc.id]['dias'].append({
+            'data': f.diario.data_aula.strftime('%d/%m/%Y'),
+            'justificativa': f.justificativa or "Sem justificativa",
+            'id': f.id
         })
 
-    return render_template('admin/partials/_detalhe_dia_modal.html', aluno=aluno, faltas=detalhes)
+    # Processamento final para lista ordenada
+    resumo_final = []
+    for d_id, data in disciplinas_map.items():
+        percentual = (data['total_faltas'] / data['carga_horaria']) * 100
+        
+        # Define Cor e Status
+        status = 'success' # Verde (Poucas faltas)
+        if percentual >= 30: status = 'danger' # Vermelho (Reprovado)
+        elif percentual >= 20: status = 'warning' # Amarelo (Alerta)
+        
+        resumo_final.append({
+            'disciplina': data['nome'],
+            'total_faltas': data['total_faltas'],
+            'limite_reprovacao': int(data['carga_horaria'] * 0.3),
+            'percentual': round(percentual, 1),
+            'status': status,
+            'dias': data['dias']
+        })
+    
+    # Ordena: Mais críticas primeiro
+    resumo_final.sort(key=lambda x: x['percentual'], reverse=True)
+
+    return render_template('admin/partials/_detalhe_dia_modal.html', aluno=aluno, resumo=resumo_final)

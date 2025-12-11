@@ -141,8 +141,8 @@
     </div>
 </div>
 
-<div class="modal fade" id="modalDetalhesFaltas" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
+<div class="modal fade" id="modalDetalhesFaltas" tabindex="-1" aria-labelledby="modalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content" id="modalConteudo">
             </div>
     </div>
@@ -150,6 +150,7 @@
 
 <script>
     const todosAlunosData = {{ todos_alunos|tojson }};
+    let modalInstance = null; // Instância única do modal
 
     function renderizarTabelaCompleta() {
         const tbody = document.getElementById('tabelaTodosAlunos');
@@ -181,13 +182,11 @@
     function filtrarAlunos() {
         const termo = document.getElementById('searchAluno').value.toLowerCase();
         
-        // Filtra Cards
         document.querySelectorAll('.aluno-card-item').forEach(card => {
             const texto = card.getAttribute('data-search').toLowerCase();
             card.style.display = texto.includes(termo) ? 'block' : 'none';
         });
 
-        // Filtra e Abre Tabela
         const rows = document.querySelectorAll('.aluno-row-item');
         const collapseElement = document.getElementById('listaCompleta');
         const bsCollapse = new bootstrap.Collapse(collapseElement, {toggle: false});
@@ -204,8 +203,22 @@
     }
 
     function verDetalhesFaltas(alunoId) {
-        const modal = new bootstrap.Modal(document.getElementById('modalDetalhesFaltas'));
+        const modalEl = document.getElementById('modalDetalhesFaltas');
         const content = document.getElementById('modalConteudo');
+        
+        // --- SOLUÇÃO PARA TELA PRETA/OVERLAY ---
+        // Move o modal para o final do <body> para garantir que o z-index funcione
+        if (modalEl.parentNode !== document.body) {
+            document.body.appendChild(modalEl);
+        }
+
+        // Cria a instância apenas uma vez
+        if (!modalInstance) {
+            modalInstance = new bootstrap.Modal(modalEl, {
+                backdrop: true,
+                keyboard: true
+            });
+        }
         
         content.innerHTML = `
             <div class="modal-body text-center py-5">
@@ -213,19 +226,23 @@
                 <p class="mt-2 text-muted">Carregando dossiê do aluno...</p>
             </div>
         `;
-        modal.show();
+        
+        modalInstance.show();
 
         fetch(`/admin-escola/detalhe-faltas/${alunoId}`)
-            .then(r => r.text())
+            .then(r => {
+                if (!r.ok) throw new Error('Erro na requisição');
+                return r.text();
+            })
             .then(html => content.innerHTML = html)
-            .catch(err => content.innerHTML = '<div class="p-3 text-danger">Erro ao carregar dados.</div>');
+            .catch(err => content.innerHTML = '<div class="p-3 text-danger text-center">Erro ao carregar dados. Tente novamente.</div>');
     }
 
     document.addEventListener('DOMContentLoaded', renderizarTabelaCompleta);
 </script>
 
 <style>
-    /* Cores de Gravidade baseadas em % */
+    /* Cores de Gravidade */
     .alert-card-critico { /* >= 30% - REPROVADO */
         border-left: 5px solid #dc3545 !important;
         background: linear-gradient(to right, #fff5f5, #fff);

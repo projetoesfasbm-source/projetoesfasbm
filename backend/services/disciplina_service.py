@@ -4,7 +4,7 @@ from collections import defaultdict
 from sqlalchemy import select, func, and_, or_
 from sqlalchemy.exc import IntegrityError
 from flask import current_app
-from datetime import date
+from datetime import date, timedelta
 
 from ..models.database import db
 from ..models.disciplina import Disciplina
@@ -15,8 +15,47 @@ from ..models.turma import Turma
 from ..models.ciclo import Ciclo
 from ..models.horario import Horario
 from ..models.semana import Semana
+from ..models.diario_classe import DiarioClasse
 
 class DisciplinaService:
+    
+    # --- MÉTODOS DE CONSULTA (RESTAURADOS) ---
+    @staticmethod
+    def get_all_disciplinas():
+        """Retorna todas as disciplinas cadastradas no sistema."""
+        return db.session.scalars(select(Disciplina).order_by(Disciplina.materia)).all()
+
+    @staticmethod
+    def get_disciplinas_by_turma(turma_id):
+        """Retorna disciplinas de uma turma específica."""
+        return db.session.scalars(
+            select(Disciplina)
+            .where(Disciplina.turma_id == turma_id)
+            .order_by(Disciplina.materia)
+        ).all()
+
+    @staticmethod
+    def get_disciplinas_by_school(school_id):
+        """
+        Busca todas as disciplinas pertencentes a uma escola específica,
+        juntando com as turmas para filtrar pelo school_id.
+        """
+        if not school_id:
+            current_app.logger.warn("Tentativa de buscar disciplinas sem um school_id.")
+            return []
+            
+        try:
+            return db.session.scalars(
+                select(Disciplina)
+                .join(Disciplina.turma)
+                .where(Turma.school_id == school_id)
+                .order_by(Turma.nome, Disciplina.materia)
+            ).all()
+        except Exception as e:
+            current_app.logger.error(f"Erro ao buscar disciplinas por escola: {e}")
+            return []
+
+    # --- MÉTODOS DE ESCRITA (CRUD) ---
     @staticmethod
     def create_disciplina(data, school_id):
         materia = data.get('materia')
@@ -94,30 +133,22 @@ class DisciplinaService:
             current_app.logger.error(f"Erro ao atualizar disciplina: {e}")
             return False, 'Ocorreu um erro interno ao atualizar a disciplina.'
 
-    # --- FUNÇÃO ADICIONADA ---
-    # Esta função busca todas as disciplinas de UMA escola, corrigindo o vazamento
-    # de dados que acontece no Quadro de Horário.
     @staticmethod
-    def get_disciplinas_by_school(school_id):
-        """
-        Busca todas as disciplinas pertencentes a uma escola específica,
-        juntando com as turmas para filtrar pelo school_id.
-        """
-        if not school_id:
-            current_app.logger.warn("Tentativa de buscar disciplinas sem um school_id.")
-            return []
-            
+    def delete_disciplina(disciplina_id):
+        disciplina = db.session.get(Disciplina, disciplina_id)
+        if not disciplina:
+            return False, 'Disciplina não encontrada.'
+
         try:
-            return db.session.scalars(
-                select(Disciplina)
-                .join(Disciplina.turma)
-                .where(Turma.school_id == school_id)
-                .order_by(Turma.nome, Disciplina.materia)
-            ).all()
+            db.session.delete(disciplina)
+            db.session.commit()
+            return True, 'Disciplina e todos os seus registros associados foram excluídos com sucesso!'
         except Exception as e:
-            current_app.logger.error(f"Erro ao buscar disciplinas por escola: {e}")
-            return []
-    # --- FIM DA FUNÇÃO ADICIONADA ---
+            db.session.rollback()
+            current_app.logger.error(f"Erro ao excluir disciplina: {e}")
+            return False, 'Ocorreu um erro interno ao excluir a disciplina.'
+
+    # --- MÉTODOS DE PROGRESSO E SINCRONIZAÇÃO ---
 
     @staticmethod
     def get_dados_progresso(disciplina, pelotao_nome=None):
@@ -148,6 +179,8 @@ class DisciplinaService:
 
         aulas_concluidas = db.session.scalar(query) or 0
         
+        # O total concluído é a soma do que foi agendado e passado + o que foi inserido manualmente (carga cumprida)
+        # Nota: Se a carga_cumprida for usada apenas para correção manual, isso está ok.
         total_concluido = aulas_concluidas + disciplina.carga_horaria_cumprida
         carga_horaria_total = disciplina.carga_horaria_prevista
         
@@ -160,18 +193,75 @@ class DisciplinaService:
             'previsto': carga_horaria_total,
             'percentual': min(percentual, 100)
         }
-    
-    @staticmethod
-    def delete_disciplina(disciplina_id):
-        disciplina = db.session.get(Disciplina, disciplina_id)
-        if not disciplina:
-            return False, 'Disciplina não encontrada.'
 
+    @staticmethod
+    def sincronizar_progresso_aulas(school_id=None):
+        """
+        Recalcula a 'carga_horaria_cumprida' de todas as disciplinas
+        baseado nos Diários de Classe lançados e na duração cadastrada no Horário.
+        """
         try:
-            db.session.delete(disciplina)
+            # 1. Busca todas as disciplinas (opcionalmente filtra por escola)
+            query = select(Disciplina)
+            if school_id:
+                # Assumindo que Disciplina -> Turma -> School
+                from ..models.turma import Turma
+                query = query.join(Turma).where(Turma.school_id == school_id)
+            
+            disciplinas = db.session.scalars(query).all()
+            
+            updates_count = 0
+            
+            dias_map = {0: 'segunda', 1: 'terca', 2: 'quarta', 3: 'quinta', 4: 'sexta', 5: 'sabado', 6: 'domingo'}
+
+            for disciplina in disciplinas:
+                # 2. Busca todos os diários lançados para esta disciplina
+                diarios = db.session.scalars(
+                    select(DiarioClasse)
+                    .where(DiarioClasse.disciplina_id == disciplina.id)
+                ).all()
+                
+                # Agrupa datas unicas para evitar duplicidade se houver multiplos registros no mesmo dia
+                datas_com_aula = set(d.data_aula for d in diarios)
+                
+                nova_carga_calculada = 0
+                
+                for data_aula in datas_com_aula:
+                    dia_semana_str = dias_map.get(data_aula.weekday())
+                    
+                    # 3. Busca a duração prevista no Horário para aquele dia específico
+                    horarios_do_dia = db.session.scalars(
+                        select(Horario)
+                        .join(Semana)
+                        .where(
+                            Horario.disciplina_id == disciplina.id,
+                            Horario.dia_semana == dia_semana_str,
+                            Semana.data_inicio <= data_aula,
+                            Semana.data_fim >= data_aula
+                        )
+                    ).all()
+                    
+                    horas_do_dia = sum(h.duracao for h in horarios_do_dia)
+                    
+                    # Se não houver horário cadastrado na grade (aula extra ou erro),
+                    # assumimos 2 tempos por padrão para não zerar o esforço do instrutor.
+                    if horas_do_dia == 0:
+                         horas_do_dia = 2 
+                    
+                    nova_carga_calculada += horas_do_dia
+
+                # 4. Atualiza no banco se mudou (Substitui o valor manual pelo calculado real)
+                # Nota: Isso vai sobrescrever ajustes manuais feitos no campo 'carga_horaria_cumprida'
+                # Se você usa esse campo para "saldo inicial", a lógica deveria ser +=. 
+                # Aqui estamos assumindo que "sincronizar" significa "recontar do zero baseado nos fatos".
+                if disciplina.carga_horaria_cumprida != nova_carga_calculada:
+                    disciplina.carga_horaria_cumprida = nova_carga_calculada
+                    db.session.add(disciplina)
+                    updates_count += 1
+            
             db.session.commit()
-            return True, 'Disciplina e todos os seus registros associados foram excluídos com sucesso!'
+            return True, f"{updates_count} disciplinas tiveram seu progresso recalculado."
+            
         except Exception as e:
             db.session.rollback()
-            current_app.logger.error(f"Erro ao excluir disciplina: {e}")
-            return False, 'Ocorreu um erro interno ao excluir a disciplina.'
+            return False, str(e)
