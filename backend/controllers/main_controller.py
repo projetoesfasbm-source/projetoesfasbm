@@ -94,6 +94,16 @@ def dashboard():
     )
 
 
+@main_bp.route('/safebrowser')
+@login_required
+def safebrowser():
+    """
+    Página com instruções e downloads do SafeExamBrowser.
+    Acessível a todos os usuários logados.
+    """
+    return render_template('safebrowser.html')
+
+
 @main_bp.route('/pre-cadastro', methods=['GET', 'POST'])
 @login_required
 @admin_or_programmer_required

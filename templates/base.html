@@ -183,7 +183,9 @@
             </div>
             <nav class="sidebar-nav">
                 <a href="{{ url_for('main.dashboard') }}" class="nav-link {% if request.endpoint == 'main.dashboard' %}active{% endif %}"><div class="nav-icon">🏠</div> Início</a>
+                
                 <div class="nav-separator">GERAL</div>
+                <a href="{{ url_for('main.safebrowser') }}" class="nav-link {% if request.endpoint == 'main.safebrowser' %}active{% endif %}"><div class="nav-icon">🛡️</div> SafeBrowser</a>
                 <a href="{{ url_for('aluno.listar_alunos') }}" class="nav-link {% if request.endpoint and 'aluno.' in request.endpoint %}active{% endif %}"><div class="nav-icon">👥</div> Alunos</a>
                 <a href="{{ url_for('instrutor.listar_instrutores') }}" class="nav-link {% if request.endpoint and 'instrutor.' in request.endpoint %}active{% endif %}"><div class="nav-icon">🎓</div> Instrutores</a>
                 <a href="{{ url_for('turma.listar_turmas') }}" class="nav-link {% if request.endpoint and 'turma.' in request.endpoint %}active{% endif %}"><div class="nav-icon">🏫</div> Turmas</a>
