@@ -42,39 +42,64 @@ class DeleteForm(FlaskForm):
 def index():
     return gerenciar_semanas(None)
 
-@semana_bp.route('/gerenciar', defaults={'ciclo_id': None}, methods=['GET', 'POST'])
-@semana_bp.route('/gerenciar/<int:ciclo_id>', methods=['GET', 'POST'])
+@semana_bp.route('/gerenciar', defaults={'ciclo_id': None}, methods=['GET'])
+@semana_bp.route('/gerenciar/<int:ciclo_id>', methods=['GET'])
 @login_required
 @school_admin_or_programmer_required
 def gerenciar_semanas(ciclo_id):
     form = AddSemanaForm()
+    delete_form = DeleteForm()
     
-    # Carregar ciclos para o select do formulário
+    # Carregar ciclos para o select do formulário e filtro lateral
     ciclos = db.session.execute(select(Ciclo).order_by(Ciclo.nome)).scalars().all()
     form.ciclo_id.choices = [(c.id, c.nome) for c in ciclos]
 
-    # Lógica de Filtro por Ciclo
+    # Lógica de Filtro por Ciclo para listar as semanas
     query = select(Semana).order_by(Semana.data_inicio.desc())
+    
     if ciclo_id:
         query = query.where(Semana.ciclo_id == ciclo_id)
         # Pré-seleciona o ciclo no formulário se estiver filtrando
         form.ciclo_id.data = ciclo_id
+    elif ciclos:
+        # Se não tiver ciclo selecionado mas existirem ciclos, seleciona o primeiro para não ficar vazio
+        # Ou mantém None e exibe msg de "Selecione um ciclo"
+        pass
     
     semanas = db.session.execute(query).scalars().all()
+
+    return render_template('gerenciar_semanas.html', 
+                           semanas=semanas, 
+                           add_form=form, 
+                           delete_form=delete_form,
+                           todos_os_ciclos=ciclos, 
+                           ciclo_selecionado_id=ciclo_id)
+
+@semana_bp.route('/adicionar', methods=['POST'])
+@login_required
+@school_admin_or_programmer_required
+def adicionar_semana():
+    form = AddSemanaForm()
+    # Recarrega choices para validação
+    ciclos = db.session.execute(select(Ciclo).order_by(Ciclo.nome)).scalars().all()
+    form.ciclo_id.choices = [(c.id, c.nome) for c in ciclos]
 
     if form.validate_on_submit():
         success, message = SemanaService.add_semana(form.data)
         if success:
             flash(message, 'success')
-            return redirect(url_for('semana.gerenciar_semanas', ciclo_id=ciclo_id))
         else:
             flash(message, 'danger')
-
-    return render_template('gerenciar_semanas.html', 
-                           semanas=semanas, 
-                           form=form, 
-                           ciclos=ciclos, 
-                           ciclo_selecionado=ciclo_id)
+        return redirect(url_for('semana.gerenciar_semanas', ciclo_id=form.ciclo_id.data))
+    
+    # Em caso de erro de validação
+    for field, errors in form.errors.items():
+        for error in errors:
+            flash(f"Erro em {getattr(form, field).label.text}: {error}", 'danger')
+            
+    # Tenta recuperar o ciclo ID do form para redirecionar corretamente
+    ciclo_id = request.form.get('ciclo_id')
+    return redirect(url_for('semana.gerenciar_semanas', ciclo_id=ciclo_id))
 
 @semana_bp.route('/editar/<int:semana_id>', methods=['GET', 'POST'])
 @login_required
@@ -106,7 +131,7 @@ def editar_semana(semana_id):
         flash('Semana atualizada com sucesso!', 'success')
         return redirect(url_for('semana.gerenciar_semanas', ciclo_id=semana.ciclo_id))
 
-    return render_template('editar_semana.html', semana=semana)
+    return render_template('editar_semana.html', semana=semana, form=form)
 
 
 @semana_bp.route('/deletar/<int:semana_id>', methods=['POST'])

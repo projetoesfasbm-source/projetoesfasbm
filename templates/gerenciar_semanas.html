@@ -19,11 +19,11 @@
                     <a href="{{ url_for('semana.gerenciar_semanas', ciclo_id=ciclo.id) }}" class="ciclo-name">{{ ciclo.nome }}</a>
                     <form method="POST" action="{{ url_for('semana.deletar_ciclo', ciclo_id=ciclo.id) }}" onsubmit="return confirm('Tem certeza que deseja deletar o ciclo \'{{ ciclo.nome }}\'? Esta ação não pode ser desfeita.');" style="display: inline;">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="btn btn-sm btn-danger">Excluir</button>
+                        <button type="submit" class="btn btn-sm btn-danger"><i class="fas fa-trash"></i></button>
                     </form>
                 </div>
             {% else %}
-                <p>Nenhum ciclo criado.</p>
+                <p class="text-muted p-3">Nenhum ciclo criado.</p>
             {% endfor %}
         </div>
         <hr>
@@ -33,57 +33,97 @@
                 <label for="nome_ciclo"><strong>Novo Ciclo</strong></label>
                 <input type="text" name="nome_ciclo" class="form-control" placeholder="Ex: Ciclo 1, Ciclo 2025/2" required>
             </div>
-            <button type="submit" class="btn btn-success" style="width: 100%;">+ Adicionar Ciclo</button>
+            <button type="submit" class="btn btn-success w-100 mt-2">+ Adicionar Ciclo</button>
         </form>
     </div>
 
     <div class="table-container">
-        <div class="table-header">
-            <h3>Semanas do Ciclo Selecionado</h3>
-        </div>
         
-        {% if ciclo_selecionado_id %}
-            <form method="POST" action="{{ url_for('semana.adicionar_semana') }}" style="padding-bottom: 1.5rem; border-bottom: 1px solid var(--color-border); margin-bottom: 1.5rem;">
+        <div class="card p-3 mb-4 bg-light border-0 shadow-sm">
+            <h5 class="mb-3 text-primary fw-bold"><i class="fas fa-plus-circle"></i> Adicionar Nova Semana</h5>
+            
+            <form method="POST" action="{{ url_for('semana.adicionar_semana') }}">
                 {{ add_form.hidden_tag() }}
-                <input type="hidden" name="ciclo_id" value="{{ ciclo_selecionado_id }}">
+                
+                {% if ciclo_selecionado_id %}
+                    <input type="hidden" name="ciclo_id" value="{{ ciclo_selecionado_id }}">
+                    <div class="mb-3">
+                        <small class="text-muted text-uppercase fw-bold">Adicionando ao Ciclo:</small><br>
+                        <span class="badge bg-primary fs-6">
+                            {% for c in todos_os_ciclos if c.id == ciclo_selecionado_id %}{{ c.nome }}{% endfor %}
+                        </span>
+                    </div>
+                {% else %}
+                    <div class="form-group mb-3">
+                        <label class="fw-bold">Selecione o Ciclo:</label>
+                        {{ add_form.ciclo_id(class="form-select") }}
+                    </div>
+                {% endif %}
 
                 <div class="form-grid">
                     <div class="form-group">
-                        {{ add_form.nome.label }}
+                        {{ add_form.nome.label(class="form-label fw-bold") }}
                         {{ add_form.nome(class="form-control", placeholder="Ex: Semana 1") }}
                     </div>
                     <div class="form-group">
-                        {{ add_form.data_inicio.label }}
+                        {{ add_form.data_inicio.label(class="form-label fw-bold") }}
                         {{ add_form.data_inicio(class="form-control") }}
                     </div>
                     <div class="form-group">
-                        {{ add_form.data_fim.label }}
+                        {{ add_form.data_fim.label(class="form-label fw-bold") }}
                         {{ add_form.data_fim(class="form-control") }}
                     </div>
                 </div>
 
-                <div class="visibility-options">
-                    <div class="period-group">
-                        <strong>Períodos Extras:</strong>
-                        <label class="checkbox-item">{{ add_form.mostrar_periodo_13() }} 13º</label>
-                        <label class="checkbox-item">{{ add_form.mostrar_periodo_14() }} 14º</label>
-                        <label class="checkbox-item">{{ add_form.mostrar_periodo_15() }} 15º</label>
+                <div class="visibility-options mt-3 p-3 bg-white rounded border">
+                    <div class="mb-2 border-bottom pb-1">
+                        <strong class="text-secondary small">CONFIGURAÇÕES EXTRAS</strong>
                     </div>
-                    <div class="weekend-container">
-                        <div class="weekend-group">
-                            <label class="checkbox-item">{{ add_form.mostrar_sabado(data_target="periodos_sabado") }} Habilitar Sábado</label>
-                            {{ add_form.periodos_sabado(class="form-control period-input", placeholder="Nº Períodos", disabled=True) }}
+                    
+                    <div class="d-flex flex-wrap gap-3 mb-3">
+                         <div class="form-check">
+                            {{ add_form.mostrar_periodo_13(class="form-check-input") }}
+                            <label class="form-check-label small" for="mostrar_periodo_13">13º Período</label>
                         </div>
-                        <div class="weekend-group">
-                            <label class="checkbox-item">{{ add_form.mostrar_domingo(data_target="periodos_domingo") }} Habilitar Domingo</label>
-                            {{ add_form.periodos_domingo(class="form-control period-input", placeholder="Nº Períodos", disabled=True) }}
+                        <div class="form-check">
+                            {{ add_form.mostrar_periodo_14(class="form-check-input") }}
+                            <label class="form-check-label small" for="mostrar_periodo_14">14º Período</label>
+                        </div>
+                        <div class="form-check">
+                            {{ add_form.mostrar_periodo_15(class="form-check-input") }}
+                            <label class="form-check-label small" for="mostrar_periodo_15">15º Período</label>
+                        </div>
+                    </div>
+
+                    <div class="d-flex flex-wrap gap-4 align-items-center">
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="form-check">
+                                {{ add_form.mostrar_sabado(class="form-check-input", data_target="periodos_sabado") }}
+                                <label class="form-check-label small fw-bold" for="mostrar_sabado">Habilitar Sábado</label>
+                            </div>
+                            {{ add_form.periodos_sabado(class="form-control form-control-sm text-center", style="width: 70px;", placeholder="Qtd", disabled=True) }}
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="form-check">
+                                {{ add_form.mostrar_domingo(class="form-check-input", data_target="periodos_domingo") }}
+                                <label class="form-check-label small fw-bold" for="mostrar_domingo">Habilitar Domingo</label>
+                            </div>
+                            {{ add_form.periodos_domingo(class="form-control form-control-sm text-center", style="width: 70px;", placeholder="Qtd", disabled=True) }}
                         </div>
                     </div>
                 </div>
 
-                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">+ Adicionar Semana ao Ciclo</button>
+                <button type="submit" class="btn btn-primary w-100 fw-bold mt-3 shadow-sm">
+                    <i class="fas fa-plus me-2"></i> Confirmar e Adicionar Semana
+                </button>
             </form>
-            
+        </div>
+
+        <div class="table-header mt-4">
+            <h3>Semanas Cadastradas</h3>
+        </div>
+        
+        {% if ciclo_selecionado_id %}
             <div class="table-responsive">
                 <table class="table-styled">
                     <thead>
@@ -97,60 +137,59 @@
                     <tbody>
                         {% for semana in semanas %}
                         <tr>
-                            <td>{{ semana.nome }}</td>
+                            <td><strong>{{ semana.nome }}</strong></td>
                             <td>{{ semana.data_inicio.strftime('%d/%m/%Y') }}</td>
                             <td>{{ semana.data_fim.strftime('%d/%m/%Y') }}</td>
                             <td class="text-right actions-group">
-                                <a href="{{ url_for('semana.editar_semana', semana_id=semana.id) }}" class="btn btn-sm btn-warning">Editar</a>
-                                <form method="POST" action="{{ url_for('semana.deletar_semana', semana_id=semana.id) }}" onsubmit="return confirm('Tem certeza?');">
+                                <a href="{{ url_for('semana.editar_semana', semana_id=semana.id) }}" class="btn btn-sm btn-warning" title="Editar"><i class="fas fa-edit"></i></a>
+                                <form method="POST" action="{{ url_for('semana.deletar_semana', semana_id=semana.id) }}" onsubmit="return confirm('Tem certeza?');" style="display:inline;">
                                     {{ delete_form.hidden_tag() }}
-                                    <button type="submit" class="btn btn-sm btn-danger">Deletar</button>
+                                    <button type="submit" class="btn btn-sm btn-danger" title="Excluir"><i class="fas fa-trash"></i></button>
                                 </form>
                             </td>
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="4" class="text-center">Nenhuma semana cadastrada para este ciclo.</td>
+                            <td colspan="4" class="text-center text-muted py-4">Nenhuma semana cadastrada para este ciclo.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
         {% else %}
-            <div class="empty-state">
-                <p>Selecione ou crie um ciclo à esquerda para gerenciar suas semanas.</p>
+            <div class="alert alert-info text-center mt-3">
+                <i class="fas fa-arrow-left me-2"></i> Selecione um ciclo na lista à esquerda para visualizar e gerenciar suas semanas.
             </div>
         {% endif %}
     </div>
 </div>
 
 <style>
-.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
-.visibility-options { display: flex; flex-wrap: wrap; gap: 1rem 2rem; align-items: center; margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--color-border); }
-.period-group { display: flex; align-items: center; gap: 1rem; }
-.checkbox-item { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; }
-.weekend-container { display: flex; flex-wrap: wrap; gap: 1.5rem; }
-.weekend-group { display: flex; align-items: center; gap: 0.5rem; }
-.period-input { width: 120px; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; }
 .management-grid { display: grid; grid-template-columns: 1fr 2fr; gap: 2rem; align-items: start; }
+@media (max-width: 992px) { .management-grid { grid-template-columns: 1fr; } }
 .ciclos-list { display: flex; flex-direction: column; gap: 0.5rem; }
-.ciclo-item { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; border-radius: 6px; transition: background-color 0.2s; }
-.ciclo-item.active { background-color: var(--color-primary-light); }
+.ciclo-item { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; border-radius: 6px; transition: all 0.2s; border: 1px solid #e9ecef; }
+.ciclo-item.active { background-color: var(--color-primary); border-color: var(--color-primary); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
 .ciclo-item.active .ciclo-name { color: white; font-weight: bold; }
-.ciclo-item:hover { background-color: #f1f5f9; }
-.ciclo-name { text-decoration: none; color: inherit; flex-grow: 1; }
+.ciclo-item:hover:not(.active) { background-color: #f8f9fa; border-color: #dee2e6; }
+.ciclo-name { text-decoration: none; color: #495057; flex-grow: 1; padding: 0 10px; display: block; }
 </style>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Lógica para habilitar/desabilitar inputs de sábado e domingo
     document.querySelectorAll('input[type="checkbox"][data-target]').forEach(checkbox => {
-        checkbox.addEventListener('change', function() {
-            const targetInput = document.querySelector(`input[name="${this.dataset.target}"]`);
-            targetInput.disabled = !this.checked;
-            if (!this.checked) {
-                targetInput.value = '';
+        const toggleInput = () => {
+            const targetName = checkbox.dataset.target;
+            const targetInput = document.querySelector(`input[name="${targetName}"]`);
+            if(targetInput) {
+                targetInput.disabled = !checkbox.checked;
+                if (!checkbox.checked) targetInput.value = '';
             }
-        });
+        };
+        checkbox.addEventListener('change', toggleInput);
+        toggleInput(); // Executa ao carregar para definir estado inicial
     });
 });
 </script>
