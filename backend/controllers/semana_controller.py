@@ -194,7 +194,7 @@ def salvar_prioridade(semana_id):
         data = request.get_json()
         semana.priority_active = data.get('status', False)
         
-        # Atualiza a lista de NOMES (strings)
+        # Atualiza a lista de NOMES (strings) - Certifique-se que o front envia uma lista de strings
         disciplinas = data.get('disciplinas', [])
         semana.priority_disciplines = json.dumps(disciplinas)
 

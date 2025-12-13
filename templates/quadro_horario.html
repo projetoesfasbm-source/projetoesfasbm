@@ -21,8 +21,11 @@
         <div class="mt-2 ms-5 ps-2">
             <strong>Disciplinas Permitidas:</strong>
             <ul class="mb-0 mt-1">
+                {# Loop seguro sobre a lista de strings #}
                 {% for nome in priority_allowed_names %}
                     <li>{{ nome }}</li>
+                {% else %}
+                    <li><em>Nenhuma disciplina selecionada.</em></li>
                 {% endfor %}
             </ul>
         </div>
@@ -36,34 +39,45 @@
             <p>Selecione um pelotão, ciclo e semana para visualizar o horário correspondente.</p>
         </div>
         
-        {% if semana_selecionada and current_user.role in ['programador', 'admin_escola', 'instrutor', 'super_admin'] %}
-        <div class="controls-group d-flex gap-2">
+        {# --- LÓGICA CORRIGIDA: Botões visíveis mesmo sem semana selecionada --- #}
+        <div class="controls-group d-flex gap-2 flex-wrap justify-content-end align-items-center">
+            
+            {# 1. BOTÃO DE GERENCIAR SEMANAS (SEMPRE VISÍVEL PARA ADMINS) #}
             {% if current_user.role in ['programador', 'admin_escola', 'super_admin'] %}
-            
-            <button type="button" class="btn {% if priority_active %}btn-danger text-white{% else %}btn-warning{% endif %} fw-bold shadow-sm" 
-                    data-bs-toggle="modal" data-bs-target="#priorityModal">
-                <i class="fas fa-star me-1"></i> 
-                {% if priority_active %}Prioridade ATIVA{% else %}Configurar Prioridade{% endif %}
-            </button>
+                <a href="{{ url_for('semana.gerenciar_semanas') }}" class="btn btn-dark shadow-sm fw-bold">
+                    <i class="fas fa-calendar-plus me-1"></i> Gerenciar Semanas / Ciclos
+                </a>
+            {% endif %}
 
-            <a href="{{ url_for('horario.exportar_pdf', pelotao=pelotao_selecionado, semana_id=semana_selecionada.id) }}" class="btn btn-danger" target="_blank">
-                <i class="fas fa-file-pdf me-1"></i> PDF
-            </a>
-            {% endif %}
-            
-            {% if can_schedule_in_this_turma %}
-            <button type="button" class="btn btn-primary" onclick="openConfirmationModal()">
-                Agendar/Desmarcar Aulas
-            </button>
-            {% else %}
-                {% if current_user.role == 'instrutor' %}
-                <button class="btn btn-secondary" disabled title="Você não tem permissão nesta turma ou o modo prioridade está ativo para outras disciplinas.">
-                    <i class="fas fa-lock"></i> Agendamento Bloqueado
-                </button>
+            {# 2. BOTÕES QUE DEPENDEM DE UMA SEMANA JÁ EXISTIR #}
+            {% if semana_selecionada %}
+                
+                {% if current_user.role in ['programador', 'admin_escola', 'super_admin'] %}
+                    <button type="button" class="btn {% if priority_active %}btn-danger text-white{% else %}btn-warning{% endif %} fw-bold shadow-sm" 
+                            data-bs-toggle="modal" data-bs-target="#priorityModal">
+                        <i class="fas fa-star me-1"></i> 
+                        {% if priority_active %}Prioridade ATIVA{% else %}Configurar Prioridade{% endif %}
+                    </button>
+
+                    <a href="{{ url_for('horario.exportar_pdf', pelotao=pelotao_selecionado, semana_id=semana_selecionada.id) }}" class="btn btn-danger" target="_blank">
+                        <i class="fas fa-file-pdf me-1"></i> PDF
+                    </a>
                 {% endif %}
-            {% endif %}
+                
+                {% if can_schedule_in_this_turma %}
+                    <button type="button" class="btn btn-primary" onclick="openConfirmationModal()">
+                        Agendar/Desmarcar Aulas
+                    </button>
+                {% else %}
+                    {% if current_user.role == 'instrutor' %}
+                        <button class="btn btn-secondary" disabled title="Você não tem permissão nesta turma ou o modo prioridade está ativo para outras disciplinas.">
+                            <i class="fas fa-lock"></i> Agendamento Bloqueado
+                        </button>
+                    {% endif %}
+                {% endif %}
+
+            {% endif %} {# Fim do if semana_selecionada #}
         </div>
-        {% endif %}
     </div>
 
     <div class="filters-bar card p-3 mb-4 shadow-sm">
@@ -85,6 +99,8 @@
                         {{ semana.nome }} ({{ semana.data_inicio.strftime('%d/%m') }} a {{ semana.data_fim.strftime('%d/%m') }})
                         {% if semana.priority_active %} 🔒 {% endif %}
                     </option>
+                    {% else %}
+                        <option value="">Nenhuma semana disponível</option>
                     {% endfor %}
                 </select>
             </div>
@@ -110,7 +126,15 @@
         <div class="empty-state">
             <div class="empty-icon">📅</div>
             <h3>Nenhum horário para exibir</h3>
-            <p>Selecione um pelotão e uma semana válida para carregar a grade horária.</p>
+            
+            {% if current_user.role in ['programador', 'admin_escola', 'super_admin'] and not todas_as_semanas %}
+                <p class="text-danger">Não há semanas cadastradas neste ciclo.</p>
+                <a href="{{ url_for('semana.gerenciar_semanas') }}" class="btn btn-primary mt-3 btn-lg">
+                    <i class="fas fa-plus-circle"></i> Criar Primeira Semana
+                </a>
+            {% else %}
+                <p>Selecione um pelotão e uma semana válida para carregar a grade horária.</p>
+            {% endif %}
         </div>
     {% else %}
         <div class="table-wrapper">
@@ -147,15 +171,10 @@
                             {% endfor %}
                         </tr>
                         
-                        {# Intervalos Corrigidos para alinhar com a lógica de 3 períodos #}
-                        {# Intervalo 1: Após 3º Período (idx 2) #}
-                        {% if row_idx == 2 %}<tr class="table-secondary"><td colspan="6" class="py-1 text-center small fw-bold text-uppercase">{{ intervalos.intervalo_1 }}</td></tr>{% endif %}
-                        
-                        {# Almoço: Após 6º Período (idx 5) #}
-                        {% if row_idx == 5 %}<tr class="table-secondary"><td colspan="6" class="py-1 text-center small fw-bold text-uppercase">{{ intervalos.almoco }}</td></tr>{% endif %}
-                        
-                        {# Intervalo 2: Após 9º Período (idx 8) - CORREÇÃO CRÍTICA AQUI (Era 9) #}
-                        {% if row_idx == 8 %}<tr class="table-secondary"><td colspan="6" class="py-1 text-center small fw-bold text-uppercase">{{ intervalos.intervalo_2 }}</td></tr>{% endif %}
+                        {# Intervalos - Alterados para cor mais escura (bg-secondary) #}
+                        {% if row_idx == 2 %}<tr><td colspan="6" class="bg-secondary text-white py-1 text-center small fw-bold text-uppercase">{{ intervalos.intervalo_1 }}</td></tr>{% endif %}
+                        {% if row_idx == 5 %}<tr><td colspan="6" class="bg-secondary text-white py-1 text-center small fw-bold text-uppercase">{{ intervalos.almoco }}</td></tr>{% endif %}
+                        {% if row_idx == 8 %}<tr><td colspan="6" class="bg-secondary text-white py-1 text-center small fw-bold text-uppercase">{{ intervalos.intervalo_2 }}</td></tr>{% endif %}
                         
                         {% endif %}
                     {% endfor %}
@@ -266,7 +285,7 @@
     </div>
     {% endif %}
 
-    {# --- MODAL DE PRIORIDADE (LISTANDO NOMES ÚNICOS) --- #}
+    {# --- MODAL DE PRIORIDADE --- #}
     {% if semana_selecionada and current_user.role in ['programador', 'admin_escola', 'super_admin'] %}
     <div class="modal fade" id="priorityModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog">
@@ -276,7 +295,6 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    
                     <div class="mb-4">
                         <label class="form-label text-muted fw-bold small">CONFIGURAÇÃO PARA A SEMANA:</label>
                         <div class="input-group">
@@ -303,9 +321,9 @@
                         <label class="form-label fw-bold mb-2">Disciplinas Permitidas (Nomes Únicos):</label>
                         <div class="border rounded p-2 bg-white" style="max-height: 250px; overflow-y: auto;">
                             {% if all_materias_names %}
+                                {# Loop seguro sobre a lista de strings (nomes das matérias) #}
                                 {% for materia_nome in all_materias_names %}
                                 <div class="form-check border-bottom py-2 position-relative">
-                                    {# Value = Nome da Matéria #}
                                     <input class="form-check-input priority-disc-check" type="checkbox" 
                                            value="{{ materia_nome }}" id="disc-{{ loop.index }}"
                                            {% if materia_nome in priority_allowed_names %}checked{% endif %}>
@@ -348,7 +366,6 @@
                 });
             }
 
-            // Atualização dinâmica dos links no modal de confirmação
             const modalSemanaSelect = document.getElementById('modal-semana-selector');
             const weekLinks = document.querySelectorAll('.dynamic-week-link');
 
@@ -357,7 +374,6 @@
                     const newSemanaId = this.value;
                     weekLinks.forEach(link => {
                         let currentHref = link.getAttribute('href');
-                        // Substitui o ID da semana na URL (espera padrão /editar/PELOTAO/ID_SEMANA/ID_CICLO)
                         const regex = /(.*\/editar\/[^\/]+\/)(\d+)(\/\d+)/;
                         if (regex.test(currentHref)) {
                             const newHref = currentHref.replace(regex, `$1${newSemanaId}$3`);
@@ -367,7 +383,6 @@
                 });
             }
 
-            // Toggle para fim de semana
             const toggleBtn = document.getElementById('weekend-toggle');
             if (toggleBtn) {
                 toggleBtn.addEventListener('click', function() {
@@ -376,7 +391,6 @@
             }
         });
 
-        // Controle do Modal de Confirmação (Agendar/Desmarcar)
         const confirmationModal = document.getElementById('confirmation-modal-overlay');
 
         function openConfirmationModal() {
@@ -401,8 +415,6 @@
             });
         }
 
-        // --- FUNÇÃO PARA SALVAR PRIORIDADE (NOMES) ---
-        
         function selectAllPriority(state) {
             document.querySelectorAll('.priority-disc-check').forEach(ch => ch.checked = state);
         }
@@ -410,7 +422,6 @@
         function savePriorityConfig() {
             const active = document.getElementById('priorityActive').checked;
             const checks = document.querySelectorAll('.priority-disc-check:checked');
-            // AGORA ENVIA UMA LISTA DE NOMES (STRINGS)
             const names = Array.from(checks).map(c => c.value);
 
             const btn = document.querySelector('#priorityModal .btn-success');

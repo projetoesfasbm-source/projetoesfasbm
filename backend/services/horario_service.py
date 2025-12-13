@@ -7,6 +7,7 @@ from sqlalchemy.orm import joinedload
 from datetime import date, timedelta
 from collections import defaultdict
 import uuid
+import json
 
 from ..models.database import db
 from ..models.horario import Horario
@@ -210,24 +211,19 @@ class HorarioService:
         if not aula or not HorarioService.can_edit_horario(aula, user):
             return None
 
-        # --- LÓGICA CORRIGIDA: Buscar lista exata de períodos ---
+        # Lista exata de períodos
         periodos_ocupados = []
-        
         if aula.group_id:
-            # Busca todos os fragmentos dessa aula agrupada
             blocos = db.session.scalars(
                 select(Horario).where(Horario.group_id == aula.group_id)
             ).all()
         else:
             blocos = [aula]
 
-        # Monta a lista de todos os tempos ocupados (ex: [1, 2, 4])
         for bloco in blocos:
             for i in range(bloco.duracao):
                 periodos_ocupados.append(bloco.periodo + i)
-        
         periodos_ocupados.sort()
-        # -------------------------------------------------------
 
         instrutor_value = str(aula.instrutor_id)
         if aula.instrutor_id_2:
@@ -236,13 +232,12 @@ class HorarioService:
         return {
             'disciplina_id': aula.disciplina_id,
             'instrutor_value': instrutor_value,
-            'periodos': periodos_ocupados,  # Nova lista enviada para o front
+            'periodos': periodos_ocupados,
             'observacao': aula.observacao,
             'materia': aula.disciplina.materia,
             'instrutor_nome': (
                 aula.instrutor.user.nome_de_guerra if aula.instrutor and aula.instrutor.user else ''
             ),
-            # Mantemos estes campos para retrocompatibilidade, se necessário
             'periodo': periodos_ocupados[0] if periodos_ocupados else aula.periodo,
             'duracao': len(periodos_ocupados)
         }
@@ -294,10 +289,8 @@ class HorarioService:
     @staticmethod
     def save_aula(data, user):
         try:
-            # 1. Definir is_admin no início
             is_admin = user.role in ['super_admin', 'programador', 'admin_escola']
 
-            # 2. Dados básicos e conversão segura para int
             pelotao = data['pelotao']
             semana_id = int(data.get('semana_id', 0))
             disciplina_id = int(data.get('disciplina_id', 0))
@@ -307,25 +300,27 @@ class HorarioService:
             periodo_fim = periodo_inicio + duracao - 1
             observacao = data.get('observacao', '').strip() or None
             
-            # --- LÓGICA DE BLOQUEIO POR PRIORIDADE ---
-            # Só executa se NÃO for admin. Admins sempre passam.
+            # --- LÓGICA DE BLOQUEIO POR PRIORIDADE (Corrigida para NOMES) ---
             if semana_id and not is_admin:
                 semana = db.session.get(Semana, semana_id)
                 if semana and getattr(semana, 'priority_active', False):
-                    # Recupera lista de IDs permitidos de forma robusta
-                    allowed_str = getattr(semana, 'priority_disciplines', '') or ''
-                    allowed_ids = []
+                    # 1. Recupera nomes permitidos (strings)
+                    allowed_names = []
+                    raw_priority = getattr(semana, 'priority_disciplines', '[]') or '[]'
+                    try:
+                        allowed_names = json.loads(raw_priority)
+                        if not isinstance(allowed_names, list): allowed_names = []
+                    except:
+                        allowed_names = []
                     
-                    if allowed_str:
-                        # Limpa colchetes, aspas e espaços. Ex: "[1, 2]" -> "1, 2"
-                        clean_str = allowed_str.replace('[', '').replace(']', '').replace('"', '').replace("'", "")
-                        # Cria lista de inteiros
-                        allowed_ids = [int(x.strip()) for x in clean_str.split(',') if x.strip().isdigit()]
-                    
-                    # Se a lista de permitidos estiver vazia OU a disciplina não estiver nela
-                    if not allowed_ids or disciplina_id not in allowed_ids:
-                        return False, "⚠️ AGENDAMENTO BLOQUEADO: Esta semana está em Modo Prioritário. Apenas as disciplinas selecionadas podem ser agendadas.", 403
-            # -----------------------------------------------
+                    # 2. Recupera NOME da disciplina atual (int -> string)
+                    disciplina_atual = db.session.get(Disciplina, disciplina_id)
+                    nome_disciplina_atual = disciplina_atual.materia if disciplina_atual else ""
+
+                    # 3. Validação: O nome desta disciplina está na lista?
+                    if not allowed_names or nome_disciplina_atual not in allowed_names:
+                        return False, "⚠️ AGENDAMENTO BLOQUEADO: Apenas as disciplinas prioritárias podem ser agendadas nesta semana.", 403
+            # -------------------------------------------------------------
 
             horario_id_raw = data.get('horario_id')
             horario_id = int(horario_id_raw) if horario_id_raw else None
@@ -364,7 +359,7 @@ class HorarioService:
                     elif vinculo_dt.instrutor_id_2 == instrutor_id_1 and vinculo_dt.instrutor_id_1:
                         instrutor_id_2 = vinculo_dt.instrutor_id_1
 
-            # edição (substituição de grupo)
+            # edição
             if horario_id:
                 aula_original = db.session.get(Horario, horario_id)
                 if not aula_original or not HorarioService.can_edit_horario(aula_original, user):
@@ -404,7 +399,6 @@ class HorarioService:
                 if db.session.execute(query_conflito).scalars().first():
                     return False, f'Conflito de horário no período {periodo_bloco_inicio}.', 409
 
-                # cria bloco
                 nova_aula_bloco = Horario(
                     pelotao=pelotao,
                     semana_id=semana_id,

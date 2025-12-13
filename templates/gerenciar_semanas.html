@@ -125,13 +125,13 @@
         
         {% if ciclo_selecionado_id %}
             <div class="table-responsive">
-                <table class="table-styled">
+                <table class="table-styled align-middle">
                     <thead>
                         <tr>
                             <th>Nome</th>
                             <th>Início</th>
                             <th>Fim</th>
-                            <th class="text-right">Ações</th>
+                            <th class="text-end" style="min-width: 180px;">Ações</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -140,12 +140,20 @@
                             <td><strong>{{ semana.nome }}</strong></td>
                             <td>{{ semana.data_inicio.strftime('%d/%m/%Y') }}</td>
                             <td>{{ semana.data_fim.strftime('%d/%m/%Y') }}</td>
-                            <td class="text-right actions-group">
-                                <a href="{{ url_for('semana.editar_semana', semana_id=semana.id) }}" class="btn btn-sm btn-warning" title="Editar"><i class="fas fa-edit"></i></a>
-                                <form method="POST" action="{{ url_for('semana.deletar_semana', semana_id=semana.id) }}" onsubmit="return confirm('Tem certeza?');" style="display:inline;">
-                                    {{ delete_form.hidden_tag() }}
-                                    <button type="submit" class="btn btn-sm btn-danger" title="Excluir"><i class="fas fa-trash"></i></button>
-                                </form>
+                            
+                            <td class="text-end">
+                                <div class="d-flex justify-content-end gap-2">
+                                    <a href="{{ url_for('semana.editar_semana', semana_id=semana.id) }}" class="btn btn-sm btn-warning fw-bold text-dark">
+                                        <i class="fas fa-edit me-1"></i> Editar
+                                    </a>
+                                    
+                                    <form method="POST" action="{{ url_for('semana.deletar_semana', semana_id=semana.id) }}" onsubmit="return confirm('Tem certeza que deseja excluir esta semana?');" class="m-0">
+                                        {{ delete_form.hidden_tag() }}
+                                        <button type="submit" class="btn btn-sm btn-danger fw-bold">
+                                            <i class="fas fa-trash me-1"></i> Excluir
+                                        </button>
+                                    </form>
+                                </div>
                             </td>
                         </tr>
                         {% else %}
