@@ -79,7 +79,7 @@
                     {% if permite_pontuacao and processo.pontos and processo.pontos > 0 %}
                         <label class="form-label d-block text-danger"><strong>Pontuação Original da Infração:</strong> {{ processo.pontos }} pontos</label>
                     {% endif %}
-                    </div>
+                </div>
 
                 <div class="mb-3">
                     <label class="form-label d-block"><strong>Defesa:</strong> {{ processo.defesa or "Aluno não apresentou defesa." }}</label>
@@ -87,13 +87,29 @@
                 <hr>
                 <div class="mb-3">
                     <label for="decisao_final-{{ processo.id }}" class="form-label">Decisão Final</label>
-                    <select name="decisao_final" id="decisao_final-{{ processo.id }}" class="form-select" required>
+                    <select name="decisao_final" id="decisao_final-{{ processo.id }}" class="form-select" onchange="toggleTurnos('{{ processo.id }}')" required>
                         <option value="" disabled selected>Selecione a decisão...</option>
                         
                         <option value="Justificado">Justificado (Sem Sanção)</option>
                         <option value="Advertência">Advertência (Com Sanção)</option>
                         <option value="Repreensão">Repreensão (Com Sanção)</option>
-                        </select>
+                        <option value="Sustação da Dispensa">Sustação da Dispensa (Com Sanção)</option>
+                    </select>
+                </div>
+
+                <div class="mb-3" id="div-turnos-{{ processo.id }}" style="display: none;">
+                    <label for="turnos_sustacao-{{ processo.id }}" class="form-label">Quantidade de Turnos</label>
+                    <select name="turnos_sustacao" id="turnos_sustacao-{{ processo.id }}" class="form-select">
+                        <option value="" disabled selected>Selecione a quantidade...</option>
+                        <option value="01 turno (6H)">01 turno (6H)</option>
+                        <option value="02 turnos (12H)">02 turnos (12H)</option>
+                        <option value="03 turnos (18H)">03 turnos (18H)</option>
+                        <option value="04 turnos (24H)">04 turnos (24H)</option>
+                        <option value="05 turnos (30H)">05 turnos (30H)</option>
+                        <option value="06 turnos (36H)">06 turnos (36H)</option>
+                        <option value="07 turnos (42H)">07 turnos (42H)</option>
+                        <option value="08 turnos (48H)">08 turnos (48H)</option>
+                    </select>
                 </div>
                 
                 <div class="mb-3">
@@ -108,5 +124,24 @@
             </form>
         </div>
         {% endif %}
-        </div>
+    </div>
 </div>
+
+<script>
+    function toggleTurnos(processoId) {
+        var decisaoSelect = document.getElementById('decisao_final-' + processoId);
+        var turnosDiv = document.getElementById('div-turnos-' + processoId);
+        var turnosSelect = document.getElementById('turnos_sustacao-' + processoId);
+
+        if (decisaoSelect && turnosDiv && turnosSelect) {
+            if (decisaoSelect.value === 'Sustação da Dispensa') {
+                turnosDiv.style.display = 'block';
+                turnosSelect.required = true; 
+            } else {
+                turnosDiv.style.display = 'none';
+                turnosSelect.required = false;
+                turnosSelect.value = ""; 
+            }
+        }
+    }
+</script>

@@ -96,22 +96,20 @@ def finalizar_processo(processo_id):
     decisao = request.form.get('decisao_final')
     fundamentacao = request.form.get('fundamentacao')
     detalhes_sancao = request.form.get('detalhes_sancao')
+    turnos_sustacao = request.form.get('turnos_sustacao')
 
     if not decisao or not fundamentacao:
         flash('É necessário selecionar uma decisão e preencher a fundamentação.', 'danger')
         return redirect(url_for('justica.index'))
     
-    # ######################################################
-    # ### INÍCIO DA CORREÇÃO (Campo 'detalhes_sancao' agora é opcional) ###
-    # ######################################################
-    # if decisao in ['Advertência', 'Repreensão'] and not detalhes_sancao:
-    #     flash('Para Advertência ou Repreensão, o campo de detalhes da sanção é obrigatório.', 'danger')
-    #     return redirect(url_for('justica.index'))
-    # ######################################################
-    # ### FIM DA CORREÇÃO ###
-    # ######################################################
+    # Define o que será salvo no campo detalhes_sancao
+    detalhes_final = detalhes_sancao
 
-    success, message = JusticaService.finalizar_processo(processo_id, decisao, fundamentacao, detalhes_sancao)
+    # Se for Sustação da Dispensa, usa o valor do seletor de turnos
+    if decisao == 'Sustação da Dispensa' and turnos_sustacao:
+        detalhes_final = f"Sustação da Dispensa de {turnos_sustacao}"
+
+    success, message = JusticaService.finalizar_processo(processo_id, decisao, fundamentacao, detalhes_final)
     flash(message, 'success' if success else 'danger')
     return redirect(url_for('justica.index'))
     
