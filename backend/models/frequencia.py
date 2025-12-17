@@ -20,4 +20,4 @@ class FrequenciaAluno(db.Model):
     justificativa: Mapped[t.Optional[str]] = mapped_column(db.String(255)) 
 
     diario: Mapped["DiarioClasse"] = relationship(back_populates="frequencias")
-    aluno: Mapped["Aluno"] = relationship()
+    aluno: Mapped["Aluno"] = relationship(back_populates="frequencias")
