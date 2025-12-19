@@ -1,163 +1,157 @@
 # backend/services/relatorio_service.py
 
-from sqlalchemy import func, or_, and_, case, distinct
-from backend.models.database import db
-from backend.models.aluno import Aluno
-from backend.models.turma import Turma
-from backend.models.disciplina import Disciplina
-from backend.models.horario import Horario
-from backend.models.instrutor import Instrutor
-from backend.models.semana import Semana
-from datetime import datetime, date
+from __future__ import annotations
+import os
+import json
+from io import BytesIO
+from typing import Any, Dict, List, Tuple
+from datetime import date
+from sqlalchemy import func, select, union_all
+
+# Importações seguras que não dependem do banco de dados ou de outros serviços locais
+from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
+from googleapiclient.errors import HttpError
+
+SCOPES = ["https://www.googleapis.com/auth/drive.file"]
+GA_CREDENTIALS_JSON = os.environ.get("GA_CREDENTIALS_JSON")
+
+def _get_google_credentials() -> Credentials:
+    if not GA_CREDENTIALS_JSON:
+        raise RuntimeError("A variável de ambiente GA_CREDENTIALS_JSON não foi configurada.")
+    try:
+        info = json.loads(GA_CREDENTIALS_JSON)
+        return Credentials.from_service_account_info(info, scopes=SCOPES)
+    except Exception as e:
+        raise RuntimeError(f"Erro ao carregar credenciais do Google: {e}")
+
+def _upload_xlsx_and_convert_to_sheet(filename: str, xlsx_bytes: bytes) -> str | None:
+    try:
+        creds = _get_google_credentials()
+        service = build('drive', 'v3', credentials=creds)
+        file_metadata = {'name': filename, 'mimeType': 'application/vnd.google-apps.spreadsheet'}
+        media = MediaIoBaseUpload(BytesIO(xlsx_bytes), mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', resumable=True)
+        file = service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
+        permission = {'type': 'anyone', 'role': 'reader'}
+        service.permissions().create(fileId=file.get('id'), body=permission).execute()
+        return file.get('webViewLink')
+    except HttpError as error:
+        print(f"Ocorreu um erro na API do Google Drive: {error}")
+        return None
+    except Exception as e:
+        print(f"Ocorreu um erro inesperado durante o upload para o Google Drive: {e}")
+        return None
 
 class RelatorioService:
-    
-    @staticmethod
-    def get_resumo_turma(turma_id):
-        """
-        Gera um resumo da turma com contagem de alunos e status.
-        """
-        turma = db.session.get(Turma, turma_id)
-        if not turma:
-            return None
-            
-        total_alunos = db.session.query(func.count(Aluno.id)).filter_by(turma_id=turma_id).scalar()
-        
-        return {
-            "turma": turma,
-            "total_alunos": total_alunos
-        }
 
     @staticmethod
-    def calcular_horas_disciplina_real(disciplina_id):
+    def get_horas_aula_por_instrutor(
+        data_inicio: date,
+        data_fim: date,
+        is_rr_filter: bool,
+        instrutor_ids_filter: List[int] | None
+    ) -> List[Dict[str, Any]]:
         """
-        Calcula a carga horária TOTAL executada pela DISCIPLINA.
-        Soma a duração dos horários únicos (confirmados e passados).
+        Busca e formata os dados de horas-aula por instrutor, corrigindo a consulta
+        para usar as colunas corretas e somar horas de instrutores primários e secundários.
         """
-        query = db.session.query(func.sum(Horario.duracao)).join(Semana).filter(
-            Horario.disciplina_id == disciplina_id,
-            Semana.data_inicio <= datetime.now().date(),
-            Horario.status == 'confirmado'
+        # As importações são feitas DENTRO da função para garantir que o contexto do app Flask esteja pronto.
+        from ..models import db, Horario, User, Instrutor, Disciplina, Semana
+
+        # Subquery para "desnormalizar" os instrutores, tratando instrutor_id e instrutor_id_2 como linhas separadas.
+        # Isso simplifica a agregação e garante que ambos sejam contabilizados.
+        s1 = select(Horario.instrutor_id.label("instrutor_id"), Horario.duracao, Horario.disciplina_id, Horario.semana_id).where(Horario.instrutor_id.isnot(None))
+        s2 = select(Horario.instrutor_id_2.label("instrutor_id"), Horario.duracao, Horario.disciplina_id, Horario.semana_id).where(Horario.instrutor_id_2.isnot(None))
+        unioned_horarios = union_all(s1, s2).alias("unioned_horarios")
+
+        # Query principal que agora utiliza a subquery.
+        query = (
+            select(
+                User.posto_graduacao,
+                User.matricula,
+                User.nome_completo,
+                Disciplina.materia.label('disciplina_nome'),
+                func.sum(unioned_horarios.c.duracao).label('ch_a_pagar'),
+                Disciplina.carga_horaria_prevista.label('ch_total')
+            )
+            .select_from(User)
+            .join(Instrutor, User.id == Instrutor.user_id)
+            .join(unioned_horarios, Instrutor.id == unioned_horarios.c.instrutor_id)
+            .join(Disciplina, unioned_horarios.c.disciplina_id == Disciplina.id)
+            .join(Semana, unioned_horarios.c.semana_id == Semana.id)
+            .filter(
+                Semana.data_inicio <= data_fim,
+                Semana.data_fim >= data_inicio
+            )
+            .group_by(
+                User.posto_graduacao, User.matricula, User.nome_completo,
+                Disciplina.materia, Disciplina.carga_horaria_prevista
+            )
+            .order_by(User.matricula.asc())  # Alterado de nome_completo para matricula.asc()
         )
-        
-        total = query.scalar() or 0
-        return float(total)
 
-    @staticmethod
-    def get_relatorio_disciplinas(turma_id):
-        """
-        Retorna dados consolidados das disciplinas da turma para relatórios.
-        """
-        disciplinas = db.session.query(Disciplina).filter_by(turma_id=turma_id).all()
-        
-        relatorio = []
-        
-        for disciplina in disciplinas:
-            # 1. Carga Horária Prevista
-            ch_prevista = disciplina.carga_horaria_prevista if disciplina.carga_horaria_prevista else 0
-            
-            # 2. Carga Horária Executada (Real - sem duplicar por instrutor)
-            ch_executada = RelatorioService.calcular_horas_disciplina_real(disciplina.id)
-                
-            # Calcular percentual
-            percentual = (ch_executada / ch_prevista * 100) if ch_prevista > 0 else 0
-            
-            # 3. Listar Instrutores envolvidos
-            q_instr1 = db.session.query(Horario.instrutor_id).filter(Horario.disciplina_id == disciplina.id).distinct()
-            q_instr2 = db.session.query(Horario.instrutor_id_2).filter(Horario.disciplina_id == disciplina.id).filter(Horario.instrutor_id_2.isnot(None)).distinct()
-            
-            ids_instrutores = set()
-            for r in q_instr1: 
-                if r[0]: ids_instrutores.add(r[0])
-            for r in q_instr2: 
-                if r[0]: ids_instrutores.add(r[0])
-            
-            nomes_instrutores = []
-            if ids_instrutores:
-                instrutores = db.session.query(Instrutor).filter(Instrutor.id.in_(ids_instrutores)).all()
-                # Usa nome_guerra que é garantido
-                nomes_instrutores = [i.nome_guerra for i in instrutores if i.nome_guerra]
+        # Aplica filtros opcionais de forma correta
+        if is_rr_filter:
+            query = query.where(Instrutor.is_rr == True)
+        if instrutor_ids_filter:
+            query = query.where(Instrutor.id.in_(instrutor_ids_filter))
 
-            relatorio.append({
-                "disciplina_nome": disciplina.materia,
-                "ch_prevista": ch_prevista,
-                "ch_executada": float(ch_executada),
-                "percentual": round(percentual, 1),
-                "instrutores": ", ".join(nomes_instrutores)
+        # Executa a query e obtém os resultados como dicionários
+        resultados_db = db.session.execute(query).mappings().all()
+        
+        # Agrupa os resultados em Python (lógica mantida, pois está correta)
+        dados_agrupados = {}
+        for r in resultados_db:
+            matricula = r['matricula'] or r['nome_completo']
+            if matricula not in dados_agrupados:
+                dados_agrupados[matricula] = {
+                    "info": {"user": {
+                        "posto_graduacao": r['posto_graduacao'], "matricula": r['matricula'], "nome_completo": r['nome_completo'],
+                    }},
+                    "disciplinas": []
+                }
+            dados_agrupados[matricula]["disciplinas"].append({
+                "nome": r['disciplina_nome'], "ch_total": r['ch_total'] or 0,
+                "ch_paga_anteriormente": 0,  # Este campo pode ser calculado no futuro se necessário
+                "ch_a_pagar": r['ch_a_pagar'] or 0,
             })
-            
-        return relatorio
+        return list(dados_agrupados.values())
 
     @staticmethod
-    def get_horas_aula_por_instrutor(data_inicio, data_fim, is_rr=None, instrutor_ids=None):
+    def export_to_google_sheets(contexto: Dict[str, Any]) -> Tuple[bool, str]:
         """
-        Gera relatório de horas por instrutor em um período.
-        Aceita filtros e corrige erro de atributo.
+        Gera o arquivo XLSX em memória e faz o upload para o Google Drive.
         """
-        # 1. Base da query: Instrutores
-        query = db.session.query(Instrutor)
+        # Importa o gerador de XLSX aqui dentro para evitar erros de importação na inicialização.
+        from .xlsx_service import gerar_mapa_gratificacao_xlsx
+        
+        try:
+            xlsx_bytes = gerar_mapa_gratificacao_xlsx(
+                dados=contexto.get("dados"),
+                valor_hora_aula=float(contexto.get("valor_hora_aula") or 0.0),
+                nome_mes_ano=contexto.get("nome_mes_ano"),
+                titulo_curso=contexto.get("titulo_curso"),
+                opm_nome=contexto.get("opm"),
+                escola_nome=contexto.get("escola_nome"),
+                data_emissao=contexto.get("data_emissao"),
+                telefone=contexto.get("telefone"),
+                auxiliar_nome=contexto.get("auxiliar_nome"),
+                comandante_nome=contexto.get("comandante_nome"),
+                digitador_nome=contexto.get("digitador_nome"),
+                auxiliar_funcao=contexto.get("auxiliar_funcao"),
+                comandante_funcao=contexto.get("comandante_funcao"),
+                data_fim=contexto.get("data_fim"),
+                cidade_assinatura=contexto.get("cidade"),
+            )
 
-        # 2. Aplicar filtro is_rr
-        if is_rr is not None:
-            if isinstance(is_rr, str):
-                if is_rr.lower() == 'true':
-                    query = query.filter(Instrutor.is_rr == True)
-                elif is_rr.lower() == 'false':
-                    query = query.filter(Instrutor.is_rr == False)
+            nome_arquivo = f'Relatório Horas-Aula - {contexto.get("nome_mes_ano", "geral")}'
+            sheet_url = _upload_xlsx_and_convert_to_sheet(nome_arquivo, xlsx_bytes)
+            
+            if sheet_url:
+                return True, sheet_url
             else:
-                query = query.filter(Instrutor.is_rr == bool(is_rr))
-
-        # 3. Aplicar filtro de IDs
-        if instrutor_ids:
-            if not isinstance(instrutor_ids, list):
-                instrutor_ids = [instrutor_ids]
-            query = query.filter(Instrutor.id.in_(instrutor_ids))
-        
-        instrutores = query.all()
-        dados = []
-
-        # 4. Iterar e calcular horas
-        for instr in instrutores:
-            # Soma horas como TITULAR
-            horas_titular = db.session.query(func.sum(Horario.duracao))\
-                .join(Semana)\
-                .filter(
-                    Horario.instrutor_id == instr.id,
-                    Semana.data_inicio >= data_inicio,
-                    Semana.data_fim <= data_fim,
-                    Horario.status == 'confirmado'
-                ).scalar() or 0
-
-            # Soma horas como ADJUNTO
-            horas_adjunto = db.session.query(func.sum(Horario.duracao))\
-                .join(Semana)\
-                .filter(
-                    Horario.instrutor_id_2 == instr.id,
-                    Semana.data_inicio >= data_inicio,
-                    Semana.data_fim <= data_fim,
-                    Horario.status == 'confirmado'
-                ).scalar() or 0
-
-            total_horas = float(horas_titular) + float(horas_adjunto)
-
-            if total_horas > 0:
-                # CORREÇÃO: Tenta pegar nome_completo, se falhar usa nome_guerra
-                nome_exibicao = getattr(instr, 'nome_completo', None)
-                if not nome_exibicao:
-                    # Tenta acessar via relacionamento 'user' se existir
-                    if hasattr(instr, 'user') and instr.user:
-                        nome_exibicao = getattr(instr.user, 'nome_completo', instr.nome_guerra)
-                    else:
-                        nome_exibicao = instr.nome_guerra
-
-                dados.append({
-                    'nome': nome_exibicao,
-                    'posto': instr.posto_graduacao or 'Instrutor',
-                    'horas': total_horas,
-                    'tipo': 'RR' if instr.is_rr else 'Ativa'
-                })
-        
-        # Ordenar por nome
-        dados.sort(key=lambda x: x['nome'])
-        
-        return dados
+                return False, "Falha no upload do arquivo para o Google Drive. Verifique as credenciais da API."
+        except Exception as e:
+            print(f"ERRO CRÍTICO ao exportar para Google Sheets: {e}")
+            return False, f"Ocorreu um erro interno ao gerar ou enviar o arquivo: {e}"
