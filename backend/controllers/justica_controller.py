@@ -229,7 +229,7 @@ def api_get_aluno_details(aluno_id):
 def exportar_selecao():
     
     active_school = g.get('active_school')
-    if not active_school or not active_school.npccal_type in ['cspm', 'cbfpm']:
+    if not active_school or not active_school.npccal_type in ['cspm', 'cbfpm', 'ctsp']:
         flash('A exportação não se aplica a esta escola.', 'info')
         return redirect(url_for('justica.index'))
     
@@ -371,5 +371,6 @@ def fada_gerar_pdf(avaliacao_id):
         mimetype="application/pdf",
         headers={"Content-disposition": f"attachment; filename=fada_aluno_{avaliacao.aluno_id}.pdf"}
     )
+
 
 # ### FIM DAS NOVAS ROTAS FADA ###
