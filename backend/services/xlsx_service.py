@@ -129,7 +129,9 @@ def gerar_mapa_gratificacao_xlsx(
     total_ch_a_pagar_sum = 0.0
     total_valor_sum = 0.0
     if dados:
-        for instrutor in sorted(dados, key=lambda i: _safe(i, "info.user.nome_completo", "")):
+        # --- ALTERAÇÃO AQUI: ORDENAÇÃO PELA MATRÍCULA (ID. FUNC.) ---
+        # Antes ordenava por "info.user.nome_completo", agora por "info.user.matricula"
+        for instrutor in sorted(dados, key=lambda i: _safe(i, "info.user.matricula", "")):
             user = _safe(instrutor, "info.user", {})
             for disc in sorted(_iter_disciplinas(instrutor), key=lambda d: d.get("nome", "")):
                 ws.row_dimensions[current_row].height = 30
