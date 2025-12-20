@@ -23,7 +23,7 @@ disciplina_bp = Blueprint('disciplina', __name__, url_prefix='/disciplina')
 class DisciplinaForm(FlaskForm):
     materia = StringField('Matéria', validators=[DataRequired(), Length(min=3, max=100)])
     carga_horaria_prevista = IntegerField('Carga Horária Total Prevista', validators=[DataRequired(), NumberRange(min=1)])
-    carga_horaria_cumprida = IntegerField('Carga Horária Já Cumprida', validators=[Optional(), NumberRange(min=0)], default=0)
+    carga_horaria_cumprida = IntegerField('Carga Horária Já Cumprida (Legado)', validators=[Optional(), NumberRange(min=0)], default=0)
     ciclo_id = SelectField('Ciclo', coerce=int, validators=[DataRequired()])
     turma_ids = SelectMultipleField('Turmas', coerce=int, validators=[DataRequired(message="Selecione pelo menos uma turma.")],
                                       option_widget=CheckboxInput(), widget=ListWidget(prefix_label=False))
@@ -52,12 +52,13 @@ def listar_disciplinas():
         # Filtra a lista em Python para evitar múltiplas queries
         disciplinas_filtradas = [d for d in todas_disciplinas if d.turma_id == turma_selecionada_id]
     else:
-        # Mostra todas as disciplinas da escola
+        # Mostra todas as disciplinas da escola (ou uma lista vazia se preferir forçar a seleção)
         disciplinas_filtradas = todas_disciplinas
 
     # Processa apenas a lista filtrada para exibir o progresso
     disciplinas_com_progresso = []
     for d in disciplinas_filtradas:
+        # O Service agora ignora instrutores e foca apenas no Quadro de Horário
         progresso = DisciplinaService.get_dados_progresso(d, d.turma.nome) 
         disciplinas_com_progresso.append({'disciplina': d, 'progresso': progresso})
 
@@ -107,7 +108,8 @@ def editar_disciplina(disciplina_id):
     class EditDisciplinaForm(FlaskForm):
         materia = StringField('Matéria', validators=[DataRequired(), Length(min=3, max=100)])
         carga_horaria_prevista = IntegerField('Carga Horária Total Prevista', validators=[DataRequired(), NumberRange(min=1)])
-        carga_horaria_cumprida = IntegerField('Carga Horária Já Cumprida', validators=[Optional(), NumberRange(min=0)], default=0)
+        # Campo mantido oculto ou opcional se quiser remover do UI
+        carga_horaria_cumprida = IntegerField('Carga Horária Cumprida', validators=[Optional(), NumberRange(min=0)], default=0)
         ciclo_id = SelectField('Ciclo', coerce=int, validators=[DataRequired()])
         turma_id = SelectField('Turma', coerce=int, validators=[DataRequired(message="A turma é obrigatória.")])
         submit = SubmitField('Salvar')
@@ -149,21 +151,11 @@ def api_disciplinas_por_turma(turma_id):
     disciplinas = sorted(turma.disciplinas, key=lambda d: d.materia)
     return jsonify([{'id': d.id, 'materia': d.materia} for d in disciplinas])
 
-# --- NOVA ROTA DE SINCRONIZAÇÃO ---
+# --- MANTIDO PARA COMPATIBILIDADE, MAS A LÓGICA AGORA É LIVE ---
 @disciplina_bp.route('/sincronizar-progresso', methods=['POST'])
 @login_required
 @school_admin_or_programmer_required
 def sincronizar_progresso():
-    school_id = UserService.get_current_school_id()
-    if not school_id:
-        flash('Escola não identificada.', 'danger')
-        return redirect(url_for('disciplina.listar_disciplinas'))
-
-    success, message = DisciplinaService.sincronizar_progresso_aulas(school_id)
-    
-    if success:
-        flash(f'Sincronização concluída: {message}', 'success')
-    else:
-        flash(f'Erro ao sincronizar: {message}', 'danger')
-        
+    # Apenas redireciona com mensagem informativa, pois o cálculo é dinâmico agora
+    flash('O progresso agora é calculado automaticamente em tempo real baseado no Quadro de Horários.', 'info')
     return redirect(request.referrer or url_for('disciplina.listar_disciplinas'))
