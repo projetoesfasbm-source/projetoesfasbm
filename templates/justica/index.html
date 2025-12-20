@@ -14,17 +14,17 @@
             <div class="justice-options">
                 <button class="btn btn-primary justice-option-btn active" data-target="inProgressContent">Em Andamento</button>
                 <button class="btn btn-warning justice-option-btn" data-target="finalizadosContent">Finalizados</button>
-                
+
                 {% if current_user.role in ['admin_escola', 'programador', 'super_admin'] %}
                     <button class="btn btn-success justice-option-btn" data-target="newTransgressionContent">Nova Infração</button>
-                    
+
                     {% if permite_pontuacao %}
                     <a href="{{ url_for('justica.fada_lista_alunos') }}" class="btn btn-info">Avaliação FADA</a>
                     {% endif %}
-                
+
                 {% endif %}
-                
-                {% if current_user.role in ['admin_escola', 'programador', 'super_admin'] and permite_pontuacao %}
+
+                {% if current_user.role in ['admin_escola', 'programador', 'super_admin'] %}
                 <a href="{{ url_for('justica.exportar_selecao') }}" class="btn btn-info">Exportar para BI</a>
                 {% endif %}
                 </div>
@@ -43,7 +43,7 @@
                     <div class="alert alert-info">Nenhum processo em andamento encontrado.</div>
                 {% endif %}
             </div>
-            
+
             <div class="justice-content" id="finalizadosContent">
                 <h3 class="justice-content-title">Processos Finalizados</h3>
                 {% if finalizados %}
@@ -77,22 +77,22 @@
                         <input type="hidden" name="aluno_id" id="aluno_id_hidden" required>
                         <div id="aluno_selected" class="selected-item-display" style="display: none;"></div>
                     </div>
-                    
+
                     <div id="transgression_fields" style="display: none;">
-                        
+
                         {% if fatos_predefinidos %}
                         <div class="form-group">
                             <label for="fato_search_input">Fato Constatado</label>
                             <input type="text" id="fato_search_input" class="form-control mb-2" placeholder="Pesquisar na lista de infrações...">
-                            
+
                             <div class="facts-list-container" id="facts-list-container">
                                 {% for rule in fatos_predefinidos %}
-                                    <div class="result-item" 
+                                    <div class="result-item"
                                          data-fato="({{ rule.codigo }}) {{ rule.descricao }}"
                                          data-pontos="{{ rule.pontos if permite_pontuacao else '0.0' }}">
-                                        
+
                                         <strong>{{ rule.codigo }}</strong> - {{ rule.descricao }}
-                                        
+
                                         {% if permite_pontuacao %}
                                             <span class="badge bg-danger float-end">{{ rule.pontos }} pts</span>
                                         {% endif %}
@@ -101,7 +101,7 @@
                             </div>
                             <input type="hidden" id="fato_hidden_input" name="fato_descricao" required>
                         </div>
-                        
+
                         {% else %}
                         <div class="form-group">
                             <label for="fato_descricao_manual">Fato Constatado (Registro Manual)</label>
@@ -109,7 +109,7 @@
                             <textarea id="fato_descricao_manual" name="fato_descricao" class="form-control" rows="3" placeholder="Descreva o fato constatado..." required></textarea>
                         </div>
                         {% endif %}
-                        
+
                         <div class="form-group">
                             <label for="observacao">Observação (Termo de Justificação)</label>
                             <textarea id="observacao" name="observacao" class="form-control" rows="12"></textarea>
@@ -159,7 +159,7 @@
     .justice-content { display: none; }
     .justice-content.active { display: block; }
     .justice-content-title { margin-bottom: 1.5rem; }
-    
+
     .search-form-container { position: relative; }
     .search-results { max-height: 200px; overflow-y: auto; border: 1px solid #ccc; border-radius: 0 0 8px 8px; background: white; position: absolute; width: 100%; z-index: 10; display: none; }
     .selected-item-display { background-color: #e9ecef; padding: 10px; border-radius: 4px; margin-top: 5px; display: flex; justify-content: space-between; align-items: center; }
@@ -190,7 +190,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const alunoSelectedDisplay = document.getElementById('aluno_selected');
     const transgressionFields = document.getElementById('transgression_fields');
     const observacaoTextarea = document.getElementById('observacao');
-    
+
     let observacaoTemplateOriginal = '';
 
     // --- Busca de Aluno (sem alterações) ---
@@ -199,7 +199,7 @@ document.addEventListener('DOMContentLoaded', function() {
         alunoSearchInput.addEventListener('input', function() {
             clearTimeout(searchTimeout);
             const query = this.value;
-            
+
             alunoHiddenInput.value = '';
             transgressionFields.style.display = 'none';
 
@@ -254,8 +254,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     observacaoTextarea.value = observacaoTemplateOriginal;
                     transgressionFields.style.display = 'block';
 
-                    updateObservacaoComFato(null); 
-                    
+                    updateObservacaoComFato(null);
+
                     document.getElementById('fato_pontos').value = '0.0';
 
                     const fatoHiddenInput = document.getElementById('fato_hidden_input');
@@ -289,11 +289,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // --- Lógica do Fato Constatado (Seletor) (sem alterações) ---
     const fatoSearchInput = document.getElementById('fato_search_input');
-    
-    if (fatoSearchInput) { 
+
+    if (fatoSearchInput) {
         const fatoListContainer = document.getElementById('facts-list-container');
         const fatoHiddenInput = document.getElementById('fato_hidden_input');
-        const fatoPontosInput = document.getElementById('fato_pontos'); 
+        const fatoPontosInput = document.getElementById('fato_pontos');
         const fatoItems = fatoListContainer.querySelectorAll('.result-item');
 
         fatoSearchInput.addEventListener('input', function() {
@@ -308,12 +308,12 @@ document.addEventListener('DOMContentLoaded', function() {
             item.addEventListener('click', function() {
                 fatoItems.forEach(i => i.classList.remove('selected'));
                 this.classList.add('selected');
-                
+
                 const fatoText = this.dataset.fato;
                 const pontos = this.dataset.pontos || 0.0;
-                
+
                 fatoHiddenInput.value = fatoText;
-                fatoPontosInput.value = pontos; 
+                fatoPontosInput.value = pontos;
 
                 updateObservacaoComFato(fatoText);
             });
@@ -338,10 +338,10 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
             textoObservacao = textoObservacao.replace(/\nCom isso, incorreu no item\.\.\./, '');
         }
-        
+
         observacaoTextarea.value = textoObservacao;
     }
-    
+
     // --- Lógica de Toggle do Formulário "Analisar" (sem alterações) ---
     const botoesToggleForm = document.querySelectorAll('.js-toggle-analise-form');
     botoesToggleForm.forEach(function(botao) {
