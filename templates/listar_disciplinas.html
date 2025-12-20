@@ -1,167 +1,149 @@
 {% extends "base.html" %}
 
-{% block title %}Gerenciar Disciplinas{% endblock %}
+{% block title %}Lista de Disciplinas{% endblock %}
 
 {% block content %}
-<div class="container-fluid px-4">
-    <div class="d-flex justify-content-between align-items-center mb-4 mt-4">
-        <h2 class="mb-0">
-            <i class="fas fa-book me-2"></i>Disciplinas
-        </h2>
-        {% if current_user.is_admin or current_user.is_programmer %}
-        <div class="d-flex gap-2">
-            <form action="{{ url_for('disciplina.sincronizar_progresso') }}" method="POST" class="d-inline">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="btn btn-outline-info" title="Recalcular progresso baseado nos Diários">
-                    <i class="fas fa-sync-alt me-1"></i> Sincronizar
-                </button>
-            </form>
-            <a href="{{ url_for('disciplina.adicionar_disciplina') }}" class="btn btn-primary">
-                <i class="fas fa-plus me-1"></i> Nova Disciplina
-            </a>
+<div class="content-header d-flex justify-content-between align-items-center">
+    <div>
+        <h1>Disciplinas</h1>
+        <p>Gerencie as matérias e seus respectivos instrutores por turma.</p>
+    </div>
+    
+    {% if current_user.role in ['programador', 'admin_escola'] %}
+    <div>
+        <form action="{{ url_for('disciplina.sincronizar_progresso') }}" method="POST" onsubmit="return confirm('Isso irá recalcular o progresso de TODAS as disciplinas da escola baseado nos diários de classe lançados e na carga horária do quadro. O processo pode levar alguns segundos. Deseja continuar?');" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-warning text-dark shadow-sm">
+                <i class="fas fa-sync-alt me-1"></i> Sincronizar Progresso
+            </button>
+        </form>
+    </div>
+    {% endif %}
+</div>
+
+<div class="table-filters">
+    <form method="GET" action="{{ url_for('disciplina.listar_disciplinas') }}" id="filter-form" class="d-flex flex-wrap align-items-end gap-3">
+        <div class="filter-group">
+            <label for="turma_select"><strong>Selecione uma Turma para Visualizar/Adicionar Disciplinas:</strong></label>
+            <select name="turma_id" id="turma_select" class="form-control" onchange="this.form.submit()">
+                <option value="">-- Selecione uma Turma --</option>
+                {% for t in turmas %}
+                <option value="{{ t.id }}" {% if t.id == turma_selecionada_id %}selected{% endif %}>{{ t.nome }}</option>
+                {% endfor %}
+            </select>
         </div>
+    </form>
+</div>
+
+{% if turma_selecionada_id %}
+<div class="table-container">
+    <div class="table-header">
+        <h3>
+            {% set turma_atual = turmas|selectattr('id', 'equalto', turma_selecionada_id)|first %}
+            Disciplinas da Turma: {{ turma_atual.nome if turma_atual else '' }}
+        </h3>
+        {% if current_user.role in ['programador', 'admin_escola'] %}
+        <a href="{{ url_for('disciplina.adicionar_disciplina') }}" class="btn btn-primary">
+            <span>+</span> Adicionar Disciplina a esta Turma
+        </a>
         {% endif %}
     </div>
 
-    <div class="card shadow-sm mb-4">
-        <div class="card-header bg-white py-3">
-            <form action="{{ url_for('disciplina.listar_disciplinas') }}" method="GET">
-                <div class="row g-2 align-items-center">
-                    <div class="col-md-4">
-                        <div class="input-group">
-                            <span class="input-group-text bg-light"><i class="fas fa-filter"></i></span>
-                            <select name="turma_id" class="form-select" onchange="this.form.submit()">
-                                <option value="">Todas as Turmas</option>
-                                {% for turma in turmas %}
-                                <option value="{{ turma.id }}" {% if turma_selecionada_id == turma.id %}selected{% endif %}>
-                                    {{ turma.nome }}
-                                </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                    </div>
-                    <div class="col-md-8">
-                        <div class="input-group">
-                            <input type="text" name="search" class="form-control" placeholder="Buscar disciplina por nome ou código..." value="{{ request.args.get('search', '') }}">
-                            <button class="btn btn-primary" type="submit">
-                                <i class="fas fa-search"></i>
-                            </button>
-                            {% if request.args.get('search') or turma_selecionada_id %}
-                            <a href="{{ url_for('disciplina.listar_disciplinas') }}" class="btn btn-outline-secondary" title="Limpar Filtros">
-                                <i class="fas fa-times"></i>
-                            </a>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-            </form>
-        </div>
-        
-        <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-hover table-striped mb-0 align-middle">
-                    <thead class="table-light">
-                        <tr>
-                            <th scope="col" class="ps-4">Nome</th>
-                            <th scope="col">Turma</th>
-                            <th scope="col" class="text-center">Carga Horária</th>
-                            <th scope="col" style="width: 25%;">Progresso</th>
-                            <th scope="col" class="text-end pe-4">Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for item in disciplinas_com_progresso %}
-                        {% set disciplina = item.disciplina %}
-                        {% set progresso = item.progresso %}
-                        <tr>
-                            <td class="ps-4 fw-bold text-primary">
-                                {{ disciplina.materia }}
-                                {% if disciplina.codigo %}
-                                <br>
-                                <small class="text-muted fw-normal">{{ disciplina.codigo }}</small>
-                                {% endif %}
-                            </td>
-                            <td>
-                                {% if disciplina.turma %}
-                                    <span class="badge bg-info text-dark">{{ disciplina.turma.nome }}</span>
-                                {% else %}
-                                    <span class="badge bg-secondary">Sem Turma</span>
-                                {% endif %}
-                            </td>
-                            <td class="text-center">
-                                <span class="badge bg-light text-dark border">
-                                    {{ progresso.agendado }} / {{ progresso.previsto }} h
+    <div class="table-responsive">
+        {% if disciplinas_com_progresso %}
+            <table class="table-styled">
+                <thead>
+                    <tr>
+                        <th style="width: 40%;">Matéria</th>
+                        <th>Carga Horária</th>
+                        <th style="width: 30%;">Progresso</th>
+                        {% if current_user.role in ['programador', 'admin_escola'] %}
+                        <th class="text-right">Ações</th>
+                        {% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in disciplinas_com_progresso %}
+                    <tr>
+                        <td data-label="Matéria">
+                            <strong>{{ item.disciplina.materia }}</strong>
+                        </td>
+                        <td data-label="Carga Horária">{{ item.disciplina.carga_horaria_prevista }}h</td>
+                        <td data-label="Progresso">
+                            <div class="progress-bar-container">
+                                <div class="progress-bar-fill" style="width: {{ item.progresso.percentual }}%;"></div>
+                                <span class="progress-bar-text">
+                                    {% set restantes = item.progresso.previsto - item.progresso.agendado %}
+                                    {{ item.progresso.agendado }} / {{ item.progresso.previsto }}h ({{ restantes }}h restantes)
                                 </span>
-                            </td>
-                            <td>
-                                <div class="d-flex align-items-center">
-                                    <div class="progress flex-grow-1" style="height: 15px; border-radius: 10px; background-color: #e9ecef;">
-                                        <div class="progress-bar progress-bar-striped progress-bar-animated {% if progresso.percentual >= 100 %}bg-success{% else %}bg-primary{% endif %}" 
-                                             role="progressbar" 
-                                             style="width: {{ progresso.percentual }}%;" 
-                                             aria-valuenow="{{ progresso.percentual }}" 
-                                             aria-valuemin="0" 
-                                             aria-valuemax="100">
-                                        </div>
-                                    </div>
-                                    <span class="ms-2 fw-bold text-dark small" style="min-width: 45px; text-align: right;">
-                                        {{ progresso.percentual }}%
-                                    </span>
-                                </div>
-                            </td>
-                            <td class="text-end pe-4">
-                                <div class="btn-group">
-                                    <a href="{{ url_for('disciplina.editar_disciplina', disciplina_id=disciplina.id) }}" class="btn btn-sm btn-outline-secondary" title="Editar">
-                                        <i class="fas fa-edit"></i>
-                                    </a>
-                                    {% if current_user.is_admin or current_user.is_programmer %}
-                                    <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteModal{{ disciplina.id }}" title="Excluir">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                    {% endif %}
-                                </div>
-
-                                <div class="modal fade" id="deleteModal{{ disciplina.id }}" tabindex="-1" aria-hidden="true">
-                                    <div class="modal-dialog">
-                                        <div class="modal-content">
-                                            <div class="modal-header">
-                                                <h5 class="modal-title">Confirmar Exclusão</h5>
-                                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                            </div>
-                                            <div class="modal-body text-start">
-                                                Tem certeza que deseja excluir a disciplina <strong>{{ disciplina.materia }}</strong>?
-                                                <br><br>
-                                                <small class="text-danger">Isso também excluirá todos os horários e vínculos associados.</small>
-                                            </div>
-                                            <div class="modal-footer">
-                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                                                <form action="{{ url_for('disciplina.excluir_disciplina', disciplina_id=disciplina.id) }}" method="POST">
-                                                    {{ delete_form.hidden_tag() }}
-                                                    <button type="submit" class="btn btn-danger">Excluir</button>
-                                                </form>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </td>
-                        </tr>
-                        {% else %}
-                        <tr>
-                            <td colspan="5" class="text-center py-5 text-muted">
-                                <i class="fas fa-folder-open fa-3x mb-3"></i>
-                                <p>Nenhuma disciplina encontrada.</p>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                            </div>
+                        </td>
+                        {% if current_user.role in ['programador', 'admin_escola'] %}
+                        <td data-label="Ações" class="text-right">
+                            <div class="btn-group">
+                                <a href="{{ url_for('disciplina.editar_disciplina', disciplina_id=item.disciplina.id) }}" class="btn btn-sm btn-warning">Gerenciar</a>
+                                <form method="POST" action="{{ url_for('disciplina.excluir_disciplina', disciplina_id=item.disciplina.id) }}" style="display: inline;" onsubmit="return confirm('Tem certeza que deseja excluir esta disciplina?');">
+                                    {{ delete_form.hidden_tag() }}
+                                    <button type="submit" class="btn btn-sm btn-danger">Excluir</button>
+                                </form>
+                            </div>
+                        </td>
+                        {% endif %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <div class="empty-state">
+                <h2>Nenhuma Disciplina Cadastrada</h2>
+                <p>Nenhuma disciplina foi encontrada para esta turma.</p>
             </div>
-        </div>
-        {% if pagination %}
-        <div class="card-footer bg-white py-3">
-             {% include 'partials/_pagination.html' %}
-        </div>
         {% endif %}
     </div>
 </div>
+{% else %}
+<div class="empty-state" style="margin-top: 2rem;">
+    <p>Por favor, selecione uma turma no menu acima para começar.</p>
+</div>
+{% endif %}
+
+<style>
+/* Ajuste para o botão no cabeçalho */
+.content-header {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.progress-bar-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 24px;
+    background-color: #e9ecef;
+    border-radius: 8px;
+    border: 1px solid #dee2e6;
+    overflow: hidden;
+}
+.progress-bar-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    background: linear-gradient(135deg, var(--color-primary-light), var(--color-primary));
+    transition: width 0.5s ease-in-out;
+}
+.progress-bar-text {
+    position: relative;
+    z-index: 1;
+    font-weight: 600;
+    font-size: 0.8rem;
+    color: #333; /* Alterado para cor escura para melhor contraste em barras vazias */
+    text-shadow: 0 0 2px rgba(255,255,255,0.8);
+    padding: 0 10px;
+    white-space: nowrap;
+}
+</style>
 {% endblock %}
