@@ -6,7 +6,8 @@ import json
 from io import BytesIO
 from typing import Any, Dict, List, Tuple
 from datetime import date
-from sqlalchemy import func, select, union_all
+from sqlalchemy import select
+from sqlalchemy.orm import aliased
 
 # Importações seguras que não dependem do banco de dados ou de outros serviços locais
 from google.oauth2.service_account import Credentials
@@ -53,70 +54,118 @@ class RelatorioService:
         instrutor_ids_filter: List[int] | None
     ) -> List[Dict[str, Any]]:
         """
-        Busca e formata os dados de horas-aula por instrutor, corrigindo a consulta
-        para usar as colunas corretas e somar horas de instrutores primários e secundários.
+        Busca e formata os dados de horas-aula por instrutor.
+        Corrige o problema de conflito ao processar instrutores primários e secundários
+        realizando a agregação via lógica de aplicação, garantindo precisão.
         """
-        # As importações são feitas DENTRO da função para garantir que o contexto do app Flask esteja pronto.
         from ..models import db, Horario, User, Instrutor, Disciplina, Semana
 
-        # Subquery para "desnormalizar" os instrutores, tratando instrutor_id e instrutor_id_2 como linhas separadas.
-        # Isso simplifica a agregação e garante que ambos sejam contabilizados.
-        s1 = select(Horario.instrutor_id.label("instrutor_id"), Horario.duracao, Horario.disciplina_id, Horario.semana_id).where(Horario.instrutor_id.isnot(None))
-        s2 = select(Horario.instrutor_id_2.label("instrutor_id"), Horario.duracao, Horario.disciplina_id, Horario.semana_id).where(Horario.instrutor_id_2.isnot(None))
-        unioned_horarios = union_all(s1, s2).alias("unioned_horarios")
+        # Criar aliases para permitir o join duplo (instrutor 1 e instrutor 2)
+        Instrutor1 = aliased(Instrutor)
+        User1 = aliased(User)
+        Instrutor2 = aliased(Instrutor)
+        User2 = aliased(User)
 
-        # Query principal que agora utiliza a subquery.
+        # Seleciona todos os dados relevantes de uma só vez
+        # Trazemos Horario, Disciplina e os dados dos DOIS possíveis instrutores
         query = (
             select(
-                User.posto_graduacao,
-                User.matricula,
-                User.nome_completo,
-                Disciplina.materia.label('disciplina_nome'),
-                func.sum(unioned_horarios.c.duracao).label('ch_a_pagar'),
-                Disciplina.carga_horaria_prevista.label('ch_total')
+                Horario,
+                Disciplina,
+                Instrutor1, User1,
+                Instrutor2, User2
             )
-            .select_from(User)
-            .join(Instrutor, User.id == Instrutor.user_id)
-            .join(unioned_horarios, Instrutor.id == unioned_horarios.c.instrutor_id)
-            .join(Disciplina, unioned_horarios.c.disciplina_id == Disciplina.id)
-            .join(Semana, unioned_horarios.c.semana_id == Semana.id)
+            .join(Semana, Horario.semana_id == Semana.id)
+            .join(Disciplina, Horario.disciplina_id == Disciplina.id)
+            # Join Obrigatório para o Instrutor 1 (Titular)
+            .join(Instrutor1, Horario.instrutor_id == Instrutor1.id)
+            .join(User1, Instrutor1.user_id == User1.id)
+            # Join Opcional (Left Join) para o Instrutor 2
+            .outerjoin(Instrutor2, Horario.instrutor_id_2 == Instrutor2.id)
+            .outerjoin(User2, Instrutor2.user_id == User2.id)
             .filter(
                 Semana.data_inicio <= data_fim,
                 Semana.data_fim >= data_inicio
             )
-            .group_by(
-                User.posto_graduacao, User.matricula, User.nome_completo,
-                Disciplina.materia, Disciplina.carga_horaria_prevista
-            )
-            .order_by(User.matricula.asc())  # Alterado de nome_completo para matricula.asc()
         )
 
-        # Aplica filtros opcionais de forma correta
-        if is_rr_filter:
-            query = query.where(Instrutor.is_rr == True)
-        if instrutor_ids_filter:
-            query = query.where(Instrutor.id.in_(instrutor_ids_filter))
+        rows = db.session.execute(query).all()
 
-        # Executa a query e obtém os resultados como dicionários
-        resultados_db = db.session.execute(query).mappings().all()
-        
-        # Agrupa os resultados em Python (lógica mantida, pois está correta)
+        # Dicionário para agregação: matricula -> dados
         dados_agrupados = {}
-        for r in resultados_db:
-            matricula = r['matricula'] or r['nome_completo']
-            if matricula not in dados_agrupados:
-                dados_agrupados[matricula] = {
-                    "info": {"user": {
-                        "posto_graduacao": r['posto_graduacao'], "matricula": r['matricula'], "nome_completo": r['nome_completo'],
-                    }},
-                    "disciplinas": []
+
+        def processar_instrutor(user_obj, instrutor_obj, disciplina_obj, duracao):
+            """Função auxiliar para somar horas a um instrutor específico."""
+            if not user_obj or not instrutor_obj:
+                return
+
+            # Aplicar Filtros
+            if is_rr_filter and not instrutor_obj.is_rr:
+                return
+            if instrutor_ids_filter and instrutor_obj.id not in instrutor_ids_filter:
+                return
+
+            chave = user_obj.matricula
+            
+            # Inicializa a estrutura do instrutor se não existir
+            if chave not in dados_agrupados:
+                dados_agrupados[chave] = {
+                    "info": {
+                        "user": {
+                            "posto_graduacao": user_obj.posto_graduacao,
+                            "matricula": user_obj.matricula,
+                            "nome_completo": user_obj.nome_completo,
+                        }
+                    },
+                    "disciplinas_map": {} # Usado temporariamente para somar por disciplina
                 }
-            dados_agrupados[matricula]["disciplinas"].append({
-                "nome": r['disciplina_nome'], "ch_total": r['ch_total'] or 0,
-                "ch_paga_anteriormente": 0,  # Este campo pode ser calculado no futuro se necessário
-                "ch_a_pagar": r['ch_a_pagar'] or 0,
+
+            # Inicializa a disciplina para este instrutor se não existir
+            nome_disc = disciplina_obj.materia
+            if nome_disc not in dados_agrupados[chave]["disciplinas_map"]:
+                dados_agrupados[chave]["disciplinas_map"][nome_disc] = {
+                    "nome": nome_disc,
+                    "ch_total": disciplina_obj.carga_horaria_prevista,
+                    "ch_a_pagar": 0
+                }
+
+            # Soma a duração
+            dados_agrupados[chave]["disciplinas_map"][nome_disc]["ch_a_pagar"] += duracao
+
+        # Itera sobre todas as aulas encontradas
+        for row in rows:
+            horario = row[0]   # Objeto Horario
+            disciplina = row[1] # Objeto Disciplina
+            inst1 = row[2]      # Objeto Instrutor (1)
+            usr1 = row[3]       # Objeto User (1)
+            inst2 = row[4]      # Objeto Instrutor (2) - Pode ser None
+            usr2 = row[5]       # Objeto User (2) - Pode ser None
+
+            duracao = horario.duracao or 1
+
+            # Processa Instrutor 1
+            processar_instrutor(usr1, inst1, disciplina, duracao)
+
+            # Processa Instrutor 2 (se existir)
+            if inst2 and usr2:
+                processar_instrutor(usr2, inst2, disciplina, duracao)
+
+        # Formata a saída final convertendo os mapas em listas para o template/xlsx
+        lista_final = []
+        # Ordena por matrícula para manter consistência
+        chaves_ordenadas = sorted(dados_agrupados.keys())
+
+        for chave in chaves_ordenadas:
+            item = dados_agrupados[chave]
+            # Converte o mapa de disciplinas em lista
+            lista_disciplinas = list(item["disciplinas_map"].values())
+            
+            lista_final.append({
+                "info": item["info"],
+                "disciplinas": lista_disciplinas
             })
-        return list(dados_agrupados.values())
+
+        return lista_final
 
     @staticmethod
     def export_to_google_sheets(contexto: Dict[str, Any]) -> Tuple[bool, str]:
