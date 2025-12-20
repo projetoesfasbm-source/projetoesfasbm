@@ -5,7 +5,7 @@ import os
 import json
 from io import BytesIO
 from typing import Any, Dict, List, Tuple
-from datetime import date
+from datetime import date, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import aliased
 
@@ -47,6 +47,25 @@ def _upload_xlsx_and_convert_to_sheet(filename: str, xlsx_bytes: bytes) -> str |
 class RelatorioService:
 
     @staticmethod
+    def _get_dia_offset(dia_semana_str: str) -> int:
+        """
+        Converte string do dia da semana (ex: 'segunda-feira') para offset numérico (0=seg, 6=dom).
+        Normaliza strings para evitar erros com acentos ou casing.
+        """
+        if not dia_semana_str:
+            return 0
+        
+        s = dia_semana_str.lower().strip()
+        if 'segunda' in s: return 0
+        if 'terca' in s or 'terça' in s: return 1
+        if 'quarta' in s: return 2
+        if 'quinta' in s: return 3
+        if 'sexta' in s: return 4
+        if 'sabado' in s or 'sábado' in s: return 5
+        if 'domingo' in s: return 6
+        return 0
+
+    @staticmethod
     def get_horas_aula_por_instrutor(
         data_inicio: date,
         data_fim: date,
@@ -55,8 +74,11 @@ class RelatorioService:
     ) -> List[Dict[str, Any]]:
         """
         Busca e formata os dados de horas-aula por instrutor.
-        Corrige o problema de conflito ao processar instrutores primários e secundários
-        realizando a agregação via lógica de aplicação, garantindo precisão.
+        
+        CORREÇÃO DEFINITIVA (DUPLA REGÊNCIA):
+        Utiliza deduplicação por (Instrutor + DATA REAL + PERÍODO).
+        Isso resolve problemas onde semanas sobrepostas ou junções incorretas geram linhas duplicadas
+        no banco, garantindo que o instrutor receba apenas 1 vez por slot de tempo físico.
         """
         from ..models import db, Horario, User, Instrutor, Disciplina, Semana
 
@@ -66,21 +88,21 @@ class RelatorioService:
         Instrutor2 = aliased(Instrutor)
         User2 = aliased(User)
 
-        # Seleciona todos os dados relevantes de uma só vez
-        # Trazemos Horario, Disciplina e os dados dos DOIS possíveis instrutores
+        # Seleciona todos os dados, INCLUINDO a Semana para calcular a data real
         query = (
             select(
                 Horario,
                 Disciplina,
                 Instrutor1, User1,
-                Instrutor2, User2
+                Instrutor2, User2,
+                Semana
             )
             .join(Semana, Horario.semana_id == Semana.id)
             .join(Disciplina, Horario.disciplina_id == Disciplina.id)
             # Join Obrigatório para o Instrutor 1 (Titular)
             .join(Instrutor1, Horario.instrutor_id == Instrutor1.id)
             .join(User1, Instrutor1.user_id == User1.id)
-            # Join Opcional (Left Join) para o Instrutor 2
+            # Join Opcional (Left Join) para o Instrutor 2 (Auxiliar/Monitor)
             .outerjoin(Instrutor2, Horario.instrutor_id_2 == Instrutor2.id)
             .outerjoin(User2, Instrutor2.user_id == User2.id)
             .filter(
@@ -93,23 +115,37 @@ class RelatorioService:
 
         # Dicionário para agregação: matricula -> dados
         dados_agrupados = {}
+        
+        # Conjunto para garantir unicidade do pagamento por SLOT DE TEMPO
+        # Chave: (instrutor_id, data_real_da_aula, periodo_aula)
+        slots_pagos = set()
 
-        def processar_instrutor(user_obj, instrutor_obj, disciplina_obj, duracao):
-            """Função auxiliar para somar horas a um instrutor específico."""
+        def processar_instrutor(user_obj, instrutor_obj, disciplina_obj, data_aula, periodo_aula, duracao):
+            """Soma horas apenas se o slot (Instrutor+Dia+Periodo) ainda não foi pago."""
             if not user_obj or not instrutor_obj:
                 return
 
-            # Aplicar Filtros
+            # Chave robusta de unicidade: Quem + Quando + Qual Periodo
+            chave_slot = (instrutor_obj.id, data_aula, periodo_aula)
+            
+            # Se já pagamos este instrutor neste horário específico, ignoramos duplicatas do banco
+            if chave_slot in slots_pagos:
+                return
+
+            # Aplica Filtros de Relatório
             if is_rr_filter and not instrutor_obj.is_rr:
                 return
             if instrutor_ids_filter and instrutor_obj.id not in instrutor_ids_filter:
                 return
 
-            chave = user_obj.matricula
+            # Marca slot como pago
+            slots_pagos.add(chave_slot)
+
+            chave_agrupamento = user_obj.matricula
             
             # Inicializa a estrutura do instrutor se não existir
-            if chave not in dados_agrupados:
-                dados_agrupados[chave] = {
+            if chave_agrupamento not in dados_agrupados:
+                dados_agrupados[chave_agrupamento] = {
                     "info": {
                         "user": {
                             "posto_graduacao": user_obj.posto_graduacao,
@@ -117,47 +153,54 @@ class RelatorioService:
                             "nome_completo": user_obj.nome_completo,
                         }
                     },
-                    "disciplinas_map": {} # Usado temporariamente para somar por disciplina
+                    "disciplinas_map": {} 
                 }
 
             # Inicializa a disciplina para este instrutor se não existir
             nome_disc = disciplina_obj.materia
-            if nome_disc not in dados_agrupados[chave]["disciplinas_map"]:
-                dados_agrupados[chave]["disciplinas_map"][nome_disc] = {
+            if nome_disc not in dados_agrupados[chave_agrupamento]["disciplinas_map"]:
+                dados_agrupados[chave_agrupamento]["disciplinas_map"][nome_disc] = {
                     "nome": nome_disc,
                     "ch_total": disciplina_obj.carga_horaria_prevista,
                     "ch_a_pagar": 0
                 }
 
             # Soma a duração
-            dados_agrupados[chave]["disciplinas_map"][nome_disc]["ch_a_pagar"] += duracao
+            dados_agrupados[chave_agrupamento]["disciplinas_map"][nome_disc]["ch_a_pagar"] += duracao
 
-        # Itera sobre todas as aulas encontradas
+        # Itera sobre todas as linhas retornadas
         for row in rows:
             horario = row[0]   # Objeto Horario
             disciplina = row[1] # Objeto Disciplina
             inst1 = row[2]      # Objeto Instrutor (1)
             usr1 = row[3]       # Objeto User (1)
-            inst2 = row[4]      # Objeto Instrutor (2) - Pode ser None
-            usr2 = row[5]       # Objeto User (2) - Pode ser None
+            inst2 = row[4]      # Objeto Instrutor (2)
+            usr2 = row[5]       # Objeto User (2)
+            semana = row[6]     # Objeto Semana
 
             duracao = horario.duracao or 1
+            periodo = horario.periodo
 
-            # Processa Instrutor 1
-            processar_instrutor(usr1, inst1, disciplina, duracao)
+            # Calcula a data real da aula para evitar duplicidade de semanas sobrepostas
+            offset_dias = RelatorioService._get_dia_offset(horario.dia_semana)
+            data_aula = semana.data_inicio + timedelta(days=offset_dias)
 
-            # Processa Instrutor 2 (se existir)
+            # 1. Processa Instrutor 1 (Titular)
+            if inst1 and usr1:
+                processar_instrutor(usr1, inst1, disciplina, data_aula, periodo, duracao)
+
+            # 2. Processa Instrutor 2 (Auxiliar/Dupla)
             if inst2 and usr2:
-                processar_instrutor(usr2, inst2, disciplina, duracao)
+                # Segurança contra erro de cadastro (mesmo ID nos dois campos)
+                if not (inst1 and inst1.id == inst2.id):
+                    processar_instrutor(usr2, inst2, disciplina, data_aula, periodo, duracao)
 
-        # Formata a saída final convertendo os mapas em listas para o template/xlsx
+        # Formata a saída final
         lista_final = []
-        # Ordena por matrícula para manter consistência
         chaves_ordenadas = sorted(dados_agrupados.keys())
 
         for chave in chaves_ordenadas:
             item = dados_agrupados[chave]
-            # Converte o mapa de disciplinas em lista
             lista_disciplinas = list(item["disciplinas_map"].values())
             
             lista_final.append({
@@ -172,7 +215,6 @@ class RelatorioService:
         """
         Gera o arquivo XLSX em memória e faz o upload para o Google Drive.
         """
-        # Importa o gerador de XLSX aqui dentro para evitar erros de importação na inicialização.
         from .xlsx_service import gerar_mapa_gratificacao_xlsx
         
         try:

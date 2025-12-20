@@ -54,8 +54,13 @@ class DisciplinaService:
         except Exception as e:
             current_app.logger.error(f"Erro ao buscar disciplinas por escola: {e}")
             return []
+    
+    @staticmethod
+    def get_by_id(id: int):
+        """Busca disciplina por ID (método auxiliar para compatibilidade)."""
+        return db.session.get(Disciplina, id)
 
-    # --- MÉTODOS DE ESCRITA (CRUD) ---
+    # --- MÉTODOS DE ESCRITA (CRUD RESTAURADOS) ---
     @staticmethod
     def create_disciplina(data, school_id):
         materia = data.get('materia')
@@ -148,21 +153,29 @@ class DisciplinaService:
             current_app.logger.error(f"Erro ao excluir disciplina: {e}")
             return False, 'Ocorreu um erro interno ao excluir a disciplina.'
 
-    # --- MÉTODOS DE PROGRESSO E SINCRONIZAÇÃO ---
+    # --- MÉTODOS DE PROGRESSO E SINCRONIZAÇÃO (CORRIGIDOS) ---
 
     @staticmethod
     def get_dados_progresso(disciplina, pelotao_nome=None):
+        """
+        Calcula o progresso da disciplina com lógica de DEDUPLICAÇÃO.
+        Isso impede que aulas com dois instrutores contem como carga horária dobrada.
+        """
         today = date.today()
+        
+        # Mapeamento para filtro de dias passados na semana atual
         today_weekday_index = today.weekday()
         dias_da_semana = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo']
-        dias_passados_na_semana = dias_da_semana[:today_weekday_index]
+        dias_passados_na_semana = dias_da_semana[:today_weekday_index + 1] # Inclui hoje
 
+        # 1. Busca os horários candidatos (aulas passadas ou de hoje)
+        # Trazemos o objeto Horario completo e a Semana para calcular unicidade
         query = (
-            select(func.sum(Horario.duracao))
+            select(Horario, Semana)
             .join(Semana)
             .where(
                 Horario.disciplina_id == disciplina.id,
-                Horario.status == 'confirmado',
+                Horario.status == 'confirmado', # Filtra apenas confirmados
                 or_(
                     Semana.data_fim < today,
                     and_(
@@ -177,21 +190,58 @@ class DisciplinaService:
         if pelotao_nome:
             query = query.where(Horario.pelotao == pelotao_nome)
 
-        aulas_concluidas = db.session.scalar(query) or 0
+        rows = db.session.execute(query).all()
         
-        # O total concluído é a soma do que foi agendado e passado + o que foi inserido manualmente (carga cumprida)
-        # Nota: Se a carga_cumprida for usada apenas para correção manual, isso está ok.
-        total_concluido = aulas_concluidas + disciplina.carga_horaria_cumprida
+        # 2. Lógica de Agregação Segura (Deduplicação)
+        # Usamos um conjunto (set) para armazenar 'slots' de tempo únicos.
+        # Se houver 2 instrutores na mesma sala (mesma data, mesmo período),
+        # teremos 2 linhas no banco, mas a chave do slot será a mesma, contando apenas 1x.
+        
+        slots_computados = set()
+        aulas_concluidas_reais = 0
+        
+        # Função auxiliar para offset do dia
+        def get_dia_offset(dia_str):
+            s = dia_str.lower().strip()
+            if 'segunda' in s: return 0
+            if 'terca' in s or 'terça' in s: return 1
+            if 'quarta' in s: return 2
+            if 'quinta' in s: return 3
+            if 'sexta' in s: return 4
+            if 'sabado' in s or 'sábado' in s: return 5
+            if 'domingo' in s: return 6
+            return 0
+
+        for row in rows:
+            horario = row[0]
+            semana = row[1]
+            
+            # Calcula data real da aula
+            offset = get_dia_offset(horario.dia_semana)
+            data_aula = semana.data_inicio + timedelta(days=offset)
+            
+            # Chave única: (Data Real, Periodo, Pelotao)
+            # Isso garante que se houver 2 registros para o mesmo horário (co-docência), só conta 1 vez.
+            chave_slot = (data_aula, horario.periodo, horario.pelotao)
+            
+            if chave_slot not in slots_computados:
+                duracao = horario.duracao or 1
+                aulas_concluidas_reais += duracao
+                slots_computados.add(chave_slot)
+
+        # 3. Calcula totais
+        # Soma o calculado real + o ajuste manual (se houver)
+        total_concluido = aulas_concluidas_reais + disciplina.carga_horaria_cumprida
         carga_horaria_total = disciplina.carga_horaria_prevista
         
         percentual = 0
         if carga_horaria_total > 0:
-            percentual = round((total_concluido / carga_horaria_total) * 100)
+            percentual = (total_concluido / carga_horaria_total) * 100
             
         return {
-            'agendado': total_concluido,
+            'agendado': int(total_concluido),
             'previsto': carga_horaria_total,
-            'percentual': min(percentual, 100)
+            'percentual': min(round(percentual), 100)
         }
 
     @staticmethod
@@ -230,6 +280,7 @@ class DisciplinaService:
                     dia_semana_str = dias_map.get(data_aula.weekday())
                     
                     # 3. Busca a duração prevista no Horário para aquele dia específico
+                    # Trazemos Horario + Semana para validar vigência
                     horarios_do_dia = db.session.scalars(
                         select(Horario)
                         .join(Semana)
@@ -241,19 +292,29 @@ class DisciplinaService:
                         )
                     ).all()
                     
-                    horas_do_dia = sum(h.duracao for h in horarios_do_dia)
+                    # DEDUPLICAÇÃO DE HORÁRIOS NO MESMO DIA (para evitar soma dobrada se houver 2 instrutores)
+                    # Usamos um set de periodos para contar cada tempo de aula apenas uma vez
+                    periodos_contabilizados = set()
+                    horas_do_dia = 0
+                    
+                    for h in horarios_do_dia:
+                        if h.periodo not in periodos_contabilizados:
+                            duracao = h.duracao or 1
+                            horas_do_dia += duracao
+                            periodos_contabilizados.add(h.periodo)
                     
                     # Se não houver horário cadastrado na grade (aula extra ou erro),
-                    # assumimos 2 tempos por padrão para não zerar o esforço do instrutor.
-                    if horas_do_dia == 0:
-                         horas_do_dia = 2 
-                    
+                    # assumimos 2 tempos por padrão.
+                    if horas_do_dia == 0 and horarios_do_dia:
+                         # Fallback se a lista não for vazia mas soma for 0 (raro)
+                         horas_do_dia = 2
+                    elif not horarios_do_dia:
+                         # Se não achou horário na grade para o dia do diário
+                         horas_do_dia = 2
+
                     nova_carga_calculada += horas_do_dia
 
-                # 4. Atualiza no banco se mudou (Substitui o valor manual pelo calculado real)
-                # Nota: Isso vai sobrescrever ajustes manuais feitos no campo 'carga_horaria_cumprida'
-                # Se você usa esse campo para "saldo inicial", a lógica deveria ser +=. 
-                # Aqui estamos assumindo que "sincronizar" significa "recontar do zero baseado nos fatos".
+                # 4. Atualiza no banco se mudou
                 if disciplina.carga_horaria_cumprida != nova_carga_calculada:
                     disciplina.carga_horaria_cumprida = nova_carga_calculada
                     db.session.add(disciplina)
