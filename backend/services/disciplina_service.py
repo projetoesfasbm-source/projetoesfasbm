@@ -20,15 +20,12 @@ from ..models.diario_classe import DiarioClasse
 class DisciplinaService:
     
     # --- MÉTODOS DE CONSULTA ---
-
     @staticmethod
     def get_all_disciplinas():
-        """Retorna todas as disciplinas cadastradas no sistema."""
         return db.session.scalars(select(Disciplina).order_by(Disciplina.materia)).all()
 
     @staticmethod
     def get_disciplinas_by_turma(turma_id):
-        """Retorna disciplinas de uma turma específica."""
         return db.session.scalars(
             select(Disciplina)
             .where(Disciplina.turma_id == turma_id)
@@ -37,12 +34,7 @@ class DisciplinaService:
 
     @staticmethod
     def get_disciplinas_by_school(school_id):
-        """
-        Busca todas as disciplinas pertencentes a uma escola específica.
-        """
-        if not school_id:
-            return []
-            
+        if not school_id: return []
         stmt = (
             select(Disciplina)
             .join(Turma, Disciplina.turma_id == Turma.id)
@@ -53,11 +45,9 @@ class DisciplinaService:
 
     @staticmethod
     def get_by_id(id: int):
-        """Busca disciplina por ID."""
         return db.session.get(Disciplina, id)
 
     # --- MÉTODOS DE ESCRITA (CRUD) ---
-
     @staticmethod
     def create_disciplina(data, school_id):
         materia = data.get('materia')
@@ -76,7 +66,7 @@ class DisciplinaService:
             try:
                 turma = db.session.get(Turma, int(turma_id))
                 if not turma or turma.school_id != school_id:
-                    errors.append(f'Turma com ID {turma_id} é inválida ou não pertence à sua escola.')
+                    errors.append(f'Turma {turma_id}: Inválida ou outra escola.')
                     continue
 
                 exists = db.session.execute(
@@ -84,7 +74,7 @@ class DisciplinaService:
                 ).scalar_one_or_none()
                 
                 if exists:
-                    errors.append(f'A disciplina "{materia}" já existe na turma {turma.nome}.')
+                    errors.append(f'Disciplina "{materia}" já existe na turma {turma.nome}.')
                     continue
 
                 nova_disciplina = Disciplina(
@@ -99,162 +89,128 @@ class DisciplinaService:
 
                 if turma.alunos:
                     for aluno in turma.alunos:
-                        matricula = HistoricoDisciplina(aluno_id=aluno.id, disciplina_id=nova_disciplina.id)
-                        db.session.add(matricula)
+                        db.session.add(HistoricoDisciplina(aluno_id=aluno.id, disciplina_id=nova_disciplina.id))
                 
                 success_count += 1
             except Exception as e:
                 db.session.rollback()
-                errors.append(f'Erro na turma {turma_id}: {str(e)}')
+                errors.append(f'Erro turma {turma_id}: {str(e)}')
                 db.session.begin()
 
-        if success_count > 0:
-            db.session.commit()
-        
-        message = f'{success_count} disciplina(s) criada(s). '
-        if errors:
-            message += "Erros: " + "; ".join(errors)
-        
-        return success_count > 0, message
+        if success_count > 0: db.session.commit()
+        return success_count > 0, f'{success_count} criada(s). ' + ("; ".join(errors) if errors else "")
 
     @staticmethod
     def update_disciplina(disciplina_id, data):
         disciplina = db.session.get(Disciplina, disciplina_id)
-        if not disciplina:
-            return False, 'Disciplina não encontrada.'
-
+        if not disciplina: return False, 'Não encontrada.'
         try:
             disciplina.materia = data.get('materia', disciplina.materia)
             disciplina.carga_horaria_prevista = int(data.get('carga_horaria_prevista', disciplina.carga_horaria_prevista))
-            
             if 'carga_horaria_cumprida' in data:
                 disciplina.carga_horaria_cumprida = int(data.get('carga_horaria_cumprida') or 0)
-                
             disciplina.ciclo_id = int(data.get('ciclo_id', disciplina.ciclo_id))
             db.session.commit()
-            return True, 'Disciplina atualizada com sucesso!'
+            return True, 'Atualizada com sucesso!'
         except Exception as e:
             db.session.rollback()
-            current_app.logger.error(f"Erro update disciplina: {e}")
             return False, f'Erro: {str(e)}'
 
     @staticmethod
     def delete_disciplina(disciplina_id):
         disciplina = db.session.get(Disciplina, disciplina_id)
-        if not disciplina:
-            return False, 'Disciplina não encontrada.'
-
+        if not disciplina: return False, 'Não encontrada.'
         try:
             db.session.delete(disciplina)
             db.session.commit()
-            return True, 'Disciplina excluída com sucesso!'
+            return True, 'Excluída com sucesso!'
         except Exception as e:
             db.session.rollback()
             return False, 'Erro ao excluir (verifique vínculos).'
 
-    # --- NOVO CÁLCULO DE PROGRESSO (REFEITO TOTALMENTE) ---
+    # --- CÁLCULO DE PROGRESSO (CORRIGIDO: USA DURACAO E NÃO PERIODOS) ---
 
     @staticmethod
-    def get_dados_progresso(disciplina, pelotao_nome=None):
+    def get_dados_progresso(disciplina):
         """
-        Calcula o progresso baseado ESTRITAMENTE no Quadro de Horários.
-        Ignora duplicidade de instrutores.
-        Conta:
-        - Realizado: Aulas no quadro com data <= hoje.
-        - Agendado: Aulas no quadro com data > hoje.
+        Calcula o progresso lendo TODAS as semanas e somando a DURACAO das aulas.
         """
         
-        # 1. Busca todos os horários confirmados desta disciplina vinculados a semanas
-        query = (
+        # Garante que o objeto turma está acessível para pegar o nome
+        if not disciplina.turma:
+             return {'realizado': 0, 'agendado': 0, 'previsto': 0, 'restante_para_planejar': 0, 'pct_realizado': 0, 'pct_agendado': 0}
+
+        nome_pelotao = disciplina.turma.nome
+
+        # 1. Busca TUDO da tabela Horario para esta disciplina
+        # Filtramos por Horario.pelotao (string) == disciplina.turma.nome
+        stmt = (
             select(Horario, Semana)
-            .join(Semana)
+            .join(Semana, Horario.semana_id == Semana.id)
             .where(
                 Horario.disciplina_id == disciplina.id,
-                Horario.status == 'confirmado'
+                Horario.pelotao == nome_pelotao
             )
         )
         
-        # Filtro opcional por pelotão, caso a arquitetura exija (geralmente não usado na visão geral)
-        if pelotao_nome:
-            query = query.where(Horario.pelotao == pelotao_nome)
-
-        rows = db.session.execute(query).all()
-
+        results = db.session.execute(stmt).all()
+        
         today = date.today()
-        
-        # Conjuntos para garantir unicidade do slot (Data + Periodo)
-        # Se houver 2 instrutores no mesmo dia/periodo, o slot é o mesmo, então conta 1x.
-        slots_realizados = set()
-        slots_agendados = set()
-        
         carga_realizada = 0
         carga_agendada = 0
+        
+        dia_map = {
+            'segunda': 0, 'terca': 1, 'terça': 1, 'quarta': 2, 
+            'quinta': 3, 'sexta': 4, 'sabado': 5, 'sábado': 5, 'domingo': 6
+        }
 
-        # Helper para converter string de dia da semana em offset
-        def get_dia_offset(dia_str):
-            s = dia_str.lower().strip()
-            if 'segunda' in s: return 0
-            if 'terca' in s or 'terça' in s: return 1
-            if 'quarta' in s: return 2
-            if 'quinta' in s: return 3
-            if 'sexta' in s: return 4
-            if 'sabado' in s or 'sábado' in s: return 5
-            if 'domingo' in s: return 6
-            return 0
-
-        for row in rows:
+        for row in results:
             horario = row[0]
             semana = row[1]
             
-            offset = get_dia_offset(horario.dia_semana)
-            data_aula = semana.data_inicio + timedelta(days=offset)
+            # --- CORREÇÃO AQUI ---
+            # O modelo Horario tem 'duracao' (int), não 'periodos' (string/list).
+            # Se duracao for None, assumimos 1 tempo.
+            qtd_aulas = horario.duracao if horario.duracao else 1
             
-            # CHAVE ÚNICA: Data real da aula + Período da aula.
-            # Isso mata o problema de instrutores duplos.
-            chave_slot = (data_aula, horario.periodo)
-            
-            duracao = horario.duracao or 1
-            
-            if data_aula <= today:
-                # É aula passada ou de hoje (Realizada)
-                if chave_slot not in slots_realizados:
-                    carga_realizada += duracao
-                    slots_realizados.add(chave_slot)
-            else:
-                # É aula futura (Agendada)
-                if chave_slot not in slots_agendados:
-                    carga_agendada += duracao
-                    slots_agendados.add(chave_slot)
+            if qtd_aulas > 0:
+                # Calcula a data exata da aula para separar Passado (Realizado) vs Futuro (Agendado)
+                nome_dia = (horario.dia_semana or '').lower()
+                offset = 0
+                for chave, val in dia_map.items():
+                    if chave in nome_dia:
+                        offset = val
+                        break
+                
+                data_aula = semana.data_inicio + timedelta(days=offset)
+                
+                if data_aula <= today:
+                    carga_realizada += qtd_aulas
+                else:
+                    carga_agendada += qtd_aulas
 
-        total_previsto = disciplina.carga_horaria_prevista or 1 # Evita divisão por zero
+        total_previsto = disciplina.carga_horaria_prevista or 0
+        base_calc = total_previsto if total_previsto > 0 else 1
+
+        pct_realizado = (carga_realizada / base_calc) * 100
+        pct_agendado = (carga_agendada / base_calc) * 100
         
-        # Porcentagens para a barra visual
-        pct_realizado = (carga_realizada / total_previsto) * 100
-        pct_agendado = (carga_agendada / total_previsto) * 100
-        
-        # Trava em 100% visualmente se passar
-        if (pct_realizado + pct_agendado) > 100:
-            # Se estourou, ajusta proporcionalmente ou apenas trunca o agendado visual
-            if pct_realizado > 100:
-                pct_realizado = 100
-                pct_agendado = 0
-            else:
-                pct_agendado = 100 - pct_realizado
+        # Ajuste visual para não ultrapassar 100% na barra
+        soma = pct_realizado + pct_agendado
+        if soma > 100:
+            scale = 100 / soma
+            pct_realizado *= scale
+            pct_agendado *= scale
 
         return {
-            'realizado': int(carga_realizada),
-            'agendado': int(carga_agendada),
-            'previsto': int(total_previsto),
-            'restante_para_planejar': int(total_previsto - (carga_realizada + carga_agendada)),
+            'realizado': carga_realizada,
+            'agendado': carga_agendada,
+            'previsto': total_previsto,
+            'restante_para_planejar': total_previsto - (carga_realizada + carga_agendada),
             'pct_realizado': round(pct_realizado, 1),
             'pct_agendado': round(pct_agendado, 1)
         }
 
     @staticmethod
     def sincronizar_progresso_aulas(school_id=None):
-        """
-        Mantive o método para compatibilidade com rotas existentes, 
-        mas a lógica de visualização agora é "Live" via get_dados_progresso.
-        Este método pode ser usado para atualizar o campo cacheado se necessário futuramente.
-        """
-        return True, "Sincronização não é mais necessária com a nova lógica de tempo real."
+        return True, "Sincronização automática ativa."

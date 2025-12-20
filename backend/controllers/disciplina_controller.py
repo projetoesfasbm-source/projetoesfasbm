@@ -8,7 +8,6 @@ from wtforms import StringField, IntegerField, SubmitField, SelectField, SelectM
 from wtforms.validators import DataRequired, Length, NumberRange, Optional
 from wtforms.widgets import CheckboxInput, ListWidget
 
-
 from ..models.database import db
 from ..models.disciplina import Disciplina
 from ..models.ciclo import Ciclo
@@ -43,23 +42,18 @@ def listar_disciplinas():
         
     turma_selecionada_id = request.args.get('turma_id', type=int)
     
-    # Busca turmas e disciplinas usando os serviços
     turmas_disponiveis = TurmaService.get_turmas_by_school(school_id)
     todas_disciplinas = DisciplinaService.get_disciplinas_by_school(school_id)
 
     disciplinas_filtradas = []
     if turma_selecionada_id:
-        # Filtra a lista em Python para evitar múltiplas queries
         disciplinas_filtradas = [d for d in todas_disciplinas if d.turma_id == turma_selecionada_id]
     else:
-        # Mostra todas as disciplinas da escola (ou uma lista vazia se preferir forçar a seleção)
         disciplinas_filtradas = todas_disciplinas
 
-    # Processa apenas a lista filtrada para exibir o progresso
     disciplinas_com_progresso = []
     for d in disciplinas_filtradas:
-        # O Service agora ignora instrutores e foca apenas no Quadro de Horário
-        progresso = DisciplinaService.get_dados_progresso(d, d.turma.nome) 
+        progresso = DisciplinaService.get_dados_progresso(d) 
         disciplinas_com_progresso.append({'disciplina': d, 'progresso': progresso})
 
     delete_form = DeleteForm()
@@ -104,11 +98,9 @@ def editar_disciplina(disciplina_id):
         flash('Disciplina não encontrada.', 'danger')
         return redirect(url_for('disciplina.listar_disciplinas'))
 
-    # Formulário local para edição única (sem seleção múltipla de turmas)
     class EditDisciplinaForm(FlaskForm):
         materia = StringField('Matéria', validators=[DataRequired(), Length(min=3, max=100)])
         carga_horaria_prevista = IntegerField('Carga Horária Total Prevista', validators=[DataRequired(), NumberRange(min=1)])
-        # Campo mantido oculto ou opcional se quiser remover do UI
         carga_horaria_cumprida = IntegerField('Carga Horária Cumprida', validators=[Optional(), NumberRange(min=0)], default=0)
         ciclo_id = SelectField('Ciclo', coerce=int, validators=[DataRequired()])
         turma_id = SelectField('Turma', coerce=int, validators=[DataRequired(message="A turma é obrigatória.")])
@@ -150,12 +142,3 @@ def api_disciplinas_por_turma(turma_id):
 
     disciplinas = sorted(turma.disciplinas, key=lambda d: d.materia)
     return jsonify([{'id': d.id, 'materia': d.materia} for d in disciplinas])
-
-# --- MANTIDO PARA COMPATIBILIDADE, MAS A LÓGICA AGORA É LIVE ---
-@disciplina_bp.route('/sincronizar-progresso', methods=['POST'])
-@login_required
-@school_admin_or_programmer_required
-def sincronizar_progresso():
-    # Apenas redireciona com mensagem informativa, pois o cálculo é dinâmico agora
-    flash('O progresso agora é calculado automaticamente em tempo real baseado no Quadro de Horários.', 'info')
-    return redirect(request.referrer or url_for('disciplina.listar_disciplinas'))
