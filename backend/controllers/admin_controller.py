@@ -1,10 +1,11 @@
 # backend/controllers/admin_controller.py
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
-from flask_login import login_required
-from sqlalchemy import select, func, case, desc
+from flask_login import login_required, current_user
+from sqlalchemy import select, func, case, desc, and_
 from sqlalchemy.orm import joinedload
 from collections import defaultdict
+from datetime import datetime
 
 from backend.models.database import db
 from backend.models.school import School
@@ -14,6 +15,7 @@ from backend.models.disciplina import Disciplina
 from backend.models.diario_classe import DiarioClasse
 from backend.models.frequencia import FrequenciaAluno
 from backend.models.user import User
+from backend.models.instrutor import Instrutor
 from backend.services.user_service import UserService
 from utils.decorators import admin_escola_required
 
@@ -36,7 +38,9 @@ def espelho_diarios():
         flash("Escola não encontrada.", "danger")
         return redirect(url_for('main.dashboard'))
 
-    # 1. Busca estatísticas
+    # =========================================================================
+    # PARTE 1: LÓGICA DO PAINEL DE RISCO
+    # =========================================================================
     stats_query = db.session.execute(
         select(
             Aluno,
@@ -98,7 +102,6 @@ def espelho_diarios():
                 'porcentagem': round(porcentagem, 1),
                 'status': status_materia
             })
-            
             if nivel_gravidade > data['max_gravidade']:
                 data['max_gravidade'] = nivel_gravidade
 
@@ -132,6 +135,36 @@ def espelho_diarios():
         -x['total_faltas']
     ))
 
+    # =========================================================================
+    # PARTE 2: LÓGICA DA LISTA DE DIÁRIOS
+    # =========================================================================
+    page = request.args.get('page', 1, type=int)
+    turma_id = request.args.get('turma_id', type=int)
+    data_str = request.args.get('data')
+
+    # Query base para listar os diários
+    query = select(DiarioClasse).join(Turma).where(Turma.school_id == school_id)
+
+    if turma_id:
+        query = query.where(DiarioClasse.turma_id == turma_id)
+    
+    if data_str:
+        try:
+            data_filtro = datetime.strptime(data_str, '%Y-%m-%d').date()
+            query = query.where(DiarioClasse.data_aula == data_filtro)
+        except ValueError:
+            pass
+
+    # Ordenação por Data e ID
+    query = query.order_by(DiarioClasse.data_aula.desc(), DiarioClasse.id.desc())
+    
+    pagination = db.paginate(query, page=page, per_page=20)
+    diarios_lista = pagination.items
+    
+    # Carregar turmas para o filtro
+    turmas = db.session.scalars(select(Turma).where(Turma.school_id == school_id)).all()
+
+    # Dados para a tabela de "Todos os Alunos" do modal/collapse
     todos_alunos_query = db.session.execute(
         select(Aluno, Turma.nome)
         .join(Turma)
@@ -143,7 +176,6 @@ def espelho_diarios():
     todos_alunos_json = []
     for row in todos_alunos_query:
         a, t_nome = row
-        
         nome_display = "Sem Nome"
         matricula_display = "N/D"
         if a.user:
@@ -161,20 +193,19 @@ def espelho_diarios():
     return render_template(
         'admin/espelho_diarios.html', 
         alunos_alertas=alunos_alertas,
-        todos_alunos=todos_alunos_json
+        todos_alunos=todos_alunos_json,
+        diarios=diarios_lista,
+        pagination=pagination,
+        turmas=turmas
     )
 
 @admin_escola_bp.route('/detalhe-faltas/<int:aluno_id>')
 @login_required
 @admin_escola_required
 def detalhe_faltas_aluno(aluno_id):
-    # Carrega aluno com User E Turma
     aluno = db.session.scalar(
         select(Aluno)
-        .options(
-            joinedload(Aluno.user),
-            joinedload(Aluno.turma)
-        )
+        .options(joinedload(Aluno.user), joinedload(Aluno.turma))
         .where(Aluno.id == aluno_id)
     )
     if not aluno:
@@ -185,22 +216,17 @@ def detalhe_faltas_aluno(aluno_id):
         select(FrequenciaAluno)
         .join(DiarioClasse)
         .join(Disciplina)
-        .where(
-            FrequenciaAluno.aluno_id == aluno_id,
-            FrequenciaAluno.presente == False
-        )
+        .where(FrequenciaAluno.aluno_id == aluno_id, FrequenciaAluno.presente == False)
         .order_by(Disciplina.materia, DiarioClasse.data_aula.desc())
     ).all()
     
-    # --- AGRUPAMENTO POR DISCIPLINA ---
     disciplinas_map = {}
-    
     for f in faltas_query:
         disc = f.diario.disciplina
         if disc.id not in disciplinas_map:
             disciplinas_map[disc.id] = {
                 'nome': disc.materia,
-                'carga_horaria': disc.carga_horaria_prevista or 1, # Evita divisão por 0
+                'carga_horaria': disc.carga_horaria_prevista or 1,
                 'total_faltas': 0,
                 'dias': []
             }
@@ -212,15 +238,12 @@ def detalhe_faltas_aluno(aluno_id):
             'id': f.id
         })
 
-    # Processamento final para lista ordenada
     resumo_final = []
     for d_id, data in disciplinas_map.items():
         percentual = (data['total_faltas'] / data['carga_horaria']) * 100
-        
-        # Define Cor e Status
-        status = 'success' # Verde (Poucas faltas)
-        if percentual >= 30: status = 'danger' # Vermelho (Reprovado)
-        elif percentual >= 20: status = 'warning' # Amarelo (Alerta)
+        status = 'success'
+        if percentual >= 30: status = 'danger'
+        elif percentual >= 20: status = 'warning'
         
         resumo_final.append({
             'disciplina': data['nome'],
@@ -231,7 +254,80 @@ def detalhe_faltas_aluno(aluno_id):
             'dias': data['dias']
         })
     
-    # Ordena: Mais críticas primeiro
     resumo_final.sort(key=lambda x: x['percentual'], reverse=True)
-
     return render_template('admin/partials/_detalhe_dia_modal.html', aluno=aluno, resumo=resumo_final)
+
+@admin_escola_bp.route('/editar-diario-bloco/<int:diario_id>', methods=['GET', 'POST'])
+@login_required
+@admin_escola_required
+def editar_diario_bloco(diario_id):
+    """
+    Permite editar um bloco de aulas (mesma turma, data e disciplina).
+    """
+    ref_diario = db.session.get(DiarioClasse, diario_id)
+    if not ref_diario:
+        flash('Diário não encontrado', 'danger')
+        return redirect(url_for('admin_escola.espelho_diarios'))
+
+    # Busca todos os tempos da mesma aula no mesmo dia
+    diarios_bloco = db.session.scalars(
+        select(DiarioClasse)
+        .where(
+            DiarioClasse.turma_id == ref_diario.turma_id,
+            DiarioClasse.disciplina_id == ref_diario.disciplina_id,
+            DiarioClasse.data_aula == ref_diario.data_aula
+        )
+        .order_by(DiarioClasse.id)
+    ).all()
+
+    # Busca alunos da turma ordenados
+    alunos = db.session.scalars(
+        select(Aluno)
+        .join(User)
+        .where(Aluno.turma_id == ref_diario.turma_id)
+        .order_by(Aluno.num_aluno, User.nome_de_guerra) # CORRIGIDO: numero_aluno -> num_aluno
+    ).all()
+
+    if request.method == 'POST':
+        conteudo = request.form.get('conteudo')
+        observacoes = request.form.get('observacoes')
+
+        try:
+            for diario in diarios_bloco:
+                diario.conteudo_ministrado = conteudo
+                diario.observacoes = observacoes
+                
+                # Atualiza Presenças
+                for aluno in alunos:
+                    campo_name = f"presenca_{aluno.id}_{diario.id}"
+                    esta_presente = (request.form.get(campo_name) == 'on')
+
+                    freq = db.session.scalar(
+                        select(FrequenciaAluno).where(
+                            FrequenciaAluno.diario_id == diario.id,
+                            FrequenciaAluno.aluno_id == aluno.id
+                        )
+                    )
+
+                    if not freq:
+                        freq = FrequenciaAluno(diario_id=diario.id, aluno_id=aluno.id)
+                        db.session.add(freq)
+                    
+                    freq.presente = esta_presente
+                    if esta_presente:
+                        freq.justificativa = None
+            
+            db.session.commit()
+            flash('Diário de classe atualizado com sucesso!', 'success')
+            return redirect(url_for('admin_escola.espelho_diarios'))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Erro ao salvar: {str(e)}', 'danger')
+
+    return render_template(
+        'admin/editar_diario_bloco.html',
+        ref=ref_diario,
+        diarios=diarios_bloco,
+        alunos=alunos
+    )

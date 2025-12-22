@@ -1,9 +1,10 @@
 {% extends "base.html" %}
 
-{% block title %}Painel de Risco Acadêmico{% endblock %}
+{% block title %}Gestão Acadêmica e Diários{% endblock %}
 
 {% block content %}
 <div class="container-fluid mt-4">
+    
     <div class="row mb-4 align-items-center">
         <div class="col-md-7">
             <h2 class="mb-0 text-danger fw-bold">
@@ -17,7 +18,7 @@
         <div class="col-md-5">
             <div class="input-group shadow-sm">
                 <span class="input-group-text bg-white"><i class="fas fa-search"></i></span>
-                <input type="text" id="searchAluno" class="form-control" placeholder="Buscar aluno..." onkeyup="filtrarAlunos()">
+                <input type="text" id="searchAluno" class="form-control" placeholder="Buscar aluno no painel..." onkeyup="filtrarAlunos()">
             </div>
         </div>
     </div>
@@ -38,7 +39,6 @@
                      data-search="{{ aluno.nome }} {{ aluno.matricula }} {{ aluno.turma }}">
                     
                     <div class="card h-100 shadow-sm border-0 position-relative alert-card-{{ aluno.gravidade }}">
-                        
                         <div class="card-body pb-0">
                             <div class="d-flex align-items-center mb-3">
                                 <div class="flex-shrink-0 position-relative">
@@ -49,7 +49,6 @@
                                             {{ aluno.nome[:2].upper() }}
                                         </div>
                                     {% endif %}
-                                    
                                     <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-dark border border-white">
                                         {{ aluno.total_faltas }}
                                     </span>
@@ -57,14 +56,12 @@
                                 <div class="ms-3 overflow-hidden">
                                     <h6 class="card-title mb-0 text-truncate fw-bold">{{ aluno.nome }}</h6>
                                     <small class="text-muted d-block">{{ aluno.turma }}</small>
-                                    <small class="text-secondary" style="font-size: 0.75rem;">{{ aluno.matricula }}</small>
                                 </div>
                             </div>
-
+                            
                             {% if aluno.riscos %}
                                 <div class="alert-section mt-2 bg-white rounded p-2 border">
                                     <small class="text-uppercase fw-bold text-muted" style="font-size: 0.7rem;">Disciplinas Críticas:</small>
-                                    
                                     {% for risco in aluno.riscos %}
                                         <div class="mt-2 mb-1">
                                             <div class="d-flex justify-content-between align-items-end" style="font-size: 0.8rem;">
@@ -73,33 +70,17 @@
                                                     {{ risco.porcentagem }}%
                                                 </span>
                                             </div>
-                                            
                                             <div class="progress" style="height: 6px;">
                                                 <div class="progress-bar {% if risco.status == 'reprovado' %}bg-danger{% else %}bg-warning{% endif %}" 
                                                      role="progressbar" 
                                                      style="width: {{ risco.porcentagem }}%;" 
                                                      aria-valuenow="{{ risco.porcentagem }}" aria-valuemin="0" aria-valuemax="100"></div>
                                             </div>
-                                            
-                                            {% if risco.status == 'reprovado' %}
-                                                <div class="text-center mt-1">
-                                                    <span class="badge bg-danger" style="font-size: 0.65rem;">REPROVADO POR FALTAS</span>
-                                                </div>
-                                            {% else %}
-                                                <div class="text-end text-muted" style="font-size: 0.65rem;">
-                                                    {{ risco.faltas }}/{{ risco.limite }} para reprovar
-                                                </div>
-                                            {% endif %}
                                         </div>
                                     {% endfor %}
                                 </div>
-                            {% else %}
-                                <div class="alert alert-light border text-center p-2 mb-0">
-                                    <small class="text-muted">Faltas dispersas. Nenhuma matéria atingiu 20%.</small>
-                                </div>
                             {% endif %}
                         </div>
-
                         <div class="card-footer bg-transparent border-0 pt-2 pb-3">
                             <button class="btn btn-outline-dark btn-sm w-100 rounded-pill" onclick="verDetalhesFaltas({{ aluno.id }})">
                                 <i class="fas fa-list-alt me-1"></i> Ver Histórico
@@ -112,13 +93,10 @@
         {% endif %}
     </div>
 
-    <div class="mt-5 pb-5">
-        <div class="d-grid gap-2">
-            <button class="btn btn-light border text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#listaCompleta">
-                <i class="fas fa-users me-2"></i> Visualizar Todos os Alunos da Escola
-            </button>
-        </div>
-        
+    <div class="mt-3 mb-5">
+        <button class="btn btn-light border text-muted w-100" type="button" data-bs-toggle="collapse" data-bs-target="#listaCompleta">
+            <i class="fas fa-users me-2"></i> Visualizar Situação de Todos os Alunos
+        </button>
         <div class="collapse mt-3" id="listaCompleta">
             <div class="card shadow-sm border-0">
                 <div class="card-body p-0">
@@ -139,21 +117,139 @@
             </div>
         </div>
     </div>
+
+    <hr class="my-5 border-secondary">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="mb-0 text-primary fw-bold">
+                <i class="fas fa-book-reader me-2"></i>Gerenciamento de Diários
+            </h3>
+            <p class="text-muted mb-0">Visualize e edite os lançamentos feitos pelos chefes de turma.</p>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 mb-4 bg-light">
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('admin_escola.espelho_diarios') }}" class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label for="turma_id" class="form-label fw-bold">Filtrar por Turma</label>
+                    <select class="form-select" name="turma_id" id="turma_id" onchange="this.form.submit()">
+                        <option value="">Todas as Turmas</option>
+                        {% for t in turmas %}
+                        <option value="{{ t.id }}" {% if request.args.get('turma_id')|int == t.id %}selected{% endif %}>
+                            {{ t.nome }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="data_filtro" class="form-label fw-bold">Filtrar por Data</label>
+                    <input type="date" class="form-control" name="data" value="{{ request.args.get('data') }}" onchange="this.form.submit()">
+                </div>
+                <div class="col-md-2">
+                    <a href="{{ url_for('admin_escola.espelho_diarios') }}" class="btn btn-outline-secondary w-100">
+                        Limpar
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 bg-white border-bottom">
+            <h6 class="m-0 font-weight-bold text-primary">Diários Lançados</h6>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover table-striped mb-0 align-middle">
+                    <thead class="table-light text-uppercase small">
+                        <tr>
+                            <th class="ps-3">Data</th>
+                            <th>Turma</th>
+                            <th>Disciplina</th>
+                            <th>Responsável</th>
+                            <th>Conteúdo / Resumo</th>
+                            <th class="text-center" style="width: 120px;">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for diario in diarios %}
+                        <tr>
+                            <td class="ps-3 text-nowrap">{{ diario.data_aula.strftime('%d/%m/%Y') }}</td>
+                            <td><span class="badge bg-light text-dark border">{{ diario.turma.nome }}</span></td>
+                            <td class="fw-bold">{{ diario.disciplina.materia }}</td>
+                            <td>
+                                {% if diario.responsavel %}
+                                    {{ diario.responsavel.nome_de_guerra or diario.responsavel.nome_completo or 'N/A' }}
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="text-truncate" style="max-width: 250px;" title="{{ diario.conteudo_ministrado }}">
+                                    {{ diario.conteudo_ministrado or 'Não informado' }}
+                                </div>
+                            </td>
+                            <td class="text-center">
+                                <a href="{{ url_for('admin_escola.editar_diario_bloco', diario_id=diario.id) }}" 
+                                   class="btn btn-primary btn-sm rounded-pill" 
+                                   title="Editar Diário e Faltas">
+                                    <i class="fas fa-edit"></i> Editar
+                                </a>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center py-5 text-muted">
+                                <i class="fas fa-inbox fa-3x mb-3 d-block"></i>
+                                Nenhum diário encontrado com os filtros selecionados.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            {% if pagination.pages > 1 %}
+            <div class="card-footer bg-white py-3">
+                <nav aria-label="Navegação de página">
+                    <ul class="pagination justify-content-center mb-0">
+                        {% if pagination.has_prev %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('admin_escola.espelho_diarios', page=pagination.prev_num, turma_id=request.args.get('turma_id'), data=request.args.get('data')) }}">Anterior</a>
+                        </li>
+                        {% endif %}
+                        <li class="page-item disabled"><span class="page-link">Página {{ pagination.page }} de {{ pagination.pages }}</span></li>
+                        {% if pagination.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('admin_escola.espelho_diarios', page=pagination.next_num, turma_id=request.args.get('turma_id'), data=request.args.get('data')) }}">Próxima</a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+            </div>
+            {% endif %}
+        </div>
+    </div>
 </div>
 
 <div class="modal fade" id="modalDetalhesFaltas" tabindex="-1" aria-labelledby="modalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content" id="modalConteudo">
-            </div>
+        </div>
     </div>
 </div>
 
 <script>
+    // Scripts originais do Painel de Risco
     const todosAlunosData = {{ todos_alunos|tojson }};
-    let modalInstance = null; // Instância única do modal
+    let modalInstance = null;
 
     function renderizarTabelaCompleta() {
         const tbody = document.getElementById('tabelaTodosAlunos');
+        if(!tbody) return;
+        
         let html = '';
         todosAlunosData.forEach(aluno => {
             let badgeInfo = aluno.faltas > 0 
@@ -186,33 +282,16 @@
             const texto = card.getAttribute('data-search').toLowerCase();
             card.style.display = texto.includes(termo) ? 'block' : 'none';
         });
-
-        const rows = document.querySelectorAll('.aluno-row-item');
-        const collapseElement = document.getElementById('listaCompleta');
-        const bsCollapse = new bootstrap.Collapse(collapseElement, {toggle: false});
-
-        if (termo.length > 0) {
-            bsCollapse.show();
-            rows.forEach(row => {
-                const texto = row.getAttribute('data-search');
-                row.style.display = texto.includes(termo) ? '' : 'none';
-            });
-        } else {
-            rows.forEach(row => row.style.display = '');
-        }
     }
 
     function verDetalhesFaltas(alunoId) {
         const modalEl = document.getElementById('modalDetalhesFaltas');
         const content = document.getElementById('modalConteudo');
         
-        // --- SOLUÇÃO PARA TELA PRETA/OVERLAY ---
-        // Move o modal para o final do <body> para garantir que o z-index funcione
         if (modalEl.parentNode !== document.body) {
             document.body.appendChild(modalEl);
         }
 
-        // Cria a instância apenas uma vez
         if (!modalInstance) {
             modalInstance = new bootstrap.Modal(modalEl, {
                 backdrop: true,
@@ -242,25 +321,11 @@
 </script>
 
 <style>
-    /* Cores de Gravidade */
-    .alert-card-critico { /* >= 30% - REPROVADO */
-        border-left: 5px solid #dc3545 !important;
-        background: linear-gradient(to right, #fff5f5, #fff);
-    }
-    .alert-card-atencao { /* >= 20% - RISCO */
-        border-left: 5px solid #ffc107 !important;
-        background: linear-gradient(to right, #fff9f2, #fff);
-    }
-    .alert-card-moderado { /* < 20% */
-        border-left: 5px solid #6c757d !important;
-    }
+    .alert-card-critico { border-left: 5px solid #dc3545 !important; background: linear-gradient(to right, #fff5f5, #fff); }
+    .alert-card-atencao { border-left: 5px solid #ffc107 !important; background: linear-gradient(to right, #fff9f2, #fff); }
+    .alert-card-moderado { border-left: 5px solid #6c757d !important; }
 
-    .aluno-card-item .card {
-        transition: all 0.3s ease;
-    }
-    .aluno-card-item .card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important;
-    }
+    .aluno-card-item .card { transition: all 0.3s ease; }
+    .aluno-card-item .card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important; }
 </style>
 {% endblock %}
