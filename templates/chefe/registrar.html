@@ -92,14 +92,14 @@
                                         <div id="periods-{{ aluno.id }}" class="d-none d-flex flex-wrap gap-1 justify-content-center align-items-center">
                                             {% for h in horarios %}
                                                 <input type="checkbox" class="btn-check" 
-                                                       name="presenca_{{ aluno.id }}_{{ h.periodo }}" 
-                                                       id="btn-check-{{ aluno.id }}-{{ h.periodo }}" 
+                                                       name="presenca_{{ aluno.id }}_{{ h['periodo'] }}" 
+                                                       id="btn-check-{{ aluno.id }}-{{ h['periodo'] }}" 
                                                        autocomplete="off" checked>
                                                 
                                                 <label class="btn btn-outline-primary btn-sm fw-bold shadow-none" 
-                                                       for="btn-check-{{ aluno.id }}-{{ h.periodo }}"
+                                                       for="btn-check-{{ aluno.id }}-{{ h['periodo'] }}"
                                                        style="width: 40px; height: 32px; display: flex; align-items: center; justify-content: center;">
-                                                    {{ h.periodo }}º
+                                                    {{ h['periodo'] }}º
                                                 </label>
                                             {% endfor %}
                                         </div>
@@ -134,7 +134,6 @@
     .table-danger-custom td { color: #842029 !important; }
     .table-danger-custom small.text-muted { color: #842029 !important; opacity: 0.8; }
 
-    /* Estilo para os botões de período */
     .btn-check:checked + .btn-outline-primary {
         background-color: #0d6efd;
         color: white;
@@ -142,7 +141,7 @@
     }
     .btn-check:not(:checked) + .btn-outline-primary {
         background-color: white;
-        color: #dc3545; /* Vermelho para indicar falta quando desmarcado */
+        color: #dc3545;
         border-color: #dee2e6;
         opacity: 0.6;
     }
@@ -160,32 +159,22 @@
         const msgDiv = document.getElementById(`periods-msg-${alunoId}`);
         const label = document.getElementById(`label-master-${alunoId}`);
         const row = document.getElementById(`row-${alunoId}`);
-        
-        // Seleciona todos os inputs btn-check
         const subChecks = periodsDiv.querySelectorAll('input.btn-check');
 
         if (masterCheck.checked) {
-            // PRESENTE TOTAL
             periodsDiv.classList.add('d-none');
             periodsHelp.classList.add('d-none');
             msgDiv.classList.remove('d-none');
-            
             label.textContent = "PRESENTE";
             label.className = "fw-bold text-success";
-            
             row.classList.remove('table-danger-custom');
-            
-            // Marca todos automaticamente
             subChecks.forEach(ch => ch.checked = true);
         } else {
-            // FALTA OU PARCIAL (Habilita edição)
             periodsDiv.classList.remove('d-none');
             periodsHelp.classList.remove('d-none');
             msgDiv.classList.add('d-none');
-            
             label.textContent = "EDITAR";
             label.className = "fw-bold text-danger";
-            
             row.classList.add('table-danger-custom');
         }
     }

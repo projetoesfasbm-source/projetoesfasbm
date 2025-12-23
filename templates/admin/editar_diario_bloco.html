@@ -27,7 +27,7 @@
                         <div class="d-flex justify-content-end gap-1 mt-1">
                             {% for d in diarios %}
                                 <span class="badge bg-primary">
-                                    {{ d.periodo }}º
+                                    {{ d.periodo if d.periodo else loop.index }}º
                                 </span>
                             {% endfor %}
                         </div>
@@ -71,7 +71,7 @@
                             {% for d in diarios %}
                             <th class="text-center" style="width: 100px;">
                                 <span class="badge bg-outline-primary text-dark border">
-                                    {{ d.periodo }}º Tempo
+                                    {{ d.periodo if d.periodo else loop.index }}º Tempo
                                 </span>
                             </th>
                             {% endfor %}
