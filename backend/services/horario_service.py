@@ -300,11 +300,45 @@ class HorarioService:
             periodo_fim = periodo_inicio + duracao - 1
             observacao = data.get('observacao', '').strip() or None
             
-            # --- LÓGICA DE BLOQUEIO POR PRIORIDADE (Corrigida para NOMES) ---
+            horario_id_raw = data.get('horario_id')
+            horario_id = int(horario_id_raw) if horario_id_raw else None
+
+            # --- VALIDAÇÃO DE CARGA HORÁRIA (NOVO) ---
+            # Bloqueia instrutores de agendar mais horas que a carga horária prevista
+            # Admins (admin_escola, programador, etc) podem ignorar esse limite se necessário.
+            disciplina = db.session.get(Disciplina, disciplina_id)
+            if disciplina and not is_admin: 
+                # Calcula quantas horas já foram agendadas para essa disciplina nesta turma (pelotao)
+                total_agendado = db.session.scalar(
+                    select(func.sum(Horario.duracao))
+                    .where(Horario.disciplina_id == disciplina_id, Horario.pelotao == pelotao)
+                ) or 0
+                
+                # Se for edição, precisamos subtrair a aula que está sendo editada do total
+                # para não contar ela duas vezes na verificação
+                if horario_id:
+                     aula_atual_editando = db.session.get(Horario, horario_id)
+                     if aula_atual_editando:
+                         # Se a aula faz parte de um bloco agrupado, subtrair o total do grupo
+                         if aula_atual_editando.group_id:
+                             total_grupo = db.session.scalar(
+                                 select(func.sum(Horario.duracao))
+                                 .where(Horario.group_id == aula_atual_editando.group_id)
+                             ) or 0
+                             total_agendado -= total_grupo
+                         else:
+                             total_agendado -= aula_atual_editando.duracao
+
+                # Verifica se o novo agendamento estoura o limite
+                if (total_agendado + duracao) > disciplina.carga_horaria_prevista:
+                    restante = disciplina.carga_horaria_prevista - total_agendado
+                    return False, f"⚠️ LIMITE EXCEDIDO: Faltam apenas {restante}h para esta disciplina. Você tentou agendar {duracao}h.", 400
+            # ---------------------------------------------
+
+            # --- LÓGICA DE BLOQUEIO POR PRIORIDADE ---
             if semana_id and not is_admin:
                 semana = db.session.get(Semana, semana_id)
                 if semana and getattr(semana, 'priority_active', False):
-                    # 1. Recupera nomes permitidos (strings)
                     allowed_names = []
                     raw_priority = getattr(semana, 'priority_disciplines', '[]') or '[]'
                     try:
@@ -313,17 +347,11 @@ class HorarioService:
                     except:
                         allowed_names = []
                     
-                    # 2. Recupera NOME da disciplina atual (int -> string)
-                    disciplina_atual = db.session.get(Disciplina, disciplina_id)
-                    nome_disciplina_atual = disciplina_atual.materia if disciplina_atual else ""
+                    nome_disciplina_atual = disciplina.materia if disciplina else ""
 
-                    # 3. Validação: O nome desta disciplina está na lista?
                     if not allowed_names or nome_disciplina_atual not in allowed_names:
                         return False, "⚠️ AGENDAMENTO BLOQUEADO: Apenas as disciplinas prioritárias podem ser agendadas nesta semana.", 403
             # -------------------------------------------------------------
-
-            horario_id_raw = data.get('horario_id')
-            horario_id = int(horario_id_raw) if horario_id_raw else None
 
             # instrutor(es)
             instrutor_id_1, instrutor_id_2 = None, None

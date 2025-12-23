@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Auditoria: Quadro Horário</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body { background-color: #f8f9fa; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .container { max-width: 1100px; margin-top: 40px; }
+        .card { border: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .header-audit { background: linear-gradient(135deg, #2c3e50 0%, #4ca1af 100%); color: white; padding: 25px; border-radius: 8px 8px 0 0; }
+        .badge-audit { font-size: 1.1rem; padding: 10px 20px; border: 2px solid white; }
+    </style>
+</head>
+<body>
+
+<div class="container mb-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <a href="{{ url_for('disciplina.listar_disciplinas') }}" class="btn btn-outline-dark">
+            <i class="fas fa-arrow-left me-1"></i> Voltar para Disciplinas
+        </a>
+    </div>
+
+    <div class="card">
+        <div class="header-audit d-flex justify-content-between align-items-center">
+            <div>
+                <h4 class="mb-1 text-uppercase ls-1">Auditoria de Agendamento</h4>
+                <h2 class="mb-0 fw-bold">{{ disciplina.materia }}</h2>
+                <p class="mb-0 opacity-75 mt-1">Turma: {{ disciplina.turma.nome }} | Ciclo: {{ disciplina.ciclo.nome }}</p>
+            </div>
+            <div class="text-end">
+                <small class="d-block text-white-50 text-uppercase fw-bold mb-1">Total Encontrado no Quadro</small>
+                <span class="badge bg-warning text-dark badge-audit rounded-pill">
+                    {{ total_auditado }} tempos
+                </span>
+            </div>
+        </div>
+
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover table-striped mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4">Data Agendada</th>
+                            <th>Semana (Ref)</th>
+                            <th class="text-center">Períodos</th>
+                            <th class="text-center">Qtd. Tempos</th>
+                            <th>Instrutor/Obs</th>
+                            <th class="text-end pe-4">ID Horário</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in agendamentos %}
+                        <tr>
+                            <td class="ps-4 fw-bold text-primary">
+                                {{ item.data.strftime('%d/%m/%Y') }}
+                                <br>
+                                <small class="text-muted fw-normal">{{ item.data.strftime('%A') }}</small>
+                            </td>
+                            <td>
+                                <span class="badge bg-secondary">{{ item.semana }}</span>
+                            </td>
+                            <td class="text-center">
+                                <span class="fw-bold text-dark">{{ item.periodos }}</span>
+                            </td>
+                            <td class="text-center">
+                                <span class="badge bg-info text-dark rounded-pill" style="font-size: 0.9em; width: 40px;">{{ item.qtd }}</span>
+                            </td>
+                            <td class="small text-muted">
+                                {{ item.instrutor }}
+                            </td>
+                            <td class="text-end pe-4 text-muted small">
+                                #{{ item.id }}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center py-5">
+                                <div class="text-muted mb-2"><i class="far fa-calendar-times fa-3x"></i></div>
+                                <h5 class="text-muted">Nenhum horário agendado para esta disciplina.</h5>
+                                <p class="text-muted small">Verifique se você lançou os horários na planilha ou no editor de semanas.</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot class="table-light">
+                        <tr>
+                            <td colspan="3" class="text-end fw-bold pt-3">TOTAL GERAL:</td>
+                            <td class="text-center fw-bold text-primary pt-3 fs-5">{{ total_auditado }}</td>
+                            <td colspan="2"></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

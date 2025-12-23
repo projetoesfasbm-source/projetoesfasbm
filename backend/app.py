@@ -103,7 +103,7 @@ def create_app(config_class=Config):
                 dt_utc = dt_utc.replace(tzinfo=timezone.utc)
 
             dt_brt = dt_utc.astimezone(BRT)
-            
+
             if format_str:
                 return dt_brt.strftime(format_str)
             else:
@@ -112,12 +112,12 @@ def create_app(config_class=Config):
         except Exception as e:
             return str(dt_utc)
     # ### FIM DO FILTRO ###
-    
+
     # ### PWA ###
     @app.route('/sw.js')
     def service_worker():
         return send_from_directory(app.static_folder, 'sw.js', mimetype='application/javascript')
-    
+
     @app.route('/manifest.json')
     def manifest():
         return send_from_directory(app.static_folder, 'manifest.json', mimetype='application/json')
@@ -206,7 +206,7 @@ def register_handlers_and_processors(app):
         Isso é executado ANTES de qualquer rota.
         """
         from backend.services.site_config_service import SiteConfigService
-        
+
         # 1. Carrega o SiteConfig
         if 'site_config' not in g:
             if app.config.get("TESTING", False):
@@ -223,15 +223,15 @@ def register_handlers_and_processors(app):
             # 1. Se for Super Admin ou Programador, a prioridade é a sessão "Visualizar Como".
             if current_user.role in ['super_admin', 'programador']:
                 school_id_to_load = session.get('view_as_school_id')
-            
-            # 2. Se for qualquer outro usuário (ou um Super Admin não visualizando), 
+
+            # 2. Se for qualquer outro usuário (ou um Super Admin não visualizando),
             #    tenta carregar a escola do vínculo.
             if school_id_to_load is None and hasattr(current_user, 'user_schools') and current_user.user_schools:
                 school_id_to_load = current_user.user_schools[0].school_id
-            
+
             if school_id_to_load:
                 g.active_school = db.session.get(School, school_id_to_load)
-        
+
 
     @app.context_processor
     def inject_globals_to_template():

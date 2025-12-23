@@ -55,7 +55,11 @@
                             {% for item in disciplinas_com_progresso %}
                             <tr>
                                 <td class="ps-4">
-                                    <div class="fw-bold text-dark" style="font-size: 1.1rem;">{{ item.disciplina.materia }}</div>
+                                    <div class="fw-bold" style="font-size: 1.1rem;">
+                                        <a href="{{ url_for('disciplina.detalhes_disciplina', disciplina_id=item.disciplina.id) }}" class="text-dark text-decoration-none hover-link" title="Verificar agendamentos no Quadro">
+                                            {{ item.disciplina.materia }} <i class="fas fa-search-plus small ms-1 text-primary"></i>
+                                        </a>
+                                    </div>
                                     <div class="text-muted small">
                                         <i class="far fa-calendar me-1"></i>Ciclo: {{ item.disciplina.ciclo.nome if item.disciplina.ciclo else '-' }}
                                     </div>
@@ -147,5 +151,6 @@
 <style>
 .bg-info { background-color: #17a2b8 !important; color: white; }
 .table-hover tbody tr:hover { background-color: #f8f9fa; }
+.hover-link:hover { text-decoration: underline !important; color: #0056b3 !important; }
 </style>
 {% endblock %}
