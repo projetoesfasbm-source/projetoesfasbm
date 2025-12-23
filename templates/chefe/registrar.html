@@ -6,7 +6,7 @@
         <div class="card-body p-4 d-flex justify-content-between align-items-center">
             <div>
                 <h6 class="text-uppercase text-muted fw-bold mb-1" style="font-size: 0.8rem;">Registro de Frequência</h6>
-                <h2 class="fw-bold mb-1 text-dark">{{ disciplina.nome }}</h2>
+                <h2 class="fw-bold mb-1 text-dark">{{ disciplina.materia if disciplina.materia is defined else disciplina.nome }}</h2>
                 <div class="d-flex align-items-center gap-3 text-secondary mt-2">
                     <span><i class="fas fa-chalkboard-teacher"></i> {{ nome_instrutor }}</span>
                     <span><i class="far fa-calendar-alt"></i> {{ data_aula.strftime('%d/%m/%Y') }}</span>
@@ -62,7 +62,13 @@
                                 {% for aluno in alunos %}
                                 <tr id="row-{{ aluno.id }}" class="bg-white">
                                     <td class="ps-3">
-                                        <div class="fw-bold text-dark">{{ aluno.user.nome_de_guerra }}</div>
+                                        <div class="fw-bold text-dark">
+                                            {% if aluno.user.nome_de_guerra %}
+                                                {{ aluno.user.nome_de_guerra }}
+                                            {% else %}
+                                                {{ aluno.user.nome_completo }}
+                                            {% endif %}
+                                        </div>
                                         <small class="text-muted">{{ aluno.num_aluno }} - {{ aluno.user.nome_completo }}</small>
                                     </td>
                                     
