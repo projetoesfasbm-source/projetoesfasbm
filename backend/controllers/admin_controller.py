@@ -270,6 +270,8 @@ def editar_diario_bloco(diario_id):
         return redirect(url_for('admin_escola.espelho_diarios'))
 
     # Busca todos os tempos da mesma aula no mesmo dia
+    # ### ALTERAÇÃO AQUI ###
+    # Ordena pelo campo periodo se existir, caso contrário ID
     diarios_bloco = db.session.scalars(
         select(DiarioClasse)
         .where(
@@ -277,15 +279,16 @@ def editar_diario_bloco(diario_id):
             DiarioClasse.disciplina_id == ref_diario.disciplina_id,
             DiarioClasse.data_aula == ref_diario.data_aula
         )
-        .order_by(DiarioClasse.id)
+        .order_by(DiarioClasse.periodo, DiarioClasse.id) 
     ).all()
+    # ### FIM DA ALTERAÇÃO ###
 
     # Busca alunos da turma ordenados
     alunos = db.session.scalars(
         select(Aluno)
         .join(User)
         .where(Aluno.turma_id == ref_diario.turma_id)
-        .order_by(Aluno.num_aluno, User.nome_de_guerra) # CORRIGIDO: numero_aluno -> num_aluno
+        .order_by(Aluno.num_aluno, User.nome_de_guerra)
     ).all()
 
     if request.method == 'POST':

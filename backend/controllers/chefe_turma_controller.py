@@ -174,15 +174,19 @@ def registrar_aula(primeiro_horario_id):
                     periodo_atual = h_virt['periodo']
                     horario_pai = h_virt['obj']
 
-                    # 1. Cria Diário (SEM PREFIXO AUTOMÁTICO NA OBS)
+                    # 1. Cria Diário COM O PERIODO CORRETO
+                    # ### ALTERAÇÃO AQUI ###
                     novo_diario = DiarioClasse(
                         data_aula=data_aula,
                         turma_id=aluno_chefe.turma_id,
                         disciplina_id=horario_pai.disciplina_id,
                         responsavel_id=current_user.id,
-                        observacoes=request.form.get('observacoes'), # CORREÇÃO AQUI
-                        conteudo_ministrado=request.form.get('conteudo')
+                        observacoes=request.form.get('observacoes'),
+                        conteudo_ministrado=request.form.get('conteudo'),
+                        periodo=periodo_atual  # Salvando o número exato do tempo (7, 8, etc)
                     )
+                    # ### FIM DA ALTERAÇÃO ###
+                    
                     db.session.add(novo_diario)
                     db.session.flush()
 

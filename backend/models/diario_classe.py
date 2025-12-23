@@ -17,6 +17,11 @@ class DiarioClasse(db.Model):
     id: Mapped[int] = mapped_column(primary_key=True)
     data_aula: Mapped[date] = mapped_column(db.Date, nullable=False)
     
+    # ### ALTERAÇÃO AQUI ###
+    # Adicionado campo para salvar o período exato (ex: 1, 2, 7, 8)
+    periodo: Mapped[t.Optional[int]] = mapped_column(db.Integer, nullable=True)
+    # ### FIM DA ALTERAÇÃO ###
+
     # Vínculos
     turma_id: Mapped[int] = mapped_column(ForeignKey('turmas.id'), nullable=False)
     disciplina_id: Mapped[int] = mapped_column(ForeignKey('disciplinas.id'), nullable=False)
