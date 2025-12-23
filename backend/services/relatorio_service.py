@@ -75,10 +75,10 @@ class RelatorioService:
         """
         Busca e formata os dados de horas-aula por instrutor.
         
-        CORREÇÃO DEFINITIVA (DUPLA REGÊNCIA):
-        Utiliza deduplicação por (Instrutor + DATA REAL + PERÍODO).
-        Isso resolve problemas onde semanas sobrepostas ou junções incorretas geram linhas duplicadas
-        no banco, garantindo que o instrutor receba apenas 1 vez por slot de tempo físico.
+        CORREÇÃO (SOMA DE CARGA HORÁRIA POR TURMA/PELOTÃO):
+        - Utiliza o campo 'pelotao' do Horario para distinguir as turmas.
+        - Soma a carga horária da disciplina para cada pelotão distinto encontrado.
+        - Mantém a deduplicação de slots de horário para não pagar a mesma aula duas vezes.
         """
         from ..models import db, Horario, User, Instrutor, Disciplina, Semana
 
@@ -88,7 +88,7 @@ class RelatorioService:
         Instrutor2 = aliased(Instrutor)
         User2 = aliased(User)
 
-        # Seleciona todos os dados, INCLUINDO a Semana para calcular a data real
+        # Seleciona todos os dados, INCLUINDO a Semana e o Horario (que contem o pelotao)
         query = (
             select(
                 Horario,
@@ -120,7 +120,7 @@ class RelatorioService:
         # Chave: (instrutor_id, data_real_da_aula, periodo_aula)
         slots_pagos = set()
 
-        def processar_instrutor(user_obj, instrutor_obj, disciplina_obj, data_aula, periodo_aula, duracao):
+        def processar_instrutor(user_obj, instrutor_obj, disciplina_obj, data_aula, periodo_aula, duracao, pelotao_str):
             """Soma horas apenas se o slot (Instrutor+Dia+Periodo) ainda não foi pago."""
             if not user_obj or not instrutor_obj:
                 return
@@ -161,12 +161,24 @@ class RelatorioService:
             if nome_disc not in dados_agrupados[chave_agrupamento]["disciplinas_map"]:
                 dados_agrupados[chave_agrupamento]["disciplinas_map"][nome_disc] = {
                     "nome": nome_disc,
-                    "ch_total": disciplina_obj.carga_horaria_prevista,
-                    "ch_a_pagar": 0
+                    "ch_total": 0,  # Começa com 0 e soma conforme encontra pelotões
+                    "ch_a_pagar": 0,
+                    "_pelotoes_contabilizados": set() # Controle interno para somar CH Total uma vez por turma
                 }
 
-            # Soma a duração
-            dados_agrupados[chave_agrupamento]["disciplinas_map"][nome_disc]["ch_a_pagar"] += duracao
+            item_disciplina = dados_agrupados[chave_agrupamento]["disciplinas_map"][nome_disc]
+            
+            # Normaliza o nome do pelotão para evitar duplicidade por espaços extras
+            pelotao_clean = pelotao_str.strip() if pelotao_str else "PADRAO"
+
+            # --- Lógica de Soma de CH Total por Turma (Pelotão) ---
+            # Se este pelotão ainda não foi contabilizado para esta disciplina deste instrutor, soma a CH Total
+            if pelotao_clean not in item_disciplina["_pelotoes_contabilizados"]:
+                item_disciplina["ch_total"] += (disciplina_obj.carga_horaria_prevista or 0)
+                item_disciplina["_pelotoes_contabilizados"].add(pelotao_clean)
+
+            # Soma a duração das aulas a pagar
+            item_disciplina["ch_a_pagar"] += duracao
 
         # Itera sobre todas as linhas retornadas
         for row in rows:
@@ -180,6 +192,9 @@ class RelatorioService:
 
             duracao = horario.duracao or 1
             periodo = horario.periodo
+            
+            # Obtém o pelotão diretamente do horário (string)
+            pelotao = getattr(horario, 'pelotao', '')
 
             # Calcula a data real da aula para evitar duplicidade de semanas sobrepostas
             offset_dias = RelatorioService._get_dia_offset(horario.dia_semana)
@@ -187,13 +202,13 @@ class RelatorioService:
 
             # 1. Processa Instrutor 1 (Titular)
             if inst1 and usr1:
-                processar_instrutor(usr1, inst1, disciplina, data_aula, periodo, duracao)
+                processar_instrutor(usr1, inst1, disciplina, data_aula, periodo, duracao, pelotao)
 
             # 2. Processa Instrutor 2 (Auxiliar/Dupla)
             if inst2 and usr2:
                 # Segurança contra erro de cadastro (mesmo ID nos dois campos)
                 if not (inst1 and inst1.id == inst2.id):
-                    processar_instrutor(usr2, inst2, disciplina, data_aula, periodo, duracao)
+                    processar_instrutor(usr2, inst2, disciplina, data_aula, periodo, duracao, pelotao)
 
         # Formata a saída final
         lista_final = []
@@ -203,6 +218,11 @@ class RelatorioService:
             item = dados_agrupados[chave]
             lista_disciplinas = list(item["disciplinas_map"].values())
             
+            # Remove chaves internas auxiliares antes de retornar para não sujar o template
+            for d in lista_disciplinas:
+                if "_pelotoes_contabilizados" in d:
+                    del d["_pelotoes_contabilizados"]
+
             lista_final.append({
                 "info": item["info"],
                 "disciplinas": lista_disciplinas
