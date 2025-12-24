@@ -73,11 +73,19 @@ class HorarioService:
 
                 instrutores_display_list = []
                 if aula.instrutor and aula.instrutor.user:
+                    # --- ALTERAÇÃO: Adiciona Posto/Graduação antes do nome ---
+                    posto = aula.instrutor.user.posto_graduacao or ''
                     nome = aula.instrutor.user.nome_de_guerra or aula.instrutor.user.username
-                    instrutores_display_list.append(nome)
+                    nome_completo = f"{posto} {nome}".strip()
+                    instrutores_display_list.append(nome_completo)
+                
                 if aula.instrutor_2 and aula.instrutor_2.user:
+                    # --- ALTERAÇÃO: Adiciona Posto/Graduação antes do nome ---
+                    posto = aula.instrutor_2.user.posto_graduacao or ''
                     nome = aula.instrutor_2.user.nome_de_guerra or aula.instrutor_2.user.username
-                    instrutores_display_list.append(nome)
+                    nome_completo = f"{posto} {nome}".strip()
+                    instrutores_display_list.append(nome_completo)
+                
                 instrutor_display = " / ".join(instrutores_display_list) if instrutores_display_list else "N/D"
 
                 aula_info = {
@@ -188,10 +196,12 @@ class HorarioService:
                 )
 
         instrutores_paginados = InstrutorService.get_all_instrutores(user=user)
-        todos_instrutores = [
-            {"id": i.id, "nome": i.user.nome_de_guerra or i.user.username}
-            for i in instrutores_paginados.items
-        ]
+        # --- ALTERAÇÃO: Adiciona Posto/Graduação na lista geral de instrutores ---
+        todos_instrutores = []
+        for i in instrutores_paginados.items:
+            posto = i.user.posto_graduacao or ''
+            nome = i.user.nome_de_guerra or i.user.username
+            todos_instrutores.append({"id": i.id, "nome": f"{posto} {nome}".strip()})
 
         return {
             'success': True,
@@ -229,15 +239,20 @@ class HorarioService:
         if aula.instrutor_id_2:
             instrutor_value = f"{aula.instrutor_id}-{aula.instrutor_id_2}"
 
+        # --- ALTERAÇÃO: Formata nome do instrutor no detalhe da aula ---
+        instrutor_nome_formatado = ''
+        if aula.instrutor and aula.instrutor.user:
+            posto = aula.instrutor.user.posto_graduacao or ''
+            nome = aula.instrutor.user.nome_de_guerra or aula.instrutor.user.username
+            instrutor_nome_formatado = f"{posto} {nome}".strip()
+
         return {
             'disciplina_id': aula.disciplina_id,
             'instrutor_value': instrutor_value,
             'periodos': periodos_ocupados,
             'observacao': aula.observacao,
             'materia': aula.disciplina.materia,
-            'instrutor_nome': (
-                aula.instrutor.user.nome_de_guerra if aula.instrutor and aula.instrutor.user else ''
-            ),
+            'instrutor_nome': instrutor_nome_formatado,
             'periodo': periodos_ocupados[0] if periodos_ocupados else aula.periodo,
             'duracao': len(periodos_ocupados)
         }
@@ -303,23 +318,17 @@ class HorarioService:
             horario_id_raw = data.get('horario_id')
             horario_id = int(horario_id_raw) if horario_id_raw else None
 
-            # --- VALIDAÇÃO DE CARGA HORÁRIA (NOVO) ---
-            # Bloqueia instrutores de agendar mais horas que a carga horária prevista
-            # Admins (admin_escola, programador, etc) podem ignorar esse limite se necessário.
+            # --- VALIDAÇÃO DE CARGA HORÁRIA (Mantida da versão anterior) ---
             disciplina = db.session.get(Disciplina, disciplina_id)
             if disciplina and not is_admin: 
-                # Calcula quantas horas já foram agendadas para essa disciplina nesta turma (pelotao)
                 total_agendado = db.session.scalar(
                     select(func.sum(Horario.duracao))
                     .where(Horario.disciplina_id == disciplina_id, Horario.pelotao == pelotao)
                 ) or 0
                 
-                # Se for edição, precisamos subtrair a aula que está sendo editada do total
-                # para não contar ela duas vezes na verificação
                 if horario_id:
                      aula_atual_editando = db.session.get(Horario, horario_id)
                      if aula_atual_editando:
-                         # Se a aula faz parte de um bloco agrupado, subtrair o total do grupo
                          if aula_atual_editando.group_id:
                              total_grupo = db.session.scalar(
                                  select(func.sum(Horario.duracao))
@@ -329,7 +338,6 @@ class HorarioService:
                          else:
                              total_agendado -= aula_atual_editando.duracao
 
-                # Verifica se o novo agendamento estoura o limite
                 if (total_agendado + duracao) > disciplina.carga_horaria_prevista:
                     restante = disciplina.carga_horaria_prevista - total_agendado
                     return False, f"⚠️ LIMITE EXCEDIDO: Faltam apenas {restante}h para esta disciplina. Você tentou agendar {duracao}h.", 400
