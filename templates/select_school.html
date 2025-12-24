@@ -1,47 +1,107 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Selecionar Escola - Sistema EsFAS</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        body {
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #1a232c 0%, #3b82f6 100%);
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+        }
+        
+        .modal-simulation {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 2rem;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            width: 100%;
+            max-width: 450px;
+            text-align: center;
+            animation: fadeIn 0.4s ease-out;
+        }
 
-{% block title %}Selecionar Escola Ativa{% endblock %}
+        .modal-icon {
+            font-size: 3rem;
+            color: #3b82f6;
+            margin-bottom: 1rem;
+        }
 
-{% block content %}
-<div class="content-header">
-    <h1>Selecionar Escola Ativa</h1>
-    <p>Como Super Admin, você pode escolher qual escola gerenciar no momento.</p>
-</div>
+        .school-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 1.5rem;
+        }
 
-<div class="modules-grid">
-    {% if schools %}
-        {% for school in schools %}
-        <a href="{{ url_for('super_admin.set_active_school', school_id=school.id) }}" class="module-card-link">
-            <div class="module-card {% if active_school and active_school.id == school.id %}active-school{% endif %}">
-                <div class="card-content">
-                    <div class="card-icon">🏫</div>
-                    <h3 class="card-title">{{ school.nome }}</h3>
-                    <p class="card-description">{{ school.abbreviation or 'Sem abreviação' }}</p>
-                    {% if active_school and active_school.id == school.id %}
-                        <span class="badge bg-success">Ativa</span>
-                    {% endif %}
-                </div>
-            </div>
-        </a>
-        {% endfor %}
-    {% else %}
-        <div class="alert alert-warning">Você não está vinculado a nenhuma escola.</div>
-    {% endif %}
-</div>
+        .school-btn {
+            background: white;
+            border: 2px solid #e2e8f0;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: left;
+            text-decoration: none;
+            color: #1e293b;
+            font-weight: 600;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
 
-<style>
-.module-card-link {
-    text-decoration: none;
-    color: inherit;
-}
-.module-card.active-school {
-    border: 2px solid var(--primary-color);
-    box-shadow: 0 0 15px rgba(var(--primary-color-rgb), 0.3);
-}
-.card-content .badge {
-    position: absolute;
-    top: 15px;
-    right: 15px;
-}
-</style>
-{% endblock %}
+        .school-btn:hover {
+            border-color: #3b82f6;
+            background: #eff6ff;
+            color: #3b82f6;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+        }
+
+        .school-btn i {
+            color: #cbd5e1;
+        }
+        .school-btn:hover i {
+            color: #3b82f6;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="modal-simulation">
+        <div class="modal-icon">
+            <i class="fas fa-university"></i>
+        </div>
+        <h3>Bem-vindo, {{ current_user.nome_de_guerra or 'Usuário' }}</h3>
+        <p class="text-muted">Seu login possui acesso a múltiplas escolas.<br>Selecione onde deseja trabalhar agora:</p>
+
+        <div class="school-list">
+            {% for vinculo in schools %}
+                <a href="{{ url_for('auth.set_school', school_id=vinculo.school.id) }}" class="school-btn">
+                    <span>{{ vinculo.school.nome }}</span>
+                    <i class="fas fa-arrow-right"></i>
+                </a>
+            {% endfor %}
+        </div>
+        
+        <div class="mt-4">
+            <a href="{{ url_for('auth.logout') }}" class="text-secondary text-decoration-none small">
+                <i class="fas fa-sign-out-alt"></i> Sair e tentar outro login
+            </a>
+        </div>
+    </div>
+
+</body>
+</html>

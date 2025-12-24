@@ -101,62 +101,27 @@
             z-index: 2051;
         }
 
-        /* --- Correções para o Dropdown do Título --- */
+        /* --- Estilos do Topo --- */
         .top-navbar {
-            overflow: visible !important; /* Permite que o menu saia da barra */
+            overflow: visible !important;
             z-index: 1040;
         }
-        
         .top-navbar-content {
             overflow: visible !important;
         }
-
         .top-navbar-title {
             overflow: visible !important;
             display: flex;
             align-items: center;
+            gap: 15px; /* Espaço entre o nome e o botão */
         }
 
-        /* Estilo do botão de título */
-        .school-selector-btn {
-            background: transparent;
-            border: none;
-            color: white !important; /* Força cor branca para contrastar com azul */
+        /* Nome da Escola (Estático) */
+        .school-name-display {
             font-weight: 700;
             font-size: 1.1rem;
-            display: flex;
-            align-items: center;
-            cursor: pointer;
-            padding: 5px 10px;
-            border-radius: 5px;
-            transition: background 0.2s;
-            text-decoration: none;
-        }
-        
-        .school-selector-btn:hover, .school-selector-btn:focus {
-            background: rgba(255,255,255,0.15);
-            color: white !important;
-        }
-
-        .school-selector-btn::after {
-            display: inline-block;
-            margin-left: 0.5em;
-            vertical-align: 0.255em;
-            content: "";
-            border-top: 0.3em solid;
-            border-right: 0.3em solid transparent;
-            border-bottom: 0;
-            border-left: 0.3em solid transparent;
-            opacity: 0.8;
-        }
-
-        .dropdown-menu-school {
-            z-index: 9999 !important; /* Garante que fique acima de tudo */
-            margin-top: 10px !important;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-            border: none;
-            border-radius: 12px;
-            min-width: 220px;
+            color: inherit !important; /* Cor do tema */
+            white-space: nowrap;
         }
     </style>
 </head>
@@ -169,45 +134,17 @@
                 <button class="sidebar-toggle" id="sidebarToggle">☰</button>
                 
                 <div class="top-navbar-title">
-                    {% if current_user.schools and current_user.schools|length > 1 %}
-                        <div class="dropdown">
-                            <button class="school-selector-btn dropdown-toggle" type="button" id="schoolTitleDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                                {% if current_school %}
-                                    {{ current_school.nome }}
-                                {% elif active_school %}
-                                    {{ active_school.nome }}
-                                {% else %}
-                                    Selecionar Escola
-                                {% endif %}
-                            </button>
-                            <ul class="dropdown-menu dropdown-menu-school shadow" aria-labelledby="schoolTitleDropdown">
-                                <li><h6 class="dropdown-header">Minhas Escolas</h6></li>
-                                {% for school in current_user.schools %}
-                                    <li>
-                                        <a class="dropdown-item d-flex align-items-center justify-content-between" 
-                                           href="{{ url_for('auth.change_school', school_id=school.id) }}">
-                                            <span>{{ school.nome }}</span>
-                                            {% if (current_school and current_school.id == school.id) or (active_school and active_school.id == school.id) %}
-                                                <i class="fas fa-check text-success ms-2"></i>
-                                            {% endif %}
-                                        </a>
-                                    </li>
-                                {% endfor %}
-                            </ul>
-                        </div>
-                    {% else %}
-                        <span style="color: white; font-weight: 700; font-size: 1.1rem;">
-                            {% if current_school %}
-                                {{ current_school.nome }}
-                            {% elif active_school %}
-                                {{ active_school.nome }}
-                            {% elif current_user.role == 'super_admin' %}
-                                <a href="{{ url_for('super_admin.select_school') }}" class="text-white text-decoration-none">Selecione uma escola</a>
-                            {% else %}
-                                Sistema de Gerenciamento
-                            {% endif %}
-                        </span>
-                    {% endif %}
+                    <span class="school-name-display">
+                        {% if current_school %}
+                            {{ current_school.nome }}
+                        {% elif active_school %}
+                            {{ active_school.nome }}
+                        {% elif current_user.role == 'super_admin' %}
+                            <a href="{{ url_for('super_admin.select_school') }}" style="color: inherit; text-decoration: none;">Selecione uma escola</a>
+                        {% else %}
+                            Sistema de Gerenciamento
+                        {% endif %}
+                    </span>
                 </div>
             </div>
             

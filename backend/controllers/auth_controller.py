@@ -1,8 +1,5 @@
 # backend/controllers/auth_controller.py
 
-from __future__ import annotations
-import typing as t
-
 from flask import (
     Blueprint, render_template, request, redirect, url_for, flash, current_app, session
 )
@@ -18,7 +15,6 @@ from ..models.user import User
 from ..models.user_school import UserSchool
 from ..models.aluno import Aluno
 from ..models.instrutor import Instrutor
-# --- NOVAS IMPORTAÇÕES ---
 from ..models.turma import Turma
 from ..services.email_service import EmailService
 
@@ -26,12 +22,8 @@ from utils.normalizer import normalize_matricula, normalize_name
 
 auth_bp = Blueprint("auth", __name__, url_prefix="")
 
-# -----------------------------------------------------------------------------
-# Forms
-# -----------------------------------------------------------------------------
-
-class CSRFOnlyForm(FlaskForm):
-    pass
+# --- Forms (Mantidos) ---
+class CSRFOnlyForm(FlaskForm): pass
 
 class LoginForm(FlaskForm):
     username = StringField("Usuário", validators=[DataRequired()])
@@ -44,46 +36,29 @@ class RequestResetForm(FlaskForm):
     submit = SubmitField("Enviar link de redefinição")
 
 class ResetPasswordForm(FlaskForm):
-    password = PasswordField(
-        "Nova senha",
-        validators=[DataRequired(), Length(min=8, message="Mínimo 8 caracteres.")],
-    )
-    password2 = PasswordField(
-        "Confirme a senha",
-        validators=[DataRequired(), EqualTo("password", message="As senhas não conferem.")],
-    )
+    password = PasswordField("Nova senha", validators=[DataRequired(), Length(min=8)])
+    password2 = PasswordField("Confirme a senha", validators=[DataRequired(), EqualTo("password")])
     submit = SubmitField("Redefinir senha")
 
-# -----------------------------------------------------------------------------
-# Helpers
-# -----------------------------------------------------------------------------
-
-def _get_serializer() -> URLSafeTimedSerializer:
+# --- Helpers ---
+def _get_serializer():
     secret = current_app.config.get("SECRET_KEY") or "CHANGEME"
     return URLSafeTimedSerializer(secret_key=secret, salt="reset-password")
 
-def _find_user_for_login(identifier: str) -> t.Optional[User]:
+def _find_user_for_login(identifier):
     ident = (identifier or "").strip()
-    if not ident:
-        return None
-
+    if not ident: return None
     mat_norm = normalize_matricula(ident)
     if mat_norm:
         user = db.session.execute(select(User).where(User.matricula == mat_norm)).scalar_one_or_none()
-        if user:
-            return user
-
+        if user: return user
     if "@" in ident:
         user = db.session.execute(select(User).where(User.email == ident.lower())).scalar_one_or_none()
-        if user:
-            return user
-
+        if user: return user
     user = db.session.execute(select(User).where(User.username == ident)).scalar_one_or_none()
     return user
 
-# -----------------------------------------------------------------------------
-# Rotas
-# -----------------------------------------------------------------------------
+# --- Rotas ---
 
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():
@@ -99,35 +74,75 @@ def login():
             return render_template("login.html", form=form)
 
         if not user.is_active:
-            flash("Conta inativa. Conclua a ativação/registro antes de acessar.", "warning")
+            flash("Conta inativa.", "warning")
             return redirect(url_for("auth.register"))
 
         login_user(user, remember=remember)
         
-        # Limpa qualquer escola "pré-selecionada" de sessões anteriores para forçar a detecção correta
+        # Limpa qualquer seleção anterior
         session.pop('active_school_id', None)
         
-        flash("Login realizado com sucesso!", "success")
-        return redirect(url_for("main.dashboard"))
+        # === AQUI ESTÁ A LÓGICA DO MODAL/SELEÇÃO ===
+        # Verifica quantas escolas o usuário tem
+        user_schools = user.user_schools # Relação SQLAlchemy
+        
+        if len(user_schools) > 1:
+            # Se tiver mais de uma, NÃO vai pro dashboard. Vai pra seleção.
+            return redirect(url_for('auth.select_school'))
+        
+        elif len(user_schools) == 1:
+            # Se tiver só uma, define ela e vai pro dashboard
+            session['active_school_id'] = user_schools[0].school_id
+            session.permanent = True
+            flash("Login realizado com sucesso!", "success")
+            return redirect(url_for("main.dashboard"))
+            
+        else:
+            # Caso raríssimo: usuário sem escola nenhuma
+            flash("Login realizado, mas você não está vinculado a nenhuma escola.", "warning")
+            return redirect(url_for("main.dashboard"))
 
     return render_template("login.html", form=form)
 
+# ROTA NOVA: Exibe o "Modal" de seleção
+@auth_bp.route("/select-school")
+@login_required
+def select_school():
+    # Busca as escolas do usuário logado para exibir no modal
+    schools = current_user.user_schools
+    return render_template("select_school.html", schools=schools)
+
+# ROTA NOVA: Processa a escolha e manda pro Dashboard
+@auth_bp.route("/set-school/<int:school_id>")
+@login_required
+def set_school(school_id):
+    # Verifica segurança: O usuário tem essa escola?
+    valid = False
+    for us in current_user.user_schools:
+        if us.school_id == school_id:
+            valid = True
+            break
+    
+    if valid:
+        session['active_school_id'] = school_id
+        session.permanent = True # Cookie persistente
+        flash("Escola selecionada com sucesso.", "success")
+        return redirect(url_for("main.dashboard"))
+    else:
+        flash("Erro ao selecionar escola.", "danger")
+        return redirect(url_for("auth.login"))
 
 @auth_bp.route("/logout")
 @login_required
 def logout():
-    session.pop('active_school_id', None) # Limpa a seleção de escola
+    session.pop('active_school_id', None)
     logout_user()
     flash("Você saiu do sistema.", "info")
     return redirect(url_for("auth.login"))
 
-
 @auth_bp.route("/register", methods=["GET", "POST"])
 def register():
-    # --- LÓGICA DE BUSCA DAS TURMAS ADICIONADA ---
-    # Busca todas as turmas para popular o dropdown no formulário
     turmas = db.session.scalars(select(Turma).order_by(Turma.nome)).all()
-
     form_data = request.form.to_dict()
 
     if request.method == "POST":
@@ -136,27 +151,24 @@ def register():
         pwd2 = form_data.get("password2", "")
 
         if not pwd or pwd != pwd2 or len(pwd) < 8:
-            flash("Senha inválida: verifique os requisitos e a confirmação.", "danger")
+            flash("Senha inválida.", "danger")
             return render_template("register.html", form_data=form_data, turmas=turmas)
 
         matricula_norm = normalize_matricula(form_data.get("matricula"))
         if not matricula_norm:
-            flash("Matrícula inválida. Use apenas números e no máximo 7 dígitos.", "danger")
+            flash("Matrícula inválida.", "danger")
             return render_template("register.html", form_data=form_data, turmas=turmas)
 
         user = db.session.execute(select(User).where(User.matricula == matricula_norm)).scalar_one_or_none()
         if not user:
-            flash("Matrícula não pré-cadastrada. Solicite ao Administrador o pré-cadastro.", "danger")
+            flash("Matrícula não encontrada.", "danger")
             return render_template("register.html", form_data=form_data, turmas=turmas)
 
-        # Aqui verificamos se existe pelo menos UM vínculo, já que o pré-cadastro agora permite múltiplos
         vinculos = db.session.scalars(select(UserSchool).where(UserSchool.user_id == user.id)).all()
         if not vinculos:
-            flash("Pré-cadastro sem vínculo de escola. Peça ao Administrador para refazer.", "danger")
+            flash("Sem vínculo escolar.", "danger")
             return render_template("register.html", form_data=form_data, turmas=turmas)
         
-        # Pega a primeira escola para fins de cadastro inicial de instrutor (caso necessário), 
-        # mas o usuário agora pode ter várias.
         primeira_escola_id = vinculos[0].school_id
 
         user.role = role
@@ -186,16 +198,15 @@ def register():
 
         try:
             db.session.commit()
-            flash("Conta ativada com sucesso! Você já está vinculado à sua escola.", "success")
+            flash("Conta ativada!", "success")
             return redirect(url_for("auth.login"))
         except Exception:
             db.session.rollback()
-            current_app.logger.exception("Erro ao ativar conta")
-            flash("Ocorreu um erro ao ativar sua conta. Tente novamente.", "danger")
+            current_app.logger.exception("Erro ativar")
+            flash("Erro ao ativar conta.", "danger")
             return render_template("register.html", form_data=form_data, turmas=turmas)
 
     return render_template("register.html", form_data={}, turmas=turmas)
-
 
 @auth_bp.route("/recuperar-senha", methods=["GET", "POST"])
 def recuperar_senha():
@@ -204,22 +215,18 @@ def recuperar_senha():
         email = form.email.data.strip().lower()
         user = db.session.execute(select(User).where(User.email == email)).scalar_one_or_none()
         if not user:
-            flash("Se o e-mail existir na nossa base de dados, você receberá instruções em instantes.", "info")
+            flash("Se o e-mail existir, você receberá instruções.", "info")
             return redirect(url_for("auth.recuperar_senha"))
 
         s = _get_serializer()
         token = s.dumps({"user_id": user.id})
-        
         EmailService.send_password_reset_email(user, token)
-
-        flash("Se o e-mail existir na nossa base de dados, você receberá instruções em instantes.", "info")
+        flash("Se o e-mail existir, você receberá instruções.", "info")
         return redirect(url_for("auth.login"))
-
     return render_template("recuperar_senha.html", form=form)
 
-
 @auth_bp.route("/redefinir-senha/<token>", methods=["GET", "POST"])
-def redefinir_senha(token: str):
+def redefinir_senha(token):
     form = ResetPasswordForm()
     s = _get_serializer()
     user_id = None
@@ -227,7 +234,7 @@ def redefinir_senha(token: str):
         data = s.loads(token, max_age=3600)
         user_id = data.get("user_id")
     except (SignatureExpired, BadSignature):
-        flash("Link de redefinição inválido ou expirado.", "warning")
+        flash("Token inválido.", "warning")
         return redirect(url_for("auth.recuperar_senha"))
 
     user = db.session.get(User, user_id)
@@ -236,46 +243,14 @@ def redefinir_senha(token: str):
         return redirect(url_for("auth.recuperar_senha"))
 
     if form.validate_on_submit():
-        pwd = form.password.data
-        if len(pwd) < 8:
-            flash("Senha inválida: verifique os requisitos.", "danger")
-            return render_template("redefinir_senha.html", form=form, token=token)
-
         try:
-            user.set_password(pwd)
+            user.set_password(form.password.data)
             user.must_change_password = False
             db.session.commit()
-            flash("Senha redefinida com sucesso. Faça login.", "success")
+            flash("Senha redefinida.", "success")
             return redirect(url_for("auth.login"))
         except Exception:
             db.session.rollback()
-            current_app.logger.exception("Erro ao redefinir senha")
-            flash("Falha ao redefinir a senha. Tente novamente.", "danger")
+            flash("Erro ao redefinir.", "danger")
 
     return render_template("redefinir_senha.html", form=form, token=token)
-
-# --- NOVA ROTA: TROCA DE ESCOLA ---
-@auth_bp.route("/change-school/<int:school_id>")
-@login_required
-def change_school(school_id):
-    """
-    Rota para o usuário comum trocar a escola ativa na sessão.
-    Verifica se o usuário realmente possui vínculo com a escola solicitada.
-    """
-    # Se for super admin, mantém a lógica antiga ou redireciona
-    if current_user.role in ['super_admin', 'programador']:
-        flash("Super Admin deve usar o painel de gerenciamento para trocar a visão.", "info")
-        return redirect(url_for('main.dashboard'))
-
-    # Verifica se o usuário tem vínculo com essa escola
-    vinculo = db.session.scalar(
-        select(UserSchool).filter_by(user_id=current_user.id, school_id=school_id)
-    )
-    
-    if vinculo:
-        session['active_school_id'] = school_id
-        flash(f"Agora você está acessando a escola: {vinculo.school.nome}", "success")
-    else:
-        flash("Você não tem permissão para acessar esta escola.", "danger")
-    
-    return redirect(url_for('main.dashboard'))
