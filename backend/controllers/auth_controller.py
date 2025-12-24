@@ -4,7 +4,7 @@ from __future__ import annotations
 import typing as t
 
 from flask import (
-    Blueprint, render_template, request, redirect, url_for, flash, current_app
+    Blueprint, render_template, request, redirect, url_for, flash, current_app, session
 )
 from flask_login import login_user, logout_user, login_required, current_user
 from flask_wtf import FlaskForm
@@ -103,6 +103,10 @@ def login():
             return redirect(url_for("auth.register"))
 
         login_user(user, remember=remember)
+        
+        # Limpa qualquer escola "pré-selecionada" de sessões anteriores para forçar a detecção correta
+        session.pop('active_school_id', None)
+        
         flash("Login realizado com sucesso!", "success")
         return redirect(url_for("main.dashboard"))
 
@@ -112,6 +116,7 @@ def login():
 @auth_bp.route("/logout")
 @login_required
 def logout():
+    session.pop('active_school_id', None) # Limpa a seleção de escola
     logout_user()
     flash("Você saiu do sistema.", "info")
     return redirect(url_for("auth.login"))
@@ -144,10 +149,15 @@ def register():
             flash("Matrícula não pré-cadastrada. Solicite ao Administrador o pré-cadastro.", "danger")
             return render_template("register.html", form_data=form_data, turmas=turmas)
 
-        vinculo = db.session.execute(select(UserSchool).where(UserSchool.user_id == user.id)).scalar_one_or_none()
-        if not vinculo:
+        # Aqui verificamos se existe pelo menos UM vínculo, já que o pré-cadastro agora permite múltiplos
+        vinculos = db.session.scalars(select(UserSchool).where(UserSchool.user_id == user.id)).all()
+        if not vinculos:
             flash("Pré-cadastro sem vínculo de escola. Peça ao Administrador para refazer.", "danger")
             return render_template("register.html", form_data=form_data, turmas=turmas)
+        
+        # Pega a primeira escola para fins de cadastro inicial de instrutor (caso necessário), 
+        # mas o usuário agora pode ter várias.
+        primeira_escola_id = vinculos[0].school_id
 
         user.role = role
         user.nome_completo = normalize_name(form_data.get("nome_completo"))
@@ -160,10 +170,7 @@ def register():
 
         if role == "aluno":
             opm_value = form_data.get("opm", "Não informado")
-            # --- LÓGICA DE VÍNCULO DE TURMA ALTERADA (AGORA OPCIONAL) ---
             turma_id_value = form_data.get('turma_id')
-            
-            # Se vier vazio, vira None. Se vier valor, converte para int.
             turma_id = int(turma_id_value) if turma_id_value else None
             
             if not user.aluno_profile:
@@ -175,7 +182,7 @@ def register():
 
         if role == "instrutor":
             if not user.instrutor_profile:
-                db.session.add(Instrutor(user_id=user.id, school_id=vinculo.school_id))
+                db.session.add(Instrutor(user_id=user.id, school_id=primeira_escola_id))
 
         try:
             db.session.commit()
@@ -187,7 +194,6 @@ def register():
             flash("Ocorreu um erro ao ativar sua conta. Tente novamente.", "danger")
             return render_template("register.html", form_data=form_data, turmas=turmas)
 
-    # Passa a lista de turmas para o template
     return render_template("register.html", form_data={}, turmas=turmas)
 
 
@@ -247,3 +253,29 @@ def redefinir_senha(token: str):
             flash("Falha ao redefinir a senha. Tente novamente.", "danger")
 
     return render_template("redefinir_senha.html", form=form, token=token)
+
+# --- NOVA ROTA: TROCA DE ESCOLA ---
+@auth_bp.route("/change-school/<int:school_id>")
+@login_required
+def change_school(school_id):
+    """
+    Rota para o usuário comum trocar a escola ativa na sessão.
+    Verifica se o usuário realmente possui vínculo com a escola solicitada.
+    """
+    # Se for super admin, mantém a lógica antiga ou redireciona
+    if current_user.role in ['super_admin', 'programador']:
+        flash("Super Admin deve usar o painel de gerenciamento para trocar a visão.", "info")
+        return redirect(url_for('main.dashboard'))
+
+    # Verifica se o usuário tem vínculo com essa escola
+    vinculo = db.session.scalar(
+        select(UserSchool).filter_by(user_id=current_user.id, school_id=school_id)
+    )
+    
+    if vinculo:
+        session['active_school_id'] = school_id
+        flash(f"Agora você está acessando a escola: {vinculo.school.nome}", "success")
+    else:
+        flash("Você não tem permissão para acessar esta escola.", "danger")
+    
+    return redirect(url_for('main.dashboard'))

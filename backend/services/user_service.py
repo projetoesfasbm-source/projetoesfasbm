@@ -19,7 +19,9 @@ class UserService:
     @staticmethod
     def pre_register_user(data, school_id):
         """
-        Pré-cadastro unitário: cria User(is_active=False) e vínculo UserSchool(role).
+        Pré-cadastro:
+        - Se o usuário NÃO existe: cria User + UserSchool.
+        - Se o usuário JÁ existe: cria APENAS UserSchool (vínculo) para a nova escola.
         """
         matricula = normalize_matricula(data.get('matricula'))
         role = (data.get('role') or '').strip()
@@ -30,25 +32,48 @@ class UserService:
         if not school_id:
             return False, "A escola é obrigatória para o pré-cadastro."
 
-        if db.session.execute(select(User).filter_by(matricula=matricula)).scalar_one_or_none():
-            return False, f"O usuário com Matrícula '{matricula}' já existe."
+        # Verifica se o usuário já existe globalmente
+        existing_user = db.session.scalar(select(User).filter_by(matricula=matricula))
 
+        if existing_user:
+            # Usuário existe. Verifica se já tem vínculo com ESTA escola.
+            existing_link = db.session.scalar(
+                select(UserSchool).filter_by(user_id=existing_user.id, school_id=school_id)
+            )
+            
+            if existing_link:
+                return False, f"O usuário {matricula} já está vinculado a esta escola."
+            
+            # Cria apenas o novo vínculo
+            try:
+                new_assignment = UserSchool(user_id=existing_user.id, school_id=school_id, role=role)
+                db.session.add(new_assignment)
+                db.session.commit()
+                return True, f"Usuário {matricula} existente foi vinculado a esta escola como {role}."
+            except Exception as e:
+                db.session.rollback()
+                current_app.logger.error(f"Erro ao vincular usuário existente no pré-cadastro: {e}")
+                return False, "Erro ao vincular usuário existente."
+        
+        # Se usuário não existe, cria do zero (Lógica original)
         try:
             new_user = User(matricula=matricula, role=role, is_active=False)
             db.session.add(new_user)
-            db.session.flush()
+            db.session.flush() # Gera o ID do usuário
+            
             db.session.add(UserSchool(user_id=new_user.id, school_id=school_id, role=role))
             db.session.commit()
             return True, f"Usuário {matricula} pré-cadastrado com sucesso como {role}."
         except Exception as e:
             db.session.rollback()
-            current_app.logger.error(f"Erro no pré-cadastro: {e}")
-            return False, "Erro ao pré-cadastrar usuário."
+            current_app.logger.error(f"Erro no pré-cadastro novo: {e}")
+            return False, "Erro ao pré-cadastrar novo usuário."
 
     @staticmethod
     def batch_pre_register_users(matriculas, role, school_id):
         """
-        Pré-cadastro em lote: cria Users (is_active=False) e vínculos UserSchool(role).
+        Pré-cadastro em lote: 
+        - Cria novos usuários ou vincula existentes à escola atual.
         """
         if not role:
             return False, 0, 0
@@ -63,12 +88,17 @@ class UserService:
 
             user = db.session.scalar(select(User).filter_by(matricula=matricula))
             if user:
-                usuarios_existentes_count += 1
+                # Verifica vínculo com a escola atual
                 existing_assignment = db.session.scalar(
                     select(UserSchool).filter_by(user_id=user.id, school_id=school_id)
                 )
                 if not existing_assignment:
+                    # Se não tem vínculo, cria
                     db.session.add(UserSchool(user_id=user.id, school_id=school_id, role=role))
+                    usuarios_existentes_count += 1
+                else:
+                    # Já existe e já tem vínculo, conta como existente
+                    usuarios_existentes_count += 1
                 continue
 
             try:
@@ -104,6 +134,8 @@ class UserService:
         if (user.username or '') in ['super_admin', 'programador'] or user.role in ['super_admin', 'programador']:
             return False, f"Não é permitido alterar a função ou vincular o usuário privilegiado."
 
+        # Nota: User.role armazena a role principal (contextual), mas UserSchool armazena a role naquela escola.
+        # Atualizamos a role principal para refletir a última alteração, mas o importante é o UserSchool.
         user.role = role
 
         existing_assignment = db.session.execute(
@@ -145,19 +177,43 @@ class UserService:
 
     @staticmethod
     def get_current_school_id():
+        """
+        Retorna o ID da escola atual do contexto do usuário.
+        Prioriza a seleção feita na sessão (troca de escola).
+        """
         if not current_user.is_authenticated:
             return None
 
+        # 1. Se for Super Admin/Programador, usa a lógica de personificação
         if current_user.role in ['super_admin', 'programador']:
             school_id_from_session = session.get('view_as_school_id')
             if school_id_from_session:
-                return school_id_from_session
+                return int(school_id_from_session)
+            return None
 
+        # 2. Se for usuário comum, verifica se há uma escola selecionada na sessão
+        active_school_id = session.get('active_school_id')
+        
+        if active_school_id:
+            # Validação de segurança: garantir que o usuário realmente pertence a essa escola
+            # para evitar manipulação de cookie/sessão
+            is_valid = db.session.scalar(
+                select(UserSchool).filter_by(user_id=current_user.id, school_id=active_school_id)
+            )
+            if is_valid:
+                return int(active_school_id)
+
+        # 3. Fallback: Se não tiver nada na sessão (primeiro login) ou inválido, pega a primeira escola encontrada
         user_school = db.session.scalar(
             select(UserSchool).filter_by(user_id=current_user.id)
         )
 
-        return user_school.school_id if user_school else None
+        if user_school:
+            # Salva na sessão para as próximas requisições
+            session['active_school_id'] = user_school.school_id
+            return user_school.school_id
+            
+        return None
 
     @staticmethod
     def delete_user_by_id(user_id: int):

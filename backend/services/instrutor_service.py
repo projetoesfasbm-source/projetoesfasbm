@@ -98,16 +98,10 @@ class InstrutorService:
         
         if user is not None:
             school_ids = InstrutorService._visible_school_ids_for(user)
-            # Se não tem escolas visíveis, retorna lista vazia
             if school_ids == []:
                 return []
-            # Se tem escolas, filtra
             if school_ids is not None:
                 stmt = stmt.where(UserSchool.school_id.in_(school_ids))
-        
-        # Remove duplicatas que podem ocorrer pelo join se instrutor estiver em múltiplas escolas (distinct)
-        # Mas como filtramos por user_school, o ideal é agrupar ou usar distinct se necessário.
-        # Geralmente Instrutor é único por ID, o SQLAlchemy cuida da identidade.
         
         return db.session.scalars(stmt).unique().all()
     
@@ -161,13 +155,7 @@ class InstrutorService:
     def _visible_school_ids_for(user) -> list[int] | None:
         if getattr(user, "role", None) in ("super_admin", "programador"):
             sid = session.get("view_as_school_id")
-            
-            # --- LINHA CORRIGIDA ---
-            # Se 'sid' for None (admin não está personificando), retorna [] (lista vazia)
-            # em vez de None. Isso força o 'get_all_instrutores' a não retornar
-            # nada, corrigindo o vazamento de dados.
             return [int(sid)] if sid else []
-            # --- FIM DA CORREÇÃO ---
 
         ids = [us.school_id for us in getattr(user, "user_schools", [])]
         return ids or []
@@ -195,11 +183,40 @@ class InstrutorService:
             if not password:
                 return False, "O campo Senha é obrigatório."
 
-            if db.session.scalar(select(User.id).where(User.matricula == matricula)):
-                return False, f"A Matrícula '{matricula}' já está em uso por outro usuário."
+            # --- ALTERAÇÃO PARA MULTI-ESCOLA ---
+            # Verifica se o usuário já existe pela matrícula
+            existing_user = db.session.scalar(select(User).where(User.matricula == matricula))
+            
+            if existing_user:
+                # Se existe, verifica se o e-mail bate (se foi fornecido e é diferente)
+                if existing_user.email and existing_user.email != email:
+                    return False, f"A Matrícula '{matricula}' já existe, mas o e-mail não confere com o cadastrado."
+
+                # Se o usuário existe, vamos garantir que ele tenha perfil de instrutor e o vínculo
+                if not getattr(existing_user, 'instrutor_profile', None):
+                    # Cria o perfil de instrutor se ele era apenas aluno ou admin
+                    new_profile = Instrutor(
+                        user_id=existing_user.id,
+                        school_id=school_id, # Escola "principal" do perfil, mas o vínculo conta mais
+                        telefone=telefone,
+                        is_rr=is_rr
+                    )
+                    db.session.add(new_profile)
+                
+                # Garante o vínculo com a escola atual
+                InstrutorService._ensure_user_school(existing_user.id, int(school_id), role='instrutor')
+                
+                # Atualiza dados básicos se vierem vazios no banco e preenchidos aqui? 
+                # Por segurança, mantemos os dados originais do usuário, a menos que se queira forçar update.
+                
+                db.session.commit()
+                return True, f"Instrutor {existing_user.nome_completo} (já existente) vinculado à nova escola com sucesso!"
+            
+            # Se não existe, verifica e-mail duplicado em outros usuários
             if db.session.scalar(select(User.id).where(User.email == email)):
                 return False, f"O e-mail '{email}' já está em uso por outro usuário."
 
+            # Criação normal de novo usuário
             user = User(
                 email=email,
                 username=email,

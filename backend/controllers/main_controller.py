@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import List
 
-from flask import Blueprint, render_template, redirect, url_for, request, flash, session
+from flask import Blueprint, render_template, redirect, url_for, request, flash, session, current_app
 from flask_login import login_required, current_user
 
 from ..models.user import User
@@ -19,6 +19,25 @@ from utils.normalizer import normalize_matricula
 main_bp = Blueprint('main', __name__)
 
 # ---------------------------------------
+# Context Processor (ESSENCIAL PARA O MENU)
+# ---------------------------------------
+@main_bp.context_processor
+def inject_active_school():
+    """
+    Injeta a escola atual em todos os templates para que o menu de seleção funcione.
+    """
+    if current_user.is_authenticated:
+        school_id = UserService.get_current_school_id()
+        current_school = db.session.get(School, school_id) if school_id else None
+        return dict(
+            current_school_id=school_id, 
+            current_school=current_school,
+            # Mantém compatibilidade com templates antigos
+            active_school=current_school 
+        )
+    return dict(current_school_id=None, current_school=None, active_school=None)
+
+# ---------------------------------------
 # Utils de parsing para pré-cadastro
 # ---------------------------------------
 
@@ -29,8 +48,6 @@ def _parse_matriculas(raw: str) -> List[str]:
     """
     Recebe string com várias matrículas separadas por vírgula/espacos/;/\n.
     Normaliza, remove vazios e duplicados preservando a ordem.
-    Obs.: NÃO filtramos por isdigit() para não descartar formatos alfanuméricos.
-          Se quiser restringir a números, ative isso dentro do normalize_matricula.
     """
     if not raw:
         return []
@@ -57,29 +74,24 @@ def index():
 @main_bp.route('/dashboard')
 @login_required
 def dashboard():
-    # Ao sair de super_admin/programador, limpa "ver como"
-    if current_user.role not in ['super_admin', 'programador']:
+    # Lógica de "Visualizar como" para Super Admin
+    if current_user.role in ['super_admin', 'programador']:
+        view_as_school_id = request.args.get('view_as_school', type=int)
+        if view_as_school_id:
+            school = db.session.get(School, view_as_school_id)
+            if school:
+                session['view_as_school_id'] = school.id
+                session['view_as_school_name'] = school.nome
+            else:
+                flash("Escola selecionada para visualização não encontrada.", "danger")
+                return redirect(url_for('super_admin.dashboard'))
+    else:
+        # Se não for admin, garante limpeza de sessões antigas de admin
         session.pop('view_as_school_id', None)
         session.pop('view_as_school_name', None)
 
-    view_as_school_id = request.args.get('view_as_school', type=int)
-
-    if current_user.role in ['super_admin', 'programador'] and view_as_school_id:
-        school = db.session.get(School, view_as_school_id)
-        if school:
-            session['view_as_school_id'] = school.id
-            session['view_as_school_name'] = school.nome
-        else:
-            flash("Escola selecionada para visualização não encontrada.", "danger")
-            return redirect(url_for('super_admin.dashboard'))
-
-    school_id_to_load = None
-    if current_user.role in ['super_admin', 'programador']:
-        school_id_to_load = session.get('view_as_school_id')
-    elif getattr(current_user, 'schools', None):
-        # current_user.schools é @property -> lista derivada de user_schools
-        if current_user.schools:
-            school_id_to_load = current_user.schools[0].id
+    # Usa o serviço para pegar a escola correta (seja a da sessão ou a padrão)
+    school_id_to_load = UserService.get_current_school_id()
 
     dashboard_data = DashboardService.get_dashboard_data(school_id=school_id_to_load)
 
@@ -109,10 +121,7 @@ def safebrowser():
 @admin_or_programmer_required
 def pre_cadastro():
     """
-    Pré-cadastro (unitário ou em lote) de usuários por matrícula,
-    vinculando-os à escola atual do administrador (ou programador).
-    - GET: exibe o formulário (template: pre_cadastro.html)
-    - POST: processa e chama UserService.(pre_register_user|batch_pre_register_users)
+    Pré-cadastro (unitário ou em lote) de usuários por matrícula.
     """
     # role pode vir por querystring para pré-seleção no template
     role_arg = request.args.get('role')
@@ -121,11 +130,10 @@ def pre_cadastro():
         # 1) Identifica a escola do usuário logado
         school_id = UserService.get_current_school_id()
         if not school_id:
-            flash("Não foi possível identificar a escola do administrador. Ação cancelada.", "danger")
+            flash("Não foi possível identificar a escola atual. Ação cancelada.", "danger")
             return redirect(url_for('main.pre_cadastro', role=role_arg) if role_arg else url_for('main.pre_cadastro'))
 
         # 2) Determina a role
-        # prioridade: role do form > role da URL > 'aluno'
         role = (request.form.get('role') or role_arg or 'aluno').strip()
         if role not in {'aluno', 'instrutor', 'admin_escola'}:
             flash('Função inválida para pré-cadastro.', 'danger')
@@ -165,6 +173,6 @@ def pre_cadastro():
 
         return redirect(url_for('main.pre_cadastro', role=role_arg) if role_arg else url_for('main.pre_cadastro'))
 
-    # GET: carrega escolas só para exibição no template (ele mostra a lista quando apropriado)
+    # GET
     schools = db.session.query(School).order_by(School.nome).all()
     return render_template('pre_cadastro.html', role_predefinido=role_arg, schools=schools)
