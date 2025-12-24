@@ -73,14 +73,14 @@ class HorarioService:
 
                 instrutores_display_list = []
                 if aula.instrutor and aula.instrutor.user:
-                    # --- ALTERAÇÃO: Adiciona Posto/Graduação antes do nome ---
+                    # Formata nome com Posto/Graduação
                     posto = aula.instrutor.user.posto_graduacao or ''
                     nome = aula.instrutor.user.nome_de_guerra or aula.instrutor.user.username
                     nome_completo = f"{posto} {nome}".strip()
                     instrutores_display_list.append(nome_completo)
                 
                 if aula.instrutor_2 and aula.instrutor_2.user:
-                    # --- ALTERAÇÃO: Adiciona Posto/Graduação antes do nome ---
+                    # Formata nome com Posto/Graduação
                     posto = aula.instrutor_2.user.posto_graduacao or ''
                     nome = aula.instrutor_2.user.nome_de_guerra or aula.instrutor_2.user.username
                     nome_completo = f"{posto} {nome}".strip()
@@ -196,7 +196,6 @@ class HorarioService:
                 )
 
         instrutores_paginados = InstrutorService.get_all_instrutores(user=user)
-        # --- ALTERAÇÃO: Adiciona Posto/Graduação na lista geral de instrutores ---
         todos_instrutores = []
         for i in instrutores_paginados.items:
             posto = i.user.posto_graduacao or ''
@@ -239,7 +238,6 @@ class HorarioService:
         if aula.instrutor_id_2:
             instrutor_value = f"{aula.instrutor_id}-{aula.instrutor_id_2}"
 
-        # --- ALTERAÇÃO: Formata nome do instrutor no detalhe da aula ---
         instrutor_nome_formatado = ''
         if aula.instrutor and aula.instrutor.user:
             posto = aula.instrutor.user.posto_graduacao or ''
@@ -318,7 +316,43 @@ class HorarioService:
             horario_id_raw = data.get('horario_id')
             horario_id = int(horario_id_raw) if horario_id_raw else None
 
-            # --- VALIDAÇÃO DE CARGA HORÁRIA (Mantida da versão anterior) ---
+            # Recupera a Semana para validações
+            semana = db.session.get(Semana, semana_id)
+            if not semana:
+                return False, "Semana não encontrada.", 404
+
+            # --- BLOCO DE VALIDAÇÕES DE INTEGRIDADE (NOVO) ---
+            # Aplica regras estritas para não-administradores
+            if not is_admin:
+                
+                # 1. Validação de Dias da Semana (Sábado/Domingo)
+                # Verifica se o dia está habilitado na configuração da semana
+                if dia == 'sabado' and not semana.mostrar_sabado:
+                    return False, "⚠️ AGENDAMENTO BLOQUEADO: O Sábado não está habilitado nesta semana.", 403
+                
+                if dia == 'domingo' and not semana.mostrar_domingo:
+                    return False, "⚠️ AGENDAMENTO BLOQUEADO: O Domingo não está habilitado nesta semana.", 403
+
+                # 2. Validação de Períodos Especiais (13, 14, 15 e Limites de Fim de Semana)
+                # Verifica cada período que a aula vai ocupar
+                for p in range(periodo_inicio, periodo_fim + 1):
+                    
+                    # Períodos Extras
+                    if p == 13 and not semana.mostrar_periodo_13:
+                        return False, "⚠️ AGENDAMENTO BLOQUEADO: O 13º tempo não está habilitado.", 403
+                    if p == 14 and not semana.mostrar_periodo_14:
+                        return False, "⚠️ AGENDAMENTO BLOQUEADO: O 14º tempo não está habilitado.", 403
+                    if p == 15 and not semana.mostrar_periodo_15:
+                        return False, "⚠️ AGENDAMENTO BLOQUEADO: O 15º tempo não está habilitado.", 403
+                    
+                    # Limites de quantidade de tempos no Fim de Semana (se configurado)
+                    if dia == 'sabado' and semana.periodos_sabado > 0 and p > semana.periodos_sabado:
+                        return False, f"⚠️ AGENDAMENTO BLOQUEADO: Sábado nesta semana vai apenas até o {semana.periodos_sabado}º tempo.", 403
+                    
+                    if dia == 'domingo' and semana.periodos_domingo > 0 and p > semana.periodos_domingo:
+                        return False, f"⚠️ AGENDAMENTO BLOQUEADO: Domingo nesta semana vai apenas até o {semana.periodos_domingo}º tempo.", 403
+
+            # --- VALIDAÇÃO DE CARGA HORÁRIA (Mantida) ---
             disciplina = db.session.get(Disciplina, disciplina_id)
             if disciplina and not is_admin: 
                 total_agendado = db.session.scalar(
@@ -340,25 +374,25 @@ class HorarioService:
 
                 if (total_agendado + duracao) > disciplina.carga_horaria_prevista:
                     restante = disciplina.carga_horaria_prevista - total_agendado
-                    return False, f"⚠️ LIMITE EXCEDIDO: Faltam apenas {restante}h para esta disciplina. Você tentou agendar {duracao}h.", 400
+                    # Evita números negativos na mensagem
+                    if restante < 0: restante = 0
+                    return False, f"⚠️ LIMITE EXCEDIDO: Faltam apenas {restante}h. Você tentou agendar {duracao}h.", 400
             # ---------------------------------------------
 
             # --- LÓGICA DE BLOQUEIO POR PRIORIDADE ---
-            if semana_id and not is_admin:
-                semana = db.session.get(Semana, semana_id)
-                if semana and getattr(semana, 'priority_active', False):
+            if semana and getattr(semana, 'priority_active', False) and not is_admin:
+                allowed_names = []
+                raw_priority = getattr(semana, 'priority_disciplines', '[]') or '[]'
+                try:
+                    allowed_names = json.loads(raw_priority)
+                    if not isinstance(allowed_names, list): allowed_names = []
+                except:
                     allowed_names = []
-                    raw_priority = getattr(semana, 'priority_disciplines', '[]') or '[]'
-                    try:
-                        allowed_names = json.loads(raw_priority)
-                        if not isinstance(allowed_names, list): allowed_names = []
-                    except:
-                        allowed_names = []
-                    
-                    nome_disciplina_atual = disciplina.materia if disciplina else ""
+                
+                nome_disciplina_atual = disciplina.materia if disciplina else ""
 
-                    if not allowed_names or nome_disciplina_atual not in allowed_names:
-                        return False, "⚠️ AGENDAMENTO BLOQUEADO: Apenas as disciplinas prioritárias podem ser agendadas nesta semana.", 403
+                if not allowed_names or nome_disciplina_atual not in allowed_names:
+                    return False, "⚠️ AGENDAMENTO BLOQUEADO: Apenas as disciplinas prioritárias podem ser agendadas nesta semana.", 403
             # -------------------------------------------------------------
 
             # instrutor(es)

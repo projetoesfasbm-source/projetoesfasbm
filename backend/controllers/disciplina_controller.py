@@ -146,7 +146,7 @@ def api_disciplinas_por_turma(turma_id):
     disciplinas = sorted(turma.disciplinas, key=lambda d: d.materia)
     return jsonify([{'id': d.id, 'materia': d.materia} for d in disciplinas])
 
-# --- ROTA DE AUDITORIA COM AGRUPAMENTO DE HORÁRIOS ---
+# --- ROTA DE AUDITORIA COM CÁLCULO DE HORAS RESTANTES ---
 @disciplina_bp.route('/detalhes/<int:disciplina_id>')
 @login_required
 def detalhes_disciplina(disciplina_id):
@@ -162,7 +162,6 @@ def detalhes_disciplina(disciplina_id):
         .where(Horario.disciplina_id == disciplina_id)
     ).all()
     
-    # Mapa para conversão de dias
     mapa_dias = {
         'segunda': 0, 'segunda-feira': 0, 
         'terça': 1, 'terca': 1, 'terça-feira': 1, 'terca-feira': 1,
@@ -176,17 +175,17 @@ def detalhes_disciplina(disciplina_id):
     processed_items = []
     total_tempos_agendados = 0
 
-    # 2. Pré-processamento: Calcula data real e normaliza dados
+    # 2. Pré-processamento
     for agendamento in raw_agendamentos:
         qtd = agendamento.duracao if agendamento.duracao else 1
         total_tempos_agendados += qtd
         
-        # Pega nome do instrutor com segurança (User.nome_de_guerra)
         instrutor_nome = 'Não definido'
         if agendamento.instrutor and agendamento.instrutor.user:
-            instrutor_nome = agendamento.instrutor.user.nome_de_guerra or agendamento.instrutor.user.nome_completo
+            posto = agendamento.instrutor.user.posto_graduacao or ''
+            nome = agendamento.instrutor.user.nome_de_guerra or agendamento.instrutor.user.nome_completo
+            instrutor_nome = f"{posto} {nome}".strip()
 
-        # Calcula a data REAL
         data_real = agendamento.semana.data_inicio
         dia_text = agendamento.dia_semana.lower().strip() if agendamento.dia_semana else ""
         offset = mapa_dias.get(dia_text)
@@ -200,16 +199,15 @@ def detalhes_disciplina(disciplina_id):
             'periodo_fim': agendamento.periodo + qtd - 1,
             'qtd': qtd,
             'semana_nome': agendamento.semana.nome,
+            'semana_id': agendamento.semana.id,
+            'pelotao': agendamento.pelotao,
             'instrutor_nome': instrutor_nome
         })
 
-    # 3. Ordenação Inteligente:
-    # Primeiro por Data (decrescente: mais recente primeiro)
-    # Segundo por Período (crescente: 1º tempo antes do 2º)
-    # Truque: (data_real, -periodo_inicio) com reverse=True ordena Data DESC e Periodo ASC
+    # 3. Ordenação
     processed_items.sort(key=lambda x: (x['data_real'], -x['periodo_inicio']), reverse=True)
 
-    # 4. Agrupamento (Mesclar linhas sequenciais)
+    # 4. Agrupamento
     grouped_list = []
     if processed_items:
         current_block = processed_items[0]
@@ -217,27 +215,20 @@ def detalhes_disciplina(disciplina_id):
         for i in range(1, len(processed_items)):
             next_item = processed_items[i]
             
-            # Critérios para mesclar:
-            # - Mesmo Dia
-            # - Mesmo Instrutor
-            # - Sequencial (O fim deste bloco + 1 é igual ao início do próximo item)
             is_same_day = (current_block['data_real'] == next_item['data_real'])
             is_same_instr = (current_block['instrutor_nome'] == next_item['instrutor_nome'])
             is_continuous = (current_block['periodo_fim'] + 1 == next_item['periodo_inicio'])
             
             if is_same_day and is_same_instr and is_continuous:
-                # MESCLAR: Estende o bloco atual
                 current_block['periodo_fim'] = next_item['periodo_fim']
                 current_block['qtd'] += next_item['qtd']
             else:
-                # Adiciona o bloco fechado e começa um novo
                 grouped_list.append(current_block)
                 current_block = next_item
         
-        # Adiciona o último bloco que sobrou
         grouped_list.append(current_block)
 
-    # 5. Formatação final para o template
+    # 5. Formatação Final
     final_output = []
     for item in grouped_list:
         p_str = f"{item['periodo_inicio']}º"
@@ -248,14 +239,20 @@ def detalhes_disciplina(disciplina_id):
             'id': item['id'],
             'data': item['data_real'],
             'semana': item['semana_nome'],
+            'semana_id': item['semana_id'],
+            'pelotao': item['pelotao'],
             'periodos': p_str,
             'qtd': item['qtd'],
             'instrutor': item['instrutor_nome']
         })
     
+    # CÁLCULO FINAL DE HORAS RESTANTES
+    horas_restantes = disciplina.carga_horaria_prevista - total_tempos_agendados
+    
     return render_template(
         'detalhes_disciplina.html', 
         disciplina=disciplina, 
         agendamentos=final_output,
-        total_auditado=total_tempos_agendados
+        total_auditado=total_tempos_agendados,
+        horas_restantes=horas_restantes  # Passando para o template
     )

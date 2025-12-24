@@ -2,96 +2,274 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Auditoria: Quadro Horário</title>
+    <title>Detalhes da Disciplina</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
     <style>
-        body { background-color: #f8f9fa; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        .container { max-width: 1100px; margin-top: 40px; }
-        .card { border: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .header-audit { background: linear-gradient(135deg, #2c3e50 0%, #4ca1af 100%); color: white; padding: 25px; border-radius: 8px 8px 0 0; }
-        .badge-audit { font-size: 1.1rem; padding: 10px 20px; border: 2px solid white; }
+        body { 
+            background-color: #f0f2f5; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+        }
+        
+        .container { 
+            max-width: 1200px; 
+            margin-top: 30px; 
+        }
+
+        /* --- Estilo dos Cards Coloridos do Topo --- */
+        .stat-card {
+            border: none;
+            border-radius: 12px;
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            color: white;
+            transition: transform 0.2s;
+            height: 100%; /* Garante altura igual */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-3px);
+        }
+
+        /* Cores Específicas */
+        .card-meta { background: linear-gradient(45deg, #4e73df, #224abe); } /* Azul */
+        .card-realizado { background: linear-gradient(45deg, #36b9cc, #258391); } /* Ciano/Info */
+        
+        .card-status-ok { background: linear-gradient(45deg, #1cc88a, #13855c); } /* Verde */
+        .card-status-warning { background: linear-gradient(45deg, #f6c23e, #dda20a); color: #333; } /* Amarelo */
+        .card-status-danger { background: linear-gradient(45deg, #e74a3b, #be2617); } /* Vermelho */
+
+        /* Ícone de Fundo Translúcido */
+        .stat-icon-bg {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 3.5rem;
+            opacity: 0.15;
+            z-index: 0;
+        }
+
+        .stat-content {
+            position: relative;
+            z-index: 1;
+        }
+
+        .stat-title {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            opacity: 0.9;
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            font-size: 1.8rem;
+            font-weight: 800;
+        }
+        
+        /* Ajuste para o texto "Horas Aulas" ficar proporcional */
+        .stat-unit {
+            font-size: 0.5em;
+            font-weight: 600;
+            opacity: 0.9;
+            margin-left: 2px;
+        }
+
+        /* --- Tabela Interativa --- */
+        .table-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            overflow: hidden;
+            margin-top: 25px;
+        }
+
+        .table-hover tbody tr {
+            cursor: pointer;
+            transition: background-color 0.15s ease-in-out;
+        }
+        
+        .table-hover tbody tr:hover {
+            background-color: #f8f9fa !important;
+            transform: scale(1.002);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+
+        .period-badge {
+            background-color: #e9ecef;
+            color: #495057;
+            font-weight: 600;
+            padding: 5px 10px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+        }
     </style>
 </head>
 <body>
 
 <div class="container mb-5">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <a href="{{ url_for('disciplina.listar_disciplinas') }}" class="btn btn-outline-dark">
-            <i class="fas fa-arrow-left me-1"></i> Voltar para Disciplinas
+    
+    <div class="d-flex align-items-center mb-4">
+        <a href="{{ url_for('disciplina.listar_disciplinas') }}" class="btn btn-outline-secondary me-3 shadow-sm" style="border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
+            <i class="fas fa-arrow-left"></i>
         </a>
+        <div>
+            <h2 class="mb-0 fw-bold text-dark">{{ disciplina.materia }}</h2>
+            <p class="text-muted mb-0">
+                <i class="fas fa-users me-1"></i> {{ disciplina.turma.nome }} 
+                <span class="mx-2">•</span> 
+                <i class="far fa-calendar-alt me-1"></i> {{ disciplina.ciclo.nome }}
+            </p>
+        </div>
     </div>
 
-    <div class="card">
-        <div class="header-audit d-flex justify-content-between align-items-center">
-            <div>
-                <h4 class="mb-1 text-uppercase ls-1">Auditoria de Agendamento</h4>
-                <h2 class="mb-0 fw-bold">{{ disciplina.materia }}</h2>
-                <p class="mb-0 opacity-75 mt-1">Turma: {{ disciplina.turma.nome }} | Ciclo: {{ disciplina.ciclo.nome }}</p>
-            </div>
-            <div class="text-end">
-                <small class="d-block text-white-50 text-uppercase fw-bold mb-1">Total Encontrado no Quadro</small>
-                <span class="badge bg-warning text-dark badge-audit rounded-pill">
-                    {{ total_auditado }} tempos
-                </span>
+    <div class="row g-4 mb-4">
+        
+        <div class="col-md-4">
+            <div class="stat-card card-meta">
+                <i class="fas fa-clipboard-list stat-icon-bg"></i>
+                <div class="stat-content">
+                    <div class="stat-title">Carga Prevista (Meta)</div>
+                    <div class="stat-value">{{ disciplina.carga_horaria_prevista }} <span class="stat-unit">Horas Aulas</span></div>
+                </div>
             </div>
         </div>
 
-        <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-hover table-striped mb-0 align-middle">
-                    <thead class="table-light">
-                        <tr>
-                            <th class="ps-4">Data Agendada</th>
-                            <th>Semana (Ref)</th>
-                            <th class="text-center">Períodos</th>
-                            <th class="text-center">Qtd. Tempos</th>
-                            <th>Instrutor/Obs</th>
-                            <th class="text-end pe-4">ID Horário</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for item in agendamentos %}
-                        <tr>
-                            <td class="ps-4 fw-bold text-primary">
+        <div class="col-md-4">
+            <div class="stat-card card-realizado">
+                <i class="fas fa-calendar-check stat-icon-bg"></i>
+                <div class="stat-content">
+                    <div class="stat-title">Agendado no Quadro</div>
+                    <div class="stat-value">{{ total_auditado }} <span class="stat-unit">Horas Aulas</span></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            {% if horas_restantes > 0 %}
+                <div class="stat-card card-status-warning">
+                    <i class="fas fa-clock stat-icon-bg"></i>
+                    <div class="stat-content">
+                        <div class="stat-title">Status Atual</div>
+                        <div class="stat-value">Restam {{ horas_restantes }} <span class="stat-unit">Horas Aulas</span></div>
+                        <small class="fw-bold" style="opacity: 0.8">Para finalizar a carga</small>
+                    </div>
+                </div>
+            {% elif horas_restantes == 0 %}
+                <div class="stat-card card-status-ok">
+                    <i class="fas fa-check-circle stat-icon-bg"></i>
+                    <div class="stat-content">
+                        <div class="stat-title">Status Atual</div>
+                        <div class="stat-value">Disciplina Completada</div>
+                        <small style="opacity: 0.9">Meta atingida com sucesso!</small>
+                    </div>
+                </div>
+            {% else %}
+                <div class="stat-card card-status-danger">
+                    <i class="fas fa-exclamation-triangle stat-icon-bg"></i>
+                    <div class="stat-content">
+                        <div class="stat-title">Atenção</div>
+                        <div class="stat-value">Excesso de {{ horas_restantes | abs }} <span class="stat-unit">Horas Aulas</span></div>
+                        <small style="opacity: 0.9">Ultrapassou a carga prevista</small>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="table-container">
+        <div class="p-3 bg-light border-bottom">
+            <h5 class="m-0 text-secondary"><i class="fas fa-list-ul me-2"></i>Detalhamento dos Agendamentos</h5>
+        </div>
+        
+        {% if agendamentos %}
+        <div class="alert alert-info m-3 py-2 small shadow-sm">
+            <i class="fas fa-mouse-pointer me-1"></i> <strong>Dica:</strong> Clique na linha para ir direto ao Quadro de Horários daquela semana.
+        </div>
+        {% endif %}
+
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4 py-3">Data</th>
+                        <th>Semana</th>
+                        <th class="text-center">Períodos</th>
+                        <th class="text-center">Qtd.</th>
+                        <th>Instrutor</th>
+                        <th class="text-end pe-4">ID</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in agendamentos %}
+                    <tr onclick="window.location='{{ url_for('horario.index', pelotao=item.pelotao, semana_id=item.semana_id) }}'" 
+                        title="Ver no Quadro Horário"
+                        class="position-relative">
+                        
+                        <td class="ps-4">
+                            <div class="fw-bold text-primary" style="font-size: 1.05rem;">
                                 {{ item.data.strftime('%d/%m/%Y') }}
-                                <br>
-                                <small class="text-muted fw-normal">{{ item.data.strftime('%A') }}</small>
-                            </td>
-                            <td>
-                                <span class="badge bg-secondary">{{ item.semana }}</span>
-                            </td>
-                            <td class="text-center">
-                                <span class="fw-bold text-dark">{{ item.periodos }}</span>
-                            </td>
-                            <td class="text-center">
-                                <span class="badge bg-info text-dark rounded-pill" style="font-size: 0.9em; width: 40px;">{{ item.qtd }}</span>
-                            </td>
-                            <td class="small text-muted">
-                                {{ item.instrutor }}
-                            </td>
-                            <td class="text-end pe-4 text-muted small">
-                                #{{ item.id }}
-                            </td>
-                        </tr>
-                        {% else %}
-                        <tr>
-                            <td colspan="6" class="text-center py-5">
-                                <div class="text-muted mb-2"><i class="far fa-calendar-times fa-3x"></i></div>
-                                <h5 class="text-muted">Nenhum horário agendado para esta disciplina.</h5>
-                                <p class="text-muted small">Verifique se você lançou os horários na planilha ou no editor de semanas.</p>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                    <tfoot class="table-light">
-                        <tr>
-                            <td colspan="3" class="text-end fw-bold pt-3">TOTAL GERAL:</td>
-                            <td class="text-center fw-bold text-primary pt-3 fs-5">{{ total_auditado }}</td>
-                            <td colspan="2"></td>
-                        </tr>
-                    </tfoot>
-                </table>
+                            </div>
+                            <div class="text-muted small text-uppercase fw-bold">
+                                {{ item.data.strftime('%A') }}
+                            </div>
+                        </td>
+                        
+                        <td>
+                            <span class="badge bg-secondary rounded-pill fw-normal px-3 py-2">
+                                {{ item.semana }}
+                            </span>
+                        </td>
+                        
+                        <td class="text-center">
+                            <span class="period-badge">{{ item.periodos }}</span>
+                        </td>
+                        
+                        <td class="text-center">
+                            <span class="fw-bold fs-5 text-dark">{{ item.qtd }}</span>
+                            <span class="text-muted small">h</span>
+                        </td>
+                        
+                        <td class="text-secondary fw-semibold">
+                            {% if item.instrutor %}
+                                <i class="fas fa-chalkboard-teacher me-1 text-muted"></i> {{ item.instrutor }}
+                            {% else %}
+                                <span class="text-muted fst-italic">Não definido</span>
+                            {% endif %}
+                        </td>
+                        
+                        <td class="text-end pe-4 text-muted small">
+                            #{{ item.id }} <i class="fas fa-external-link-alt ms-2 text-primary opacity-50"></i>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center py-5">
+                            <div class="text-muted mb-3 opacity-25">
+                                <i class="far fa-calendar-times fa-4x"></i>
+                            </div>
+                            <h4 class="text-muted fw-light">Nenhum horário agendado</h4>
+                            <p class="text-muted mb-0">Esta disciplina ainda não possui registros no Quadro de Horários.</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="bg-light p-3 border-top d-flex justify-content-between align-items-center">
+            <span class="text-muted small">Mostrando {{ agendamentos|length }} registros agrupados.</span>
+            <div class="d-flex align-items-center">
+                <span class="text-uppercase fw-bold text-secondary me-3 small">Total Auditado:</span>
+                <span class="badge bg-dark fs-6 px-3 py-2">{{ total_auditado }} Horas Aulas</span>
             </div>
         </div>
     </div>
