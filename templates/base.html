@@ -135,7 +135,25 @@
                 
                 <div class="top-navbar-title">
                     <span class="school-name-display">
-                        {% if current_school %}
+                        {# --- LÓGICA DE CORREÇÃO VISUAL PARA MULTI-ESCOLA --- #}
+                        {# 1. Tenta pegar o ID da sessão diretamente #}
+                        {% set session_active_id = session.get('active_school_id') %}
+                        {% set visual_school_name = namespace(value=None) %}
+
+                        {# 2. Se temos ID na sessão e usuário logado, busca o nome correto na lista dele #}
+                        {% if session_active_id and current_user.user_schools %}
+                            {% for vinculo in current_user.user_schools %}
+                                {# Converte ambos para string para garantir igualdade #}
+                                {% if vinculo.school_id|string == session_active_id|string %}
+                                    {% set visual_school_name.value = vinculo.school.nome %}
+                                {% endif %}
+                            {% endfor %}
+                        {% endif %}
+
+                        {# 3. Exibição com Prioridade: Nome Achado > Nome Injetado > Super Admin > Padrão #}
+                        {% if visual_school_name.value %}
+                            {{ visual_school_name.value }}
+                        {% elif current_school %}
                             {{ current_school.nome }}
                         {% elif active_school %}
                             {{ active_school.nome }}

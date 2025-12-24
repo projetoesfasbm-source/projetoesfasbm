@@ -6,40 +6,60 @@ from datetime import datetime
 from flask import current_app, session
 from werkzeug.utils import secure_filename
 from sqlalchemy import select, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
 
 from ..models.database import db
 from ..models.aluno import Aluno
 from ..models.user import User
-from ..models.turma import Turma
 from ..models.historico import HistoricoAluno
+from ..models.turma import Turma
+from ..models.disciplina import Disciplina
+from ..models.historico_disciplina import HistoricoDisciplina
 from ..models.user_school import UserSchool
 from utils.image_utils import allowed_file
 from utils.normalizer import normalize_name
+
+# Importação para garantir o contexto da sessão (Correção do Bug)
 from .user_service import UserService
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 
+
 def _save_profile_picture(file):
-    # (Mantido igual ao anterior, omitido para brevidade mas deve estar no arquivo final)
-    if not file: return None, "Nenhum arquivo enviado."
+    """Valida e salva a imagem de perfil; retorna o nome do arquivo salvo ou uma mensagem de erro."""
+    if not file:
+        return None, "Nenhum arquivo enviado."
+    
     file.stream.seek(0)
-    if not allowed_file(file.filename, file.stream, ALLOWED_EXTENSIONS): return None, "Tipo inválido."
+    if not allowed_file(file.filename, file.stream, ALLOWED_EXTENSIONS):
+        return None, "Tipo de arquivo de imagem não permitido."
+    
     try:
         filename = secure_filename(file.filename)
         ext = filename.rsplit('.', 1)[1].lower()
-        uid = f"{uuid.uuid4()}.{ext}"
-        path = os.path.join(current_app.static_folder, 'uploads', 'profile_pics', uid)
+        unique_filename = f"{uuid.uuid4()}.{ext}"
+        upload_folder = os.path.join(current_app.static_folder, 'uploads', 'profile_pics')
+        os.makedirs(upload_folder, exist_ok=True)
+        file_path = os.path.join(upload_folder, unique_filename)
+        
         file.stream.seek(0)
-        file.save(path)
-        return uid, "Sucesso"
-    except: return None, "Erro ao salvar."
+        file.save(file_path)
+        
+        return unique_filename, "Arquivo salvo com sucesso"
+    except Exception as e:
+        current_app.logger.error(f"Erro ao salvar foto de perfil: {e}")
+        return None, "Erro ao salvar o arquivo de imagem."
+
 
 class AlunoService:
     @staticmethod
     def get_all_alunos(user, nome_turma=None, search_term=None, page=1, per_page=15):
+        # Pega a escola ativa
         active_school_id = UserService.get_current_school_id()
+
         if not active_school_id:
+            # Retorna lista vazia se não houver escola selecionada
             return db.paginate(select(Aluno).where(db.false()), page=page, per_page=per_page)
 
         stmt = (
@@ -52,7 +72,10 @@ class AlunoService:
                 # CORREÇÃO "MATRÍCULA 2": Filtra pela escola da TURMA do aluno
                 Turma.school_id == active_school_id
             )
-            .options(joinedload(Aluno.user), joinedload(Aluno.turma))
+            .options(
+                joinedload(Aluno.user),
+                joinedload(Aluno.turma),
+            )
             .order_by(User.nome_completo, User.matricula)
         )
 
@@ -60,16 +83,23 @@ class AlunoService:
             stmt = stmt.where(Turma.nome == nome_turma)
         
         if search_term:
-            like = f"%{search_term}%"
-            stmt = stmt.where(or_(User.nome_completo.ilike(like), User.matricula.ilike(like)))
+            like_term = f"%{search_term}%"
+            stmt = stmt.where(
+                or_(
+                    User.nome_completo.ilike(like_term),
+                    User.matricula.ilike(like_term)
+                )
+            )
 
-        return db.paginate(stmt, page=page, per_page=per_page, error_out=False)
+        alunos_paginados = db.paginate(stmt, page=page, per_page=per_page, error_out=False)
+        return alunos_paginados
 
     @staticmethod
     def get_aluno_by_id(aluno_id: int):
         active_school = UserService.get_current_school_id()
         aluno = db.session.get(Aluno, aluno_id)
-        # Segurança: só retorna se a turma do aluno for desta escola
+        
+        # Segurança: só retorna se a turma do aluno pertencer à escola atual
         if aluno and aluno.turma and aluno.turma.school_id == active_school:
             return aluno
         return None
@@ -77,86 +107,130 @@ class AlunoService:
     @staticmethod
     def update_profile_picture(aluno_id: int, file):
         aluno = AlunoService.get_aluno_by_id(aluno_id)
-        if not aluno: return False, "Aluno não encontrado ou de outra escola."
-        
+        if not aluno:
+            return False, "Aluno não encontrado ou pertence a outra escola."
+
         if file:
+            # Remove a foto antiga se não for a padrão
             if aluno.foto_perfil and aluno.foto_perfil != 'default.png':
-                try: os.remove(os.path.join(current_app.static_folder, 'uploads', 'profile_pics', aluno.foto_perfil))
-                except: pass
-            fname, msg = _save_profile_picture(file)
-            if fname:
-                aluno.foto_perfil = fname
-                return True, "Foto atualizada."
-            return False, msg
-        return False, "Sem arquivo."
+                old_path = os.path.join(current_app.static_folder, 'uploads', 'profile_pics', aluno.foto_perfil)
+                if os.path.exists(old_path):
+                    try:
+                        os.remove(old_path)
+                    except Exception as e:
+                        current_app.logger.error(f"Não foi possível remover a foto antiga: {e}")
+
+            # Salva a nova foto
+            filename, msg = _save_profile_picture(file)
+            if filename:
+                aluno.foto_perfil = filename
+                return True, "Foto de perfil atualizada com sucesso."
+            else:
+                return False, msg
+        return False, "Nenhum arquivo de imagem fornecido."
 
     @staticmethod
     def update_aluno(aluno_id: int, data: dict):
         aluno = AlunoService.get_aluno_by_id(aluno_id)
-        if not aluno: return False, "Aluno não encontrado."
+        if not aluno:
+            return False, "Aluno não encontrado."
 
-        nome = normalize_name(data.get('nome_completo'))
-        email = (data.get('email') or '').strip()
+        nome_completo = normalize_name(data.get('nome_completo'))
+        email_novo = (data.get('email') or '').strip()
         opm = (data.get('opm') or '').strip()
-        turma_id = data.get('turma_id')
+        turma_id_val = data.get('turma_id')
 
-        if not all([nome, opm, email, turma_id]): return False, "Campos obrigatórios."
+        if not all([nome_completo, opm, email_novo, turma_id_val]):
+            return False, "Todos os campos de dados básicos são obrigatórios."
 
         try:
             # Verifica se a nova turma pertence à escola atual
-            new_turma = db.session.get(Turma, turma_id)
+            new_turma = db.session.get(Turma, turma_id_val)
             if not new_turma or new_turma.school_id != UserService.get_current_school_id():
-                return False, "Turma inválida."
+                return False, "Turma inválida ou de outra escola."
 
-            if aluno.user and aluno.user.email != email:
-                if db.session.scalar(select(User.id).where(User.email == email, User.id != aluno.user.id)):
-                    return False, "E-mail em uso."
+            if aluno.user and aluno.user.email != email_novo:
+                if db.session.scalar(select(User).where(User.email == email_novo, User.id != aluno.user.id)):
+                    return False, "O e-mail fornecido já está em uso por outra conta."
 
             if aluno.user:
-                aluno.user.nome_completo = nome
-                aluno.user.email = email
-                posto = data.get('posto_graduacao')
-                aluno.user.posto_graduacao = data.get('posto_graduacao_outro') if posto == 'Outro' else posto
+                aluno.user.nome_completo = nome_completo
+                aluno.user.email = email_novo
+                posto_selecionado = data.get('posto_graduacao')
+                if posto_selecionado == 'Outro':
+                    aluno.user.posto_graduacao = data.get('posto_graduacao_outro')
+                else:
+                    aluno.user.posto_graduacao = posto_selecionado
 
             aluno.opm = opm
-            aluno.turma_id = int(turma_id)
+            aluno.turma_id = int(turma_id_val)
+
             db.session.commit()
-            return True, "Atualizado."
+            return True, "Perfil do aluno atualizado com sucesso!"
+
         except Exception as e:
             db.session.rollback()
-            return False, f"Erro: {e}"
-
+            current_app.logger.error(f"Erro inesperado ao atualizar aluno: {e}")
+            return False, f"Ocorreu um erro inesperado ao atualizar o perfil. Detalhes: {str(e)}"
+            
     @staticmethod
     def update_funcao_aluno(aluno_id: int, form_data: dict):
         aluno = AlunoService.get_aluno_by_id(aluno_id)
-        if not aluno: return False, "Aluno não encontrado."
+        if not aluno:
+            return False, "Aluno não encontrado."
+        
         try:
-            nova = form_data.get('funcao_atual')
-            dt = datetime.strptime(form_data.get('data_evento'), '%Y-%m-%d') if form_data.get('data_evento') else datetime.utcnow()
+            funcao_nova = form_data.get('funcao_atual')
+            data_evento_str = form_data.get('data_evento')
+            data_evento = datetime.strptime(data_evento_str, '%Y-%m-%d') if data_evento_str else datetime.utcnow()
             
-            if aluno.funcao_atual and aluno.funcao_atual != nova:
-                # Lógica de histórico (simplificada)
-                pass 
+            funcao_antiga = aluno.funcao_atual
 
-            if nova and nova != aluno.funcao_atual:
-                db.session.add(HistoricoAluno(aluno_id=aluno_id, tipo='Função', descricao=f'Assumiu: {nova}', data_inicio=dt))
+            if funcao_antiga and funcao_antiga != funcao_nova:
+                historico_antigo = db.session.scalars(select(HistoricoAluno).where(
+                    HistoricoAluno.aluno_id == aluno_id,
+                    HistoricoAluno.tipo == 'Função de Escola',
+                    HistoricoAluno.descricao.like(f"%Assumiu a função de {funcao_antiga}%"),
+                    HistoricoAluno.data_fim.is_(None)
+                ).order_by(HistoricoAluno.data_inicio.desc())).first()
+                if historico_antigo:
+                    historico_antigo.data_fim = data_evento
 
-            aluno.funcao_atual = nova if nova else None
+            if funcao_nova and funcao_nova != funcao_antiga:
+                novo_historico = HistoricoAluno(
+                    aluno_id=aluno_id,
+                    tipo='Função de Escola',
+                    descricao=f'Assumiu a função de {funcao_nova}.',
+                    data_inicio=data_evento
+                )
+                db.session.add(novo_historico)
+
+            aluno.funcao_atual = funcao_nova if funcao_nova else None
+            
             db.session.commit()
-            return True, "Função atualizada."
-        except Exception:
+            return True, "Função do aluno atualizada com sucesso!"
+        except Exception as e:
             db.session.rollback()
-            return False, "Erro."
+            current_app.logger.error(f"Erro ao atualizar função do aluno: {e}")
+            return False, "Ocorreu um erro ao atualizar a função."
 
     @staticmethod
     def delete_aluno(aluno_id: int):
         aluno = AlunoService.get_aluno_by_id(aluno_id)
-        if not aluno: return False, "Não encontrado."
+        if not aluno:
+            return False, "Aluno não encontrado."
+
         try:
-            if aluno.user: db.session.delete(aluno.user)
-            else: db.session.delete(aluno)
-            db.session.commit()
-            return True, "Excluído."
+            user_a_deletar = aluno.user
+            if user_a_deletar:
+                db.session.delete(user_a_deletar)
+                db.session.commit()
+                return True, "Aluno e todos os seus registros foram excluídos com sucesso!"
+            else:
+                db.session.delete(aluno)
+                db.session.commit()
+                return True, "Perfil de aluno órfão removido com sucesso."
         except Exception as e:
             db.session.rollback()
-            return False, f"Erro: {e}"
+            current_app.logger.error(f"Erro ao excluir aluno: {e}")
+            return False, f"Erro ao excluir aluno: {str(e)}"
