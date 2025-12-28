@@ -135,36 +135,43 @@
 
                 <div class="top-navbar-title">
                     <span class="school-name-display">
-                        {# --- LÓGICA DE CORREÇÃO VISUAL PARA MULTI-ESCOLA --- #}
-                        {# 1. Tenta pegar o ID da sessão diretamente #}
-                        {% set session_active_id = session.get('active_school_id') %}
-                        {% set visual_school_name = namespace(value=None) %}
+                        {# 1. MODO 'VER COMO' (Prioridade Máxima: Super Admin visualizando escola específica) #}
+                        {% if session.get('view_as_school_name') %}
+                            {{ session.get('view_as_school_name') }}
 
-                        {# 2. Se temos ID na sessão e usuário logado, busca o nome correto na lista dele #}
-                        {% if session_active_id and current_user.user_schools %}
-                            {% for vinculo in current_user.user_schools %}
-                                {# Converte ambos para string para garantir igualdade #}
-                                {% if vinculo.school_id|string == session_active_id|string %}
-                                    {% set visual_school_name.value = vinculo.school.nome %}
-                                {% endif %}
-                            {% endfor %}
-                        {% endif %}
-
-                        {# 3. Exibição com Prioridade: Nome Achado > Nome Injetado > Super Admin > Padrão #}
-                        {% if visual_school_name.value %}
-                            {{ visual_school_name.value }}
-                        {% elif current_school %}
-                            {{ current_school.nome }}
-                        {% elif active_school %}
-                            {{ active_school.nome }}
+                        {# 2. SUPER ADMIN GERAL (Se não estiver no modo 'Ver Como', exibe título geral) #}
+                        {# ISSO TEM PRIORIDADE sobre qualquer vínculo de escola que o usuário admin possa ter #}
                         {% elif current_user.role == 'super_admin' %}
-                            <a href="{{ url_for('super_admin.select_school') }}" style="color: inherit; text-decoration: none;">Selecione uma escola</a>
+                            Sistema de Gerenciamento de Ensino - Departamento de Ensino e Cultura
+
+                        {# 3. USUÁRIOS COMUNS (Alunos/Instrutores/Admins de Escola) #}
                         {% else %}
-                            Sistema de Gerenciamento
+                            {% set session_active_id = session.get('active_school_id') %}
+                            {% set visual_school_name = namespace(value=None) %}
+
+                            {# Tenta encontrar o nome da escola nos vínculos do usuário #}
+                            {% if session_active_id and current_user.user_schools %}
+                                {% for vinculo in current_user.user_schools %}
+                                    {% if vinculo.school_id|string == session_active_id|string %}
+                                        {% set visual_school_name.value = vinculo.school.nome %}
+                                    {% endif %}
+                                {% endfor %}
+                            {% endif %}
+
+                            {# Exibe o nome encontrado ou Fallback #}
+                            {% if visual_school_name.value %}
+                                {{ visual_school_name.value }}
+                            {% elif current_school %}
+                                {{ current_school.nome }}
+                            {% elif active_school %}
+                                {{ active_school.nome }}
+                            {% else %}
+                                Sistema de Gerenciamento de Ensino
+                            {% endif %}
                         {% endif %}
                     </span>
                 </div>
-            </div>
+                </div>
 
             <div class="top-navbar-right-items">
                 <div class="dropdown">
