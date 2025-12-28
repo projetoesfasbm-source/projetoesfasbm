@@ -1,7 +1,7 @@
 # backend/controllers/super_admin_controller.py
 
 from flask import Blueprint, render_template, request, flash, redirect, url_for, session
-from flask_login import login_required
+from flask_login import login_required, current_user
 import secrets
 import string
 from utils.decorators import super_admin_required
@@ -36,32 +36,47 @@ def exit_view():
 @super_admin_required
 def manage_schools():
     if request.method == 'POST':
-        # ### INÍCIO DA ALTERAÇÃO ###
-        # Capturamos o 'npccal_type' do formulário
         school_name = request.form.get('school_name')
         npccal_type = request.form.get('npccal_type')
 
-        # Verificamos ambos os campos
         if not school_name or not npccal_type:
             flash('O nome da escola e o Tipo de NPCCAL são obrigatórios.', 'danger')
         else:
-            # Enviamos ambos os dados para o service
             success, message = SchoolService.create_school(school_name, npccal_type)
             if success:
                 flash(message, 'success')
             else:
                 flash(message, 'danger')
-        # ### FIM DA ALTERAÇÃO ###
         return redirect(url_for('super_admin.manage_schools'))
         
     schools = db.session.query(School).order_by(School.nome).all()
     return render_template('super_admin/manage_schools.html', schools=schools)
 
+@super_admin_bp.route('/schools/edit/<int:school_id>', methods=['POST'])
+@login_required
+@super_admin_required
+def edit_school(school_id):
+    school_name = request.form.get('school_name')
+    npccal_type = request.form.get('npccal_type')
+
+    success, message = SchoolService.update_school(school_id, school_name, npccal_type)
+    
+    flash(message, 'success' if success else 'danger')
+    return redirect(url_for('super_admin.manage_schools'))
+
 @super_admin_bp.route('/schools/delete/<int:school_id>', methods=['POST'])
 @login_required
 @super_admin_required
 def delete_school(school_id):
-    success, message = SchoolService.delete_school(school_id)
+    password = request.form.get('password')
+    
+    if not password:
+        flash('A senha é obrigatória para confirmar a exclusão.', 'danger')
+        return redirect(url_for('super_admin.manage_schools'))
+
+    # Passa o current_user e a senha para o Service validar
+    success, message = SchoolService.delete_school(school_id, current_user, password)
+    
     flash(message, 'success' if success else 'danger')
     return redirect(url_for('super_admin.manage_schools'))
 

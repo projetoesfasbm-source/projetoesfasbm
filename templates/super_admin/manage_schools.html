@@ -6,7 +6,7 @@
 <div class="container mt-4">
     <h1 class="mb-4">Gerenciar Escolas</h1>
 
-    {# Formulário de Criação #}
+    {# --- Formulário de Criação de Escola --- #}
     <div class="card mb-4">
         <div class="card-header">
             Adicionar Nova Escola
@@ -33,13 +33,13 @@
                             </select>
                         </div>
                     </div>
-                    </div>
+                </div>
                 <button type="submit" class="btn btn-primary mt-3">Criar Escola</button>
             </form>
         </div>
     </div>
 
-    {# Formulário de Criação de Administrador #}
+    {# --- Formulário de Criação de Administrador --- #}
     <div class="card mb-4">
         <div class="card-header">
             Adicionar Novo Administrador de Escola
@@ -73,7 +73,7 @@
         </div>
     </div>
 
-    {# Tabela de Escolas Existentes #}
+    {# --- Tabela de Escolas Existentes --- #}
     <div class="card">
         <div class="card-header">
             Escolas Cadastradas
@@ -107,10 +107,21 @@
                             <td>{{ 'Sim' if school.is_active else 'Não' }}</td>
                             <td>{{ school.created_at | br_time('%d/%m/%Y %H:%M') }}</td>
                             <td>
-                                <form method="POST" action="{{ url_for('super_admin.delete_school', school_id=school.id) }}" onsubmit="return confirm('ATENÇÃO: Excluir esta escola irá remover permanentemente todos os seus dados (turmas, alunos, vínculos, etc.). Esta ação não pode ser desfeita. Deseja continuar?');">
-                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                                    <button type="submit" class="btn btn-danger btn-sm">Excluir</button>
-                                </form>
+                                <div class="d-flex gap-2">
+                                    <button type="button" 
+                                            class="btn btn-warning btn-sm" 
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#editSchoolModal{{ school.id }}">
+                                        Editar
+                                    </button>
+
+                                    <button type="button"
+                                            class="btn btn-danger btn-sm"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#deleteSchoolModal{{ school.id }}">
+                                        Excluir
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                         {% endfor %}
@@ -122,4 +133,87 @@
         </div>
     </div>
 </div>
+
+{# --- ÁREA DE MODAIS (Invisíveis) --- #}
+{% for school in schools %}
+
+<div class="modal fade" id="editSchoolModal{{ school.id }}" tabindex="-1" aria-labelledby="editSchoolModalLabel{{ school.id }}" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editSchoolModalLabel{{ school.id }}">Editar Escola</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" action="{{ url_for('super_admin.edit_school', school_id=school.id) }}">
+                <div class="modal-body">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    
+                    <div class="mb-3">
+                        <label for="edit_school_name_{{ school.id }}" class="form-label">Nome da Escola</label>
+                        <input type="text" class="form-control" id="edit_school_name_{{ school.id }}" name="school_name" value="{{ school.nome }}" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="edit_npccal_type_{{ school.id }}" class="form-label">Tipo de NPCCAL</label>
+                        <select name="npccal_type" id="edit_npccal_type_{{ school.id }}" class="form-select" required>
+                            <option value="cspm" {% if school.npccal_type == 'cspm' %}selected{% endif %}>CSPM</option>
+                            <option value="cbfpm" {% if school.npccal_type == 'cbfpm' %}selected{% endif %}>CBFPM</option>
+                            <option value="ctsp" {% if school.npccal_type == 'ctsp' %}selected{% endif %}>CTSP</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar Alterações</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="deleteSchoolModal{{ school.id }}" tabindex="-1" aria-labelledby="deleteSchoolModalLabel{{ school.id }}" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="deleteSchoolModalLabel{{ school.id }}">Confirmar Exclusão</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" action="{{ url_for('super_admin.delete_school', school_id=school.id) }}">
+                <div class="modal-body">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    
+                    <p class="fw-bold">ATENÇÃO!</p>
+                    <p>Você está prestes a excluir a escola <strong>{{ school.nome }}</strong>.</p>
+                    <p class="text-danger">
+                        Esta ação irá apagar PERMANENTEMENTE todos os dados (turmas, diários) desta escola.<br>
+                        <strong>Usuários:</strong> Quem estiver cadastrado APENAS nesta escola será excluído. Quem tiver vínculo com outras escolas será mantido.
+                    </p>
+                    
+                    <div class="mb-3">
+                        <label for="password_{{ school.id }}" class="form-label">Digite sua senha para confirmar:</label>
+                        <input type="password" class="form-control" id="password_{{ school.id }}" name="password" required placeholder="Sua senha de Super Admin">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-danger">Confirmar Exclusão Total</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endfor %}
+
+{# --- SCRIPT DE CORREÇÃO DO MODAL (Fix Backdrop Issue) --- #}
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // Move todos os modais para o final do body para evitar problemas de sobreposição (backdrop)
+        var modals = document.querySelectorAll('.modal');
+        modals.forEach(function(modal) {
+            document.body.appendChild(modal);
+        });
+    });
+</script>
+
 {% endblock %}
