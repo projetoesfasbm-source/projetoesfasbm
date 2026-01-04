@@ -27,6 +27,7 @@ from utils.decorators import admin_or_programmer_required, can_schedule_classes_
 from ..services.horario_service import HorarioService
 from ..services.user_service import UserService
 from ..services.turma_service import TurmaService
+from ..services.semana_service import SemanaService  # Importar SemanaService
 
 horario_bp = Blueprint('horario', __name__, url_prefix='/horario')
 
@@ -57,7 +58,7 @@ def index():
     # 1. Identificar Turma e Escola
     if current_user.role == 'aluno':
         if not current_user.aluno_profile or not current_user.aluno_profile.turma:
-            flash("Você não está matriculado em nenhuma turma. Contate a administração.", 'warning')
+            flash("Você não está matriculado em nenhuma turma.", 'warning')
             return redirect(url_for('main.dashboard'))
         turma_do_aluno = current_user.aluno_profile.turma
         school_id = turma_do_aluno.school_id
@@ -66,31 +67,43 @@ def index():
     else:
         school_id = UserService.get_current_school_id()
         if not school_id:
-            flash("Nenhuma escola associada ou selecionada.", "warning")
+            flash("Nenhuma escola selecionada.", "warning")
             return redirect(url_for('main.dashboard'))
         
         todas_as_turmas = TurmaService.get_turmas_by_school(school_id)
-        
         turma_selecionada_nome = request.args.get('pelotao', session.get('ultima_turma_visualizada'))
         
         if not turma_selecionada_nome and todas_as_turmas:
             turma_selecionada_nome = todas_as_turmas[0].nome
         elif turma_selecionada_nome and turma_selecionada_nome not in [t.nome for t in todas_as_turmas]:
-             flash("Turma selecionada inválida.", "danger")
              turma_selecionada_nome = todas_as_turmas[0].nome if todas_as_turmas else None
 
-    # 2. Identificar Ciclo e Semanas
-    ciclo_selecionado_id = request.args.get('ciclo', session.get('ultimo_ciclo_horario', 1), type=int)
+    # 2. Identificar Ciclo e Semanas (CORRIGIDO PARA ISOLAR POR ESCOLA)
+    ciclo_selecionado_id = request.args.get('ciclo', session.get('ultimo_ciclo_horario'), type=int)
+    
+    # Busca apenas ciclos da escola atual
+    ciclos = db.session.scalars(
+        select(Ciclo).where(Ciclo.school_id == school_id).order_by(Ciclo.nome)
+    ).all()
+    
+    # Valida se o ciclo selecionado pertence à escola
+    if not ciclo_selecionado_id or ciclo_selecionado_id not in [c.id for c in ciclos]:
+        ciclo_selecionado_id = ciclos[0].id if ciclos else None
+
     session['ultimo_ciclo_horario'] = ciclo_selecionado_id
     
-    ciclos = db.session.scalars(select(Ciclo).order_by(Ciclo.id)).all()
-    
     todas_as_semanas = []
-    if school_id:
-        todas_as_semanas = db.session.scalars(select(Semana).where(Semana.ciclo_id == ciclo_selecionado_id).order_by(Semana.data_inicio.desc())).all()
+    if ciclo_selecionado_id:
+        # Busca semanas apenas deste ciclo (que já sabemos ser da escola)
+        todas_as_semanas = db.session.scalars(
+            select(Semana)
+            .where(Semana.ciclo_id == ciclo_selecionado_id)
+            .order_by(Semana.data_inicio.desc())
+        ).all()
     
     semana_id = request.args.get('semana_id')
-    semana_selecionada = HorarioService.get_semana_selecionada(semana_id, ciclo_selecionado_id)
+    # Usa o serviço que já tem a blindagem de escola
+    semana_selecionada = SemanaService.get_semana_selecionada(semana_id, ciclo_selecionado_id)
     
     # 3. Construir Grade Horária
     horario_matrix = None
@@ -100,72 +113,50 @@ def index():
         horario_matrix = HorarioService.construir_matriz_horario(turma_selecionada_nome, semana_selecionada.id, current_user)
         datas_semana = HorarioService.get_datas_da_semana(semana_selecionada)
 
-    # 4. Lógica de Prioridade e Permissões (CORRIGIDA PARA NOMES)
+    # 4. Lógica de Prioridade e Permissões
     can_schedule_in_this_turma = False
     instrutor_turmas_vinculadas = []
     priority_active = False
     priority_allowed_names = [] 
     all_materias_names = []     
 
-    # Carrega lista única de nomes para o Modal
     if school_id:
-        try:
-            all_materias_names = db.session.scalars(
-                select(Disciplina.materia)
-                .join(Turma)
-                .where(Turma.school_id == school_id)
-                .distinct()
-                .order_by(Disciplina.materia)
-            ).all()
-        except Exception:
-            all_materias_names = []
+        all_materias_names = db.session.scalars(
+            select(Disciplina.materia)
+            .join(Turma)
+            .where(Turma.school_id == school_id)
+            .distinct()
+            .order_by(Disciplina.materia)
+        ).all()
 
     if semana_selecionada:
         priority_active = getattr(semana_selecionada, 'priority_active', False)
-        raw_priority = getattr(semana_selecionada, 'priority_disciplines', '[]') or '[]'
-        
         try:
-            priority_allowed_names = json.loads(raw_priority)
-            if not isinstance(priority_allowed_names, list):
-                priority_allowed_names = []
+            priority_allowed_names = json.loads(getattr(semana_selecionada, 'priority_disciplines', '[]') or '[]')
         except:
             priority_allowed_names = []
 
-        # -- Define Permissões --
         if current_user.role in ['programador', 'admin_escola', 'super_admin']:
             can_schedule_in_this_turma = True
             
         elif current_user.role == 'instrutor' and current_user.instrutor_profile:
             instrutor_id = current_user.instrutor_profile.id
-            
-            # Carrega turmas vinculadas (Menu lateral)
             pelotao_names = db.session.scalars(select(DisciplinaTurma.pelotao).where(or_(DisciplinaTurma.instrutor_id_1 == instrutor_id, DisciplinaTurma.instrutor_id_2 == instrutor_id)).distinct()).all()
             if pelotao_names:
                 instrutor_turmas_vinculadas = db.session.scalars(select(Turma).where(Turma.nome.in_(pelotao_names)).order_by(Turma.nome)).all()
             
-            # Verifica acesso
-            is_vinculado_turma = turma_selecionada_nome in pelotao_names
-
-            if is_vinculado_turma:
+            if turma_selecionada_nome in pelotao_names:
                 if not priority_active:
                     can_schedule_in_this_turma = True
                 else:
-                    # Lógica de Bloqueio por NOME
-                    if not priority_allowed_names:
-                        can_schedule_in_this_turma = False
-                    else:
-                        # CORREÇÃO CRÍTICA: Verifica se o instrutor leciona ALGUMA matéria
-                        # cujo NOME esteja na lista permitida, NESTA turma específica.
+                    if priority_allowed_names:
                         query_match = select(DisciplinaTurma).join(Disciplina).where(
                             DisciplinaTurma.pelotao == turma_selecionada_nome,
-                            Disciplina.materia.in_(priority_allowed_names), # Compara STRING com lista de STRINGS
-                            or_(
-                                DisciplinaTurma.instrutor_id_1 == instrutor_id,
-                                DisciplinaTurma.instrutor_id_2 == instrutor_id
-                            )
+                            Disciplina.materia.in_(priority_allowed_names),
+                            or_(DisciplinaTurma.instrutor_id_1 == instrutor_id, DisciplinaTurma.instrutor_id_2 == instrutor_id)
                         )
-                        has_match = db.session.execute(query_match).first() is not None
-                        can_schedule_in_this_turma = has_match
+                        if db.session.execute(query_match).first():
+                            can_schedule_in_this_turma = True
 
     tempos, intervalos = _get_horario_context_data()
     all_disciplinas = [] 
@@ -188,6 +179,8 @@ def index():
                            priority_allowed_names=priority_allowed_names,
                            all_materias_names=all_materias_names)
 
+# ... (Mantenha o restante das rotas do controller iguais, elas usam o HorarioService que já está correto) ...
+
 @horario_bp.route('/save-priority-config', methods=['POST'])
 @login_required
 @admin_or_programmer_required
@@ -201,12 +194,15 @@ def exportar_pdf():
     pelotao = request.args.get('pelotao')
     semana_id = request.args.get('semana_id', type=int)
     if not pelotao or not semana_id:
-        flash('Parâmetros inválidos para gerar o PDF.', 'danger')
+        flash('Parâmetros inválidos.', 'danger')
         return redirect(url_for('horario.index'))
     semana = db.session.get(Semana, semana_id)
-    if not semana:
-        flash('Semana não encontrada.', 'danger')
+    # Validação de Escola
+    active_school = UserService.get_current_school_id()
+    if not semana or (active_school and semana.ciclo.school_id != active_school):
+        flash('Semana não encontrada ou permissão negada.', 'danger')
         return redirect(url_for('horario.index'))
+        
     horario_matrix = HorarioService.construir_matriz_horario(pelotao, semana_id, current_user)
     datas_semana = HorarioService.get_datas_da_semana(semana)
     rendered_html = render_template('horario_pdf.html', pelotao_selecionado=pelotao, semana_selecionada=semana, horario_matrix=horario_matrix, datas_semana=datas_semana)
@@ -223,10 +219,13 @@ def exportar_pdf():
 @login_required
 @can_schedule_classes_required
 def editar_horario_grid(pelotao, semana_id, ciclo_id):
+    # Validação de Escola
     semana = db.session.get(Semana, semana_id)
-    if not semana:
+    active_school = UserService.get_current_school_id()
+    if not semana or (active_school and semana.ciclo.school_id != active_school):
         flash("Semana não encontrada.", "danger")
         return redirect(url_for('horario.index'))
+        
     context_data = HorarioService.get_edit_grid_context(pelotao, semana_id, ciclo_id, current_user)
     if not context_data.get('success'):
         flash(context_data.get('message', 'Erro ao carregar dados.'), 'danger')

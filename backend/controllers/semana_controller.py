@@ -24,7 +24,6 @@ class AddSemanaForm(FlaskForm):
     data_inicio = DateField('Data de Início', validators=[DataRequired()])
     data_fim = DateField('Data de Fim', validators=[DataRequired()])
     ciclo_id = SelectField('Ciclo', coerce=int, validators=[DataRequired()])
-    # Campos adicionados para períodos extras e fins de semana
     mostrar_periodo_13 = BooleanField('13º Período')
     mostrar_periodo_14 = BooleanField('14º Período')
     mostrar_periodo_15 = BooleanField('15º Período')
@@ -50,21 +49,29 @@ def gerenciar_semanas(ciclo_id):
     form = AddSemanaForm()
     delete_form = DeleteForm()
     
-    # Carregar ciclos para o select do formulário e filtro lateral
-    ciclos = db.session.execute(select(Ciclo).order_by(Ciclo.nome)).scalars().all()
+    # --- FILTRO DE ESCOLA ---
+    school_id = UserService.get_current_school_id()
+    
+    # Carrega APENAS ciclos da escola ativa
+    ciclos = db.session.execute(
+        select(Ciclo).where(Ciclo.school_id == school_id).order_by(Ciclo.nome)
+    ).scalars().all()
+    
     form.ciclo_id.choices = [(c.id, c.nome) for c in ciclos]
 
-    # Lógica de Filtro por Ciclo para listar as semanas
-    query = select(Semana).order_by(Semana.data_inicio.desc())
+    # Validação do Ciclo selecionado
+    if ciclo_id:
+        ciclo_valido = any(c.id == ciclo_id for c in ciclos)
+        if not ciclo_valido:
+            flash("Ciclo inválido ou de outra escola.", "warning")
+            ciclo_id = None
+
+    # Monta query filtrando por ciclo (que já garante a escola)
+    query = select(Semana).join(Ciclo).where(Ciclo.school_id == school_id).order_by(Semana.data_inicio.desc())
     
     if ciclo_id:
         query = query.where(Semana.ciclo_id == ciclo_id)
-        # Pré-seleciona o ciclo no formulário se estiver filtrando
         form.ciclo_id.data = ciclo_id
-    elif ciclos:
-        # Se não tiver ciclo selecionado mas existirem ciclos, seleciona o primeiro para não ficar vazio
-        # Ou mantém None e exibe msg de "Selecione um ciclo"
-        pass
     
     semanas = db.session.execute(query).scalars().all()
 
@@ -80,8 +87,10 @@ def gerenciar_semanas(ciclo_id):
 @school_admin_or_programmer_required
 def adicionar_semana():
     form = AddSemanaForm()
-    # Recarrega choices para validação
-    ciclos = db.session.execute(select(Ciclo).order_by(Ciclo.nome)).scalars().all()
+    school_id = UserService.get_current_school_id()
+    ciclos = db.session.execute(
+        select(Ciclo).where(Ciclo.school_id == school_id).order_by(Ciclo.nome)
+    ).scalars().all()
     form.ciclo_id.choices = [(c.id, c.nome) for c in ciclos]
 
     if form.validate_on_submit():
@@ -92,12 +101,10 @@ def adicionar_semana():
             flash(message, 'danger')
         return redirect(url_for('semana.gerenciar_semanas', ciclo_id=form.ciclo_id.data))
     
-    # Em caso de erro de validação
     for field, errors in form.errors.items():
         for error in errors:
             flash(f"Erro em {getattr(form, field).label.text}: {error}", 'danger')
             
-    # Tenta recuperar o ciclo ID do form para redirecionar corretamente
     ciclo_id = request.form.get('ciclo_id')
     return redirect(url_for('semana.gerenciar_semanas', ciclo_id=ciclo_id))
 
@@ -106,30 +113,38 @@ def adicionar_semana():
 @school_admin_or_programmer_required
 def editar_semana(semana_id):
     semana = db.session.get(Semana, semana_id)
-    if not semana:
-        flash("Semana não encontrada.", "danger")
+    school_id = UserService.get_current_school_id()
+    
+    # Validação de Segurança
+    if not semana or (school_id and semana.ciclo.school_id != school_id):
+        flash("Semana não encontrada ou permissão negada.", "danger")
         return redirect(url_for('semana.gerenciar_semanas'))
 
     form = AddSemanaForm(obj=semana)
-    ciclos = db.session.execute(select(Ciclo).order_by(Ciclo.nome)).scalars().all()
+    ciclos = db.session.execute(
+        select(Ciclo).where(Ciclo.school_id == school_id).order_by(Ciclo.nome)
+    ).scalars().all()
     form.ciclo_id.choices = [(c.id, c.nome) for c in ciclos]
 
     if form.validate_on_submit():
-        semana.nome = form.nome.data
-        semana.data_inicio = datetime.strptime(request.form['data_inicio'], '%Y-%m-%d').date()
-        semana.data_fim = datetime.strptime(request.form['data_fim'], '%Y-%m-%d').date()
-        semana.ciclo_id = form.ciclo_id.data
-        semana.mostrar_periodo_13 = 'mostrar_periodo_13' in request.form
-        semana.mostrar_periodo_14 = 'mostrar_periodo_14' in request.form
-        semana.mostrar_periodo_15 = 'mostrar_periodo_15' in request.form
-        semana.mostrar_sabado = 'mostrar_sabado' in request.form
-        semana.periodos_sabado = int(request.form.get('periodos_sabado') or 0)
-        semana.mostrar_domingo = 'mostrar_domingo' in request.form
-        semana.periodos_domingo = int(request.form.get('periodos_domingo') or 0)
+        data = request.form.to_dict()
+        data['ciclo_id'] = form.ciclo_id.data # Garante int
         
-        db.session.commit()
-        flash('Semana atualizada com sucesso!', 'success')
-        return redirect(url_for('semana.gerenciar_semanas', ciclo_id=semana.ciclo_id))
+        # Checkboxes não enviados se desmarcados
+        data.update({
+             'mostrar_periodo_13': 'mostrar_periodo_13' in request.form,
+             'mostrar_periodo_14': 'mostrar_periodo_14' in request.form,
+             'mostrar_periodo_15': 'mostrar_periodo_15' in request.form,
+             'mostrar_sabado': 'mostrar_sabado' in request.form,
+             'mostrar_domingo': 'mostrar_domingo' in request.form
+        })
+        
+        success, msg = SemanaService.update_semana(semana_id, data)
+        if success:
+            flash('Semana atualizada com sucesso!', 'success')
+            return redirect(url_for('semana.gerenciar_semanas', ciclo_id=semana.ciclo_id))
+        else:
+            flash(msg, 'danger')
 
     return render_template('editar_semana.html', semana=semana, form=form)
 
@@ -154,15 +169,20 @@ def deletar_semana(semana_id):
 @admin_or_programmer_required
 def adicionar_ciclo():
     nome_ciclo = request.form.get('nome_ciclo')
-    if nome_ciclo:
-        if not db.session.scalar(select(Ciclo).where(Ciclo.nome == nome_ciclo)):
-            db.session.add(Ciclo(nome=nome_ciclo))
+    school_id = UserService.get_current_school_id()
+    
+    if nome_ciclo and school_id:
+        exists = db.session.scalar(
+            select(Ciclo).where(Ciclo.nome == nome_ciclo, Ciclo.school_id == school_id)
+        )
+        if not exists:
+            db.session.add(Ciclo(nome=nome_ciclo, school_id=school_id))
             db.session.commit()
             flash(f"Ciclo '{nome_ciclo}' criado com sucesso!", "success")
         else:
-            flash(f"Já existe um ciclo com o nome '{nome_ciclo}'.", "danger")
+            flash(f"Já existe um ciclo com o nome '{nome_ciclo}' nesta escola.", "danger")
     else:
-        flash("O nome do ciclo não pode estar vazio.", "danger")
+        flash("Nome inválido ou escola não identificada.", "danger")
     return redirect(url_for('semana.gerenciar_semanas'))
 
 @semana_bp.route('/ciclo/deletar/<int:ciclo_id>', methods=['POST'])
@@ -170,7 +190,9 @@ def adicionar_ciclo():
 @admin_or_programmer_required
 def deletar_ciclo(ciclo_id):
     ciclo = db.session.get(Ciclo, ciclo_id)
-    if ciclo:
+    school_id = UserService.get_current_school_id()
+    
+    if ciclo and ciclo.school_id == school_id:
         if ciclo.semanas or ciclo.disciplinas:
             flash("Não é possível deletar um ciclo que contém semanas ou disciplinas associadas.", "danger")
         else:
@@ -178,23 +200,23 @@ def deletar_ciclo(ciclo_id):
             db.session.commit()
             flash(f"Ciclo '{ciclo.nome}' deletado com sucesso.", "success")
     else:
-        flash("Ciclo não encontrado.", "danger")
+        flash("Ciclo não encontrado ou permissão negada.", "danger")
     return redirect(url_for('semana.gerenciar_semanas'))
 
-# --- ROTA PARA SALVAR A PRIORIDADE (JSON/NOMES) ---
 @semana_bp.route('/<int:semana_id>/salvar-prioridade', methods=['POST'])
 @login_required
 @school_admin_or_programmer_required
 def salvar_prioridade(semana_id):
     try:
         semana = db.session.get(Semana, semana_id)
-        if not semana:
+        school_id = UserService.get_current_school_id()
+        
+        if not semana or (school_id and semana.ciclo.school_id != school_id):
             return jsonify({'success': False, 'message': 'Semana não encontrada'}), 404
 
         data = request.get_json()
         semana.priority_active = data.get('status', False)
         
-        # Atualiza a lista de NOMES (strings) - Certifique-se que o front envia uma lista de strings
         disciplinas = data.get('disciplinas', [])
         semana.priority_disciplines = json.dumps(disciplinas)
 
