@@ -1,3 +1,4 @@
+# backend/models/semana.py
 from __future__ import annotations
 import typing as t
 from datetime import date
@@ -15,7 +16,7 @@ class Semana(db.Model):
     data_inicio: Mapped[date] = mapped_column(db.Date, nullable=False)
     data_fim: Mapped[date] = mapped_column(db.Date, nullable=False)
 
-    # Relação com Ciclo (O Ciclo já tem o school_id, usaremos ele)
+    # Relação com Ciclo (O Ciclo contém o school_id)
     ciclo_id: Mapped[int] = mapped_column(db.ForeignKey('ciclos.id'), nullable=False)
     ciclo: Mapped["Ciclo"] = relationship(back_populates="semanas")
 
@@ -30,7 +31,7 @@ class Semana(db.Model):
     mostrar_domingo: Mapped[bool] = mapped_column(default=False, server_default='0')
     periodos_domingo: Mapped[int] = mapped_column(default=0, server_default='0')
 
-    # Modos de Prioridade
+    # Configurações de Prioridade
     priority_active: Mapped[bool] = mapped_column(default=False, server_default='0')
     priority_disciplines: Mapped[str | None] = mapped_column(db.Text, nullable=True)
 

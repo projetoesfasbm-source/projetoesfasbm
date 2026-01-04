@@ -3,8 +3,6 @@
 from datetime import date
 from flask import current_app
 from sqlalchemy import select, and_
-from sqlalchemy.orm import joinedload
-
 from ..models.database import db
 from ..models.semana import Semana
 from ..models.horario import Horario
@@ -14,27 +12,9 @@ from .user_service import UserService
 class SemanaService:
     
     @staticmethod
-    def get_semanas_by_school():
-        """
-        Retorna todas as semanas vinculadas a ciclos da escola ativa.
-        Filtra pelo school_id do Ciclo para evitar vazamento entre escolas.
-        """
-        active_school_id = UserService.get_current_school_id()
-        if not active_school_id:
-            return []
-            
-        stmt = (
-            select(Semana)
-            .join(Ciclo, Semana.ciclo_id == Ciclo.id)
-            .where(Ciclo.school_id == active_school_id)
-            .order_by(Semana.data_inicio.desc())
-        )
-        return db.session.scalars(stmt).all()
-
-    @staticmethod
     def get_semana_selecionada(semana_id_str=None, ciclo_id=None):
         """
-        Busca uma semana específica ou a atual, GARANTINDO que pertença à escola.
+        Busca uma semana específica ou a atual, GARANTINDO que pertença à escola ativa (via Ciclo).
         """
         active_school_id = UserService.get_current_school_id()
         if not active_school_id:
@@ -44,17 +24,18 @@ class SemanaService:
         if semana_id_str and str(semana_id_str).isdigit():
             semana = db.session.get(Semana, int(semana_id_str))
             
-            # BLINDAGEM: A semana pertence a um ciclo desta escola?
+            # BLINDAGEM: Verifica se o CICLO da semana pertence à escola atual
             if semana and semana.ciclo and semana.ciclo.school_id == active_school_id:
                 return semana
-            # Se a semana existe mas é de outra escola, ignoramos (retorna None)
+            # Se não pertence, ignora (retorna None)
 
-        # 2. Busca Automática (Semana Atual ou Última) dentro do ciclo/escola
+        # 2. Busca Automática (Semana Atual ou Última)
         today = date.today()
         
+        # Query base: Semanas cujos Ciclos são da escola ativa
         stmt = (
             select(Semana)
-            .join(Ciclo, Semana.ciclo_id == Ciclo.id)
+            .join(Ciclo)
             .where(Ciclo.school_id == active_school_id)
         )
         
@@ -72,7 +53,7 @@ class SemanaService:
         if semana_atual:
             return semana_atual
 
-        # Se não houver semana hoje, retorna a última cadastrada da escola/ciclo
+        # Se não houver semana hoje, retorna a última cadastrada
         return db.session.scalars(
             stmt.order_by(Semana.data_inicio.desc())
         ).first()
@@ -87,12 +68,15 @@ class SemanaService:
         if not all([nome, data_inicio, data_fim, ciclo_id]):
             return False, 'Todos os campos, incluindo o ciclo, são obrigatórios.'
 
-        # --- NOVA VERIFICAÇÃO DE SEGURANÇA ---
+        # --- VALIDAÇÃO DE ESCOLA ---
         active_school_id = UserService.get_current_school_id()
         ciclo = db.session.get(Ciclo, ciclo_id)
-        if not ciclo or (active_school_id and ciclo.school_id != active_school_id):
-            return False, 'O Ciclo selecionado não pertence à sua escola.'
-        # -------------------------------------
+        
+        if not ciclo:
+            return False, 'Ciclo não encontrado.'
+            
+        if active_school_id and ciclo.school_id != active_school_id:
+            return False, 'Você não pode criar semanas em um ciclo de outra escola.'
 
         if data_inicio > data_fim:
             return False, 'A data de início não pode ser posterior à data de fim.'
@@ -138,7 +122,7 @@ class SemanaService:
         semana = db.session.get(Semana, semana_id)
         if not semana: return False, 'Semana não encontrada.'
         
-        # Proteção: Só edita se for da escola ativa
+        # Proteção: Só edita se for da escola ativa (via Ciclo)
         active_school = UserService.get_current_school_id()
         if active_school and semana.ciclo.school_id != active_school:
             return False, "Permissão negada: Semana pertence a outra escola."
@@ -146,12 +130,15 @@ class SemanaService:
         semana.nome = data.get('nome')
         semana.data_inicio = data.get('data_inicio')
         semana.data_fim = data.get('data_fim')
-        # Atualiza o ciclo se fornecido, validando a escola
-        new_ciclo_id = data.get('ciclo_id')
-        if new_ciclo_id and int(new_ciclo_id) != semana.ciclo_id:
-             new_ciclo = db.session.get(Ciclo, new_ciclo_id)
-             if new_ciclo and new_ciclo.school_id == active_school:
-                 semana.ciclo_id = new_ciclo_id
+        
+        # Se mudar de ciclo, verifica se o novo ciclo é da mesma escola
+        novo_ciclo_id = data.get('ciclo_id')
+        if novo_ciclo_id and int(novo_ciclo_id) != semana.ciclo_id:
+             novo_ciclo = db.session.get(Ciclo, novo_ciclo_id)
+             if novo_ciclo and novo_ciclo.school_id == active_school:
+                 semana.ciclo_id = novo_ciclo_id
+             else:
+                 return False, "Ciclo de destino inválido ou de outra escola."
         
         semana.mostrar_periodo_13 = 'mostrar_periodo_13' in data
         semana.mostrar_periodo_14 = 'mostrar_periodo_14' in data
@@ -175,7 +162,7 @@ class SemanaService:
         semana = db.session.get(Semana, semana_id)
         if not semana: return False, 'Semana não encontrada.'
         
-        # Proteção: Só deleta se for da escola ativa
+        # Proteção
         active_school = UserService.get_current_school_id()
         if active_school and semana.ciclo.school_id != active_school:
             return False, "Permissão negada."

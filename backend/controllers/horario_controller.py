@@ -2,7 +2,7 @@
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session, Response
 from flask_login import login_required, current_user
-from sqlalchemy import select, or_, text, and_
+from sqlalchemy import select, or_
 from sqlalchemy.orm import joinedload
 from datetime import date
 from flask_wtf import FlaskForm
@@ -10,7 +10,6 @@ from wtforms import HiddenField, SubmitField
 from wtforms.validators import DataRequired
 from weasyprint import HTML
 from urllib.parse import quote
-from collections import defaultdict
 import json
 
 from ..models.database import db
@@ -21,13 +20,12 @@ from ..models.disciplina_turma import DisciplinaTurma
 from ..models.semana import Semana
 from ..models.turma import Turma
 from ..models.ciclo import Ciclo
-from ..models.user import User
 from ..services.site_config_service import SiteConfigService
 from utils.decorators import admin_or_programmer_required, can_schedule_classes_required
 from ..services.horario_service import HorarioService
 from ..services.user_service import UserService
 from ..services.turma_service import TurmaService
-from ..services.semana_service import SemanaService  # Importar SemanaService
+from ..services.semana_service import SemanaService
 
 horario_bp = Blueprint('horario', __name__, url_prefix='/horario')
 
@@ -121,13 +119,16 @@ def index():
     all_materias_names = []     
 
     if school_id:
-        all_materias_names = db.session.scalars(
-            select(Disciplina.materia)
-            .join(Turma)
-            .where(Turma.school_id == school_id)
-            .distinct()
-            .order_by(Disciplina.materia)
-        ).all()
+        try:
+            all_materias_names = db.session.scalars(
+                select(Disciplina.materia)
+                .join(Turma)
+                .where(Turma.school_id == school_id)
+                .distinct()
+                .order_by(Disciplina.materia)
+            ).all()
+        except Exception:
+            all_materias_names = []
 
     if semana_selecionada:
         priority_active = getattr(semana_selecionada, 'priority_active', False)
@@ -179,8 +180,6 @@ def index():
                            priority_allowed_names=priority_allowed_names,
                            all_materias_names=all_materias_names)
 
-# ... (Mantenha o restante das rotas do controller iguais, elas usam o HorarioService que já está correto) ...
-
 @horario_bp.route('/save-priority-config', methods=['POST'])
 @login_required
 @admin_or_programmer_required
@@ -197,7 +196,7 @@ def exportar_pdf():
         flash('Parâmetros inválidos.', 'danger')
         return redirect(url_for('horario.index'))
     semana = db.session.get(Semana, semana_id)
-    # Validação de Escola
+    
     active_school = UserService.get_current_school_id()
     if not semana or (active_school and semana.ciclo.school_id != active_school):
         flash('Semana não encontrada ou permissão negada.', 'danger')
@@ -219,7 +218,6 @@ def exportar_pdf():
 @login_required
 @can_schedule_classes_required
 def editar_horario_grid(pelotao, semana_id, ciclo_id):
-    # Validação de Escola
     semana = db.session.get(Semana, semana_id)
     active_school = UserService.get_current_school_id()
     if not semana or (active_school and semana.ciclo.school_id != active_school):

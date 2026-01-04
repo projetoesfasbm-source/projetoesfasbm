@@ -49,29 +49,25 @@ def gerenciar_semanas(ciclo_id):
     form = AddSemanaForm()
     delete_form = DeleteForm()
     
-    # --- FILTRO DE ESCOLA ---
     school_id = UserService.get_current_school_id()
     
-    # Carrega APENAS ciclos da escola ativa
+    # Busca apenas Ciclos da escola atual
     ciclos = db.session.execute(
         select(Ciclo).where(Ciclo.school_id == school_id).order_by(Ciclo.nome)
     ).scalars().all()
     
     form.ciclo_id.choices = [(c.id, c.nome) for c in ciclos]
 
-    # Validação do Ciclo selecionado
-    if ciclo_id:
-        ciclo_valido = any(c.id == ciclo_id for c in ciclos)
-        if not ciclo_valido:
-            flash("Ciclo inválido ou de outra escola.", "warning")
-            ciclo_id = None
-
-    # Monta query filtrando por ciclo (que já garante a escola)
+    # Query: Semanas que pertencem a ciclos desta escola
     query = select(Semana).join(Ciclo).where(Ciclo.school_id == school_id).order_by(Semana.data_inicio.desc())
     
     if ciclo_id:
-        query = query.where(Semana.ciclo_id == ciclo_id)
-        form.ciclo_id.data = ciclo_id
+        # Validação extra: o ciclo pertence à escola?
+        if any(c.id == ciclo_id for c in ciclos):
+            query = query.where(Semana.ciclo_id == ciclo_id)
+            form.ciclo_id.data = ciclo_id
+        else:
+            ciclo_id = None # Ciclo inválido ou de outra escola
     
     semanas = db.session.execute(query).scalars().all()
 
@@ -88,12 +84,14 @@ def gerenciar_semanas(ciclo_id):
 def adicionar_semana():
     form = AddSemanaForm()
     school_id = UserService.get_current_school_id()
+    
     ciclos = db.session.execute(
         select(Ciclo).where(Ciclo.school_id == school_id).order_by(Ciclo.nome)
     ).scalars().all()
     form.ciclo_id.choices = [(c.id, c.nome) for c in ciclos]
 
     if form.validate_on_submit():
+        # Service valida se o ciclo pertence à escola
         success, message = SemanaService.add_semana(form.data)
         if success:
             flash(message, 'success')
@@ -115,9 +113,9 @@ def editar_semana(semana_id):
     semana = db.session.get(Semana, semana_id)
     school_id = UserService.get_current_school_id()
     
-    # Validação de Segurança
+    # Validação de segurança via Ciclo
     if not semana or (school_id and semana.ciclo.school_id != school_id):
-        flash("Semana não encontrada ou permissão negada.", "danger")
+        flash("Semana não encontrada ou não pertence à sua escola.", "danger")
         return redirect(url_for('semana.gerenciar_semanas'))
 
     form = AddSemanaForm(obj=semana)
@@ -128,9 +126,7 @@ def editar_semana(semana_id):
 
     if form.validate_on_submit():
         data = request.form.to_dict()
-        data['ciclo_id'] = form.ciclo_id.data # Garante int
-        
-        # Checkboxes não enviados se desmarcados
+        data['ciclo_id'] = form.ciclo_id.data
         data.update({
              'mostrar_periodo_13': 'mostrar_periodo_13' in request.form,
              'mostrar_periodo_14': 'mostrar_periodo_14' in request.form,
@@ -161,7 +157,7 @@ def deletar_semana(semana_id):
             success, message = SemanaService.delete_semana(semana_id)
             flash(message, 'success' if success else 'danger')
             return redirect(url_for('semana.gerenciar_semanas', ciclo_id=ciclo_id))
-    flash('Ocorreu um erro ao tentar deletar a semana.', 'danger')
+    flash('Ocorreu um erro ao tentar deletar.', 'danger')
     return redirect(url_for('semana.gerenciar_semanas'))
 
 @semana_bp.route('/ciclo/adicionar', methods=['POST'])
@@ -172,17 +168,19 @@ def adicionar_ciclo():
     school_id = UserService.get_current_school_id()
     
     if nome_ciclo and school_id:
+        # Verifica se já existe ciclo com esse nome NA MESMA ESCOLA
         exists = db.session.scalar(
             select(Ciclo).where(Ciclo.nome == nome_ciclo, Ciclo.school_id == school_id)
         )
         if not exists:
+            # CRIA O CICLO VINCULADO À ESCOLA
             db.session.add(Ciclo(nome=nome_ciclo, school_id=school_id))
             db.session.commit()
             flash(f"Ciclo '{nome_ciclo}' criado com sucesso!", "success")
         else:
             flash(f"Já existe um ciclo com o nome '{nome_ciclo}' nesta escola.", "danger")
     else:
-        flash("Nome inválido ou escola não identificada.", "danger")
+        flash("Nome do ciclo inválido.", "danger")
     return redirect(url_for('semana.gerenciar_semanas'))
 
 @semana_bp.route('/ciclo/deletar/<int:ciclo_id>', methods=['POST'])
