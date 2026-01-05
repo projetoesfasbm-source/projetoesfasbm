@@ -26,19 +26,19 @@ def send_async_email_brevo(app, to_email, subject, html_content):
 
         # 2. Inicializa o cliente da API
         api_instance = sib_api_v3_sdk.TransactionalEmailsApi(sib_api_v3_sdk.ApiClient(configuration))
-        
+
         # 3. Configura o Remetente (Sender) - FIXO conforme solicitado
         # Isso garante que use exatamente o e-mail que funcionou no seu teste.
-        sender = {"name": "Sistema EsFAS", "email": "projetoesfasbm@gmail.com"}
-        
+        sender = {"name": "SisGEn", "email": "projetoesfasbm@gmail.com"}
+
         # Configura o destinatário
         to = [{"email": to_email}]
 
         # 4. Prepara o objeto de envio
         send_smtp_email = sib_api_v3_sdk.SendSmtpEmail(
-            to=to, 
-            sender=sender, 
-            subject=subject, 
+            to=to,
+            sender=sender,
+            subject=subject,
             html_content=html_content
         )
 
@@ -64,10 +64,10 @@ class EmailService:
         if not user.email:
             log.warning(f"Tentativa de envio de e-mail de senha para usuário sem e-mail: {user.matricula}")
             return None
-            
+
         log.info(f"Iniciando processo de envio de e-mail de SENHA para: {user.email}")
         app = current_app._get_current_object()
-        
+
         # Renderiza o template HTML com os dados necessários
         html_content = render_template(
             'email/redefinir_senha.html',
@@ -75,8 +75,8 @@ class EmailService:
             token=token
         )
 
-        subject = 'Redefinição de Senha - Sistema EsFAS'
-        
+        subject = 'Redefinição de Senha - SisGEn'
+
         # Inicia a thread para envio assíncrono
         thr = Thread(target=send_async_email_brevo, args=[app, user.email, subject, html_content])
         thr.start()
@@ -91,7 +91,7 @@ class EmailService:
 
         log.info(f"Iniciando processo de envio de notificação de JUSTIÇA (Abertura) para: {user.email}")
         app = current_app._get_current_object()
-        
+
         html_content = render_template(
             'email/notificacao_justica.html',
             user=user,
@@ -100,7 +100,7 @@ class EmailService:
         )
 
         subject = f'Notificação de Processo Disciplinar - Nº {processo.id}'
-        
+
         thr = Thread(target=send_async_email_brevo, args=[app, user.email, subject, html_content])
         thr.start()
         return thr
@@ -114,7 +114,7 @@ class EmailService:
 
         log.info(f"Iniciando processo de envio de notificação de JUSTIÇA (Veredito) para: {user.email}")
         app = current_app._get_current_object()
-        
+
         html_content = render_template(
             'email/veredito_justica.html',
             user=user,
@@ -122,7 +122,7 @@ class EmailService:
         )
 
         subject = f'Decisão de Processo Disciplinar - Nº {processo.id}'
-        
+
         thr = Thread(target=send_async_email_brevo, args=[app, user.email, subject, html_content])
         thr.start()
         return thr
