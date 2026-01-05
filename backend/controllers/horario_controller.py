@@ -68,15 +68,43 @@ def index():
             flash("Nenhuma escola selecionada.", "warning")
             return redirect(url_for('main.dashboard'))
         
+        # Busca inicial de todas as turmas da escola
         todas_as_turmas = TurmaService.get_turmas_by_school(school_id)
+        
+        # --- LÓGICA DE FILTRO PARA INSTRUTOR (ALTERAÇÃO SOLICITADA) ---
+        # Se for instrutor, filtra 'todas_as_turmas' para mostrar APENAS as vinculadas.
+        # Isso evita que o instrutor caia em uma turma bloqueada por padrão.
+        if current_user.role == 'instrutor' and current_user.instrutor_profile:
+            try:
+                instrutor_id = current_user.instrutor_profile.id
+                # Busca nomes dos pelotões onde o instrutor está vinculado
+                pelotao_names = db.session.scalars(
+                    select(DisciplinaTurma.pelotao)
+                    .where(or_(DisciplinaTurma.instrutor_id_1 == instrutor_id, 
+                               DisciplinaTurma.instrutor_id_2 == instrutor_id))
+                    .distinct()
+                ).all()
+                
+                # Se tiver vínculos, substitui a lista completa pela lista filtrada
+                if pelotao_names:
+                    # Filtra mantendo os objetos Turma completos
+                    turmas_vinculadas = [t for t in todas_as_turmas if t.nome in pelotao_names]
+                    if turmas_vinculadas:
+                        todas_as_turmas = turmas_vinculadas
+            except Exception:
+                # Se der erro no filtro, mantém a lista completa como fallback
+                pass
+        # -------------------------------------------------------------
+
         turma_selecionada_nome = request.args.get('pelotao', session.get('ultima_turma_visualizada'))
         
+        # Lógica de seleção automática (agora operando sobre a lista possivelmente filtrada)
         if not turma_selecionada_nome and todas_as_turmas:
             turma_selecionada_nome = todas_as_turmas[0].nome
         elif turma_selecionada_nome and turma_selecionada_nome not in [t.nome for t in todas_as_turmas]:
              turma_selecionada_nome = todas_as_turmas[0].nome if todas_as_turmas else None
 
-    # 2. Identificar Ciclo e Semanas (CORRIGIDO PARA ISOLAR POR ESCOLA)
+    # 2. Identificar Ciclo e Semanas
     ciclo_selecionado_id = request.args.get('ciclo', session.get('ultimo_ciclo_horario'), type=int)
     
     # Busca apenas ciclos da escola atual
@@ -92,7 +120,7 @@ def index():
     
     todas_as_semanas = []
     if ciclo_selecionado_id:
-        # Busca semanas apenas deste ciclo (que já sabemos ser da escola)
+        # Busca semanas apenas deste ciclo
         todas_as_semanas = db.session.scalars(
             select(Semana)
             .where(Semana.ciclo_id == ciclo_selecionado_id)
@@ -100,7 +128,6 @@ def index():
         ).all()
     
     semana_id = request.args.get('semana_id')
-    # Usa o serviço que já tem a blindagem de escola
     semana_selecionada = SemanaService.get_semana_selecionada(semana_id, ciclo_selecionado_id)
     
     # 3. Construir Grade Horária
@@ -142,6 +169,8 @@ def index():
             
         elif current_user.role == 'instrutor' and current_user.instrutor_profile:
             instrutor_id = current_user.instrutor_profile.id
+            
+            # Reutiliza a lógica para preencher a variável 'instrutor_turmas_vinculadas' usada no modal
             pelotao_names = db.session.scalars(select(DisciplinaTurma.pelotao).where(or_(DisciplinaTurma.instrutor_id_1 == instrutor_id, DisciplinaTurma.instrutor_id_2 == instrutor_id)).distinct()).all()
             if pelotao_names:
                 instrutor_turmas_vinculadas = db.session.scalars(select(Turma).where(Turma.nome.in_(pelotao_names)).order_by(Turma.nome)).all()

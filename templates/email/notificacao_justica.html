@@ -20,12 +20,12 @@
         <div class="header">
             <h2>Notificação de Justiça e Disciplina</h2>
         </div>
-        
+
         <div class="content">
             <p>Prezado(a) <strong>{{ user.posto_graduacao or '' }} {{ user.nome_de_guerra or user.nome_completo }}</strong>,</p>
-            
-            <p>Informamos que foi registrado um novo procedimento disciplinar em seu nome no Sistema de Gestão da EsFAS.</p>
-            
+
+            <p>Informamos que foi registrado um novo procedimento disciplinar em seu nome no Sistema de Gerenciamento de Ensino.</p>
+
             <div class="process-details">
                 <p><strong>Nº do Processo:</strong> {{ processo.id }}</p>
                 <p><strong>Data da Ocorrência:</strong> {{ processo.data_ocorrencia.strftime('%d/%m/%Y') }}</p>
@@ -34,18 +34,18 @@
             </div>
 
             <p>Solicitamos que acesse o sistema o mais breve possível para tomar ciência formal do ocorrido e, se necessário, apresentar suas razões de defesa dentro do prazo regulamentar.</p>
-            
+
             <div class="button-container">
                 <a href="{{ url }}" class="button">Acessar Sistema para Dar Ciência</a>
             </div>
-            
+
             <p>Atenciosamente,<br>
             Seção de Justiça e Disciplina</p>
             </div>
-        
+
         <div class="footer">
             <p>Este é um e-mail automático, por favor não responda.</p>
-            <p>Sistema de Gerenciamento da Escola de Formação e Aperfeiçoamento de Sargentos (EsFAS)</p>
+            <p>Sistema de Gerenciamento de Ensino (SisGEn)</p>
         </div>
     </div>
 </body>
