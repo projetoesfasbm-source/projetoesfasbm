@@ -14,9 +14,10 @@ from ..services.relatorio_service import RelatorioService
 from ..services.instrutor_service import InstrutorService
 from ..services.site_config_service import SiteConfigService
 from ..services.xlsx_service import gerar_mapa_gratificacao_xlsx
+from ..services.user_service import UserService
 from utils.decorators import admin_or_programmer_required
 
-relatorios_bp = Blueprint('relatorios', __name__, url_prefix='/relatorios')
+relatorios_bp = Blueprint('relatorios', _name_, url_prefix='/relatorios')
 
 
 def _build_filename(prefix: str, label: Optional[str], extension: str, fallback: Optional[str] = None) -> str:
@@ -40,6 +41,11 @@ def index():
 @login_required
 @admin_or_programmer_required
 def gerar_relatorio_horas_aula():
+    school_id = UserService.get_current_school_id()
+    if not school_id:
+        flash('Nenhuma escola selecionada.', 'warning')
+        return redirect(url_for('main.dashboard'))
+
     report_type = request.args.get('tipo', 'mensal')
     tipo_relatorio_titulo = report_type.replace("_", " ").title()
 
@@ -87,8 +93,9 @@ def gerar_relatorio_horas_aula():
                 flash('Seleção de instrutores inválida.', 'warning')
                 return redirect(url_for('relatorios.gerar_relatorio_horas_aula', tipo=report_type))
 
+        # --- AQUI ESTA A CORREÇÃO: Passando school_id ---
         dados_relatorio = RelatorioService.get_horas_aula_por_instrutor(
-            data_inicio, data_fim, is_rr_filter, instrutor_ids_filter
+            data_inicio, data_fim, is_rr_filter, instrutor_ids_filter, school_id
         )
         valor_hora_aula = SiteConfigService.get_valor_hora_aula()
         

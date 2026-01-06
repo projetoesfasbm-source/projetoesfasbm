@@ -1,6 +1,6 @@
 # backend/services/relatorio_service.py
 
-from __future__ import annotations
+from _future_ import annotations
 import os
 import json
 from io import BytesIO
@@ -70,17 +70,13 @@ class RelatorioService:
         data_inicio: date,
         data_fim: date,
         is_rr_filter: bool,
-        instrutor_ids_filter: List[int] | None
+        instrutor_ids_filter: List[int] | None,
+        school_id: int
     ) -> List[Dict[str, Any]]:
         """
-        Busca e formata os dados de horas-aula por instrutor.
-        
-        CORREÇÃO (SOMA DE CARGA HORÁRIA POR TURMA/PELOTÃO):
-        - Utiliza o campo 'pelotao' do Horario para distinguir as turmas.
-        - Soma a carga horária da disciplina para cada pelotão distinto encontrado.
-        - Mantém a deduplicação de slots de horário para não pagar a mesma aula duas vezes.
+        Busca e formata os dados de horas-aula por instrutor, FILTRANDO PELA ESCOLA (school_id).
         """
-        from ..models import db, Horario, User, Instrutor, Disciplina, Semana
+        from ..models import db, Horario, User, Instrutor, Disciplina, Semana, Ciclo
 
         # Criar aliases para permitir o join duplo (instrutor 1 e instrutor 2)
         Instrutor1 = aliased(Instrutor)
@@ -98,6 +94,7 @@ class RelatorioService:
                 Semana
             )
             .join(Semana, Horario.semana_id == Semana.id)
+            .join(Ciclo, Semana.ciclo_id == Ciclo.id) # Join Necessário para filtrar escola
             .join(Disciplina, Horario.disciplina_id == Disciplina.id)
             # Join Obrigatório para o Instrutor 1 (Titular)
             .join(Instrutor1, Horario.instrutor_id == Instrutor1.id)
@@ -107,7 +104,8 @@ class RelatorioService:
             .outerjoin(User2, Instrutor2.user_id == User2.id)
             .filter(
                 Semana.data_inicio <= data_fim,
-                Semana.data_fim >= data_inicio
+                Semana.data_fim >= data_inicio,
+                Ciclo.school_id == school_id # FILTRO DE ESCOLA ADICIONADO
             )
         )
 
