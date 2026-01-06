@@ -54,7 +54,7 @@ class RelatorioService:
         """
         if not dia_semana_str:
             return 0
-        
+
         s = dia_semana_str.lower().strip()
         if 'segunda' in s: return 0
         if 'terca' in s or 'terça' in s: return 1
@@ -113,7 +113,7 @@ class RelatorioService:
 
         # Dicionário para agregação: matricula -> dados
         dados_agrupados = {}
-        
+
         # Conjunto para garantir unicidade do pagamento por SLOT DE TEMPO
         # Chave: (instrutor_id, data_real_da_aula, periodo_aula)
         slots_pagos = set()
@@ -125,7 +125,7 @@ class RelatorioService:
 
             # Chave robusta de unicidade: Quem + Quando + Qual Periodo
             chave_slot = (instrutor_obj.id, data_aula, periodo_aula)
-            
+
             # Se já pagamos este instrutor neste horário específico, ignoramos duplicatas do banco
             if chave_slot in slots_pagos:
                 return
@@ -140,7 +140,7 @@ class RelatorioService:
             slots_pagos.add(chave_slot)
 
             chave_agrupamento = user_obj.matricula
-            
+
             # Inicializa a estrutura do instrutor se não existir
             if chave_agrupamento not in dados_agrupados:
                 dados_agrupados[chave_agrupamento] = {
@@ -151,7 +151,7 @@ class RelatorioService:
                             "nome_completo": user_obj.nome_completo,
                         }
                     },
-                    "disciplinas_map": {} 
+                    "disciplinas_map": {}
                 }
 
             # Inicializa a disciplina para este instrutor se não existir
@@ -165,7 +165,7 @@ class RelatorioService:
                 }
 
             item_disciplina = dados_agrupados[chave_agrupamento]["disciplinas_map"][nome_disc]
-            
+
             # Normaliza o nome do pelotão para evitar duplicidade por espaços extras
             pelotao_clean = pelotao_str.strip() if pelotao_str else "PADRAO"
 
@@ -190,7 +190,7 @@ class RelatorioService:
 
             duracao = horario.duracao or 1
             periodo = horario.periodo
-            
+
             # Obtém o pelotão diretamente do horário (string)
             pelotao = getattr(horario, 'pelotao', '')
 
@@ -215,7 +215,7 @@ class RelatorioService:
         for chave in chaves_ordenadas:
             item = dados_agrupados[chave]
             lista_disciplinas = list(item["disciplinas_map"].values())
-            
+
             # Remove chaves internas auxiliares antes de retornar para não sujar o template
             for d in lista_disciplinas:
                 if "_pelotoes_contabilizados" in d:
@@ -234,7 +234,7 @@ class RelatorioService:
         Gera o arquivo XLSX em memória e faz o upload para o Google Drive.
         """
         from .xlsx_service import gerar_mapa_gratificacao_xlsx
-        
+
         try:
             xlsx_bytes = gerar_mapa_gratificacao_xlsx(
                 dados=contexto.get("dados"),
@@ -256,7 +256,7 @@ class RelatorioService:
 
             nome_arquivo = f'Relatório Horas-Aula - {contexto.get("nome_mes_ano", "geral")}'
             sheet_url = _upload_xlsx_and_convert_to_sheet(nome_arquivo, xlsx_bytes)
-            
+
             if sheet_url:
                 return True, sheet_url
             else:

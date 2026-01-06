@@ -98,12 +98,12 @@ def gerar_relatorio_horas_aula():
             data_inicio, data_fim, is_rr_filter, instrutor_ids_filter, school_id
         )
         valor_hora_aula = SiteConfigService.get_valor_hora_aula()
-        
+
         meses = ("Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
                  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro")
         nome_mes_ano_pt = f"{meses[data_inicio.month - 1]} de {data_inicio.year}"
         data_assinatura_pt = f"{data_fim.day} de {meses[data_fim.month - 1]} de {data_fim.year}"
-        
+
         curso_nome = (request.form.get('curso_nome') or '').strip() or report_defaults["curso_nome"]
         opm_nome = (request.form.get('opm') or '').strip() or report_defaults["opm"]
         escola_nome = (request.form.get('escola_nome') or '').strip() or report_defaults["escola_nome"]
@@ -123,7 +123,7 @@ def gerar_relatorio_horas_aula():
 
         if action == 'preview':
             return render_template('relatorios/pdf_template.html', **contexto)
-        
+
         elif action == 'download':
             rendered_html = render_template('relatorios/pdf_template.html', **contexto)
             try:
