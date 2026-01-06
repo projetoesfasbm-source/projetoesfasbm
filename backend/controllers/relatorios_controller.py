@@ -14,10 +14,9 @@ from ..services.relatorio_service import RelatorioService
 from ..services.instrutor_service import InstrutorService
 from ..services.site_config_service import SiteConfigService
 from ..services.xlsx_service import gerar_mapa_gratificacao_xlsx
-from ..services.user_service import UserService
 from utils.decorators import admin_or_programmer_required
 
-relatorios_bp = Blueprint('relatorios', _name_, url_prefix='/relatorios')
+relatorios_bp = Blueprint('relatorios', __name__, url_prefix='/relatorios')
 
 
 def _build_filename(prefix: str, label: Optional[str], extension: str, fallback: Optional[str] = None) -> str:
@@ -41,11 +40,6 @@ def index():
 @login_required
 @admin_or_programmer_required
 def gerar_relatorio_horas_aula():
-    school_id = UserService.get_current_school_id()
-    if not school_id:
-        flash('Nenhuma escola selecionada.', 'warning')
-        return redirect(url_for('main.dashboard'))
-
     report_type = request.args.get('tipo', 'mensal')
     tipo_relatorio_titulo = report_type.replace("_", " ").title()
 
@@ -93,17 +87,16 @@ def gerar_relatorio_horas_aula():
                 flash('Seleção de instrutores inválida.', 'warning')
                 return redirect(url_for('relatorios.gerar_relatorio_horas_aula', tipo=report_type))
 
-        # --- AQUI ESTA A CORREÇÃO: Passando school_id ---
         dados_relatorio = RelatorioService.get_horas_aula_por_instrutor(
-            data_inicio, data_fim, is_rr_filter, instrutor_ids_filter, school_id
+            data_inicio, data_fim, is_rr_filter, instrutor_ids_filter
         )
         valor_hora_aula = SiteConfigService.get_valor_hora_aula()
-
+        
         meses = ("Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
                  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro")
         nome_mes_ano_pt = f"{meses[data_inicio.month - 1]} de {data_inicio.year}"
         data_assinatura_pt = f"{data_fim.day} de {meses[data_fim.month - 1]} de {data_fim.year}"
-
+        
         curso_nome = (request.form.get('curso_nome') or '').strip() or report_defaults["curso_nome"]
         opm_nome = (request.form.get('opm') or '').strip() or report_defaults["opm"]
         escola_nome = (request.form.get('escola_nome') or '').strip() or report_defaults["escola_nome"]
@@ -123,7 +116,7 @@ def gerar_relatorio_horas_aula():
 
         if action == 'preview':
             return render_template('relatorios/pdf_template.html', **contexto)
-
+        
         elif action == 'download':
             rendered_html = render_template('relatorios/pdf_template.html', **contexto)
             try:
