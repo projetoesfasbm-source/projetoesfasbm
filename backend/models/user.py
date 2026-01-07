@@ -22,8 +22,8 @@ class User(UserMixin, db.Model):
     # --- CONSTANTES DE PERMISSÃO ---
     ROLE_PROGRAMADOR = 'programador'
     ROLE_ADMIN_ESCOLA = 'admin_escola'
-    ROLE_ADMIN_CAL = 'admin_cal'   # Novo: Chefe CAL (Justiça)
-    ROLE_ADMIN_SENS = 'admin_sens' # Novo: Chefe SENS (Ensino)
+    ROLE_ADMIN_CAL = 'admin_cal'   
+    ROLE_ADMIN_SENS = 'admin_sens' 
     ROLE_INSTRUTOR = 'instrutor'
     ROLE_ALUNO = 'aluno'
 
@@ -35,11 +35,14 @@ class User(UserMixin, db.Model):
     nome_completo: Mapped[t.Optional[str]] = mapped_column(db.String(120), nullable=True)
     nome_de_guerra: Mapped[t.Optional[str]] = mapped_column(db.String(50), nullable=True)
     posto_graduacao: Mapped[t.Optional[str]] = mapped_column(db.String(50), nullable=True)
+    
+    # OBS: Este campo torna-se um fallback ou para cargos globais (programador)
     role: Mapped[str] = mapped_column(db.String(20), nullable=False, default='aluno')
+    
     is_active: Mapped[bool] = mapped_column(default=False, nullable=False)
     must_change_password: Mapped[bool] = mapped_column(default=False, nullable=False)
 
-    # --- RELACIONAMENTOS ORIGINAIS (INTOCADOS) ---
+    # --- RELACIONAMENTOS ---
     aluno_profile: Mapped['Aluno'] = relationship('Aluno', back_populates='user', uselist=False, cascade="all, delete-orphan")
     instrutor_profile: Mapped['Instrutor'] = relationship('Instrutor', back_populates='user', uselist=False, cascade="all, delete-orphan")
     user_schools: Mapped[list['UserSchool']] = relationship('UserSchool', back_populates='user', cascade="all, delete-orphan")
@@ -64,30 +67,77 @@ class User(UserMixin, db.Model):
     def __repr__(self):
         return f'<User {self.username or self.matricula}>'
 
-    # --- PROPRIEDADES DE PODER (QUEM É O CHEFE DE QUÊ) ---
-    # Isso define quem pode EDITAR/GERENCIAR. 
-    # A visualização no menu será controlada separadamente no HTML.
+    # --- NOVA LÓGICA DE PERMISSÕES POR ESCOLA ---
 
+    def get_role_in_school(self, school_id: int | None) -> str:
+        """
+        Retorna o role do usuário na escola específica.
+        Se school_id for None, retorna o role global (comportamento legado).
+        """
+        if self.is_programador:
+            return self.ROLE_PROGRAMADOR
+            
+        if not school_id:
+            return self.role # Fallback legado
+            
+        # Busca no relacionamento já carregado (evita query extra se user_schools estiver eager loaded)
+        # ou se não estiver, o SQLAlchemy faz a query aqui.
+        for us in self.user_schools:
+            if us.school_id == school_id:
+                return us.role
+        
+        return self.ROLE_ALUNO # Default se não tiver vínculo específico
+
+    def is_programador_check(self) -> bool:
+        """Programador é um cargo global, independe da escola."""
+        return self.role == self.ROLE_PROGRAMADOR
+
+    def is_admin_escola_in_school(self, school_id: int | None) -> bool:
+        if self.is_programador_check(): return True
+        local_role = self.get_role_in_school(school_id)
+        return local_role == self.ROLE_ADMIN_ESCOLA
+
+    def is_cal_in_school(self, school_id: int | None) -> bool:
+        if self.is_programador_check(): return True
+        local_role = self.get_role_in_school(school_id)
+        return local_role in [self.ROLE_ADMIN_CAL, self.ROLE_ADMIN_ESCOLA]
+
+    def is_sens_in_school(self, school_id: int | None) -> bool:
+        if self.is_programador_check(): return True
+        local_role = self.get_role_in_school(school_id)
+        return local_role in [self.ROLE_ADMIN_SENS, self.ROLE_ADMIN_ESCOLA]
+        
+    def is_instrutor_in_school(self, school_id: int | None) -> bool:
+        if self.is_programador_check(): return True
+        local_role = self.get_role_in_school(school_id)
+        return local_role == self.ROLE_INSTRUTOR
+
+    def is_staff_in_school(self, school_id: int | None) -> bool:
+        """Verifica se tem qualquer cargo administrativo na escola."""
+        if self.is_programador_check(): return True
+        local_role = self.get_role_in_school(school_id)
+        return local_role in [self.ROLE_ADMIN_SENS, self.ROLE_ADMIN_CAL, self.ROLE_ADMIN_ESCOLA]
+
+    # --- PROPRIEDADES LEGADAS (COMPATIBILIDADE COM TEMPLATES ANTIGOS) ---
+    # Estas propriedades agora tentam olhar o global, mas o ideal é usar as funções acima nos controllers.
+    
     @property
     def is_programador(self):
         return self.role == self.ROLE_PROGRAMADOR
 
     @property
     def is_admin_escola(self):
-        # Comandante / Acesso Total
-        return self.role == self.ROLE_ADMIN_ESCOLA
+        # Alerta: isso olha o campo global. Em refatoração futura, templates devem passar school_id.
+        return self.role == self.ROLE_ADMIN_ESCOLA or self.is_programador
 
     @property
     def is_cal(self):
-        # É o ADMINISTRADOR da Justiça? (Chefe CAL, Comandante ou Programador)
         return self.role in [self.ROLE_ADMIN_CAL, self.ROLE_ADMIN_ESCOLA, self.ROLE_PROGRAMADOR]
 
     @property
     def is_sens(self):
-        # É o ADMINISTRADOR do Ensino? (Chefe SENS, Comandante ou Programador)
         return self.role in [self.ROLE_ADMIN_SENS, self.ROLE_ADMIN_ESCOLA, self.ROLE_PROGRAMADOR]
 
     @property
     def is_staff(self):
-        # Faz parte da equipe administrativa (SENS, CAL, Comandante)
         return self.role in [self.ROLE_ADMIN_SENS, self.ROLE_ADMIN_CAL, self.ROLE_ADMIN_ESCOLA, self.ROLE_PROGRAMADOR]
