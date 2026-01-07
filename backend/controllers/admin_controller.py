@@ -1,11 +1,12 @@
 # backend/controllers/admin_controller.py
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, abort
 from flask_login import login_required, current_user
 from sqlalchemy import select, func, case, desc, and_
 from sqlalchemy.orm import joinedload
 from collections import defaultdict
 from datetime import datetime
+from functools import wraps
 
 from backend.models.database import db
 from backend.models.school import School
@@ -17,13 +18,30 @@ from backend.models.frequencia import FrequenciaAluno
 from backend.models.user import User
 from backend.models.instrutor import Instrutor
 from backend.services.user_service import UserService
-from utils.decorators import admin_escola_required
 
 admin_escola_bp = Blueprint('admin_escola', __name__, url_prefix='/admin-escola')
 
+def sens_permission_required(f):
+    """
+    Decorator para permitir acesso ao SENS e Administradores.
+    Substitui o admin_escola_required que bloqueava o SENS.
+    """
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return redirect(url_for('auth.login'))
+        
+        # Permite: SENS (Chefe Ensino), Admin Escola (Cmt), Programador, Super Admin
+        if not (current_user.is_sens or current_user.is_super_admin):
+            flash("Acesso restrito. Área exclusiva para a Seção de Ensino (SENS).", "danger")
+            return redirect(url_for('main.dashboard'))
+            
+        return f(*args, **kwargs)
+    return decorated_function
+
 @admin_escola_bp.route('/')
 @login_required
-@admin_escola_required
+@sens_permission_required
 def index():
     school_id = UserService.get_current_school_id()
     school = db.session.get(School, school_id)
@@ -31,7 +49,7 @@ def index():
 
 @admin_escola_bp.route('/espelho-diarios')
 @login_required
-@admin_escola_required
+@sens_permission_required
 def espelho_diarios():
     school_id = UserService.get_current_school_id()
     if not school_id:
@@ -201,7 +219,7 @@ def espelho_diarios():
 
 @admin_escola_bp.route('/detalhe-faltas/<int:aluno_id>')
 @login_required
-@admin_escola_required
+@sens_permission_required
 def detalhe_faltas_aluno(aluno_id):
     aluno = db.session.scalar(
         select(Aluno)
@@ -259,7 +277,7 @@ def detalhe_faltas_aluno(aluno_id):
 
 @admin_escola_bp.route('/editar-diario-bloco/<int:diario_id>', methods=['GET', 'POST'])
 @login_required
-@admin_escola_required
+@sens_permission_required
 def editar_diario_bloco(diario_id):
     """
     Permite editar um bloco de aulas (mesma turma, data e disciplina).
@@ -270,8 +288,6 @@ def editar_diario_bloco(diario_id):
         return redirect(url_for('admin_escola.espelho_diarios'))
 
     # Busca todos os tempos da mesma aula no mesmo dia
-    # ### ALTERAÇÃO AQUI ###
-    # Ordena pelo campo periodo se existir, caso contrário ID
     diarios_bloco = db.session.scalars(
         select(DiarioClasse)
         .where(
@@ -281,7 +297,6 @@ def editar_diario_bloco(diario_id):
         )
         .order_by(DiarioClasse.periodo, DiarioClasse.id) 
     ).all()
-    # ### FIM DA ALTERAÇÃO ###
 
     # Busca alunos da turma ordenados
     alunos = db.session.scalars(

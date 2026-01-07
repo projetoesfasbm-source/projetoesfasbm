@@ -1,7 +1,5 @@
-# backend/controllers/questionario_controller.py
-
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
-from flask_login import login_required
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, abort
+from flask_login import login_required, current_user
 from sqlalchemy import select, func, distinct
 
 from ..models.database import db
@@ -13,53 +11,63 @@ from ..models.user import User
 
 questionario_bp = Blueprint('questionario', __name__, url_prefix='/questionario')
 
+# Helper para permissões
+def cal_or_admin_required():
+    if not (current_user.is_cal or current_user.is_admin_escola or current_user.is_programador or current_user.is_super_admin):
+        flash('Acesso não autorizado.', 'danger')
+        return False
+    return True
+
 @questionario_bp.route('/')
 @login_required
 def index():
-    return render_template('questionario/index.html')
+    questionarios = db.session.scalars(select(Questionario).order_by(Questionario.id.desc())).all()
+    return render_template('questionario/index.html', questionarios=questionarios)
 
 @questionario_bp.route('/novo', methods=['GET', 'POST'])
 @login_required
-def novo_questionario():
+def novo():
+    if not cal_or_admin_required():
+        return redirect(url_for('questionario.index'))
+
     if request.method == 'POST':
         titulo = request.form.get('titulo')
+        publico_alvo = request.form.get('publico_alvo', 'todos')
+        
         if not titulo:
             flash('O título do questionário é obrigatório.', 'danger')
             return render_template('questionario/novo.html')
 
-        novo_questionario = Questionario(titulo=titulo)
-        db.session.add(novo_questionario)
+        novo_q = Questionario(titulo=titulo, publico_alvo=publico_alvo, ativo=True)
+        db.session.add(novo_q)
         db.session.flush()
 
         perguntas_data = {}
         for key, value in request.form.items():
             if key.startswith('pergunta_'):
                 index = key.split('_')[1]
-                if index not in perguntas_data:
-                    perguntas_data[index] = {'opcoes': []}
+                if index not in perguntas_data: perguntas_data[index] = {'opcoes': []}
                 perguntas_data[index]['texto'] = value
             elif key.startswith('tipo_'):
                 index = key.split('_')[1]
-                if index not in perguntas_data:
-                    perguntas_data[index] = {'opcoes': []}
+                if index not in perguntas_data: perguntas_data[index] = {'opcoes': []}
                 perguntas_data[index]['tipo'] = value
             elif key.startswith('opcao_'):
                 parts = key.split('_')
-                p_index, o_index = parts[1], parts[2]
-                if p_index not in perguntas_data:
-                    perguntas_data[p_index] = {'opcoes': []}
-                perguntas_data[p_index]['opcoes'].append(value)
+                if len(parts) >= 3:
+                    p_index = parts[1]
+                    if p_index not in perguntas_data: perguntas_data[p_index] = {'opcoes': []}
+                    perguntas_data[p_index]['opcoes'].append(value)
             elif key.startswith('outro_'):
                 index = key.split('_')[1]
-                if index not in perguntas_data:
-                    perguntas_data[index] = {'opcoes': []}
+                if index not in perguntas_data: perguntas_data[index] = {'opcoes': []}
                 perguntas_data[index]['outro'] = True
 
         for index, data in perguntas_data.items():
             if data.get('texto'):
                 pergunta = Pergunta(
                     texto=data['texto'],
-                    questionario_id=novo_questionario.id,
+                    questionario_id=novo_q.id,
                     tipo=data.get('tipo', 'unica')
                 )
                 db.session.add(pergunta)
@@ -71,8 +79,7 @@ def novo_questionario():
                             opcao = OpcaoResposta(texto=opt_texto, pergunta_id=pergunta.id)
                             db.session.add(opcao)
                     if data.get('outro'):
-                        opcao_outro = OpcaoResposta(texto='Outro', pergunta_id=pergunta.id)
-                        db.session.add(opcao_outro)
+                        db.session.add(OpcaoResposta(texto='Outro', pergunta_id=pergunta.id))
 
         db.session.commit()
         flash('Questionário criado com sucesso!', 'success')
@@ -80,22 +87,36 @@ def novo_questionario():
         
     return render_template('questionario/novo.html')
 
-@questionario_bp.route('/ver')
+@questionario_bp.route('/ver/<int:id>')
 @login_required
-def ver_questionarios():
-    questionarios = db.session.scalars(select(Questionario).order_by(Questionario.titulo)).all()
-    return render_template('questionario/ver.html', questionarios=questionarios)
-
-@questionario_bp.route('/resultado/<int:questionario_id>')
-@login_required
-def resultado_questionario(questionario_id):
-    questionario = db.session.get(Questionario, questionario_id)
+def ver(id):
+    # Visualização para Admin/CAL (Preview)
+    if not cal_or_admin_required():
+        return redirect(url_for('questionario.index'))
+        
+    questionario = db.session.get(Questionario, id)
     if not questionario:
         flash('Questionário não encontrado.', 'danger')
-        return redirect(url_for('questionario.ver_questionarios'))
+        return redirect(url_for('questionario.index'))
+    return render_template('questionario/realizar.html', questionario=questionario, preview=True)
+
+@questionario_bp.route('/resultado/<int:id>')
+@login_required
+def resultado(id):
+    # Permitir SENS ver resultados também? Se sim, adicione is_sens
+    if not (current_user.is_cal or current_user.is_sens or current_user.is_staff):
+        flash('Permissão negada.', 'danger')
+        return redirect(url_for('questionario.index'))
+
+    questionario = db.session.get(Questionario, id)
+    if not questionario:
+        flash('Questionário não encontrado.', 'danger')
+        return redirect(url_for('questionario.index'))
         
     dados_graficos = {}
     respostas_texto = {}
+    
+    # Lógica simplificada de contagem
     for pergunta in questionario.perguntas:
         if pergunta.tipo == 'texto_livre':
             respostas = db.session.scalars(select(Resposta).where(Resposta.pergunta_id == pergunta.id, Resposta.texto_livre.isnot(None))).all()
@@ -105,9 +126,9 @@ def resultado_questionario(questionario_id):
             labels = [opcao.texto for opcao in pergunta.opcoes]
             dados = []
             for opcao in pergunta.opcoes:
-                count = db.session.query(func.count(Resposta.id)).filter_by(pergunta_id=pergunta.id, opcao_resposta_id=opcao.id).scalar()
-                dados.append(count)
-            dados_graficos[pergunta.id] = {'labels': labels, 'dados': dados}
+                count = db.session.query(func.count(Resposta.id)).filter_by(opcao_resposta_id=opcao.id).scalar()
+                dados.append(count or 0)
+            dados_graficos[pergunta.id] = {'labels': labels, 'dados': dados, 'texto': pergunta.texto}
 
     return render_template(
         'questionario/resultado.html', 
@@ -116,120 +137,72 @@ def resultado_questionario(questionario_id):
         respostas_texto=respostas_texto
     )
 
-@questionario_bp.route('/realizar', methods=['GET', 'POST'])
+@questionario_bp.route('/realizar/<int:id>', methods=['GET', 'POST'])
 @login_required
-def realizar_questionario():
-    if request.method == 'POST':
-        questionario_id = request.form.get('questionario_id')
-        user_id = request.form.get('user_id')
-
-        if not questionario_id or not user_id:
-            flash('Por favor, selecione um questionário e um usuário.', 'danger')
-            return redirect(url_for('questionario.realizar_questionario'))
-
-        questionario = db.session.get(Questionario, int(questionario_id))
-        
-        for pergunta in questionario.perguntas:
-            if pergunta.tipo == 'texto_livre':
-                texto_livre = request.form.get(f'texto_livre_{pergunta.id}')
-                if texto_livre:
-                    nova_resposta = Resposta(
-                        questionario_id=questionario.id, pergunta_id=pergunta.id,
-                        user_id=int(user_id), texto_livre=texto_livre
-                    )
-                    db.session.add(nova_resposta)
-            else:
-                respostas_ids = request.form.getlist(f'pergunta_{pergunta.id}')
-                for resposta_id in respostas_ids:
-                    opcao_selecionada = db.session.get(OpcaoResposta, int(resposta_id))
-                    texto_livre_outro = None
-                    if opcao_selecionada and opcao_selecionada.texto in ['Outro', 'Outra área', 'Outro motivo', 'Outra forma', 'Quais']:
-                        texto_livre_outro = request.form.get(f'outro_{pergunta.id}')
-
-                    nova_resposta = Resposta(
-                        questionario_id=questionario.id, pergunta_id=pergunta.id,
-                        user_id=int(user_id), opcao_resposta_id=int(resposta_id),
-                        texto_livre=texto_livre_outro
-                    )
-                    db.session.add(nova_resposta)
-        
-        db.session.commit()
-        flash('Questionário respondido com sucesso!', 'success')
+def realizar(id):
+    questionario = db.session.get(Questionario, id)
+    if not questionario or not questionario.ativo:
+        flash('Questionário indisponível.', 'warning')
         return redirect(url_for('questionario.index'))
 
-    questionarios = db.session.scalars(select(Questionario).order_by(Questionario.titulo)).all()
-    
-    alunos_objs = db.session.scalars(select(User).where(User.role == 'aluno').order_by(User.nome_completo)).all()
-    instrutores_objs = db.session.scalars(select(User).where(User.role == 'instrutor').order_by(User.nome_completo)).all()
+    # Verifica se usuário já respondeu
+    ja_respondeu = db.session.scalar(select(Resposta).where(Resposta.questionario_id == id, Resposta.user_id == current_user.id))
+    if ja_respondeu:
+        flash('Você já respondeu este questionário.', 'info')
+        return redirect(url_for('questionario.index'))
 
-    # --- ALTERAÇÃO APLICADA AQUI: Adiciona a matrícula aos dados ---
-    alunos_data = [{'id': u.id, 'nome_completo': u.nome_completo or u.username, 'matricula': u.matricula} for u in alunos_objs]
-    instrutores_data = [{'id': u.id, 'nome_completo': u.nome_completo or u.username, 'matricula': u.matricula} for u in instrutores_objs]
-
-    return render_template('questionario/realizar.html', 
-                           questionarios=questionarios, 
-                           alunos=alunos_data, 
-                           instrutores=instrutores_data)
-
-@questionario_bp.route('/api/get-perguntas/<int:questionario_id>')
-@login_required
-def get_perguntas(questionario_id):
-    questionario = db.session.get(Questionario, questionario_id)
-    if not questionario:
-        return jsonify({'error': 'Questionário não encontrado'}), 404
+    if request.method == 'POST':
+        for pergunta in questionario.perguntas:
+            if pergunta.tipo == 'texto_livre':
+                texto = request.form.get(f'texto_livre_{pergunta.id}')
+                if texto:
+                    db.session.add(Resposta(questionario_id=id, pergunta_id=pergunta.id, user_id=current_user.id, texto_livre=texto))
+            else:
+                opcoes_ids = request.form.getlist(f'pergunta_{pergunta.id}')
+                texto_outro = request.form.get(f'outro_{pergunta.id}')
+                
+                for op_id in opcoes_ids:
+                    db.session.add(Resposta(questionario_id=id, pergunta_id=pergunta.id, opcao_resposta_id=int(op_id), user_id=current_user.id, texto_livre=texto_outro))
         
-    perguntas_list = []
-    for p in questionario.perguntas:
-        opcoes_list = [{'id': o.id, 'texto': o.texto} for o in p.opcoes]
-        perguntas_list.append({'id': p.id, 'texto': p.texto, 'tipo': p.tipo, 'opcoes': opcoes_list})
-        
-    return jsonify(perguntas_list)
-
-@questionario_bp.route('/excluir/<int:questionario_id>', methods=['POST'])
-@login_required
-def excluir_questionario(questionario_id):
-    questionario = db.session.get(Questionario, questionario_id)
-    if not questionario:
-        flash('Questionário não encontrado.', 'danger')
-        return redirect(url_for('questionario.ver_questionarios'))
-
-    try:
-        db.session.query(Resposta).filter_by(questionario_id=questionario_id).delete()
-        db.session.delete(questionario)
         db.session.commit()
-        flash('Questionário e todas as suas respostas foram excluídos com sucesso!', 'success')
-    except Exception as e:
-        db.session.rollback()
-        flash(f'Erro ao excluir o questionário: {e}', 'danger')
-        
-    return redirect(url_for('questionario.ver_questionarios'))
+        flash('Respostas enviadas com sucesso!', 'success')
+        return redirect(url_for('questionario.index'))
+
+    return render_template('questionario/realizar.html', questionario=questionario)
 
 @questionario_bp.route('/participantes/<int:questionario_id>')
 @login_required
-def ver_participantes(questionario_id):
+def participantes(questionario_id):
+    if not cal_or_admin_required():
+        return redirect(url_for('questionario.index'))
+
     questionario = db.session.get(Questionario, questionario_id)
-    if not questionario:
-        flash('Questionário não encontrado.', 'danger')
-        return redirect(url_for('questionario.ver_questionarios'))
+    user_ids = db.session.scalars(select(distinct(Resposta.user_id)).where(Resposta.questionario_id == questionario_id)).all()
+    users = db.session.scalars(select(User).where(User.id.in_(user_ids))).all() if user_ids else []
     
-    user_ids = db.session.scalars(
-        select(distinct(Resposta.user_id)).where(Resposta.questionario_id == questionario_id)
-    ).all()
+    return render_template('questionario/participantes.html', questionario=questionario, participantes=users)
+
+@questionario_bp.route('/alternar-status/<int:id>')
+@login_required
+def alternar_status(id):
+    if not cal_or_admin_required(): return redirect(url_for('questionario.index'))
     
-    participantes = []
-    if user_ids:
-        participantes = db.session.scalars(
-            select(User).where(User.id.in_(user_ids)).order_by(User.nome_completo)
-        ).all()
-        
-    return render_template('questionario/participantes.html', questionario=questionario, participantes=participantes)
+    q = db.session.get(Questionario, id)
+    if q:
+        q.ativo = not q.ativo
+        db.session.commit()
+        flash(f'Questionário {"ativado" if q.ativo else "desativado"}.', 'success')
+    return redirect(url_for('questionario.index'))
 
-@questionario_bp.route('/editar-respostas/<int:questionario_id>/<int:user_id>', methods=['GET', 'POST'])
+@questionario_bp.route('/excluir/<int:id>')
 @login_required
-def editar_respostas(questionario_id, user_id):
-    pass
-
-@questionario_bp.route('/excluir-resposta/<int:questionario_id>/<int:user_id>', methods=['POST'])
-@login_required
-def excluir_resposta_usuario(questionario_id, user_id):
-    pass
+def excluir(id):
+    if not cal_or_admin_required(): return redirect(url_for('questionario.index'))
+    
+    q = db.session.get(Questionario, id)
+    if q:
+        db.session.query(Resposta).filter_by(questionario_id=id).delete()
+        db.session.delete(q)
+        db.session.commit()
+        flash('Questionário excluído.', 'success')
+    return redirect(url_for('questionario.index'))
