@@ -42,8 +42,8 @@
         {# --- LÓGICA CORRIGIDA: Botões visíveis mesmo sem semana selecionada --- #}
         <div class="controls-group d-flex gap-2 flex-wrap justify-content-end align-items-center">
             
-            {# 1. BOTÃO DE GERENCIAR SEMANAS (SEMPRE VISÍVEL PARA ADMINS) #}
-            {% if current_user.role in ['programador', 'admin_escola', 'super_admin'] %}
+            {# 1. BOTÃO DE GERENCIAR SEMANAS (SENS + ADMINS) #}
+            {% if current_user.role in ['programador', 'admin_escola', 'super_admin', 'sens'] %}
                 <a href="{{ url_for('semana.gerenciar_semanas') }}" class="btn btn-dark shadow-sm fw-bold">
                     <i class="fas fa-calendar-plus me-1"></i> Gerenciar Semanas / Ciclos
                 </a>
@@ -52,7 +52,8 @@
             {# 2. BOTÕES QUE DEPENDEM DE UMA SEMANA JÁ EXISTIR #}
             {% if semana_selecionada %}
                 
-                {% if current_user.role in ['programador', 'admin_escola', 'super_admin'] %}
+                {# BOTÕES ADMINISTRATIVOS (SENS + ADMINS) #}
+                {% if current_user.role in ['programador', 'admin_escola', 'super_admin', 'sens'] %}
                     <button type="button" class="btn {% if priority_active %}btn-danger text-white{% else %}btn-warning{% endif %} fw-bold shadow-sm" 
                             data-bs-toggle="modal" data-bs-target="#priorityModal">
                         <i class="fas fa-star me-1"></i> 
@@ -127,7 +128,8 @@
             <div class="empty-icon">📅</div>
             <h3>Nenhum horário para exibir</h3>
             
-            {% if current_user.role in ['programador', 'admin_escola', 'super_admin'] and not todas_as_semanas %}
+            {# BOTÃO CRIAR PRIMEIRA SEMANA (SENS + ADMINS) #}
+            {% if current_user.role in ['programador', 'admin_escola', 'super_admin', 'sens'] and not todas_as_semanas %}
                 <p class="text-danger">Não há semanas cadastradas neste ciclo.</p>
                 <a href="{{ url_for('semana.gerenciar_semanas') }}" class="btn btn-primary mt-3 btn-lg">
                     <i class="fas fa-plus-circle"></i> Criar Primeira Semana
@@ -285,8 +287,8 @@
     </div>
     {% endif %}
 
-    {# --- MODAL DE PRIORIDADE --- #}
-    {% if semana_selecionada and current_user.role in ['programador', 'admin_escola', 'super_admin'] %}
+    {# --- MODAL DE PRIORIDADE (SENS + ADMINS) --- #}
+    {% if semana_selecionada and current_user.role in ['programador', 'admin_escola', 'super_admin', 'sens'] %}
     <div class="modal fade" id="priorityModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">

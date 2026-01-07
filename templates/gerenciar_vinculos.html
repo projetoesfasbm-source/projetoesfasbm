@@ -6,12 +6,16 @@
 <div class="content-header">
     <h1>Gerenciar Vínculos</h1>
     <p>Vincule instrutores a turmas e disciplinas.</p>
+    
+    <p class="text-muted small">Seu cargo atual no sistema é: <strong class="text-danger">{{ current_user.role }}</strong></p>
 </div>
 
 <div class="table-container">
     <div class="table-header">
         <h3>Vínculos Existentes</h3>
-        {% if current_user.role in ['programador', 'admin_escola'] %}
+        
+        {# VERIFICAÇÃO DE PERMISSÃO: Incluindo 'sens' na lista #}
+        {% if current_user.role in ['programador', 'admin_escola', 'super_admin', 'sens'] %}
         <a href="{{ url_for('vinculo.adicionar_vinculo') }}" class="btn btn-primary">
             <span>+</span> Inserir Novo Vínculo
         </a>
@@ -53,7 +57,6 @@
                         <td data-label="Disciplina">{{ vinculo.disciplina.materia }}</td>
                         <td data-label="Ciclo">{{ vinculo.disciplina.ciclo.nome if vinculo.disciplina.ciclo else 'N/A' }}</td>
                         <td data-label="Instrutor">
-                            {# --- CORREÇÃO APLICADA AQUI --- #}
                             {% if vinculo.instrutor_1 %}
                                 <div><strong>1:</strong> {{ (vinculo.instrutor_1.user.nome_de_guerra or vinculo.instrutor_1.user.nome_completo) }}{% if vinculo.instrutor_1.user.posto_graduacao %} - {{ vinculo.instrutor_1.user.posto_graduacao }}{% endif %}</div>
                             {% endif %}
@@ -66,15 +69,18 @@
                         </td>
                         <td data-label="Ações" class="text-right">
                             <div class="btn-group">
-                                {% if current_user.role in ['programador', 'admin_escola'] %}
-                                <a href="{{ url_for('vinculo.editar_vinculo', vinculo_id=vinculo.id) }}" class="btn btn-sm btn-warning">Editar</a>
-                                <form method="POST" action="{{ url_for('vinculo.excluir_vinculo', vinculo_id=vinculo.id) }}" onsubmit="return confirm('Tem certeza que deseja deletar este vínculo?');" style="display: inline;">
-                                    {{ delete_form.hidden_tag() }}
-                                    <button type="submit" class="btn btn-sm btn-danger">Excluir</button>
-                                </form>
+                                
+                                {# VERIFICAÇÃO DE PERMISSÃO NA TABELA #}
+                                {% if current_user.role in ['programador', 'admin_escola', 'super_admin', 'sens'] %}
+                                    <a href="{{ url_for('vinculo.editar_vinculo', vinculo_id=vinculo.id) }}" class="btn btn-sm btn-warning">Editar</a>
+                                    <form method="POST" action="{{ url_for('vinculo.excluir_vinculo', vinculo_id=vinculo.id) }}" onsubmit="return confirm('Tem certeza que deseja deletar este vínculo?');" style="display: inline;">
+                                        {{ delete_form.hidden_tag() }}
+                                        <button type="submit" class="btn btn-sm btn-danger">Excluir</button>
+                                    </form>
                                 {% else %}
-                                <span class="text-muted">Sem ações</span>
+                                    <span class="text-muted"><i class="fas fa-lock"></i> Leitura</span>
                                 {% endif %}
+                                
                             </div>
                         </td>
                     </tr>

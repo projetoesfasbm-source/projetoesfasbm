@@ -49,12 +49,21 @@
                 <td>{{ aluno.user.posto_graduacao }}</td>
                 <td><strong>{{ aluno.user.nome_completo }}</strong></td>
                 <td class="text-end">
-                    <a href="{{ url_for('avaliacao.ver_avaliacoes', aluno_id=aluno.id) }}" class="btn btn-sm btn-outline-secondary me-1" title="Ver Histórico">
-                        <i class="fas fa-history"></i> Histórico
-                    </a>
-                    <a href="{{ url_for('avaliacao.nova_avaliacao', aluno_id=aluno.id) }}" class="btn btn-sm btn-success" title="Nova Avaliação">
-                        <i class="fas fa-plus-circle"></i> Avaliar
-                    </a>
+                    
+                    {# VERIFICAÇÃO DE PERMISSÃO: APENAS CAL (E ADMINS) #}
+                    {% if current_user.role in ['programador', 'admin_escola', 'super_admin', 'cal'] %}
+                        <a href="{{ url_for('avaliacao.ver_avaliacoes', aluno_id=aluno.id) }}" class="btn btn-sm btn-outline-secondary me-1" title="Ver Histórico">
+                            <i class="fas fa-history"></i> Histórico
+                        </a>
+                        <a href="{{ url_for('avaliacao.nova_avaliacao', aluno_id=aluno.id) }}" class="btn btn-sm btn-success" title="Nova Avaliação">
+                            <i class="fas fa-plus-circle"></i> Avaliar
+                        </a>
+                    {% else %}
+                        <span class="badge bg-secondary" title="Apenas CAL pode avaliar">
+                            <i class="fas fa-lock"></i> Restrito ao CAL
+                        </span>
+                    {% endif %}
+                    
                 </td>
             </tr>
             {% endfor %}

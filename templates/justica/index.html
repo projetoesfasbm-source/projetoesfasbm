@@ -15,7 +15,8 @@
                 <button class="btn btn-primary justice-option-btn active" data-target="inProgressContent">Em Andamento</button>
                 <button class="btn btn-warning justice-option-btn" data-target="finalizadosContent">Finalizados</button>
 
-                {% if current_user.role in ['admin_escola', 'programador', 'super_admin'] %}
+                {# CORREÇÃO: Adicionado 'is_cal' para permitir gestão de justiça #}
+                {% if current_user.is_cal or current_user.role in ['admin_escola', 'programador', 'super_admin'] %}
                     <button class="btn btn-success justice-option-btn" data-target="newTransgressionContent">Nova Infração</button>
 
                     {% if permite_pontuacao %}
@@ -24,7 +25,8 @@
 
                 {% endif %}
 
-                {% if current_user.role in ['admin_escola', 'programador', 'super_admin'] %}
+                {# CORREÇÃO: Adicionado 'is_cal' para exportação #}
+                {% if current_user.is_cal or current_user.role in ['admin_escola', 'programador', 'super_admin'] %}
                 <a href="{{ url_for('justica.exportar_selecao') }}" class="btn btn-info">Exportar para BI</a>
                 {% endif %}
                 </div>
@@ -59,7 +61,8 @@
                 {% endif %}
             </div>
 
-            {% if current_user.role in ['admin_escola', 'programador', 'super_admin'] %}
+            {# CORREÇÃO: Adicionado 'is_cal' para ver o formulário de nova infração #}
+            {% if current_user.is_cal or current_user.role in ['admin_escola', 'programador', 'super_admin'] %}
             <div class="justice-content" id="newTransgressionContent">
                 <h3 class="justice-content-title">Registrar Nova Infração</h3>
                 <form method="POST" action="{{ url_for('justica.novo_processo') }}">
@@ -88,14 +91,14 @@
                             <div class="facts-list-container" id="facts-list-container">
                                 {% for rule in fatos_predefinidos %}
                                     <div class="result-item"
-                                         data-fato="({{ rule.codigo }}) {{ rule.descricao }}"
-                                         data-pontos="{{ rule.pontos if permite_pontuacao else '0.0' }}">
+                                     data-fato="({{ rule.codigo }}) {{ rule.descricao }}"
+                                     data-pontos="{{ rule.pontos if permite_pontuacao else '0.0' }}">
 
-                                        <strong>{{ rule.codigo }}</strong> - {{ rule.descricao }}
+                                    <strong>{{ rule.codigo }}</strong> - {{ rule.descricao }}
 
-                                        {% if permite_pontuacao %}
-                                            <span class="badge bg-danger float-end">{{ rule.pontos }} pts</span>
-                                        {% endif %}
+                                    {% if permite_pontuacao %}
+                                        <span class="badge bg-danger float-end">{{ rule.pontos }} pts</span>
+                                    {% endif %}
                                     </div>
                                 {% endfor %}
                             </div>
@@ -126,7 +129,8 @@
     </div>
 
     <div class="justice-sidebar">
-        {% if current_user.role in ['admin_escola', 'programador', 'super_admin'] and permite_pontuacao %}
+        {# CORREÇÃO: Adicionado 'is_cal' para ver análise #}
+        {% if (current_user.is_cal or current_user.role in ['admin_escola', 'programador', 'super_admin']) and permite_pontuacao %}
         <a href="{{ url_for('justica.analise') }}" class="analysis-card">
             <div class="analysis-card-icon">📊</div>
             <div class="analysis-card-text">

@@ -17,7 +17,9 @@
                 Todos os Alunos
             {% endif %}
         </h3>
-        {% if current_user.role in ['programador', 'admin_escola'] %}
+        
+        {# CORREÇÃO: Adicionado 'is_sens' para permitir que o SENS cadastre alunos #}
+        {% if current_user.is_sens or current_user.role in ['programador', 'admin_escola', 'super_admin'] %}
         <div class="header-actions">
             <a href="{{ url_for('main.pre_cadastro', role='aluno') }}" class="btn btn-info">
                 <span>+</span> Inserir Pré-Cadastro
@@ -81,7 +83,9 @@
                         <td data-label="Ações" class="text-right">
                             <div class="btn-group">
                                 <a href="{{ url_for('historico.historico_funcional', aluno_id=aluno.id) }}" class="btn btn-sm btn-info">Ver Histórico</a>
-                                {% if current_user.role in ['super_admin', 'programador', 'admin_escola'] %}
+                                
+                                {# CORREÇÃO: Adicionado 'is_sens' para liberar edição/exclusão #}
+                                {% if current_user.is_sens or current_user.role in ['super_admin', 'programador', 'admin_escola'] %}
                                 <a href="{{ url_for('aluno.editar_aluno', aluno_id=aluno.id) }}" class="btn btn-sm btn-warning">Editar</a>
                                 <form method="POST" action="{{ url_for('aluno.excluir_aluno', aluno_id=aluno.id) }}" onsubmit="return confirm('Tem certeza que deseja excluir este aluno? Esta ação não pode ser desfeita.');" style="display: inline;">
                                     {{ delete_form.hidden_tag() }}

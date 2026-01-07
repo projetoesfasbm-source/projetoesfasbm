@@ -12,7 +12,8 @@
     <div class="table-header">
         <h3>Instrutores Cadastrados</h3>
         
-        {% if current_user.role in ['programador', 'admin_escola'] %}
+        {# CORREÇÃO: Adicionado 'is_sens' para liberar cadastro #}
+        {% if current_user.is_sens or current_user.role in ['programador', 'admin_escola'] %}
         <div class="header-actions">
             <a href="{{ url_for('main.pre_cadastro', role='instrutor') }}" class="btn btn-info">
                 <span>+</span> Inserir Pré-Cadastro
@@ -48,7 +49,9 @@
                         <th>Matrícula</th>
                         <th>Nome de Guerra</th>
                         <th>E-mail</th>
-                        {% if current_user.role in ['programador', 'admin_escola'] %}
+                        
+                        {# CORREÇÃO: Adicionado 'is_sens' para liberar coluna de Ações #}
+                        {% if current_user.is_sens or current_user.role in ['programador', 'admin_escola'] %}
                         <th class="text-right">Ações</th>
                         {% endif %}
                     </tr>
@@ -61,7 +64,9 @@
                         <td data-label="Matrícula">{{ instrutor.user.matricula if instrutor.user else 'N/A' }}</td>
                         <td data-label="Nome de Guerra">{{ instrutor.user.nome_de_guerra if instrutor.user else 'N/A' }}</td>
                         <td data-label="Email">{{ instrutor.user.email if instrutor.user else 'N/A' }}</td>
-                        {% if current_user.role in ['programador', 'admin_escola'] %}
+                        
+                        {# CORREÇÃO: Adicionado 'is_sens' para liberar botões de edição/exclusão #}
+                        {% if current_user.is_sens or current_user.role in ['programador', 'admin_escola'] %}
                         <td data-label="Ações" class="text-right">
                             <div class="btn-group">
                                 <a href="{{ url_for('instrutor.editar_instrutor', instrutor_id=instrutor.id) }}" class="btn btn-sm btn-warning">Editar</a>
@@ -91,7 +96,7 @@
         {% endif %}
     </div>
 
-    {# --- BLOCO DE PAGINAÇÃO CORRIGIDO --- #}
+    {# --- BLOCO DE PAGINAÇÃO --- #}
     {% if instrutores_paginados.pages > 1 %}
     <div class="pagination-container">
         {% with pagination_object=instrutores_paginados %}

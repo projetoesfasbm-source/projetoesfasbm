@@ -19,11 +19,11 @@ if t.TYPE_CHECKING:
 class User(UserMixin, db.Model):
     __tablename__ = 'users'
 
-    # --- CONSTANTES DE PERMISSÃO (ADICIONADO) ---
+    # --- CONSTANTES DE PERMISSÃO ---
     ROLE_PROGRAMADOR = 'programador'
     ROLE_ADMIN_ESCOLA = 'admin_escola'
-    ROLE_ADMIN_CAL = 'admin_cal'   # Novo: Corpo de Alunos
-    ROLE_ADMIN_SENS = 'admin_sens' # Novo: Seção de Ensino
+    ROLE_ADMIN_CAL = 'admin_cal'   # Novo: Chefe CAL (Justiça)
+    ROLE_ADMIN_SENS = 'admin_sens' # Novo: Chefe SENS (Ensino)
     ROLE_INSTRUTOR = 'instrutor'
     ROLE_ALUNO = 'aluno'
 
@@ -39,7 +39,7 @@ class User(UserMixin, db.Model):
     is_active: Mapped[bool] = mapped_column(default=False, nullable=False)
     must_change_password: Mapped[bool] = mapped_column(default=False, nullable=False)
 
-    # --- RELACIONAMENTOS (MANTIDOS ORIGINAIS) ---
+    # --- RELACIONAMENTOS ORIGINAIS (INTOCADOS) ---
     aluno_profile: Mapped['Aluno'] = relationship('Aluno', back_populates='user', uselist=False, cascade="all, delete-orphan")
     instrutor_profile: Mapped['Instrutor'] = relationship('Instrutor', back_populates='user', uselist=False, cascade="all, delete-orphan")
     user_schools: Mapped[list['UserSchool']] = relationship('UserSchool', back_populates='user', cascade="all, delete-orphan")
@@ -64,22 +64,30 @@ class User(UserMixin, db.Model):
     def __repr__(self):
         return f'<User {self.username or self.matricula}>'
 
-    # --- PROPRIEDADES AUXILIARES DE PERMISSÃO (ADICIONADO) ---
-    
+    # --- PROPRIEDADES DE PODER (QUEM É O CHEFE DE QUÊ) ---
+    # Isso define quem pode EDITAR/GERENCIAR. 
+    # A visualização no menu será controlada separadamente no HTML.
+
     @property
     def is_programador(self):
         return self.role == self.ROLE_PROGRAMADOR
 
     @property
     def is_admin_escola(self):
+        # Comandante / Acesso Total
         return self.role == self.ROLE_ADMIN_ESCOLA
 
     @property
     def is_cal(self):
-        # CAL ou Superior (Admin Escola/Programador)
+        # É o ADMINISTRADOR da Justiça? (Chefe CAL, Comandante ou Programador)
         return self.role in [self.ROLE_ADMIN_CAL, self.ROLE_ADMIN_ESCOLA, self.ROLE_PROGRAMADOR]
 
     @property
     def is_sens(self):
-        # SENS ou Superior (Admin Escola/Programador)
+        # É o ADMINISTRADOR do Ensino? (Chefe SENS, Comandante ou Programador)
         return self.role in [self.ROLE_ADMIN_SENS, self.ROLE_ADMIN_ESCOLA, self.ROLE_PROGRAMADOR]
+
+    @property
+    def is_staff(self):
+        # Faz parte da equipe administrativa (SENS, CAL, Comandante)
+        return self.role in [self.ROLE_ADMIN_SENS, self.ROLE_ADMIN_CAL, self.ROLE_ADMIN_ESCOLA, self.ROLE_PROGRAMADOR]

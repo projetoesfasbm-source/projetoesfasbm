@@ -3,9 +3,19 @@
 {% block title %}Lista de Disciplinas{% endblock %}
 
 {% block content %}
-<div class="content-header">
-    <h1>Disciplinas</h1>
-    <p>Gerencie as matérias e acompanhe o andamento pelo Quadro de Horários.</p>
+{# --- ALTERAÇÃO: Cabeçalho Flex para alinhar Título à esquerda e Botão à direita --- #}
+<div class="content-header d-flex justify-content-between align-items-center">
+    <div>
+        <h1>Disciplinas</h1>
+        <p>Gerencie as matérias e acompanhe o andamento pelo Quadro de Horários.</p>
+    </div>
+
+    {# --- O BOTÃO AGORA ESTÁ AQUI, VISÍVEL SEMPRE --- #}
+    {% if current_user.is_sens or current_user.role in ['programador', 'admin_escola'] %}
+    <a href="{{ url_for('disciplina.adicionar_disciplina') }}" class="btn btn-primary shadow-sm btn-lg">
+        <i class="fas fa-plus me-1"></i> Adicionar Disciplina
+    </a>
+    {% endif %}
 </div>
 
 <div class="table-filters mt-3">
@@ -29,11 +39,7 @@
             {% set turma_atual = turmas|selectattr('id', 'equalto', turma_selecionada_id)|first %}
             <i class="fas fa-chalkboard-teacher me-2"></i>{{ turma_atual.nome if turma_atual else '' }}
         </h3>
-        {% if current_user.role in ['programador', 'admin_escola'] %}
-        <a href="{{ url_for('disciplina.adicionar_disciplina') }}" class="btn btn-primary shadow-sm btn-lg">
-            <i class="fas fa-plus me-1"></i> Adicionar Disciplina
-        </a>
-        {% endif %}
+        {# Removi o botão daqui pois ele já está no topo #}
     </div>
 
     <div class="card shadow-sm">
@@ -46,7 +52,8 @@
                                 <th style="width: 30%;" class="ps-4">Matéria</th>
                                 <th style="width: 10%;" class="text-center">Meta</th>
                                 <th style="width: 40%;">Progresso (Quadro Horário)</th>
-                                {% if current_user.role in ['programador', 'admin_escola'] %}
+                                
+                                {% if current_user.is_sens or current_user.role in ['programador', 'admin_escola'] %}
                                 <th style="width: 20%;" class="text-end pe-4">Ações</th>
                                 {% endif %}
                             </tr>
@@ -70,14 +77,14 @@
                                 <td>
                                     <div class="d-flex flex-column gap-1">
                                         <div class="progress" style="height: 25px; border-radius: 10px; background-color: #e9ecef; box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);">
-                                            {# Barra VERDE: Aulas Realizadas (Passado) #}
+                                            {# Barra VERDE: Aulas Realizadas #}
                                             <div class="progress-bar bg-success" role="progressbar" 
                                                  style="width: {{ item.progresso.pct_realizado }}%;" 
                                                  title="Realizado: {{ item.progresso.realizado }}h">
                                                  {% if item.progresso.pct_realizado > 10 %}{{ item.progresso.realizado }}h{% endif %}
                                             </div>
                                             
-                                            {# Barra AZUL: Aulas Agendadas (Futuro) #}
+                                            {# Barra AZUL: Aulas Agendadas #}
                                             <div class="progress-bar bg-info progress-bar-striped progress-bar-animated" role="progressbar" 
                                                  style="width: {{ item.progresso.pct_agendado }}%;" 
                                                  title="Agendado Futuro: {{ item.progresso.agendado }}h">
@@ -103,7 +110,7 @@
                                     </div>
                                 </td>
                                 
-                                {% if current_user.role in ['programador', 'admin_escola'] %}
+                                {% if current_user.is_sens or current_user.role in ['programador', 'admin_escola'] %}
                                 <td class="text-end pe-4 text-nowrap align-middle">
                                     <div class="d-flex justify-content-end gap-2">
                                         <a href="{{ url_for('disciplina.editar_disciplina', disciplina_id=item.disciplina.id) }}" 
@@ -132,7 +139,8 @@
                         <div class="text-muted mb-3" style="font-size: 3rem;"><i class="fas fa-folder-open"></i></div>
                         <h4>Nenhuma Disciplina Encontrada</h4>
                         <p class="text-muted">Esta turma ainda não possui disciplinas cadastradas.</p>
-                        {% if current_user.role in ['programador', 'admin_escola'] %}
+                        
+                        {% if current_user.is_sens or current_user.role in ['programador', 'admin_escola'] %}
                         <a href="{{ url_for('disciplina.adicionar_disciplina') }}" class="btn btn-primary mt-2 btn-lg">Cadastrar Agora</a>
                         {% endif %}
                     </div>

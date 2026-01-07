@@ -240,64 +240,63 @@
                 <div class="nav-separator">GERAL</div>
                 <a href="{{ url_for('main.safebrowser') }}" class="nav-link {% if request.endpoint == 'main.safebrowser' %}active{% endif %}"><div class="nav-icon">🛡️</div> SafeBrowser</a>
                 
-                {# BLOCO ACADÊMICO BÁSICO (Visualização para Todos) #}
-                {# Visível para: SENS, Instrutor, Aluno, Admins #}
-                {% if current_user.is_sens or current_user.role in ['super_admin', 'instrutor', 'aluno'] %}
+                {# === BLOCO DE ENSINO GERAL === #}
+                {# VISÍVEL PARA: Staff (SENS/CAL - Admins), Instrutor, Aluno (Visualizadores) #}
+                {% if current_user.is_staff or current_user.role in ['super_admin', 'instrutor', 'aluno'] %}
                     <a href="{{ url_for('aluno.listar_alunos') }}" class="nav-link {% if request.endpoint and 'aluno.' in request.endpoint and 'historico' not in request.endpoint %}active{% endif %}"><div class="nav-icon">👥</div> Alunos</a>
                     <a href="{{ url_for('instrutor.listar_instrutores') }}" class="nav-link {% if request.endpoint and 'instrutor.' in request.endpoint %}active{% endif %}"><div class="nav-icon">🎓</div> Instrutores</a>
                     <a href="{{ url_for('turma.listar_turmas') }}" class="nav-link {% if request.endpoint and 'turma.' in request.endpoint %}active{% endif %}"><div class="nav-icon">🏫</div> Turmas</a>
                     <a href="{{ url_for('disciplina.listar_disciplinas') }}" class="nav-link {% if request.endpoint and 'disciplina.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📚</div> Disciplinas</a>
                 {% endif %}
 
-                {# VÍNCULOS (Apenas Gestão) #}
-                {% if current_user.role in ['super_admin', 'programador', 'admin_escola', 'admin_sens'] %}
+                {# VÍNCULOS (Apenas Gestão SENS/CAL/Admin) #}
+                {% if current_user.is_staff or current_user.role == 'super_admin' %}
                     <a href="{{ url_for('vinculo.gerenciar_vinculos') }}" class="nav-link {% if request.endpoint and 'vinculo.' in request.endpoint %}active{% endif %}"><div class="nav-icon">🔗</div> Vínculos</a>
                 {% endif %}
 
                 <div class="nav-separator">ACADÊMICO</div>
                 
                 {# QUADRO HORÁRIO #}
-                {# Quem vê: SENS, Instrutor (Agenda/Vê), Aluno (Vê) #}
-                {% if current_user.is_sens or current_user.role in ['super_admin', 'instrutor', 'aluno'] %}
+                {# VISÍVEL PARA: Staff, Instrutor, Aluno #}
+                {% if current_user.is_staff or current_user.role in ['super_admin', 'instrutor', 'aluno'] %}
                     <a href="{{ url_for('horario.index') }}" class="nav-link {% if request.endpoint and ('horario.' in request.endpoint or 'semana.' in request.endpoint) %}active{% endif %}"><div class="nav-icon">📅</div> Quadro Horário</a>
                 {% endif %}
 
                 {# DIÁRIOS DE CLASSE (Visualização Administrativa SENS) #}
-                {# CORREÇÃO: INSTRUTOR REMOVIDO DAQUI para não ver a lista geral #}
-                {% if current_user.is_sens or current_user.role == 'super_admin' %}
+                {# VISÍVEL PARA: SENS (Admin), CAL (View). INSTRUTOR/ALUNO NÃO VEEM ESTE GERAL #}
+                {% if current_user.is_staff or current_user.role == 'super_admin' %}
                     <a href="{{ url_for('admin_escola.espelho_diarios') }}" class="nav-link {% if request.endpoint == 'admin_escola.espelho_diarios' %}active{% endif %}"><div class="nav-icon">📖</div> Diários de Classe (Adm)</a>
-                {% endif %}
-                
-                {# DIÁRIO DE CLASSE (Aluno Chefe) #}
-                {% if current_user.role == 'aluno' and current_user.aluno_profile %}
-                     <a href="{{ url_for('chefe.painel') }}" class="nav-link {% if request.endpoint and 'chefe.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📖</div> Diário de Classe (Chefe)</a>
                 {% endif %}
 
                 {# JUSTIÇA E DISCIPLINA #}
-                {# Quem vê: CAL (Admin), Aluno (Defesa/Ciente) - INSTRUTOR NÃO VÊ #}
-                {% if current_user.is_cal or current_user.role in ['super_admin', 'aluno'] %}
+                {# VISÍVEL PARA: CAL (Admin), SENS (View), Aluno (Defesa). INSTRUTOR NÃO VÊ #}
+                {% if current_user.is_staff or current_user.role in ['super_admin', 'aluno'] %}
                     <a href="{{ url_for('justica.index') }}" class="nav-link {% if request.endpoint and 'justica.' in request.endpoint %}active{% endif %}"><div class="nav-icon">⚖️</div> Justiça e Disciplina</a>
                 {% endif %}
 
                 {# QUESTIONÁRIOS #}
-                {# Quem vê: CAL (Admin), Aluno - INSTRUTOR NÃO VÊ #}
-                {% if current_user.is_cal or current_user.role in ['super_admin', 'aluno'] %}
+                {# VISÍVEL PARA: CAL (Admin), SENS (View), Aluno (Responder). INSTRUTOR NÃO VÊ #}
+                {% if current_user.is_staff or current_user.role in ['super_admin', 'aluno'] %}
                     <a href="{{ url_for('questionario.index') }}" class="nav-link {% if request.endpoint and 'questionario.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📝</div> Questionário Alunos</a>
                 {% endif %}
 
                 {# APROVAÇÃO (SENS) #}
+                {# VISÍVEL PARA: SENS (Admin) #}
                 {% if current_user.is_sens or current_user.role == 'super_admin' %}
                     <a href="{{ url_for('horario.aprovar_horarios') }}" class="nav-link {% if request.endpoint == 'horario.aprovar_horarios' %}active{% endif %}"><div class="nav-icon">👍</div> Aprovar Aulas</a>
                 {% endif %}
 
-                {# RELATÓRIOS (SENS) #}
-                {% if current_user.is_sens or current_user.role == 'super_admin' %}
+                {# RELATÓRIOS (Staff Geral) #}
+                {% if current_user.is_staff or current_user.role == 'super_admin' %}
                     <a href="{{ url_for('relatorios.index') }}" class="nav-link {% if request.endpoint and 'relatorios.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📊</div> Relatórios</a>
                 {% endif %}
 
+                {# PORTAL DO ALUNO #}
                 {% if current_user.role == 'aluno' and current_user.aluno_profile %}
                     <div class="nav-separator">PORTAL DO ALUNO</div>
                     <a href="{{ url_for('historico.index') }}" class="nav-link {% if request.endpoint and 'historico.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📊</div> Meu CTSP</a>
+
+                    <a href="{{ url_for('chefe.painel') }}" class="nav-link {% if request.endpoint and 'chefe.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📋</div> Chefe de Turma</a>
                 {% endif %}
 
                  {% if current_user.role == 'super_admin' %}
@@ -305,7 +304,8 @@
                     <a href="{{ url_for('super_admin.dashboard') }}" class="nav-link {% if request.endpoint and 'super_admin.' in request.endpoint %}active{% endif %}"><div class="nav-icon">👑</div> Painel Super Admin</a>
                  {% endif %}
 
-                 {% if current_user.role in ['super_admin', 'programador', 'admin_escola'] %}
+                 {# ADMINISTRAÇÃO GERAL - Apenas para quem é Admin da Escola ou Programador #}
+                 {% if current_user.is_admin_escola or current_user.is_programador %}
                     <div class="nav-separator">ADMINISTRAÇÃO</div>
                     <a href="{{ url_for('tools.index') }}" class="nav-link {% if request.endpoint and ('tools.' in request.endpoint or 'assets.' in request.endpoint or 'customizer.' in request.endpoint) %}active{% endif %}"><div class="nav-icon">🛠️</div> Ferramentas Admin</a>
                     
