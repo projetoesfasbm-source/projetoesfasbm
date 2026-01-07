@@ -6,6 +6,7 @@ from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from .database import db
+from flask import session # Mantemos como fallback
 
 if t.TYPE_CHECKING:
     from .site_config import SiteConfig
@@ -21,9 +22,9 @@ class User(UserMixin, db.Model):
 
     # --- CONSTANTES DE PERMISSÃO ---
     ROLE_PROGRAMADOR = 'programador'
-    ROLE_ADMIN_ESCOLA = 'admin_escola'
-    ROLE_ADMIN_CAL = 'admin_cal'   
-    ROLE_ADMIN_SENS = 'admin_sens' 
+    ROLE_ADMIN_ESCOLA = 'admin_escola' # Comandante
+    ROLE_ADMIN_CAL = 'admin_cal'       # Chefe CAL
+    ROLE_ADMIN_SENS = 'admin_sens'     # Chefe SENS
     ROLE_INSTRUTOR = 'instrutor'
     ROLE_ALUNO = 'aluno'
 
@@ -36,7 +37,6 @@ class User(UserMixin, db.Model):
     nome_de_guerra: Mapped[t.Optional[str]] = mapped_column(db.String(50), nullable=True)
     posto_graduacao: Mapped[t.Optional[str]] = mapped_column(db.String(50), nullable=True)
     
-    # OBS: Este campo torna-se um fallback ou para cargos globais (programador)
     role: Mapped[str] = mapped_column(db.String(20), nullable=False, default='aluno')
     
     is_active: Mapped[bool] = mapped_column(default=False, nullable=False)
@@ -45,7 +45,8 @@ class User(UserMixin, db.Model):
     # --- RELACIONAMENTOS ---
     aluno_profile: Mapped['Aluno'] = relationship('Aluno', back_populates='user', uselist=False, cascade="all, delete-orphan")
     instrutor_profile: Mapped['Instrutor'] = relationship('Instrutor', back_populates='user', uselist=False, cascade="all, delete-orphan")
-    user_schools: Mapped[list['UserSchool']] = relationship('UserSchool', back_populates='user', cascade="all, delete-orphan")
+    # Carregamento eager para garantir que as permissões estejam disponíveis
+    user_schools: Mapped[list['UserSchool']] = relationship('UserSchool', back_populates='user', cascade="all, delete-orphan", lazy='selectin')
 
     notifications: Mapped[list['Notification']] = relationship('Notification', back_populates='user', cascade="all, delete-orphan")
     push_subscriptions: Mapped[list['PushSubscription']] = relationship('PushSubscription', back_populates='user', cascade="all, delete-orphan")
@@ -67,59 +68,71 @@ class User(UserMixin, db.Model):
     def __repr__(self):
         return f'<User {self.username or self.matricula}>'
 
-    # --- NOVA LÓGICA DE PERMISSÕES POR ESCOLA ---
+    # =================================================================
+    # LÓGICA DE PERMISSÕES (CORRIGIDA)
+    # =================================================================
+
+    def _get_active_school_id(self):
+        """Tenta recuperar o ID da escola ativa do contexto ou sessão."""
+        # 1. Verifica se foi injetado pelo before_request (mais seguro)
+        if hasattr(self, 'temp_active_school_id'):
+            return self.temp_active_school_id
+        # 2. Fallback para sessão direta
+        try:
+            sid = session.get('active_school_id')
+            return int(sid) if sid else None
+        except:
+            return None
 
     def get_role_in_school(self, school_id: int | None) -> str:
-        """
-        Retorna o role do usuário na escola específica.
-        Se school_id for None, retorna o role global (comportamento legado).
-        """
-        if self.is_programador:
-            return self.ROLE_PROGRAMADOR
+        """Retorna o cargo do usuário na escola específica."""
+        # Super usuários globais
+        if self.role == self.ROLE_PROGRAMADOR: return self.ROLE_PROGRAMADOR
+        if self.role == 'super_admin': return 'super_admin'
             
         if not school_id:
-            return self.role # Fallback legado
+            return self.role 
             
-        # Busca no relacionamento já carregado (evita query extra se user_schools estiver eager loaded)
-        # ou se não estiver, o SQLAlchemy faz a query aqui.
+        # Busca na lista (agora carregada com lazy='selectin' para garantir)
         for us in self.user_schools:
-            if us.school_id == school_id:
+            if us.school_id == int(school_id):
                 return us.role
         
-        return self.ROLE_ALUNO # Default se não tiver vínculo específico
+        return self.ROLE_ALUNO
+
+    # --- Verificadores Contextuais (passando ID explícito) ---
 
     def is_programador_check(self) -> bool:
-        """Programador é um cargo global, independe da escola."""
         return self.role == self.ROLE_PROGRAMADOR
 
     def is_admin_escola_in_school(self, school_id: int | None) -> bool:
         if self.is_programador_check(): return True
-        local_role = self.get_role_in_school(school_id)
-        return local_role == self.ROLE_ADMIN_ESCOLA
+        return self.get_role_in_school(school_id) == self.ROLE_ADMIN_ESCOLA
 
     def is_cal_in_school(self, school_id: int | None) -> bool:
         if self.is_programador_check(): return True
-        local_role = self.get_role_in_school(school_id)
-        return local_role in [self.ROLE_ADMIN_CAL, self.ROLE_ADMIN_ESCOLA]
+        role = self.get_role_in_school(school_id)
+        # CAL é Admin ou CAL
+        return role in [self.ROLE_ADMIN_CAL, self.ROLE_ADMIN_ESCOLA]
 
     def is_sens_in_school(self, school_id: int | None) -> bool:
         if self.is_programador_check(): return True
-        local_role = self.get_role_in_school(school_id)
-        return local_role in [self.ROLE_ADMIN_SENS, self.ROLE_ADMIN_ESCOLA]
+        role = self.get_role_in_school(school_id)
+        # SENS é Admin ou SENS
+        return role in [self.ROLE_ADMIN_SENS, self.ROLE_ADMIN_ESCOLA]
         
     def is_instrutor_in_school(self, school_id: int | None) -> bool:
         if self.is_programador_check(): return True
-        local_role = self.get_role_in_school(school_id)
-        return local_role == self.ROLE_INSTRUTOR
+        role = self.get_role_in_school(school_id)
+        return role == self.ROLE_INSTRUTOR
 
     def is_staff_in_school(self, school_id: int | None) -> bool:
-        """Verifica se tem qualquer cargo administrativo na escola."""
         if self.is_programador_check(): return True
-        local_role = self.get_role_in_school(school_id)
-        return local_role in [self.ROLE_ADMIN_SENS, self.ROLE_ADMIN_CAL, self.ROLE_ADMIN_ESCOLA]
+        role = self.get_role_in_school(school_id)
+        return role in [self.ROLE_ADMIN_SENS, self.ROLE_ADMIN_CAL, self.ROLE_ADMIN_ESCOLA]
 
-    # --- PROPRIEDADES LEGADAS (COMPATIBILIDADE COM TEMPLATES ANTIGOS) ---
-    # Estas propriedades agora tentam olhar o global, mas o ideal é usar as funções acima nos controllers.
+    # --- PROPRIEDADES LEGADAS INTELIGENTES (RESOLUÇÃO DO PROBLEMA) ---
+    # Estas propriedades agora buscam automaticamente a escola ativa.
     
     @property
     def is_programador(self):
@@ -127,17 +140,24 @@ class User(UserMixin, db.Model):
 
     @property
     def is_admin_escola(self):
-        # Alerta: isso olha o campo global. Em refatoração futura, templates devem passar school_id.
-        return self.role == self.ROLE_ADMIN_ESCOLA or self.is_programador
+        # Admin Geral: Tem acesso a tudo que SENS e CAL têm
+        if self.is_programador: return True
+        sid = self._get_active_school_id()
+        return self.is_admin_escola_in_school(sid)
 
     @property
     def is_cal(self):
-        return self.role in [self.ROLE_ADMIN_CAL, self.ROLE_ADMIN_ESCOLA, self.ROLE_PROGRAMADOR]
+        # Quem é Admin Escola TAMBÉM é CAL (tem permissão de justiça)
+        sid = self._get_active_school_id()
+        return self.is_cal_in_school(sid)
 
     @property
     def is_sens(self):
-        return self.role in [self.ROLE_ADMIN_SENS, self.ROLE_ADMIN_ESCOLA, self.ROLE_PROGRAMADOR]
+        # Quem é Admin Escola TAMBÉM é SENS (tem permissão de ensino)
+        sid = self._get_active_school_id()
+        return self.is_sens_in_school(sid)
 
     @property
     def is_staff(self):
-        return self.role in [self.ROLE_ADMIN_SENS, self.ROLE_ADMIN_CAL, self.ROLE_ADMIN_ESCOLA, self.ROLE_PROGRAMADOR]
+        sid = self._get_active_school_id()
+        return self.is_staff_in_school(sid)

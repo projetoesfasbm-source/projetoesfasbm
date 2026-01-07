@@ -13,7 +13,7 @@
                             <i class="fas fa-user-shield me-2"></i>Gerenciar Equipe e Permissões
                         </h4>
                         <p class="text-muted mb-0 small">
-                            Defina os papéis de acesso da equipe: 
+                            Defina os papéis de acesso da equipe nesta escola: 
                             <span class="badge bg-warning text-dark mx-1">CAL (Justiça)</span> 
                             <span class="badge bg-info text-dark mx-1">SENS (Ensino)</span>
                             <span class="badge bg-dark mx-1">Admin Geral</span>
@@ -46,14 +46,14 @@
                         <tr>
                             <th class="ps-4">Usuário</th>
                             <th>Identificação</th>
-                            <th>Cargo Atual</th>
+                            <th>Cargo NA ESCOLA</th>
                             <th>Acesso no Sistema</th>
                             <th class="text-end pe-4">Ações</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% if usuarios %}
-                            {% for usuario in usuarios %}
+                        {% if usuarios_com_role %}
+                            {% for usuario, vinculo in usuarios_com_role %}
                             <tr>
                                 <td class="ps-4">
                                     <div class="d-flex align-items-center">
@@ -75,26 +75,27 @@
                                     <small class="text-muted">Matrícula: <span class="user-matricula">{{ usuario.matricula or '-' }}</span></small>
                                 </td>
                                 <td>
-                                    {% if usuario.role == 'admin_escola' %}
+                                    {# CORREÇÃO: Verifica vinculo.role, não usuario.role #}
+                                    {% if vinculo.role == 'admin_escola' %}
                                         <span class="badge bg-dark">Comandante / Admin Geral</span>
                                     {% elif usuario.role == 'programador' %}
                                         <span class="badge bg-danger">Programador</span>
-                                    {% elif usuario.role == 'admin_cal' %}
+                                    {% elif vinculo.role == 'admin_cal' %}
                                         <span class="badge bg-warning text-dark border border-warning">Chefe CAL (Justiça)</span>
-                                    {% elif usuario.role == 'admin_sens' %}
+                                    {% elif vinculo.role == 'admin_sens' %}
                                         <span class="badge bg-info text-dark border border-info">Chefe SENS (Ensino)</span>
-                                    {% elif usuario.role == 'instrutor' %}
+                                    {% elif vinculo.role == 'instrutor' %}
                                         <span class="badge bg-secondary">Instrutor</span>
                                     {% else %}
-                                        <span class="badge bg-light text-dark border">{{ usuario.role }}</span>
+                                        <span class="badge bg-light text-dark border">{{ vinculo.role }}</span>
                                     {% endif %}
                                 </td>
                                 <td>
-                                    {% if usuario.role == 'admin_escola' or usuario.role == 'programador' %}
+                                    {% if vinculo.role == 'admin_escola' or usuario.role == 'programador' %}
                                         <div class="text-success small"><i class="fas fa-check-double me-1"></i> Acesso Total</div>
-                                    {% elif usuario.role == 'admin_cal' %}
+                                    {% elif vinculo.role == 'admin_cal' %}
                                         <div class="text-dark small"><i class="fas fa-balance-scale me-1"></i> Apenas Justiça/Disciplina</div>
-                                    {% elif usuario.role == 'admin_sens' %}
+                                    {% elif vinculo.role == 'admin_sens' %}
                                         <div class="text-dark small"><i class="fas fa-book me-1"></i> Ensino, Turmas e Horários</div>
                                     {% else %}
                                         <div class="text-muted small">Acesso Básico</div>
@@ -119,7 +120,7 @@
                                     <div class="text-muted opacity-50 mb-3">
                                         <i class="fas fa-users fa-3x"></i>
                                     </div>
-                                    <h5>Nenhum usuário encontrado</h5>
+                                    <h5>Nenhum usuário encontrado nesta escola</h5>
                                 </td>
                             </tr>
                         {% endif %}
@@ -130,15 +131,14 @@
                         <i class="fas fa-search fa-3x"></i>
                     </div>
                     <h5>Nenhum resultado encontrado</h5>
-                    <p class="text-muted small">Tente buscar por outro nome ou matrícula.</p>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-{% if usuarios %}
-    {% for usuario in usuarios %}
+{% if usuarios_com_role %}
+    {% for usuario, vinculo in usuarios_com_role %}
         {% if usuario.id != current_user.id and usuario.role != 'programador' %}
         <div class="modal fade permission-modal" id="modalRole{{ usuario.id }}" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered">
@@ -148,7 +148,7 @@
                         <div class="modal-header bg-light">
                             <h5 class="modal-title">
                                 <i class="fas fa-user-edit me-2 text-primary"></i>
-                                Definir Função
+                                Definir Função na Escola
                             </h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                         </div>
@@ -156,8 +156,9 @@
                             <p class="mb-3">Selecione o nível de acesso para: <br><strong>{{ usuario.nome_completo or usuario.username }}</strong></p>
                             
                             <div class="list-group">
+                                {# Verifica vinculo.role para marcar o radio button correto #}
                                 <label class="list-group-item d-flex gap-3 align-items-center list-group-item-action p-3">
-                                    <input class="form-check-input flex-shrink-0" type="radio" name="novo_role" value="admin_cal" {{ 'checked' if usuario.role == 'admin_cal' else '' }}>
+                                    <input class="form-check-input flex-shrink-0" type="radio" name="novo_role" value="admin_cal" {{ 'checked' if vinculo.role == 'admin_cal' else '' }}>
                                     <div class="w-100">
                                         <div class="d-flex justify-content-between">
                                             <strong>Chefe CAL (Corpo de Alunos)</strong>
@@ -168,7 +169,7 @@
                                 </label>
                                 
                                 <label class="list-group-item d-flex gap-3 align-items-center list-group-item-action p-3">
-                                    <input class="form-check-input flex-shrink-0" type="radio" name="novo_role" value="admin_sens" {{ 'checked' if usuario.role == 'admin_sens' else '' }}>
+                                    <input class="form-check-input flex-shrink-0" type="radio" name="novo_role" value="admin_sens" {{ 'checked' if vinculo.role == 'admin_sens' else '' }}>
                                     <div class="w-100">
                                         <div class="d-flex justify-content-between">
                                             <strong>Chefe SENS (Seção de Ensino)</strong>
@@ -179,7 +180,7 @@
                                 </label>
 
                                 <label class="list-group-item d-flex gap-3 align-items-center list-group-item-action p-3">
-                                    <input class="form-check-input flex-shrink-0" type="radio" name="novo_role" value="admin_escola" {{ 'checked' if usuario.role == 'admin_escola' else '' }}>
+                                    <input class="form-check-input flex-shrink-0" type="radio" name="novo_role" value="admin_escola" {{ 'checked' if vinculo.role == 'admin_escola' else '' }}>
                                     <div class="w-100">
                                         <div class="d-flex justify-content-between">
                                             <strong>Comandante / Admin Geral</strong>
@@ -190,7 +191,7 @@
                                 </label>
 
                                 <label class="list-group-item d-flex gap-3 align-items-center list-group-item-action p-3">
-                                    <input class="form-check-input flex-shrink-0" type="radio" name="novo_role" value="instrutor" {{ 'checked' if usuario.role == 'instrutor' else '' }}>
+                                    <input class="form-check-input flex-shrink-0" type="radio" name="novo_role" value="instrutor" {{ 'checked' if vinculo.role == 'instrutor' else '' }}>
                                     <div class="w-100">
                                         <div class="d-flex justify-content-between">
                                             <strong>Instrutor / Sem Função Adm.</strong>
@@ -215,24 +216,19 @@
 
 <script>
     document.addEventListener("DOMContentLoaded", function() {
-        // CORREÇÃO: Move os modais para o final do body para evitar problemas de backdrop escuro (z-index)
         let modals = document.querySelectorAll('.permission-modal');
         modals.forEach(modal => document.body.appendChild(modal));
     });
 
     function filterTable() {
-        // Lógica de filtro JavaScript
         let input = document.getElementById("searchInput");
         let filter = input.value.toUpperCase();
         let table = document.getElementById("usersTable");
         let tr = table.getElementsByTagName("tr");
         let hasVisibleRow = false;
 
-        // Loop em todas as linhas da tabela (começando de 1 para pular cabeçalho)
         for (let i = 1; i < tr.length; i++) { 
             let row = tr[i];
-            
-            // Busca os elementos de texto dentro da linha
             let nameEl = row.querySelector(".user-name");
             let emailEl = row.querySelector(".user-email");
             let matriculaEl = row.querySelector(".user-matricula");
@@ -244,7 +240,6 @@
                 let matriculaValue = matriculaEl ? (matriculaEl.textContent || matriculaEl.innerText) : "";
                 let postoValue = postoEl ? (postoEl.textContent || postoEl.innerText) : "";
 
-                // Verifica se algum campo contém o termo digitado
                 if (nameValue.toUpperCase().indexOf(filter) > -1 || 
                     emailValue.toUpperCase().indexOf(filter) > -1 ||
                     matriculaValue.toUpperCase().indexOf(filter) > -1 ||
@@ -258,7 +253,6 @@
             }
         }
 
-        // Controle da mensagem "Nenhum resultado encontrado"
         let noResultDiv = document.getElementById("searchNoResults");
         let tableHead = table.getElementsByTagName("thead")[0];
         let noResultsRow = document.getElementById("noResultsRow"); // Linha original de vazio
@@ -271,7 +265,6 @@
             } else {
                 noResultDiv.classList.add("d-none");
                 if(tableHead) tableHead.style.display = "";
-                // Se não tem filtro e não tem linhas visíveis, mostra o row original se existir
                 if (!hasVisibleRow && filter === "" && noResultsRow) {
                      noResultsRow.style.display = "";
                 }
@@ -279,5 +272,4 @@
         }
     }
 </script>
-
 {% endblock %}

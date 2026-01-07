@@ -4,7 +4,7 @@ import os
 import click
 import firebase_admin
 # ### INÍCIO DA ALTERAÇÃO ###
-# Adicionado send_from_directory às importações do Flask
+# Adicionado send_from_directory e g às importações do Flask
 from flask import Flask, render_template, g, session, send_from_directory
 # ### FIM DA ALTERAÇÃO ###
 from flask_login import LoginManager, current_user
@@ -137,6 +137,30 @@ def create_app(config_class=Config):
     def load_user(user_id):
         return db.session.get(User, int(user_id))
 
+    # =========================================================
+    # CORREÇÃO CRÍTICA DE PERMISSÕES POR ESCOLA (Context Inject)
+    # =========================================================
+    @app.before_request
+    def set_user_context():
+        """
+        Injeta o ID da escola ativa no objeto current_user ANTES de processar
+        qualquer rota ou template. Isso garante que as propriedades is_sens, 
+        is_cal, etc., funcionem corretamente nos templates antigos.
+        """
+        if current_user.is_authenticated:
+            # 1. Tenta pegar da sessão 'Visualizar Como' (Super Admin)
+            if current_user.role in ['super_admin', 'programador']:
+                view_as = session.get('view_as_school_id')
+                if view_as:
+                    current_user.temp_active_school_id = int(view_as)
+                    return
+
+            # 2. Pega da sessão padrão 'active_school_id'
+            sid = session.get('active_school_id')
+            if sid:
+                current_user.temp_active_school_id = int(sid)
+    # =========================================================
+
     with app.app_context():
         AssetService.initialize_upload_folder(app)
         register_blueprints(app)
@@ -226,11 +250,16 @@ def register_handlers_and_processors(app):
 
             # 2. Se for qualquer outro usuário (ou um Super Admin não visualizando),
             #    tenta carregar a escola do vínculo.
+            #    (Agora prioriza o active_school_id da sessão para evitar loading aleatório)
+            if school_id_to_load is None:
+                 school_id_to_load = session.get('active_school_id')
+            
+            # Fallback para o primeiro vínculo se nada estiver na sessão
             if school_id_to_load is None and hasattr(current_user, 'user_schools') and current_user.user_schools:
                 school_id_to_load = current_user.user_schools[0].school_id
 
             if school_id_to_load:
-                g.active_school = db.session.get(School, school_id_to_load)
+                g.active_school = db.session.get(School, int(school_id_to_load))
 
 
     @app.context_processor

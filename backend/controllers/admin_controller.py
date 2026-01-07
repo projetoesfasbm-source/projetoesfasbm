@@ -23,17 +23,25 @@ admin_escola_bp = Blueprint('admin_escola', __name__, url_prefix='/admin-escola'
 
 def sens_permission_required(f):
     """
-    Decorator para permitir acesso ao SENS e Administradores.
-    Substitui o admin_escola_required que bloqueava o SENS.
+    Decorator para permitir acesso ao SENS e Administradores no contexto da escola atual.
+    Substitui a verificação global 'current_user.is_sens' para evitar vazamento de permissão entre escolas.
     """
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not current_user.is_authenticated:
             return redirect(url_for('auth.login'))
         
-        # Permite: SENS (Chefe Ensino), Admin Escola (Cmt), Programador, Super Admin
-        if not (current_user.is_sens or current_user.is_super_admin):
-            flash("Acesso restrito. Área exclusiva para a Seção de Ensino (SENS).", "danger")
+        # 1. Identifica a escola atual
+        school_id = UserService.get_current_school_id()
+        
+        # 2. Verifica permissão ESPECÍFICA para esta escola
+        # Aceita: SENS da escola, Admin da escola, Programador ou Super Admin
+        if not (current_user.is_sens_in_school(school_id) or 
+                current_user.is_admin_escola_in_school(school_id) or
+                current_user.is_programador or 
+                getattr(current_user, 'is_super_admin', False)):
+            
+            flash("Acesso restrito. Área exclusiva para a Seção de Ensino (SENS) nesta escola.", "danger")
             return redirect(url_for('main.dashboard'))
             
         return f(*args, **kwargs)

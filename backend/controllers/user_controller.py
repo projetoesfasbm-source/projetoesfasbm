@@ -9,15 +9,8 @@ from typing import Optional
 import json
 
 from flask import (
-    Blueprint,
-    current_app,
-    flash,
-    redirect,
-    render_template,
-    request,
-    url_for,
-    jsonify,
-    abort
+    Blueprint, current_app, flash, redirect, render_template,
+    request, url_for, jsonify, abort
 )
 from flask_login import current_user, login_required
 from sqlalchemy import text, select
@@ -34,13 +27,13 @@ from backend.services.instrutor_service import InstrutorService
 from backend.models.user import User
 from backend.models.turma import Turma
 from backend.models.school import School
-from backend.models.user_school import UserSchool
+from backend.models.user_school import UserSchool # Necessário para a nova query
 from backend.services.user_service import UserService
 from utils.decorators import super_admin_required, admin_required
 
 user_bp = Blueprint("user", __name__, url_prefix="/user")
 
-# DICIONÁRIO ESTRUTURADO PARA POSTOS E GRADUAÇÕES
+# ... (Mantenha o dicionário posto_graduacao_structured e as funções utils iguais ao original) ...
 posto_graduacao_structured = {
     'Praças': ['Soldado PM', '2º Sargento PM', '1º Sargento PM'],
     'Oficiais': ['1º Tenente PM', 'Capitão PM', 'Major PM', 'Tenente-Coronel PM', 'Coronel PM'],
@@ -49,32 +42,29 @@ posto_graduacao_structured = {
     'Outros': ['Civil', 'Outro']
 }
 
-# ===== Forms =====
+# ... (Mantenha MeuPerfilForm e Utils iguais) ...
+# (Para economizar espaço, mantenha o código do form e utils que já existe no seu arquivo)
+
+# ... (Mantenha Meu Perfil e Change Password iguais) ...
+
 class MeuPerfilForm(FlaskForm):
     nome_completo = StringField('Nome Completo', validators=[DataRequired()])
     email = StringField('E-mail', validators=[DataRequired(), Email()])
-    
     posto_categoria = SelectField("Categoria", choices=list(posto_graduacao_structured.keys()), validators=[DataRequired()])
-    posto_graduacao = SelectField('Posto/Graduação', choices=[], validators=[DataRequired()]) # Choices são dinâmicas
-
+    posto_graduacao = SelectField('Posto/Graduação', choices=[], validators=[DataRequired()]) 
     turma_id = SelectField('Turma', coerce=int, validators=[WTFormsOptional()])
     is_rr = RadioField("Efetivo da Reserva Remunerada (RR)", choices=[('True', 'Sim'), ('False', 'Não')], coerce=lambda x: x == 'True', default=False)
-    
     foto_perfil = FileField('Alterar Foto de Perfil', validators=[FileAllowed(['jpg', 'jpeg', 'png', 'gif', 'webp'], 'Apenas imagens!')])
-
     current_password = PasswordField('Senha Atual', validators=[WTFormsOptional()])
     new_password = PasswordField('Nova Senha', validators=[WTFormsOptional(), EqualTo('confirm_new_password', message='As senhas não correspondem.')])
     confirm_new_password = PasswordField('Confirmar Nova Senha', validators=[WTFormsOptional()])
     submit = SubmitField('Salvar Alterações')
 
-
-# ===== Utils =====
 def norm_email(v: Optional[str]) -> Optional[str]:
     return v.strip().lower() if v else None
 
 def norm_idfunc(v: Optional[str]) -> Optional[str]:
-    if not v:
-        return None
+    if not v: return None
     return re.sub(r"\D+", "", v.strip()) or None
 
 def set_password_hash_on_user(user_obj, plain: str):
@@ -84,37 +74,28 @@ def set_password_hash_on_user(user_obj, plain: str):
         user_obj.password_hash = generate_password_hash(plain)
 
 def exists_in_users_by(column: str, value: str) -> bool:
-    # Ignora o usuário atual na verificação para permitir que ele salve seu próprio perfil
     return db.session.scalar(select(User).where(getattr(User, column) == value, User.id != current_user.id)) is not None
 
 def generate_unique_username(base: str, max_tries: int = 50) -> str:
     base = re.sub(r"[^a-z0-9._-]+", "-", base.lower())
     candidate = base or "user"
-    if not exists_in_users_by("username", candidate):
-        return candidate
+    if not exists_in_users_by("username", candidate): return candidate
     for i in range(1, max_tries + 1):
         candidate = f"{base}-{i}"
-        if not exists_in_users_by("username", candidate):
-            return candidate
+        if not exists_in_users_by("username", candidate): return candidate
     suffix = secrets.token_hex(2)
     candidate = f"{base}-{suffix}"
     return candidate
 
-def insert_user_school(user_id: int, school_id: int, role: str):
-    us = UserSchool(user_id=user_id, school_id=school_id, role=role, created_at=datetime.utcnow())
-    db.session.add(us)
-
-# ===== Rota Meu Perfil =====
 @user_bp.route("/meu-perfil", methods=["GET", "POST"])
 @login_required
 def meu_perfil():
     form = MeuPerfilForm(obj=current_user)
-    
     form.turma_id.choices = []
     
     if request.method == 'GET':
         posto_atual = current_user.posto_graduacao
-        categoria_encontrada = 'Outros' # Padrão
+        categoria_encontrada = 'Outros'
         for categoria, postos in posto_graduacao_structured.items():
             if posto_atual in postos:
                 categoria_encontrada = categoria
@@ -141,10 +122,8 @@ def meu_perfil():
         try:
             current_user.nome_completo = form.nome_completo.data
             current_user.posto_graduacao = form.posto_graduacao.data
-            
             nome_de_guerra = request.form.get('nome_de_guerra')
-            if nome_de_guerra:
-                current_user.nome_de_guerra = nome_de_guerra
+            if nome_de_guerra: current_user.nome_de_guerra = nome_de_guerra
             
             if form.email.data != current_user.email and exists_in_users_by("email", form.email.data):
                 flash("Este e-mail já está em uso por outro usuário.", "warning")
@@ -181,7 +160,6 @@ def meu_perfil():
 
     return render_template("meu_perfil.html", user=current_user, form=form, postos_data=posto_graduacao_structured)
 
-
 @user_bp.route("/change-password-ajax", methods=["POST"])
 @login_required
 def change_password_ajax():
@@ -192,13 +170,10 @@ def change_password_ajax():
 
     if not all([current_password, new_password, confirm_new_password]):
         return jsonify({'success': False, 'message': 'Todos os campos são obrigatórios.'}), 400
-
     if not current_user.check_password(current_password):
         return jsonify({'success': False, 'message': 'A senha atual está incorreta.'}), 400
-    
     if new_password != confirm_new_password:
         return jsonify({'success': False, 'message': 'As novas senhas não correspondem.'}), 400
-    
     if len(new_password) < 8:
         return jsonify({'success': False, 'message': 'A nova senha deve ter pelo menos 8 caracteres.'}), 400
         
@@ -212,21 +187,17 @@ def change_password_ajax():
         current_app.logger.error(f"Erro ao alterar senha via AJAX: {e}")
         return jsonify({'success': False, 'message': 'Ocorreu um erro interno ao alterar a senha.'}), 500
 
-
 @user_bp.route("/criar-admin", methods=["GET", "POST"])
 @login_required
 def criar_admin_escola():
-    role_atual = getattr(current_user, "role", None)
-    if role_atual not in ("admin_escola", "super_admin", "programador"):
+    # Verifica permissão via escola atual
+    school_id = UserService.get_current_school_id()
+    if not (current_user.is_programador or current_user.is_admin_escola_in_school(school_id)):
         flash("Você não tem permissão para criar administradores.", "danger")
         return redirect(url_for("main.dashboard"))
 
-    escola_id = None
-    if hasattr(current_user, 'user_schools') and current_user.user_schools:
-        escola_id = current_user.user_schools[0].school_id
-
-    if not escola_id:
-        flash("Não foi possível identificar a escola do usuário atual.", "danger")
+    if not school_id:
+        flash("Selecione uma escola primeiro.", "danger")
         return redirect(url_for("main.dashboard"))
 
     if request.method == "POST":
@@ -243,20 +214,21 @@ def criar_admin_escola():
             username = generate_unique_username(base_username)
 
             if db.session.scalar(select(User).where(User.email == email)):
-                flash("E-mail já está em uso na tabela de usuários.", "warning")
+                flash("E-mail já está em uso.", "warning")
                 return redirect(url_for("user.criar_admin_escola"))
             if db.session.scalar(select(User).where(User.matricula == id_func)):
-                flash("Matrícula (ID Func) já está em uso na tabela de usuários.", "warning")
+                flash("Matrícula (ID Func) já está em uso.", "warning")
                 return redirect(url_for("user.criar_admin_escola"))
 
             temp_pass = secrets.token_urlsafe(8)
             
+            # CRIAÇÃO: Usuário nasce com role global neutro 'aluno'
             user = User(
                 matricula=id_func,
                 username=username,
                 email=email,
                 nome_completo=nome,
-                role="admin_escola",
+                role="aluno", 
                 is_active=True,
                 must_change_password=True
             )
@@ -264,7 +236,9 @@ def criar_admin_escola():
 
             db.session.add(user)
             db.session.flush()
-            insert_user_school(user.id, escola_id, "admin_escola")
+            
+            # ATRIBUIÇÃO: Role específico da escola
+            UserService.set_user_role_for_school(user.id, school_id, "admin_escola")
             db.session.commit()
 
             flash(f"Administrador criado com sucesso. Username: {username} • Senha temporária: {temp_pass}", "success")
@@ -273,58 +247,44 @@ def criar_admin_escola():
         except IntegrityError as ie:
             db.session.rollback()
             msg = str(getattr(ie, "orig", ie))
-            if "email" in msg.lower():
-                flash("Conflito: e-mail já cadastrado.", "danger")
-            elif "matricula" in msg.lower():
-                flash("Conflito: Matrícula (ID Func) já cadastrada.", "danger")
-            else:
-                flash(f"Não foi possível criar (Erro de Integridade). Detalhe: {msg}", "danger")
+            flash(f"Erro de integridade: {msg}", "danger")
         except Exception:
             db.session.rollback()
-            current_app.logger.exception("Erro ao criar administrador de escola")
+            current_app.logger.exception("Erro ao criar administrador")
             flash("Ocorreu um erro ao criar o administrador.", "danger")
 
     return render_template("criar_admin_escola.html")
 
-# --- ALTERAÇÃO: Lista e Gestão de Cargos/Papéis (CAL / SENS) ---
+# ===== Rotas de Gestão de Papéis (REFATORADAS) =====
 
 @user_bp.route("/admins", methods=["GET"])
 @login_required
-@admin_required # Exige ser 'admin_escola' ou 'programador' para ver todos
+@admin_required 
 def listar_admins_escola():
-    """
-    Lista todos os usuários vinculados à escola atual para gestão de cargos.
-    Permite visualizar e alterar permissões (CAL, SENS, ADMIN, INSTRUTOR).
-    """
     school_id = UserService.get_current_school_id()
     if not school_id:
         flash("Selecione uma escola para gerenciar usuários.", "warning")
         return redirect(url_for('main.dashboard'))
 
-    # Busca todos os usuários vinculados à escola atual
-    # Filtra alunos para não poluir a lista (opcional, mas recomendado focar no Staff)
-    query = (
-        select(User)
+    # CORREÇÃO: Busca tuplas (User, UserSchool) para ler o cargo da escola
+    results = db.session.execute(
+        select(User, UserSchool)
         .join(UserSchool)
         .where(
             UserSchool.school_id == school_id,
-            User.role != 'aluno' # Exclui alunos da lista de staff administrativo
+            UserSchool.role != 'aluno' # Mostra quem tem cargo na escola
         )
         .order_by(User.nome_completo)
-    )
+    ).all()
     
-    users = db.session.scalars(query).all()
-
-    return render_template("listar_admins_escola.html", usuarios=users)
+    # Passa 'usuarios_com_role' para o template
+    return render_template("listar_admins_escola.html", usuarios_com_role=results)
 
 
 @user_bp.route("/alterar-papel/<int:user_id>", methods=["POST"])
 @login_required
-@admin_required # Apenas Comandante/Admin Geral pode alterar papeis
+@admin_required
 def alterar_papel_usuario(user_id):
-    """
-    Rota para o Admin Geral definir se um usuário é CAL, SENS ou OUTRO.
-    """
     school_id = UserService.get_current_school_id()
     if not school_id:
         return redirect(url_for('main.dashboard'))
@@ -334,47 +294,27 @@ def alterar_papel_usuario(user_id):
         flash("Usuário não encontrado.", "danger")
         return redirect(url_for('user.listar_admins_escola'))
 
-    # Proteção: Não permitir alterar o próprio papel ou de super admins/programadores
     if user.id == current_user.id:
         flash("Você não pode alterar seu próprio papel por aqui.", "warning")
         return redirect(url_for('user.listar_admins_escola'))
-        
+    
     if user.role == 'programador':
         flash("Não é permitido alterar o papel de um Programador.", "danger")
         return redirect(url_for('user.listar_admins_escola'))
 
     novo_role = request.form.get('novo_role')
-    
-    # Validação dos papéis permitidos
-    papeis_validos = ['admin_cal', 'admin_sens', 'admin_escola', 'instrutor']
+    papeis_validos = ['admin_cal', 'admin_sens', 'admin_escola', 'instrutor', 'aluno']
     
     if novo_role not in papeis_validos:
         flash("Papel inválido selecionado.", "danger")
         return redirect(url_for('user.listar_admins_escola'))
 
-    try:
-        # Atualiza a tabela User (Principal)
-        user.role = novo_role
-        
-        # Atualiza o vínculo na tabela UserSchool (Específico da escola)
-        # Isso garante consistência se o sistema verificar permissão por escola
-        vinculo = db.session.scalar(
-            select(UserSchool).where(
-                UserSchool.user_id == user.id, 
-                UserSchool.school_id == school_id
-            )
-        )
-        
-        if vinculo:
-            vinculo.role = novo_role
-        
-        db.session.commit()
-        
+    # CORREÇÃO: Usa o serviço para atualizar SOMENTE na escola atual
+    success, msg = UserService.set_user_role_for_school(user.id, school_id, novo_role)
+    
+    if success:
         flash(f"Permissões de {user.nome_completo} atualizadas para: {novo_role.upper()}", "success")
-        
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.exception(f"Erro ao alterar papel do usuário {user_id}: {e}")
-        flash("Erro ao atualizar permissões no banco de dados.", "danger")
+    else:
+        flash(msg, "danger")
 
     return redirect(url_for('user.listar_admins_escola'))
