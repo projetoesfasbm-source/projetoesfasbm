@@ -8,8 +8,8 @@
     <p>Selecione a turma para carregar suas disciplinas e então vincule os instrutores.</p>
 </div>
 
-{# VERIFICAÇÃO DE PERMISSÃO: INCLUI SENS, PROGRAMADOR E ADMINS #}
-{% if current_user.role in ['programador', 'admin_escola', 'super_admin', 'sens'] %}
+{# VERIFICAÇÃO DE PERMISSÃO: Adicionado 'admin_sens' #}
+{% if current_user.role in ['programador', 'admin_escola', 'super_admin', 'sens', 'admin_sens'] %}
 
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
@@ -55,7 +55,6 @@
         const turmaSelect = document.getElementById('turma_select');
         const disciplinaSelect = document.getElementById('disciplina_id');
 
-        // Inicialização do Select2
         $('.select2-enable').select2({
             theme: 'bootstrap-5',
             width: '100%',
@@ -92,21 +91,15 @@
     </script>
 
 {% else %}
-    
-    {# MENSAGEM DE BLOQUEIO PARA QUEM NÃO TEM PERMISSÃO #}
     <div class="alert alert-danger d-flex align-items-center shadow-sm" role="alert" style="max-width: 600px; margin: 2rem auto;">
         <i class="fas fa-lock fa-2x me-3"></i>
         <div>
             <h4 class="alert-heading mb-1">Acesso Restrito</h4>
-            <p class="mb-0">O gerenciamento de vínculos de instrutores é exclusivo da <strong>SENS</strong> e da Administração.</p>
+            <p class="mb-0">Acesso exclusivo para SENS e Administração.</p>
         </div>
     </div>
     <div class="text-center mt-3">
-        <a href="{{ url_for('index.index') }}" class="btn btn-secondary">
-            <i class="fas fa-arrow-left me-1"></i> Voltar ao Início
-        </a>
+        <a href="{{ url_for('index.index') }}" class="btn btn-secondary"><i class="fas fa-arrow-left me-1"></i> Voltar</a>
     </div>
-
 {% endif %}
-
 {% endblock %}

@@ -39,11 +39,10 @@
             <p>Selecione um pelotão, ciclo e semana para visualizar o horário correspondente.</p>
         </div>
         
-        {# --- LÓGICA CORRIGIDA: Botões visíveis mesmo sem semana selecionada --- #}
         <div class="controls-group d-flex gap-2 flex-wrap justify-content-end align-items-center">
             
-            {# 1. BOTÃO DE GERENCIAR SEMANAS (SENS + ADMINS) #}
-            {% if current_user.role in ['programador', 'admin_escola', 'super_admin', 'sens'] %}
+            {# 1. BOTÃO DE GERENCIAR SEMANAS (SENS + ADMIN_SENS + ADMINS) #}
+            {% if current_user.role in ['programador', 'admin_escola', 'super_admin', 'sens', 'admin_sens'] %}
                 <a href="{{ url_for('semana.gerenciar_semanas') }}" class="btn btn-dark shadow-sm fw-bold">
                     <i class="fas fa-calendar-plus me-1"></i> Gerenciar Semanas / Ciclos
                 </a>
@@ -52,8 +51,8 @@
             {# 2. BOTÕES QUE DEPENDEM DE UMA SEMANA JÁ EXISTIR #}
             {% if semana_selecionada %}
                 
-                {# BOTÕES ADMINISTRATIVOS (SENS + ADMINS) #}
-                {% if current_user.role in ['programador', 'admin_escola', 'super_admin', 'sens'] %}
+                {# BOTÕES ADMINISTRATIVOS #}
+                {% if current_user.role in ['programador', 'admin_escola', 'super_admin', 'sens', 'admin_sens'] %}
                     <button type="button" class="btn {% if priority_active %}btn-danger text-white{% else %}btn-warning{% endif %} fw-bold shadow-sm" 
                             data-bs-toggle="modal" data-bs-target="#priorityModal">
                         <i class="fas fa-star me-1"></i> 
@@ -65,7 +64,8 @@
                     </a>
                 {% endif %}
                 
-                {% if can_schedule_in_this_turma %}
+                {# --- CORREÇÃO: Forçando o botão aparecer para Admins OU se tiver permissão na turma --- #}
+                {% if can_schedule_in_this_turma or current_user.role in ['programador', 'admin_escola', 'super_admin', 'sens', 'admin_sens'] %}
                     <button type="button" class="btn btn-primary" onclick="openConfirmationModal()">
                         Agendar/Desmarcar Aulas
                     </button>
@@ -128,8 +128,8 @@
             <div class="empty-icon">📅</div>
             <h3>Nenhum horário para exibir</h3>
             
-            {# BOTÃO CRIAR PRIMEIRA SEMANA (SENS + ADMINS) #}
-            {% if current_user.role in ['programador', 'admin_escola', 'super_admin', 'sens'] and not todas_as_semanas %}
+            {# BOTÃO CRIAR PRIMEIRA SEMANA (SENS + ADMIN_SENS + ADMINS) #}
+            {% if current_user.role in ['programador', 'admin_escola', 'super_admin', 'sens', 'admin_sens'] and not todas_as_semanas %}
                 <p class="text-danger">Não há semanas cadastradas neste ciclo.</p>
                 <a href="{{ url_for('semana.gerenciar_semanas') }}" class="btn btn-primary mt-3 btn-lg">
                     <i class="fas fa-plus-circle"></i> Criar Primeira Semana
@@ -276,6 +276,7 @@
 
             <div class="form-actions" style="justify-content: flex-end; margin-top: 2rem;">
                 <button type="button" class="btn btn-secondary" onclick="closeConfirmationModal()">Cancelar</button>
+                {# --- CORREÇÃO DO BOTÃO DENTRO DO MODAL PARA ADMINS --- #}
                 {% if current_user.role != 'instrutor' %}
                     <a href="{{ url_for('horario.editar_horario_grid', pelotao=pelotao_selecionado, semana_id=semana_selecionada.id, ciclo_id=ciclo_selecionado) }}" 
                        class="btn btn-primary dynamic-week-link">
@@ -287,8 +288,8 @@
     </div>
     {% endif %}
 
-    {# --- MODAL DE PRIORIDADE (SENS + ADMINS) --- #}
-    {% if semana_selecionada and current_user.role in ['programador', 'admin_escola', 'super_admin', 'sens'] %}
+    {# --- MODAL DE PRIORIDADE (SENS + ADMIN_SENS + ADMINS) --- #}
+    {% if semana_selecionada and current_user.role in ['programador', 'admin_escola', 'super_admin', 'sens', 'admin_sens'] %}
     <div class="modal fade" id="priorityModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">

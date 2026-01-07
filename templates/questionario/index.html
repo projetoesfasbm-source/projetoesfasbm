@@ -1,49 +1,88 @@
 {% extends "base.html" %}
 
-{% block title %}Módulo de Questionários{% endblock %}
+{% block title %}Questionários{% endblock %}
 
 {% block content %}
 <div class="content-header">
-    <h1>Módulo de Questionários</h1>
-    <p>Crie, visualize e aplique questionários aos alunos e instrutores.</p>
+    <h1>Questionários e Pesquisas</h1>
+    <p>Gerenciamento de avaliações institucionais e pesquisas de satisfação.</p>
 </div>
 
-<div class="modules-grid">
-    <a href="{{ url_for('questionario.novo_questionario') }}" class="module-card-link">
-        <div class="module-card">
-            <div class="card-content">
-                <div class="card-icon">➕</div>
-                <h3 class="card-title">Novo Questionário</h3>
-                <p class="card-description">Elabore um novo formulário com perguntas de múltipla escolha e campos abertos.</p>
-            </div>
-        </div>
-    </a>
-    
-    <a href="{{ url_for('questionario.ver_questionarios') }}" class="module-card-link">
-        <div class="module-card">
-            <div class="card-content">
-                <div class="card-icon">📊</div>
-                <h3 class="card-title">Ver Questionários</h3>
-                <p class="card-description">Analise as respostas dos questionários já aplicados e visualize os resultados em gráficos.</p>
-            </div>
-        </div>
-    </a>
-    
-    <a href="{{ url_for('questionario.realizar_questionario') }}" class="module-card-link">
-        <div class="module-card">
-            <div class="card-content">
-                <div class="card-icon">✍️</div>
-                <h3 class="card-title">Realizar Questionário</h3>
-                <p class="card-description">Selecione um aluno ou instrutor para responder a um questionário existente.</p>
-            </div>
-        </div>
-    </a>
-</div>
+<div class="table-container">
+    <div class="table-header">
+        <h3>Questionários Disponíveis</h3>
+        
+        {# --- TRAVA DE SEGURANÇA: Apenas CAL e Admins podem CRIAR --- #}
+        {# Repare que 'sens' e 'admin_sens' NÃO estão na lista abaixo #}
+        {% if current_user.role in ['programador', 'admin_escola', 'super_admin', 'cal'] %}
+            <a href="{{ url_for('questionario.novo') }}" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Novo Questionário
+            </a>
+        {% endif %}
+    </div>
 
-<style>
-.module-card-link {
-    text-decoration: none;
-    color: inherit;
-}
-</style>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Título</th>
+                    <th>Público Alvo</th>
+                    <th>Status</th>
+                    <th>Respostas</th>
+                    <th class="text-end">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for q in questionarios %}
+                <tr>
+                    <td><strong>{{ q.titulo }}</strong></td>
+                    <td>
+                        {% if q.publico_alvo == 'alunos' %}
+                            <span class="badge bg-info text-dark">Alunos</span>
+                        {% elif q.publico_alvo == 'instrutores' %}
+                            <span class="badge bg-warning text-dark">Instrutores</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Todos</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if q.ativo %}
+                            <span class="badge bg-success">Ativo</span>
+                        {% else %}
+                            <span class="badge bg-danger">Encerrado</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="badge bg-light text-dark border">{{ q.respostas|length }}</span>
+                    </td>
+                    <td class="text-end">
+                        <div class="btn-group">
+                            {# Botão de VER RESULTADOS (Liberado para SENS também, se desejar) #}
+                            <a href="{{ url_for('questionario.resultado', id=q.id) }}" class="btn btn-sm btn-info" title="Ver Resultados">
+                                <i class="fas fa-chart-bar"></i>
+                            </a>
+
+                            {# --- TRAVA DE EDIÇÃO: Apenas CAL e Admins --- #}
+                            {% if current_user.role in ['programador', 'admin_escola', 'super_admin', 'cal'] %}
+                                <a href="{{ url_for('questionario.ver', id=q.id) }}" class="btn btn-sm btn-secondary" title="Visualizar">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                <a href="{{ url_for('questionario.editar_respostas', id=q.id) }}" class="btn btn-sm btn-warning" title="Gerenciar">
+                                    <i class="fas fa-cog"></i>
+                                </a>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" class="text-center py-4 text-muted">
+                        Nenhum questionário cadastrado.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
 {% endblock %}

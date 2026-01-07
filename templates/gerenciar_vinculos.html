@@ -6,16 +6,14 @@
 <div class="content-header">
     <h1>Gerenciar Vínculos</h1>
     <p>Vincule instrutores a turmas e disciplinas.</p>
-    
-    <p class="text-muted small">Seu cargo atual no sistema é: <strong class="text-danger">{{ current_user.role }}</strong></p>
 </div>
 
 <div class="table-container">
     <div class="table-header">
         <h3>Vínculos Existentes</h3>
         
-        {# VERIFICAÇÃO DE PERMISSÃO: Incluindo 'sens' na lista #}
-        {% if current_user.role in ['programador', 'admin_escola', 'super_admin', 'sens'] %}
+        {# --- CORREÇÃO: Adicionado 'admin_sens' na lista --- #}
+        {% if current_user.role in ['programador', 'admin_escola', 'super_admin', 'sens', 'admin_sens'] %}
         <a href="{{ url_for('vinculo.adicionar_vinculo') }}" class="btn btn-primary">
             <span>+</span> Inserir Novo Vínculo
         </a>
@@ -70,8 +68,8 @@
                         <td data-label="Ações" class="text-right">
                             <div class="btn-group">
                                 
-                                {# VERIFICAÇÃO DE PERMISSÃO NA TABELA #}
-                                {% if current_user.role in ['programador', 'admin_escola', 'super_admin', 'sens'] %}
+                                {# --- CORREÇÃO: Adicionado 'admin_sens' na lista --- #}
+                                {% if current_user.role in ['programador', 'admin_escola', 'super_admin', 'sens', 'admin_sens'] %}
                                     <a href="{{ url_for('vinculo.editar_vinculo', vinculo_id=vinculo.id) }}" class="btn btn-sm btn-warning">Editar</a>
                                     <form method="POST" action="{{ url_for('vinculo.excluir_vinculo', vinculo_id=vinculo.id) }}" onsubmit="return confirm('Tem certeza que deseja deletar este vínculo?');" style="display: inline;">
                                         {{ delete_form.hidden_tag() }}
@@ -91,7 +89,7 @@
             <div class="empty-state">
                 <div class="empty-icon">🔗</div>
                 <h2>Nenhum Vínculo Encontrado</h2>
-                <p>Não há vínculos que correspondam aos filtros selecionados. Tente limpar os filtros ou adicione um novo vínculo.</p>
+                <p>Não há vínculos que correspondam aos filtros selecionados.</p>
             </div>
         {% endif %}
     </div>

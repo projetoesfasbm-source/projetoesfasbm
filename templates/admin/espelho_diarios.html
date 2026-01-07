@@ -192,11 +192,18 @@
                                 </div>
                             </td>
                             <td class="text-center">
-                                <a href="{{ url_for('admin_escola.editar_diario_bloco', diario_id=diario.id) }}" 
-                                   class="btn btn-primary btn-sm rounded-pill" 
-                                   title="Editar Diário e Faltas">
-                                    <i class="fas fa-edit"></i> Editar
-                                </a>
+                                
+                                {# VERIFICAÇÃO DE PERMISSÃO: Adicionado 'admin_sens' #}
+                                {% if current_user.role in ['programador', 'admin_escola', 'super_admin', 'sens', 'admin_sens'] %}
+                                    <a href="{{ url_for('admin_escola.editar_diario_bloco', diario_id=diario.id) }}" 
+                                       class="btn btn-primary btn-sm rounded-pill" 
+                                       title="Editar Diário e Faltas">
+                                        <i class="fas fa-edit"></i> Editar
+                                    </a>
+                                {% else %}
+                                    <span class="text-muted small" title="Sem permissão"><i class="fas fa-lock"></i></span>
+                                {% endif %}
+                                
                             </td>
                         </tr>
                         {% else %}
