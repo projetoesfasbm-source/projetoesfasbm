@@ -13,6 +13,7 @@ from werkzeug.utils import secure_filename
 from ..services.relatorio_service import RelatorioService
 from ..services.instrutor_service import InstrutorService
 from ..services.site_config_service import SiteConfigService
+from ..services.user_service import UserService
 from ..services.xlsx_service import gerar_mapa_gratificacao_xlsx
 from utils.decorators import admin_or_programmer_required
 
@@ -33,6 +34,12 @@ def _build_filename(prefix: str, label: Optional[str], extension: str, fallback:
 @login_required
 @admin_or_programmer_required
 def index():
+    # Verifica se há uma escola selecionada no contexto atual
+    school_id = UserService.get_current_school_id()
+    if not school_id:
+        flash('Selecione uma escola para acessar os relatórios.', 'warning')
+        return redirect(url_for('main.dashboard'))
+
     return render_template('relatorios/index.html')
 
 
@@ -40,6 +47,12 @@ def index():
 @login_required
 @admin_or_programmer_required
 def gerar_relatorio_horas_aula():
+    # Verifica se há uma escola selecionada
+    school_id = UserService.get_current_school_id()
+    if not school_id:
+        flash('Selecione uma escola para gerar relatórios.', 'warning')
+        return redirect(url_for('main.dashboard'))
+
     report_type = request.args.get('tipo', 'mensal')
     tipo_relatorio_titulo = report_type.replace("_", " ").title()
 

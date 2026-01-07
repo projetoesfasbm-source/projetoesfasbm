@@ -73,14 +73,22 @@ class RelatorioService:
         instrutor_ids_filter: List[int] | None
     ) -> List[Dict[str, Any]]:
         """
-        Busca e formata os dados de horas-aula por instrutor.
+        Busca e formata os dados de horas-aula por instrutor, filtrando pela ESCOLA SELECIONADA.
         
-        CORREÇÃO (SOMA DE CARGA HORÁRIA POR TURMA/PELOTÃO):
+        CORREÇÃO (SOMA DE CARGA HORÁRIA POR TURMA/PELOTÃO + FILTRO DE ESCOLA):
         - Utiliza o campo 'pelotao' do Horario para distinguir as turmas.
+        - Filtra pelo school_id do ciclo da semana.
         - Soma a carga horária da disciplina para cada pelotão distinto encontrado.
         - Mantém a deduplicação de slots de horário para não pagar a mesma aula duas vezes.
         """
-        from ..models import db, Horario, User, Instrutor, Disciplina, Semana
+        from ..models import db, Horario, User, Instrutor, Disciplina, Semana, Ciclo
+        from ..services.user_service import UserService
+
+        # Recupera o ID da escola selecionada na sessão
+        school_id = UserService.get_current_school_id()
+        if not school_id:
+            # Se não tiver escola selecionada, retorna vazio para evitar vazamento de dados
+            return []
 
         # Criar aliases para permitir o join duplo (instrutor 1 e instrutor 2)
         Instrutor1 = aliased(Instrutor)
@@ -98,6 +106,7 @@ class RelatorioService:
                 Semana
             )
             .join(Semana, Horario.semana_id == Semana.id)
+            .join(Ciclo, Semana.ciclo_id == Ciclo.id)  # Join com Ciclo para acessar school_id
             .join(Disciplina, Horario.disciplina_id == Disciplina.id)
             # Join Obrigatório para o Instrutor 1 (Titular)
             .join(Instrutor1, Horario.instrutor_id == Instrutor1.id)
@@ -107,7 +116,8 @@ class RelatorioService:
             .outerjoin(User2, Instrutor2.user_id == User2.id)
             .filter(
                 Semana.data_inicio <= data_fim,
-                Semana.data_fim >= data_inicio
+                Semana.data_fim >= data_inicio,
+                Ciclo.school_id == school_id  # FILTRO DE ESCOLA ADICIONADO
             )
         )
 

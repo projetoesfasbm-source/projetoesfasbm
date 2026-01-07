@@ -239,26 +239,44 @@
 
                 <div class="nav-separator">GERAL</div>
                 <a href="{{ url_for('main.safebrowser') }}" class="nav-link {% if request.endpoint == 'main.safebrowser' %}active{% endif %}"><div class="nav-icon">🛡️</div> SafeBrowser</a>
-                <a href="{{ url_for('aluno.listar_alunos') }}" class="nav-link {% if request.endpoint and 'aluno.' in request.endpoint %}active{% endif %}"><div class="nav-icon">👥</div> Alunos</a>
-                <a href="{{ url_for('instrutor.listar_instrutores') }}" class="nav-link {% if request.endpoint and 'instrutor.' in request.endpoint %}active{% endif %}"><div class="nav-icon">🎓</div> Instrutores</a>
-                <a href="{{ url_for('turma.listar_turmas') }}" class="nav-link {% if request.endpoint and 'turma.' in request.endpoint %}active{% endif %}"><div class="nav-icon">🏫</div> Turmas</a>
-                <a href="{{ url_for('disciplina.listar_disciplinas') }}" class="nav-link {% if request.endpoint and 'disciplina.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📚</div> Disciplinas</a>
+                
+                {# BLOCO DE ENSINO (SENS) #}
+                {# Visível para: SENS, Admin Escola, Programador e Super Admin #}
+                {% if current_user.is_sens or current_user.role == 'super_admin' %}
+                    <a href="{{ url_for('aluno.listar_alunos') }}" class="nav-link {% if request.endpoint and 'aluno.' in request.endpoint %}active{% endif %}"><div class="nav-icon">👥</div> Alunos</a>
+                    <a href="{{ url_for('instrutor.listar_instrutores') }}" class="nav-link {% if request.endpoint and 'instrutor.' in request.endpoint %}active{% endif %}"><div class="nav-icon">🎓</div> Instrutores</a>
+                    <a href="{{ url_for('turma.listar_turmas') }}" class="nav-link {% if request.endpoint and 'turma.' in request.endpoint %}active{% endif %}"><div class="nav-icon">🏫</div> Turmas</a>
+                    <a href="{{ url_for('disciplina.listar_disciplinas') }}" class="nav-link {% if request.endpoint and 'disciplina.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📚</div> Disciplinas</a>
 
-                {% if current_user.role in ['super_admin', 'programador', 'admin_escola'] %}
-                    <a href="{{ url_for('vinculo.gerenciar_vinculos') }}" class="nav-link {% if request.endpoint and 'vinculo.' in request.endpoint %}active{% endif %}"><div class="nav-icon">🔗</div> Vínculos</a>
+                    {% if current_user.role in ['super_admin', 'programador', 'admin_escola', 'admin_sens'] %}
+                        <a href="{{ url_for('vinculo.gerenciar_vinculos') }}" class="nav-link {% if request.endpoint and 'vinculo.' in request.endpoint %}active{% endif %}"><div class="nav-icon">🔗</div> Vínculos</a>
+                    {% endif %}
                 {% endif %}
 
                 <div class="nav-separator">ACADÊMICO</div>
-                <a href="{{ url_for('horario.index') }}" class="nav-link {% if request.endpoint and ('horario.' in request.endpoint or 'semana.' in request.endpoint) %}active{% endif %}"><div class="nav-icon">📅</div> Quadro Horário</a>
-                <a href="{{ url_for('justica.index') }}" class="nav-link {% if request.endpoint and 'justica.' in request.endpoint %}active{% endif %}"><div class="nav-icon">⚖️</div> Justiça e Disciplina</a>
+                
+                {# QUADRO HORÁRIO E DIÁRIOS (SENS) #}
+                {% if current_user.is_sens or current_user.role == 'super_admin' %}
+                    <a href="{{ url_for('horario.index') }}" class="nav-link {% if request.endpoint and ('horario.' in request.endpoint or 'semana.' in request.endpoint) %}active{% endif %}"><div class="nav-icon">📅</div> Quadro Horário</a>
+                {% endif %}
 
-                {% if current_user.role in ['super_admin', 'programador', 'admin_escola'] %}
+                {# JUSTIÇA E DISCIPLINA (CAL) #}
+                {# Visível para: CAL, Admin Escola, Programador e Super Admin #}
+                {% if current_user.is_cal or current_user.role == 'super_admin' %}
+                    <a href="{{ url_for('justica.index') }}" class="nav-link {% if request.endpoint and 'justica.' in request.endpoint %}active{% endif %}"><div class="nav-icon">⚖️</div> Justiça e Disciplina</a>
+                {% endif %}
+
+                {# APROVAÇÃO E RELATÓRIOS (SENS) #}
+                {% if current_user.is_sens or current_user.role == 'super_admin' %}
                     <a href="{{ url_for('horario.aprovar_horarios') }}" class="nav-link {% if request.endpoint == 'horario.aprovar_horarios' %}active{% endif %}"><div class="nav-icon">👍</div> Aprovar Aulas</a>
 
-                    {# LINK ADMINISTRATIVO: DIÁRIOS DE CLASSE #}
                     <a href="{{ url_for('admin_escola.espelho_diarios') }}" class="nav-link {% if request.endpoint == 'admin_escola.espelho_diarios' %}active{% endif %}"><div class="nav-icon">📖</div> Diários de Classe</a>
 
                     <a href="{{ url_for('relatorios.index') }}" class="nav-link {% if request.endpoint and 'relatorios.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📊</div> Relatórios</a>
+                {% endif %}
+
+                {# QUESTIONÁRIOS (CAL) #}
+                {% if current_user.is_cal or current_user.role == 'super_admin' %}
                     <a href="{{ url_for('questionario.index') }}" class="nav-link {% if request.endpoint and 'questionario.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📝</div> Questionário Alunos</a>
                 {% endif %}
 
@@ -275,7 +293,12 @@
                  {% endif %}
 
                  {% if current_user.role in ['super_admin', 'programador', 'admin_escola'] %}
+                    <div class="nav-separator">ADMINISTRAÇÃO</div>
                     <a href="{{ url_for('tools.index') }}" class="nav-link {% if request.endpoint and ('tools.' in request.endpoint or 'assets.' in request.endpoint or 'customizer.' in request.endpoint) %}active{% endif %}"><div class="nav-icon">🛠️</div> Ferramentas Admin</a>
+                    
+                    <a href="{{ url_for('user.listar_admins_escola') }}" class="nav-link {% if request.endpoint == 'user.listar_admins_escola' %}active{% endif %}">
+                        <div class="nav-icon">🛡️</div> Usuários e Permissões
+                    </a>
                 {% endif %}
             </nav>
             <div class="sidebar-footer"></div>
