@@ -16,7 +16,8 @@ from flask import (
     render_template,
     request,
     url_for,
-    jsonify
+    jsonify,
+    abort
 )
 from flask_login import current_user, login_required
 from sqlalchemy import text, select
@@ -34,7 +35,8 @@ from backend.models.user import User
 from backend.models.turma import Turma
 from backend.models.school import School
 from backend.models.user_school import UserSchool
-from utils.decorators import super_admin_required
+from backend.services.user_service import UserService
+from utils.decorators import super_admin_required, admin_required
 
 user_bp = Blueprint("user", __name__, url_prefix="/user")
 
@@ -266,7 +268,7 @@ def criar_admin_escola():
             db.session.commit()
 
             flash(f"Administrador criado com sucesso. Username: {username} • Senha temporária: {temp_pass}", "success")
-            return redirect(url_for("user.lista_admins_escola"))
+            return redirect(url_for("user.listar_admins_escola"))
 
         except IntegrityError as ie:
             db.session.rollback()
@@ -284,21 +286,95 @@ def criar_admin_escola():
 
     return render_template("criar_admin_escola.html")
 
+# --- ALTERAÇÃO: Lista e Gestão de Cargos/Papéis (CAL / SENS) ---
+
 @user_bp.route("/admins", methods=["GET"])
 @login_required
-def lista_admins_escola():
-    school_id = None
-    if hasattr(current_user, 'user_schools') and current_user.user_schools:
-        school_id = current_user.user_schools[0].school_id
-    
+@admin_required # Exige ser 'admin_escola' ou 'programador' para ver todos
+def listar_admins_escola():
+    """
+    Lista todos os usuários vinculados à escola atual para gestão de cargos.
+    Permite visualizar e alterar permissões (CAL, SENS, ADMIN, INSTRUTOR).
+    """
+    school_id = UserService.get_current_school_id()
     if not school_id:
-        return render_template("listar_admins_escola.html", admins=[])
+        flash("Selecione uma escola para gerenciar usuários.", "warning")
+        return redirect(url_for('main.dashboard'))
 
-    rows = db.session.execute(
+    # Busca todos os usuários vinculados à escola atual
+    # Filtra alunos para não poluir a lista (opcional, mas recomendado focar no Staff)
+    query = (
         select(User)
         .join(UserSchool)
-        .where(UserSchool.school_id == school_id, UserSchool.role == 'admin_escola')
+        .where(
+            UserSchool.school_id == school_id,
+            User.role != 'aluno' # Exclui alunos da lista de staff administrativo
+        )
         .order_by(User.nome_completo)
-    ).scalars().all()
+    )
+    
+    users = db.session.scalars(query).all()
 
-    return render_template("listar_admins_escola.html", admins=rows)
+    return render_template("listar_admins_escola.html", usuarios=users)
+
+
+@user_bp.route("/alterar-papel/<int:user_id>", methods=["POST"])
+@login_required
+@admin_required # Apenas Comandante/Admin Geral pode alterar papeis
+def alterar_papel_usuario(user_id):
+    """
+    Rota para o Admin Geral definir se um usuário é CAL, SENS ou OUTRO.
+    """
+    school_id = UserService.get_current_school_id()
+    if not school_id:
+        return redirect(url_for('main.dashboard'))
+
+    user = db.session.get(User, user_id)
+    if not user:
+        flash("Usuário não encontrado.", "danger")
+        return redirect(url_for('user.listar_admins_escola'))
+
+    # Proteção: Não permitir alterar o próprio papel ou de super admins/programadores
+    if user.id == current_user.id:
+        flash("Você não pode alterar seu próprio papel por aqui.", "warning")
+        return redirect(url_for('user.listar_admins_escola'))
+        
+    if user.role == 'programador':
+        flash("Não é permitido alterar o papel de um Programador.", "danger")
+        return redirect(url_for('user.listar_admins_escola'))
+
+    novo_role = request.form.get('novo_role')
+    
+    # Validação dos papéis permitidos
+    papeis_validos = ['admin_cal', 'admin_sens', 'admin_escola', 'instrutor']
+    
+    if novo_role not in papeis_validos:
+        flash("Papel inválido selecionado.", "danger")
+        return redirect(url_for('user.listar_admins_escola'))
+
+    try:
+        # Atualiza a tabela User (Principal)
+        user.role = novo_role
+        
+        # Atualiza o vínculo na tabela UserSchool (Específico da escola)
+        # Isso garante consistência se o sistema verificar permissão por escola
+        vinculo = db.session.scalar(
+            select(UserSchool).where(
+                UserSchool.user_id == user.id, 
+                UserSchool.school_id == school_id
+            )
+        )
+        
+        if vinculo:
+            vinculo.role = novo_role
+        
+        db.session.commit()
+        
+        flash(f"Permissões de {user.nome_completo} atualizadas para: {novo_role.upper()}", "success")
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.exception(f"Erro ao alterar papel do usuário {user_id}: {e}")
+        flash("Erro ao atualizar permissões no banco de dados.", "danger")
+
+    return redirect(url_for('user.listar_admins_escola'))
