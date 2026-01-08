@@ -193,8 +193,8 @@
                             </td>
                             <td class="text-center">
                                 
-                                {# VERIFICAÇÃO DE PERMISSÃO: Adicionado 'admin_sens' #}
-                                {% if current_user.role in ['programador', 'admin_escola', 'super_admin', 'sens', 'admin_sens'] %}
+                                {# CORREÇÃO: Usa is_sens (que inclui Admin e Programador) #}
+                                {% if current_user.is_sens %}
                                     <a href="{{ url_for('admin_escola.editar_diario_bloco', diario_id=diario.id) }}" 
                                        class="btn btn-primary btn-sm rounded-pill" 
                                        title="Editar Diário e Faltas">
@@ -249,7 +249,6 @@
 </div>
 
 <script>
-    // Scripts originais do Painel de Risco
     const todosAlunosData = {{ todos_alunos|tojson }};
     let modalInstance = null;
 

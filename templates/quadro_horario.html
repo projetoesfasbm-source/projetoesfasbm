@@ -21,7 +21,6 @@
         <div class="mt-2 ms-5 ps-2">
             <strong>Disciplinas Permitidas:</strong>
             <ul class="mb-0 mt-1">
-                {# Loop seguro sobre a lista de strings #}
                 {% for nome in priority_allowed_names %}
                     <li>{{ nome }}</li>
                 {% else %}
@@ -41,8 +40,8 @@
         
         <div class="controls-group d-flex gap-2 flex-wrap justify-content-end align-items-center">
             
-            {# 1. BOTÃO DE GERENCIAR SEMANAS (SENS + ADMIN_SENS + ADMINS) #}
-            {% if current_user.role in ['programador', 'admin_escola', 'super_admin', 'sens', 'admin_sens'] %}
+            {# 1. BOTÃO DE GERENCIAR SEMANAS - CORRIGIDO PARA is_sens #}
+            {% if current_user.is_sens %}
                 <a href="{{ url_for('semana.gerenciar_semanas') }}" class="btn btn-dark shadow-sm fw-bold">
                     <i class="fas fa-calendar-plus me-1"></i> Gerenciar Semanas / Ciclos
                 </a>
@@ -51,8 +50,8 @@
             {# 2. BOTÕES QUE DEPENDEM DE UMA SEMANA JÁ EXISTIR #}
             {% if semana_selecionada %}
                 
-                {# BOTÕES ADMINISTRATIVOS #}
-                {% if current_user.role in ['programador', 'admin_escola', 'super_admin', 'sens', 'admin_sens'] %}
+                {# BOTÕES ADMINISTRATIVOS - CORRIGIDO PARA is_sens #}
+                {% if current_user.is_sens %}
                     <button type="button" class="btn {% if priority_active %}btn-danger text-white{% else %}btn-warning{% endif %} fw-bold shadow-sm" 
                             data-bs-toggle="modal" data-bs-target="#priorityModal">
                         <i class="fas fa-star me-1"></i> 
@@ -64,8 +63,8 @@
                     </a>
                 {% endif %}
                 
-                {# --- CORREÇÃO: Forçando o botão aparecer para Admins OU se tiver permissão na turma --- #}
-                {% if can_schedule_in_this_turma or current_user.role in ['programador', 'admin_escola', 'super_admin', 'sens', 'admin_sens'] %}
+                {# CORREÇÃO: Admin/Sens tem acesso total, Instrutor depende de permissão #}
+                {% if can_schedule_in_this_turma or current_user.is_sens %}
                     <button type="button" class="btn btn-primary" onclick="openConfirmationModal()">
                         Agendar/Desmarcar Aulas
                     </button>
@@ -77,7 +76,7 @@
                     {% endif %}
                 {% endif %}
 
-            {% endif %} {# Fim do if semana_selecionada #}
+            {% endif %}
         </div>
     </div>
 
@@ -128,8 +127,8 @@
             <div class="empty-icon">📅</div>
             <h3>Nenhum horário para exibir</h3>
             
-            {# BOTÃO CRIAR PRIMEIRA SEMANA (SENS + ADMIN_SENS + ADMINS) #}
-            {% if current_user.role in ['programador', 'admin_escola', 'super_admin', 'sens', 'admin_sens'] and not todas_as_semanas %}
+            {# CORREÇÃO: is_sens #}
+            {% if current_user.is_sens and not todas_as_semanas %}
                 <p class="text-danger">Não há semanas cadastradas neste ciclo.</p>
                 <a href="{{ url_for('semana.gerenciar_semanas') }}" class="btn btn-primary mt-3 btn-lg">
                     <i class="fas fa-plus-circle"></i> Criar Primeira Semana
@@ -173,7 +172,6 @@
                             {% endfor %}
                         </tr>
                         
-                        {# Intervalos - Alterados para cor mais escura (bg-secondary) #}
                         {% if row_idx == 2 %}<tr><td colspan="6" class="bg-secondary text-white py-1 text-center small fw-bold text-uppercase">{{ intervalos.intervalo_1 }}</td></tr>{% endif %}
                         {% if row_idx == 5 %}<tr><td colspan="6" class="bg-secondary text-white py-1 text-center small fw-bold text-uppercase">{{ intervalos.almoco }}</td></tr>{% endif %}
                         {% if row_idx == 8 %}<tr><td colspan="6" class="bg-secondary text-white py-1 text-center small fw-bold text-uppercase">{{ intervalos.intervalo_2 }}</td></tr>{% endif %}
@@ -276,7 +274,6 @@
 
             <div class="form-actions" style="justify-content: flex-end; margin-top: 2rem;">
                 <button type="button" class="btn btn-secondary" onclick="closeConfirmationModal()">Cancelar</button>
-                {# --- CORREÇÃO DO BOTÃO DENTRO DO MODAL PARA ADMINS --- #}
                 {% if current_user.role != 'instrutor' %}
                     <a href="{{ url_for('horario.editar_horario_grid', pelotao=pelotao_selecionado, semana_id=semana_selecionada.id, ciclo_id=ciclo_selecionado) }}" 
                        class="btn btn-primary dynamic-week-link">
@@ -288,8 +285,8 @@
     </div>
     {% endif %}
 
-    {# --- MODAL DE PRIORIDADE (SENS + ADMIN_SENS + ADMINS) --- #}
-    {% if semana_selecionada and current_user.role in ['programador', 'admin_escola', 'super_admin', 'sens', 'admin_sens'] %}
+    {# CORREÇÃO: Modal de prioridade só para SENS/Admin #}
+    {% if semana_selecionada and current_user.is_sens %}
     <div class="modal fade" id="priorityModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
@@ -324,7 +321,6 @@
                         <label class="form-label fw-bold mb-2">Disciplinas Permitidas (Nomes Únicos):</label>
                         <div class="border rounded p-2 bg-white" style="max-height: 250px; overflow-y: auto;">
                             {% if all_materias_names %}
-                                {# Loop seguro sobre a lista de strings (nomes das matérias) #}
                                 {% for materia_nome in all_materias_names %}
                                 <div class="form-check border-bottom py-2 position-relative">
                                     <input class="form-check-input priority-disc-check" type="checkbox" 

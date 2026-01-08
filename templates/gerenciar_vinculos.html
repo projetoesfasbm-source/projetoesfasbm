@@ -12,8 +12,8 @@
     <div class="table-header">
         <h3>Vínculos Existentes</h3>
         
-        {# --- CORREÇÃO: Adicionado 'admin_sens' na lista --- #}
-        {% if current_user.role in ['programador', 'admin_escola', 'super_admin', 'sens', 'admin_sens'] %}
+        {# CORREÇÃO: Usa a propriedade inteligente is_sens (inclui Admin Escola e Programador) #}
+        {% if current_user.is_sens %}
         <a href="{{ url_for('vinculo.adicionar_vinculo') }}" class="btn btn-primary">
             <span>+</span> Inserir Novo Vínculo
         </a>
@@ -68,8 +68,8 @@
                         <td data-label="Ações" class="text-right">
                             <div class="btn-group">
                                 
-                                {# --- CORREÇÃO: Adicionado 'admin_sens' na lista --- #}
-                                {% if current_user.role in ['programador', 'admin_escola', 'super_admin', 'sens', 'admin_sens'] %}
+                                {# CORREÇÃO: Usa is_sens para verificar permissão #}
+                                {% if current_user.is_sens %}
                                     <a href="{{ url_for('vinculo.editar_vinculo', vinculo_id=vinculo.id) }}" class="btn btn-sm btn-warning">Editar</a>
                                     <form method="POST" action="{{ url_for('vinculo.excluir_vinculo', vinculo_id=vinculo.id) }}" onsubmit="return confirm('Tem certeza que deseja deletar este vínculo?');" style="display: inline;">
                                         {{ delete_form.hidden_tag() }}
