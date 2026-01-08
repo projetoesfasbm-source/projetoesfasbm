@@ -175,3 +175,36 @@ class SemanaService:
         except Exception as e:
             db.session.rollback()
             return False, f"Erro ao deletar: {str(e)}"
+
+    # --- NOVO MÉTODO: DELETAR CICLO COM CASCATA ---
+    @staticmethod
+    def deletar_ciclo(ciclo_id):
+        """
+        Deleta um ciclo e TODAS as suas dependências (Semanas, Aulas).
+        """
+        ciclo = db.session.get(Ciclo, ciclo_id)
+        if not ciclo:
+            return False, "Ciclo não encontrado."
+
+        active_school_id = UserService.get_current_school_id()
+        if active_school_id and ciclo.school_id != active_school_id:
+             return False, "Permissão negada para excluir este ciclo."
+
+        try:
+            # Busca todas as semanas do ciclo
+            semanas = db.session.scalars(select(Semana).where(Semana.ciclo_id == ciclo.id)).all()
+            
+            for semana in semanas:
+                # Deleta aulas associadas à semana
+                db.session.query(Horario).filter(Horario.semana_id == semana.id).delete()
+                # Deleta a semana
+                db.session.delete(semana)
+            
+            # Por fim, deleta o ciclo
+            db.session.delete(ciclo)
+            db.session.commit()
+            return True, "Ciclo e todos os dados associados foram excluídos com sucesso."
+            
+        except Exception as e:
+            db.session.rollback()
+            return False, f"Erro ao excluir ciclo: {str(e)}"

@@ -17,10 +17,18 @@
             {% for ciclo in todos_os_ciclos %}
                 <div class="ciclo-item {% if ciclo.id == ciclo_selecionado_id %}active{% endif %}">
                     <a href="{{ url_for('semana.gerenciar_semanas', ciclo_id=ciclo.id) }}" class="ciclo-name">{{ ciclo.nome }}</a>
-                    <form method="POST" action="{{ url_for('semana.deletar_ciclo', ciclo_id=ciclo.id) }}" onsubmit="return confirm('Tem certeza que deseja deletar o ciclo \'{{ ciclo.nome }}\'? Esta ação não pode ser desfeita.');" style="display: inline;">
+                    
+                    {# --- ALTERAÇÃO AQUI: Botão Excluir Visível e Alerta de Cascata --- #}
+                    <form method="POST" action="{{ url_for('semana.deletar_ciclo', ciclo_id=ciclo.id) }}" 
+                          onsubmit="return confirm('ATENÇÃO: Ao excluir o ciclo \'{{ ciclo.nome }}\', TODAS as semanas e aulas vinculadas a ele serão APAGADAS PERMANENTEMENTE.\n\nDeseja realmente continuar?');" 
+                          style="display: inline;">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="btn btn-sm btn-danger"><i class="fas fa-trash"></i></button>
+                        <button type="submit" class="btn btn-sm btn-danger fw-bold" style="min-width: 80px;">
+                            <i class="fas fa-trash me-1"></i> Excluir
+                        </button>
                     </form>
+                    {# ------------------------------------------------------------- #}
+                    
                 </div>
             {% else %}
                 <p class="text-muted p-3">Nenhum ciclo criado.</p>

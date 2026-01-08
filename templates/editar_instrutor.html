@@ -57,14 +57,13 @@
                 {{ form.telefone(class="form-control") }}
             </div>
 
+            {# CORREÇÃO: Alterado para Select Box (Lista Suspensa) para evitar erros de valor #}
             <div class="form-group">
                 {{ form.is_rr.label(class="form-label") }}
-                <div class="btn-group" role="group">
-                    {% for subfield in form.is_rr %}
-                        <input type="radio" class="btn-check" name="{{ subfield.name }}" id="{{ subfield.id }}" value="{{ subfield.data }}" {% if subfield.checked %}checked{% endif %}>
-                        <label class="btn btn-outline-primary" for="{{ subfield.id }}">{{ subfield.label.text }}</label>
-                    {% endfor %}
-                </div>
+                {{ form.is_rr(class="form-select") }}
+                <small class="form-text text-muted">
+                    Se marcado como <strong>Sim</strong>, este instrutor NÃO aparecerá na exportação de pagamento mensal padrão (será movido para a lista de RR).
+                </small>
             </div>
 
             <div class="form-actions">
@@ -114,7 +113,8 @@ document.addEventListener('DOMContentLoaded', function () {
     categoriaSelect.addEventListener('change', updatePostoOptions);
     postoSelect.addEventListener('change', toggleOutroField);
 
-    updatePostoOptions();
+    // Inicializa o estado dos campos
+    toggleOutroField();
 });
 </script>
 {% endblock %}

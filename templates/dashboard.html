@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard - SisGEn{% endblock %}
+{% block title %}Dashboard - Sistema EsFAS{% endblock %}
 
 {% block content %}
 <div class="container-fluid dashboard-container">
@@ -26,10 +26,9 @@
             </div>
         </div>
 
-        {# Estatísticas Principais e NOTIFICAÇÕES NO TOPO #}
+        {# Estatísticas Principais #}
         {% if dashboard_data %}
         <div class="quick-stats-bar">
-            {% if current_user.is_staff or current_user.role == 'super_admin' %}
             <div class="stat-compact">
                 <span class="stat-icon">👥</span>
                 <div class="stat-info">
@@ -44,9 +43,6 @@
                     <span class="stat-label">Instrutores</span>
                 </div>
             </div>
-            {% endif %}
-            
-            {% if current_user.is_sens or current_user.role == 'super_admin' %}
             <div class="stat-compact">
                 <span class="stat-icon">📚</span>
                 <div class="stat-info">
@@ -54,26 +50,13 @@
                     <span class="stat-label">Disciplinas</span>
                 </div>
             </div>
-            {% endif %}
-
-            {# --- NOTIFICAÇÃO DISCRETA NO TOPO: AULAS PENDENTES (SENS) --- #}
-            {% if current_user.is_sens and dashboard_data.lista_aulas_pendentes %}
-            <a href="{{ url_for('horario.aprovar_horarios') }}" class="stat-compact stat-warning" title="Clique para aprovar">
+            
+            {% if school_in_context and current_user.role in ['super_admin', 'programador', 'admin_escola'] and dashboard_data.aulas_pendentes > 0 %}
+            <a href="{{ url_for('horario.aprovar_horarios') }}" class="stat-compact stat-warning">
                 <span class="stat-icon">⚠️</span>
                 <div class="stat-info">
-                    <span class="stat-number">{{ dashboard_data.lista_aulas_pendentes|length }}</span>
+                    <span class="stat-number">{{ dashboard_data.aulas_pendentes }}</span>
                     <span class="stat-label">Aulas Pendentes</span>
-                </div>
-            </a>
-            {% endif %}
-
-            {# --- NOTIFICAÇÃO DISCRETA NO TOPO: JUSTIÇA PENDENTE (CAL) --- #}
-            {% if current_user.is_cal and dashboard_data.lista_processos_pendentes %}
-            <a href="{{ url_for('justica.index') }}" class="stat-compact stat-danger" title="Clique para ver processos">
-                <span class="stat-icon">⚖️</span>
-                <div class="stat-info">
-                    <span class="stat-number">{{ dashboard_data.lista_processos_pendentes|length }}</span>
-                    <span class="stat-label">Proc. Abertos</span>
                 </div>
             </a>
             {% endif %}
@@ -81,16 +64,14 @@
         {% endif %}
     </div>
 
+    {# Grade principal de Módulos e Informações #}
     <div class="dashboard-grid">
         <div class="modules-grid-main">
-            {# Conteúdo principal opcional #}
+            {# ... Cards de Módulos (Alunos, Instrutores, etc.) ... #}
         </div>
 
+        {# Painel Lateral de Informações #}
         <div class="dashboard-sidebar">
-            
-            {# --- BARRA LATERAL LIMPA (REMOVIDAS AS CAIXAS DE APROVAÇÃO) --- #}
-
-            {# --- BOX: PRÓXIMAS AULAS (Padrão do Sistema) --- #}
             <div class="info-panel">
                 <div class="panel-header">
                     <h4>Próximas Aulas Agendadas</h4>
@@ -103,19 +84,19 @@
                                 <div class="info-icon class-date">{{ aula.semana.data_inicio.strftime('%d/%m') }}</div>
                                 <div class="info-details">
                                     <strong>{{ aula.disciplina.materia }}</strong>
-                                    <span>{{ aula.pelotao }} - {{ aula.instrutor.user.nome_de_guerra if aula.instrutor else 'N/D' }}</span>
+                                    <span>{{ aula.pelotao }} - {{ aula.instrutor.user.nome_de_guerra }}</span>
                                 </div>
                             </li>
                         {% endfor %}
                         </ul>
                     {% else %}
-                        <p class="text-muted text-center mb-0">Nenhuma aula agendada.</p>
+                        <p class="text-muted text-center">Nenhuma aula agendada.</p>
                     {% endif %}
                 </div>
             </div>
 
-            {# --- BOX: ATIVIDADE RECENTE (Apenas Admin Geral/Programador) --- #}
-            {% if current_user.is_admin_escola or current_user.is_programador %}
+            {# --- CORREÇÃO APLICADA AQUI --- #}
+            {% if current_user.role in ['super_admin', 'programador', 'admin_escola'] %}
             <div class="info-panel">
                 <div class="panel-header">
                     <h4>Atividade Recente</h4>
@@ -136,32 +117,25 @@
                         {% endfor %}
                         </ul>
                     {% else %}
-                        <p class="text-muted text-center mb-0">Nenhuma atividade recente.</p>
+                        <p class="text-muted text-center">Nenhuma atividade recente.</p>
                     {% endif %}
                 </div>
             </div>
             {% endif %}
-            
+            {# --- FIM DA CORREÇÃO --- #}
         </div>
     </div>
 </div>
 
+{# Estilos para os novos componentes do Dashboard #}
 <style>
-    /* Estilo Amarelo (Aulas - Topo) */
     .stat-compact.stat-warning { background-color: #fffbeb; border: 1px solid #fde68a; text-decoration: none; color: inherit; transition: all 0.2s ease; }
     .stat-compact.stat-warning:hover { background-color: #fefce8; transform: translateY(-2px); box-shadow: var(--shadow-medium); }
     .stat-warning .stat-icon { color: #f59e0b; }
-
-    /* Estilo Vermelho (Justiça - Topo) */
-    .stat-compact.stat-danger { background-color: #fef2f2; border: 1px solid #fecaca; text-decoration: none; color: inherit; transition: all 0.2s ease; }
-    .stat-compact.stat-danger:hover { background-color: #fff5f5; transform: translateY(-2px); box-shadow: var(--shadow-medium); }
-    .stat-danger .stat-icon { color: #dc3545; }
-
-    .dashboard-grid { display: grid; grid-template-columns: 1fr 350px; gap: 1.5rem; margin-top: 1.5rem; }
-    @media (max-width: 992px) { .dashboard-grid { grid-template-columns: 1fr; } }
-    .modules-grid-main { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; align-content: start; }
+    .dashboard-grid { display: grid; grid-template-columns: 1fr; gap: 1.5rem; margin-top: 1.5rem; }
+    .modules-grid-main { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; }
     .dashboard-sidebar { display: flex; flex-direction: column; gap: 1.5rem; }
-    .info-panel { background: var(--color-white); border-radius: var(--border-radius); border: 1px solid var(--color-border); box-shadow: var(--shadow-soft); overflow: hidden; }
+    .info-panel { background: var(--color-white); border-radius: var(--border-radius); border: 1px solid var(--color-border); box-shadow: var(--shadow-soft); }
     .panel-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--color-border); }
     .panel-header h4 { margin: 0; font-size: 1.1rem; font-weight: 700; }
     .panel-body { padding: 1.5rem; }

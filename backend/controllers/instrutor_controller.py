@@ -2,7 +2,7 @@
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required, current_user
-from wtforms import StringField, SelectField, BooleanField, PasswordField, SubmitField, RadioField
+from wtforms import StringField, SelectField, BooleanField, PasswordField, SubmitField
 from wtforms.validators import DataRequired, Optional, Email, EqualTo
 from flask_wtf import FlaskForm
 import json
@@ -10,6 +10,7 @@ import json
 from ..services.instrutor_service import InstrutorService
 from ..services.user_service import UserService
 from ..models.user import User
+from ..models.database import db  # Importante para o commit manual
 from utils.decorators import (
     admin_or_programmer_required,
     school_admin_or_programmer_required,
@@ -39,7 +40,8 @@ class InstrutorForm(FlaskForm):
     posto_graduacao_outro = StringField("Outro (especifique)", validators=[Optional()])
 
     telefone = StringField("Telefone", validators=[Optional()])
-    is_rr = RadioField("Efetivo da Reserva Remunerada (RR)", choices=[(True, 'Sim'), (False, 'Não')], coerce=lambda x: x == 'True', default=False)
+    # Alterado para SelectField para maior estabilidade
+    is_rr = SelectField("Efetivo da Reserva Remunerada (RR)", choices=[('0', 'Não'), ('1', 'Sim')], default='0')
     submit = SubmitField("Salvar")
 
 
@@ -53,8 +55,9 @@ class EditInstrutorForm(FlaskForm):
     posto_graduacao = SelectField("Posto/Graduação", validators=[DataRequired()])
     posto_graduacao_outro = StringField("Outro (especifique)", validators=[Optional()])
 
-    telefone = StringField("Telefone", validators=[Optional()] )
-    is_rr = RadioField("Efetivo da Reserva Remunerada (RR)", choices=[(True, 'Sim'), (False, 'Não')], coerce=lambda x: x == 'True')
+    telefone = StringField("Telefone", validators=[Optional()])
+    # CORREÇÃO: SelectField com valores string '0' e '1'
+    is_rr = SelectField("Efetivo da Reserva Remunerada (RR)", choices=[('0', 'Não'), ('1', 'Sim')], default='0')
     submit = SubmitField("Salvar Alterações")
 
 
@@ -97,7 +100,11 @@ def cadastrar_instrutor():
             flash("Não foi possível identificar a escola para associar o instrutor.", "danger")
             return redirect(url_for("instrutor.listar_instrutores"))
 
-        success, message = InstrutorService.create_full_instrutor(form.data, school_id)
+        # Ajuste manual para garantir envio correto do boleano no create
+        form_data = form.data.copy()
+        form_data['is_rr'] = True if form.is_rr.data == '1' else False
+
+        success, message = InstrutorService.create_full_instrutor(form_data, school_id)
         if success:
             flash(message, "success")
             return redirect(url_for("instrutor.listar_instrutores"))
@@ -119,12 +126,16 @@ def editar_instrutor(instrutor_id):
     form = EditInstrutorForm(obj=instrutor)
     
     if request.method == 'GET':
+        # Preenche os dados do Usuário
         form.nome_completo.data = instrutor.user.nome_completo
         form.nome_de_guerra.data = instrutor.user.nome_de_guerra
         form.matricula.data = instrutor.user.matricula
         form.email.data = instrutor.user.email
-        form.is_rr.data = instrutor.is_rr
+        
+        # CORREÇÃO: Preenche o RR corretamente convertendo booleano para string
+        form.is_rr.data = '1' if instrutor.is_rr else '0'
 
+        # Lógica de Posto/Graduação
         posto_atual = instrutor.user.posto_graduacao
         categoria_encontrada = None
         for categoria, postos in posto_graduacao_structured.items():
@@ -148,12 +159,31 @@ def editar_instrutor(instrutor_id):
               form.posto_graduacao.choices = [(p, p) for p in posto_graduacao_structured[categoria_selecionada]]
 
     if form.validate_on_submit():
-        success, message = InstrutorService.update_instrutor(instrutor_id, form.data)
-        if success:
-            flash(message, "success")
+        try:
+            # --- ATUALIZAÇÃO MANUAL E SEGURA ---
+            # 1. Atualiza dados do Usuário
+            instrutor.user.nome_completo = form.nome_completo.data
+            instrutor.user.nome_de_guerra = form.nome_de_guerra.data
+            instrutor.user.email = form.email.data
+            
+            if form.posto_graduacao.data == 'Outro':
+                instrutor.user.posto_graduacao = form.posto_graduacao_outro.data
+            else:
+                instrutor.user.posto_graduacao = form.posto_graduacao.data
+
+            # 2. Atualiza dados do Instrutor
+            instrutor.telefone = form.telefone.data
+            
+            # CORREÇÃO CRÍTICA: Converte '1'/'0' para True/False explicitamente
+            instrutor.is_rr = (form.is_rr.data == '1')
+
+            db.session.commit()
+            flash("Instrutor atualizado com sucesso.", "success")
             return redirect(url_for("instrutor.listar_instrutores"))
-        else:
-            flash(message, "danger")
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f"Erro ao atualizar: {str(e)}", "danger")
 
     return render_template("editar_instrutor.html", form=form, instrutor=instrutor, postos_data=posto_graduacao_structured)
 
