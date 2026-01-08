@@ -54,7 +54,8 @@ def _get_horario_context_data():
 @login_required
 def index():
     # 1. Identificar Turma e Escola
-    if current_user.role == 'aluno':
+    # Se for aluno E NÃO tiver cargo administrativo (como SENS/Admin), cai aqui
+    if current_user.role == 'aluno' and not current_user.is_staff:
         if not current_user.aluno_profile or not current_user.aluno_profile.turma:
             flash("Você não está matriculado em nenhuma turma.", 'warning')
             return redirect(url_for('main.dashboard'))
@@ -71,10 +72,10 @@ def index():
         # Busca inicial de todas as turmas da escola
         todas_as_turmas = TurmaService.get_turmas_by_school(school_id)
         
-        # --- LÓGICA DE FILTRO PARA INSTRUTOR (ALTERAÇÃO SOLICITADA) ---
-        # Se for instrutor, filtra 'todas_as_turmas' para mostrar APENAS as vinculadas.
-        # Isso evita que o instrutor caia em uma turma bloqueada por padrão.
-        if current_user.role == 'instrutor' and current_user.instrutor_profile:
+        # --- LÓGICA DE FILTRO PARA INSTRUTOR ---
+        # Filtra APENAS se for instrutor E NÃO for SENS/Admin.
+        # Se for SENS (current_user.is_sens), pula este bloco e mostra tudo.
+        if current_user.role == 'instrutor' and current_user.instrutor_profile and not current_user.is_sens:
             try:
                 instrutor_id = current_user.instrutor_profile.id
                 # Busca nomes dos pelotões onde o instrutor está vinculado
@@ -87,18 +88,16 @@ def index():
                 
                 # Se tiver vínculos, substitui a lista completa pela lista filtrada
                 if pelotao_names:
-                    # Filtra mantendo os objetos Turma completos
                     turmas_vinculadas = [t for t in todas_as_turmas if t.nome in pelotao_names]
                     if turmas_vinculadas:
                         todas_as_turmas = turmas_vinculadas
             except Exception:
-                # Se der erro no filtro, mantém a lista completa como fallback
                 pass
         # -------------------------------------------------------------
 
         turma_selecionada_nome = request.args.get('pelotao', session.get('ultima_turma_visualizada'))
         
-        # Lógica de seleção automática (agora operando sobre a lista possivelmente filtrada)
+        # Lógica de seleção automática
         if not turma_selecionada_nome and todas_as_turmas:
             turma_selecionada_nome = todas_as_turmas[0].nome
         elif turma_selecionada_nome and turma_selecionada_nome not in [t.nome for t in todas_as_turmas]:
@@ -164,13 +163,13 @@ def index():
         except:
             priority_allowed_names = []
 
-        if current_user.role in ['programador', 'admin_escola', 'super_admin']:
+        # CORREÇÃO: Usa is_sens (que inclui Admin e Programador)
+        if current_user.is_sens or current_user.is_admin_escola or current_user.is_programador:
             can_schedule_in_this_turma = True
             
         elif current_user.role == 'instrutor' and current_user.instrutor_profile:
             instrutor_id = current_user.instrutor_profile.id
             
-            # Reutiliza a lógica para preencher a variável 'instrutor_turmas_vinculadas' usada no modal
             pelotao_names = db.session.scalars(select(DisciplinaTurma.pelotao).where(or_(DisciplinaTurma.instrutor_id_1 == instrutor_id, DisciplinaTurma.instrutor_id_2 == instrutor_id)).distinct()).all()
             if pelotao_names:
                 instrutor_turmas_vinculadas = db.session.scalars(select(Turma).where(Turma.nome.in_(pelotao_names)).order_by(Turma.nome)).all()
@@ -209,6 +208,7 @@ def index():
                            priority_allowed_names=priority_allowed_names,
                            all_materias_names=all_materias_names)
 
+# ... (restante das rotas permanece igual) ...
 @horario_bp.route('/save-priority-config', methods=['POST'])
 @login_required
 @admin_or_programmer_required

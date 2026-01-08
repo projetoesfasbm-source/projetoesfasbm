@@ -40,7 +40,7 @@
         
         <div class="controls-group d-flex gap-2 flex-wrap justify-content-end align-items-center">
             
-            {# 1. BOTÃO DE GERENCIAR SEMANAS - CORRIGIDO PARA is_sens #}
+            {# 1. BOTÃO DE GERENCIAR SEMANAS #}
             {% if current_user.is_sens %}
                 <a href="{{ url_for('semana.gerenciar_semanas') }}" class="btn btn-dark shadow-sm fw-bold">
                     <i class="fas fa-calendar-plus me-1"></i> Gerenciar Semanas / Ciclos
@@ -50,7 +50,7 @@
             {# 2. BOTÕES QUE DEPENDEM DE UMA SEMANA JÁ EXISTIR #}
             {% if semana_selecionada %}
                 
-                {# BOTÕES ADMINISTRATIVOS - CORRIGIDO PARA is_sens #}
+                {# BOTÕES ADMINISTRATIVOS #}
                 {% if current_user.is_sens %}
                     <button type="button" class="btn {% if priority_active %}btn-danger text-white{% else %}btn-warning{% endif %} fw-bold shadow-sm" 
                             data-bs-toggle="modal" data-bs-target="#priorityModal">
@@ -127,7 +127,6 @@
             <div class="empty-icon">📅</div>
             <h3>Nenhum horário para exibir</h3>
             
-            {# CORREÇÃO: is_sens #}
             {% if current_user.is_sens and not todas_as_semanas %}
                 <p class="text-danger">Não há semanas cadastradas neste ciclo.</p>
                 <a href="{{ url_for('semana.gerenciar_semanas') }}" class="btn btn-primary mt-3 btn-lg">
@@ -253,7 +252,8 @@
                 </small>
             </div>
 
-            {% if current_user.role == 'instrutor' %}
+            {# CORREÇÃO CRÍTICA: Prioriza is_sens sobre o cargo global #}
+            {% if current_user.role == 'instrutor' and not current_user.is_sens %}
                 <h3 id="modal-title">Selecionar Turma</h3>
                 <div class="turma-selection-buttons">
                     {% for turma in instrutor_turmas_vinculadas %}
@@ -274,7 +274,8 @@
 
             <div class="form-actions" style="justify-content: flex-end; margin-top: 2rem;">
                 <button type="button" class="btn btn-secondary" onclick="closeConfirmationModal()">Cancelar</button>
-                {% if current_user.role != 'instrutor' %}
+                {# Mostra o botão para SENS, Admin ou quem não é instrutor comum #}
+                {% if current_user.is_sens or current_user.role != 'instrutor' %}
                     <a href="{{ url_for('horario.editar_horario_grid', pelotao=pelotao_selecionado, semana_id=semana_selecionada.id, ciclo_id=ciclo_selecionado) }}" 
                        class="btn btn-primary dynamic-week-link">
                         Confirmar e Continuar
@@ -285,7 +286,6 @@
     </div>
     {% endif %}
 
-    {# CORREÇÃO: Modal de prioridade só para SENS/Admin #}
     {% if semana_selecionada and current_user.is_sens %}
     <div class="modal fade" id="priorityModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog">

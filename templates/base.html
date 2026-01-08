@@ -138,7 +138,7 @@
                         {% if session.get('view_as_school_name') %}
                             {{ session.get('view_as_school_name') }}
                         {% elif current_user.role == 'super_admin' %}
-                            Sistema de Gerenciamento de Ensino - Departamento de Ensino e Cultura
+                            Sistema de Gerenciamento de Ensino - Departamento de Educação e Cultura
                         {% else %}
                             {% set session_active_id = session.get('active_school_id') %}
                             {% set visual_school_name = namespace(value=None) %}
@@ -223,14 +223,14 @@
                     </div>
                 </a>
             </div>
-            
+
             <nav class="sidebar-nav">
                 {% set active_sid = session.get('active_school_id')|int if session.get('active_school_id') else None %}
 
                 <a href="{{ url_for('main.dashboard') }}" class="nav-link {% if request.endpoint == 'main.dashboard' %}active{% endif %}"><div class="nav-icon">🏠</div> Início</a>
                 <div class="nav-separator">GERAL</div>
                 <a href="{{ url_for('main.safebrowser') }}" class="nav-link {% if request.endpoint == 'main.safebrowser' %}active{% endif %}"><div class="nav-icon">🛡️</div> SafeBrowser</a>
-                
+
                 {# VERIFICAÇÃO DE STAFF OU INSTRUTOR/ALUNO NA ESCOLA ATUAL #}
                 {% if current_user.is_staff_in_school(active_sid) or current_user.is_instrutor_in_school(active_sid) or current_user.role in ['super_admin', 'aluno'] %}
                     <a href="{{ url_for('aluno.listar_alunos') }}" class="nav-link {% if request.endpoint and 'aluno.' in request.endpoint and 'historico' not in request.endpoint %}active{% endif %}"><div class="nav-icon">👥</div> Alunos</a>
