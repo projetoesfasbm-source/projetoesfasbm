@@ -4,18 +4,14 @@ from flask import Blueprint, render_template, request, flash, redirect, url_for,
 from flask_login import login_required, current_user
 from sqlalchemy import select, or_
 import locale
-from datetime import datetime # Importado para FADA
+from datetime import datetime 
 
-# ### INÍCIO DA ALTERAÇÃO (FADA) ###
 from weasyprint import HTML
 from io import BytesIO
 try:
-    # 'zoneinfo' é padrão do Python 3.9+
     from zoneinfo import ZoneInfo
 except ImportError:
-    # Fallback para versões mais antigas
     from backports.zoneinfo import ZoneInfo
-# ### FIM DA ALTERAÇÃO ###
 
 from ..models.database import db
 from ..models.aluno import Aluno
@@ -24,13 +20,13 @@ from ..models.turma import Turma
 from ..models.discipline_rule import DisciplineRule
 from ..models.school import School
 from ..models.user_school import UserSchool
-from ..models.fada_avaliacao import FadaAvaliacao # Importa o novo modelo
+from ..models.fada_avaliacao import FadaAvaliacao
 from ..services.justica_service import JusticaService
-from utils.decorators import admin_or_programmer_required
+# CORREÇÃO: Importa o decorador específico de CAL
+from utils.decorators import cal_required, admin_or_programmer_required
 
 justica_bp = Blueprint('justica', __name__, url_prefix='/justica-e-disciplina')
 
-# --- INÍCIO DA FUNÇÃO CORRIGIDA ---
 @justica_bp.route('/')
 @login_required
 def index():
@@ -42,17 +38,14 @@ def index():
 
     active_school = g.get('active_school')
     fatos_predefinidos = []
-    permite_pontuacao = False  # Por padrão, não permite pontuação
+    permite_pontuacao = False
 
     if active_school:
         npccal_type_da_escola = active_school.npccal_type
 
-        # 1. A pontuação SÓ se aplica a 'cspm' e 'cbfpm'.
         if npccal_type_da_escola in ['cspm', 'cbfpm']:
             permite_pontuacao = True
 
-        # 2. CORREÇÃO: Busca as regras exatas para o tipo da escola (seja 'ctsp', 'cspm' ou 'cbfpm')
-        #    Removemos a lógica que forçava 'cspm'
         fatos_predefinidos = db.session.scalars(
             select(DisciplineRule)
             .where(DisciplineRule.npccal_type == npccal_type_da_escola)
@@ -63,14 +56,13 @@ def index():
         'justica/index.html',
         em_andamento=processos_em_andamento,
         finalizados=processos_finalizados,
-        fatos_predefinidos=fatos_predefinidos, # Esta lista agora será populada corretamente
+        fatos_predefinidos=fatos_predefinidos,
         permite_pontuacao=permite_pontuacao
     )
-# --- FIM DA FUNÇÃO CORRIGIDA ---
 
 @justica_bp.route('/analise')
 @login_required
-@admin_or_programmer_required
+@cal_required # USO DO DECORADOR CORRETO: Permite CAL
 def analise():
 
     active_school = g.get('active_school')
@@ -91,7 +83,7 @@ def analise():
 
 @justica_bp.route('/finalizar/<int:processo_id>', methods=['POST'])
 @login_required
-@admin_or_programmer_required
+@cal_required # USO DO DECORADOR CORRETO: Permite CAL
 def finalizar_processo(processo_id):
     decisao = request.form.get('decisao_final')
     fundamentacao = request.form.get('fundamentacao')
@@ -102,10 +94,8 @@ def finalizar_processo(processo_id):
         flash('É necessário selecionar uma decisão e preencher a fundamentação.', 'danger')
         return redirect(url_for('justica.index'))
 
-    # Define o que será salvo no campo detalhes_sancao
     detalhes_final = detalhes_sancao
 
-    # Se for Sustação da Dispensa, usa o valor do seletor de turnos
     if decisao == 'Sustação da Dispensa' and turnos_sustacao:
         detalhes_final = f"Sustação da Dispensa de {turnos_sustacao}"
 
@@ -115,7 +105,7 @@ def finalizar_processo(processo_id):
 
 @justica_bp.route('/novo', methods=['POST'])
 @login_required
-@admin_or_programmer_required
+@cal_required # USO DO DECORADOR CORRETO: Permite CAL
 def novo_processo():
 
     aluno_id = request.form.get('aluno_id')
@@ -167,7 +157,7 @@ def enviar_defesa(processo_id):
 
 @justica_bp.route('/deletar/<int:processo_id>', methods=['POST'])
 @login_required
-@admin_or_programmer_required
+@cal_required # USO DO DECORADOR CORRETO: Permite CAL
 def deletar_processo(processo_id):
     success, message = JusticaService.deletar_processo(processo_id)
     flash(message, 'success' if success else 'danger')
@@ -175,13 +165,16 @@ def deletar_processo(processo_id):
 
 @justica_bp.route('/api/alunos')
 @login_required
-@admin_or_programmer_required
+@cal_required # USO DO DECORADOR CORRETO: Permite CAL
 def api_get_alunos():
     search = request.args.get('q', '').lower()
 
     school_id_to_load = None
     if current_user.role in ['super_admin', 'programador']:
         school_id_to_load = session.get('view_as_school_id')
+    # Tenta pegar do contexto ativo (fix para CAL)
+    elif hasattr(current_user, 'temp_active_school_id'):
+        school_id_to_load = current_user.temp_active_school_id
     elif hasattr(current_user, 'user_schools') and current_user.user_schools:
         school_id_to_load = current_user.user_schools[0].school_id
 
@@ -210,7 +203,7 @@ def api_get_alunos():
 
 @justica_bp.route('/api/aluno-details/<int:aluno_id>')
 @login_required
-@admin_or_programmer_required
+@cal_required # USO DO DECORADOR CORRETO: Permite CAL
 def api_get_aluno_details(aluno_id):
     aluno = db.session.get(Aluno, aluno_id)
     if not aluno or not aluno.user:
@@ -225,7 +218,7 @@ def api_get_aluno_details(aluno_id):
 
 @justica_bp.route('/exportar', methods=['GET', 'POST'])
 @login_required
-@admin_or_programmer_required
+@cal_required # USO DO DECORADOR CORRETO: Permite CAL
 def exportar_selecao():
 
     active_school = g.get('active_school')
@@ -264,7 +257,7 @@ def exportar_selecao():
 
 @justica_bp.route('/fada')
 @login_required
-@admin_or_programmer_required
+@cal_required # USO DO DECORADOR CORRETO: Permite CAL
 def fada_lista_alunos():
     """Mostra a lista de alunos da escola para avaliação FADA."""
     active_school = g.get('active_school')
@@ -281,7 +274,7 @@ def fada_lista_alunos():
 
 @justica_bp.route('/fada/avaliar/<int:aluno_id>', methods=['GET', 'POST'])
 @login_required
-@admin_or_programmer_required
+@cal_required # USO DO DECORADOR CORRETO: Permite CAL
 def fada_avaliar_aluno(aluno_id):
     """Exibe o formulário FADA para um aluno específico (GET) ou salva (POST)."""
 
@@ -324,7 +317,7 @@ def fada_avaliar_aluno(aluno_id):
 
 @justica_bp.route('/fada/pdf/<int:avaliacao_id>')
 @login_required
-@admin_or_programmer_required
+@cal_required # USO DO DECORADOR CORRETO: Permite CAL
 def fada_gerar_pdf(avaliacao_id):
     """Gera o PDF de uma avaliação FADA preenchida."""
 
@@ -371,5 +364,3 @@ def fada_gerar_pdf(avaliacao_id):
         mimetype="application/pdf",
         headers={"Content-disposition": f"attachment; filename=fada_aluno_{avaliacao.aluno_id}.pdf"}
     )
-
-# ### FIM DAS NOVAS ROTAS FADA ###

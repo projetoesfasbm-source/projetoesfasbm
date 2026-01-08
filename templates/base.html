@@ -263,6 +263,7 @@
                 {# ALUNO COMUM #}
                 {% elif current_user.role == 'aluno' %}
                      <div class="nav-separator">JUSTIÇA E DISCIPLINA</div>
+                     <a href="{{ url_for('justica.index') }}" class="nav-link {% if request.endpoint and 'justica.' in request.endpoint %}active{% endif %}"><div class="nav-icon">⚖️</div> Justiça e Disciplina</a>
                      <a href="{{ url_for('questionario.index') }}" class="nav-link {% if request.endpoint and 'questionario.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📝</div> Questionários</a>
                 {% endif %}
 

@@ -1,12 +1,7 @@
 # backend/services/justica_service.py
 
-# ### INÍCIO DA ALTERAÇÃO ###
-# Importar 'render_template' não é mais necessário aqui, mas url_for é.
-# Importar 'EmailService' para enviá-lo
-from flask import g, url_for, session, render_template # render_template é usado no FADA
+from flask import g, url_for, session, render_template
 from ..services.email_service import EmailService
-# ### FIM DA ALTERAÇÃO ###
-
 from sqlalchemy import select, func, and_
 from datetime import datetime, timezone
 from ..models.database import db
@@ -24,14 +19,27 @@ class JusticaService:
     
     @staticmethod
     def get_processos_para_usuario(user):
-        """Busca processos relevantes para o usuário (admin vê todos, aluno vê só os seus)."""
-        if user.role in ['admin_escola', 'super_admin', 'programador']:
+        """
+        Busca processos relevantes.
+        CORREÇÃO: Agora verifica user.is_cal (contexto da escola) em vez de apenas role global.
+        Isso permite que o Chefe CAL veja todos os processos da escola.
+        """
+        # Verifica se é CAL, Admin Escola, Programador ou Super Admin
+        if user.is_cal or user.is_admin_escola or user.is_programador or getattr(user, 'role', '') == 'super_admin':
             
             school_id_to_load = None
+            # 1. Tenta pegar da sessão (Programador/Super Admin)
             if user.role in ['super_admin', 'programador']:
                 school_id_to_load = session.get('view_as_school_id')
-            elif hasattr(user, 'user_schools') and user.user_schools:
-                school_id_to_load = user.user_schools[0].school_id
+            
+            # 2. Tenta pegar do contexto injetado (CAL/Admin Escola)
+            if not school_id_to_load:
+                # Tenta pegar do atributo temporário injetado no app.py
+                if hasattr(user, 'temp_active_school_id'):
+                    school_id_to_load = user.temp_active_school_id
+                # Fallback para session direta
+                elif session.get('active_school_id'):
+                    school_id_to_load = int(session.get('active_school_id'))
 
             if not school_id_to_load:
                 return [] 
@@ -46,12 +54,13 @@ class JusticaService:
                     joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.user),
                     joinedload(ProcessoDisciplina.relator)
                 )
+                .distinct() # Garante que não duplique se houver joins estranhos
                 .order_by(ProcessoDisciplina.data_ocorrencia.desc())
             )
         else:
-            # Assumindo que o perfil do aluno está em user.aluno_profile
-            if not user.aluno_profile:
-                return [] # Retorna vazio se o usuário não for um aluno
+            # Visão do Aluno Comum (vê apenas os seus)
+            if not getattr(user, 'aluno_profile', None):
+                return [] 
             
             query = (
                 select(ProcessoDisciplina)
@@ -71,10 +80,9 @@ class JusticaService:
         if not aluno:
             return False, "Aluno não encontrado."
         
-        # ### CORREÇÃO: Busca o 'aluno.user' para passar aos serviços
         aluno_user = aluno.user
         if not aluno_user or not aluno_user.email:
-             return False, "Este aluno não possui um usuário ou e-mail associado. Não é possível notificá-lo."
+             return False, "Este aluno não possui um usuário ou e-mail associado."
 
         try:
             novo_processo = ProcessoDisciplina(
@@ -86,49 +94,31 @@ class JusticaService:
                 status='Aguardando Ciência' 
             )
             db.session.add(novo_processo)
-            
-            # ######################################################
-            # ### INÍCIO DA CORREÇÃO DE HOJE ###
-            # ######################################################
-            # Força o banco a popular os defaults (como ID e data_ocorrencia)
-            # ANTES de passar o objeto 'novo_processo' para o template de e-mail.
             db.session.flush()
-            # ######################################################
-            # ### FIM DA CORREÇÃO DE HOJE ###
-            # ######################################################
 
-            # ### INÍCIO DA CORREÇÃO ANTERIOR (E-MAIL) ###
-            # 1. Gerar a URL para os links
             url_notificacao = url_for('justica.index', _external=True)
 
-            # 2. Enviar o e-mail para o aluno usando o serviço correto
-            # O EmailService já tem o template e as variáveis corretas (incluindo 'user')
             EmailService.send_justice_notification_email(
                 user=aluno_user,
-                processo=novo_processo, # Agora 'novo_processo' tem a data_ocorrencia
+                processo=novo_processo,
                 url=url_notificacao
             )
-            # ### FIM DA CORREÇÃO ANTERIOR (E-MAIL) ###
 
-            # 3. Criar a notificação interna (sininho)
             NotificationService.create_notification(
                 user_id=aluno_user.id,
                 message=f"Novo Processo Disciplinar: {fato}", 
                 url=url_notificacao
             )
             
-            # 4. Salvar tudo no banco
             db.session.commit()
-            
-            return True, "Processo disciplinar registrado e aluno notificado por e-mail e notificação interna!"
+            return True, "Processo disciplinar registrado e aluno notificado!"
         
         except SQLAlchemyError as e:
             db.session.rollback()
             return False, f"Erro de banco de dados: {e}"
         except Exception as e:
             db.session.rollback()
-            # Este 'except' pega o erro 'strftime'
-            return False, f"Erro inesperado ao criar processo (verifique as configurações de e-mail): {e}"
+            return False, f"Erro inesperado: {e}"
 
     @staticmethod
     def registrar_ciente(processo_id, user):
@@ -150,7 +140,7 @@ class JusticaService:
                 url=url_for('justica.index', _external=True)
             )
             
-            return True, "Ciência registrada com sucesso. Você tem 24h para apresentar sua defesa."
+            return True, "Ciência registrada com sucesso."
         except Exception as e:
             db.session.rollback()
             return False, f"Erro ao registrar ciência: {e}"
@@ -192,7 +182,7 @@ class JusticaService:
         
         aluno_user = getattr(getattr(processo, 'aluno', None), 'user', None)
         if not aluno_user or not aluno_user.email:
-             return False, "Não foi possível encontrar o usuário ou e-mail do aluno para notificar."
+             return False, "Não foi possível encontrar o usuário ou e-mail do aluno."
 
         try:
             processo.decisao_final = decisao
@@ -201,28 +191,22 @@ class JusticaService:
             processo.data_decisao = datetime.now(timezone.utc)
             processo.status = 'Finalizado'
             
-            # ### INÍCIO DA CORREÇÃO ANTERIOR (E-MAIL) ###
-            # Envia e-mail de notificação da decisão usando o serviço correto
             EmailService.send_justice_verdict_email(
                 user=aluno_user,
                 processo=processo
             )
-            # ### FIM DA CORREÇÃO ANTERIOR (E-MAIL) ###
 
-            # Cria notificação interna
             NotificationService.create_notification(
                 user_id=aluno_user.id,
                 message=f"Seu processo nº {processo.id} foi finalizado. Decisão: {decisao}.",
                 url=url_for('justica.index', _external=True)
             )
             
-            # O flush não é necessário aqui, pois o commit() vem antes de qualquer erro
             db.session.commit()
-            
-            return True, "Processo finalizado e aluno notificado por e-mail!"
+            return True, "Processo finalizado e aluno notificado!"
         except Exception as e:
             db.session.rollback()
-            return False, f"Erro ao finalizar processo (verifique as configurações de e-mail): {e}"
+            return False, f"Erro ao finalizar processo: {e}"
 
     @staticmethod
     def deletar_processo(processo_id):
@@ -310,11 +294,8 @@ class JusticaService:
             'top_alunos': [{'nome': a[0], 'total': a[1]} for a in top_alunos]
         }
         
-    # ### INÍCIO DAS NOVAS FUNÇÕES FADA ###
-
     @staticmethod
     def get_alunos_para_fada(school_id):
-        """Busca todos os alunos de uma escola para a lista da FADA."""
         query = (
             select(Aluno)
             .join(User, Aluno.user_id == User.id)
@@ -323,14 +304,13 @@ class JusticaService:
                 UserSchool.school_id == school_id,
                 User.role == 'aluno'
             )
-            .options(joinedload(Aluno.user)) # Carrega os dados do usuário
+            .options(joinedload(Aluno.user))
             .order_by(User.nome_completo)
         )
         return db.session.scalars(query).all()
 
     @staticmethod
     def get_fada_por_id(avaliacao_id):
-        """Busca uma avaliação FADA específica pelo ID, com dados do aluno e avaliador."""
         query = (
             select(FadaAvaliacao)
             .where(FadaAvaliacao.id == avaliacao_id)
@@ -342,18 +322,14 @@ class JusticaService:
         return db.session.scalar(query)
 
     @staticmethod
-    # ### CORREÇÃO DE BUG ANTERIOR: Adicionado 'nome_avaliador_custom' que estava faltando ###
     def salvar_fada(form_data, aluno_id, avaliador_id, nome_avaliador_custom):
-        """Cria ou atualiza uma avaliação FADA para um aluno."""
         try:
-            # ### CORREÇÃO DE BUG ANTERIOR: Passa o 'nome_avaliador_custom' para o modelo ###
             avaliacao = FadaAvaliacao(
                 aluno_id=aluno_id, 
                 avaliador_id=avaliador_id,
                 nome_avaliador_custom=nome_avaliador_custom
             )
 
-            # Mapeia os 18 atributos
             for i in range(1, 19):
                 field_name_map = {
                     1: 'attr_1_expressao', 2: 'attr_2_planejamento', 3: 'attr_3_perseveranca',
@@ -364,19 +340,18 @@ class JusticaService:
                     16: 'attr_16_etica', 17: 'attr_17_produtividade', 18: 'attr_18_eficiencia'
                 }
                 field_name = field_name_map.get(i)
-                form_field_name = f'attr_{i}' # O nome no formulário é 'attr_1', 'attr_2', etc.
+                form_field_name = f'attr_{i}'
                 
                 valor = form_data.get(form_field_name)
                 try:
                     valor_float = float(valor)
                     valor_float = max(0.0, min(10.0, valor_float))
                 except (ValueError, TypeError):
-                    valor_float = 8.0 # Padrão
+                    valor_float = 8.0
                 
                 if field_name:
                     setattr(avaliacao, field_name, valor_float)
 
-            # Preenche os campos de texto
             avaliacao.justificativa_notas = form_data.get('justificativa_notas')
             avaliacao.observacoes = form_data.get('observacoes')
             avaliacao.adaptacao_carreira = form_data.get('adaptacao_carreira', 'Em adaptação à carreira militar')
@@ -389,5 +364,3 @@ class JusticaService:
         except Exception as e:
             db.session.rollback()
             return False, f"Erro ao salvar a avaliação FADA: {e}", None
-            
-    # ### FIM DAS NOVAS FUNÇÕES FADA ###
