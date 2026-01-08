@@ -10,7 +10,7 @@ from flask_login import login_required, current_user
 
 from ..models.user import User
 from ..models.school import School
-from ..models.user_school import UserSchool # Necessário para query direta
+from ..models.user_school import UserSchool
 from ..models.database import db
 from ..services.dashboard_service import DashboardService
 from utils.decorators import admin_or_programmer_required
@@ -129,6 +129,7 @@ def dashboard():
         return redirect(url_for('main.selecionar_escola'))
 
     # 4. Carrega Dashboard
+    # O Service agora filtra corretamente as listas para o school_id
     dashboard_data = DashboardService.get_dashboard_data(school_id=school_id_to_load)
 
     school_in_context = None

@@ -20,6 +20,7 @@ from ..models.user import User
 from .notification_service import NotificationService
 from .instrutor_service import InstrutorService
 from .site_config_service import SiteConfigService
+from .user_service import UserService # Import necessário para pegar a escola atual
 
 class HorarioService:
 
@@ -148,7 +149,6 @@ class HorarioService:
         horario_matrix = HorarioService.construir_matriz_horario(pelotao, semana_id, user)
         semana = db.session.get(Semana, semana_id)
         
-        # CORREÇÃO: is_admin agora usa a propriedade is_sens (que engloba Admin/Prog no contexto da escola)
         is_admin = user.is_sens or user.is_admin_escola or user.is_programador
 
         def get_horas_agendadas(disciplina_id, pelotao_nome):
@@ -168,7 +168,6 @@ class HorarioService:
 
         disciplinas_disponiveis = []
         if is_admin:
-            # Admin vê TODAS as disciplinas da turma
             disciplinas_da_turma = db.session.scalars(
                 select(Disciplina)
                 .where(Disciplina.turma_id == turma_obj.id)
@@ -180,7 +179,6 @@ class HorarioService:
                     {"id": d.id, "nome": d.materia, "restantes": horas_restantes}
                 )
         else:
-            # Instrutor vê apenas suas disciplinas
             instrutor_id = user.instrutor_profile.id if user.instrutor_profile else 0
             disciplinas_do_instrutor = db.session.scalars(
                 select(Disciplina)
@@ -200,13 +198,9 @@ class HorarioService:
                     {"id": d.id, "nome": d.materia, "restantes": horas_restantes}
                 )
 
-        # Se for admin, carrega lista completa de instrutores para o dropdown
-        # Se for instrutor, carrega lista completa também? Geralmente sim, para co-instrutoria,
-        # mas talvez filtrada. Vamos manter completa para flexibilidade.
         instrutores_paginados = InstrutorService.get_all_instrutores_sem_paginacao(user)
         todos_instrutores = []
         
-        # Ajuste: get_all_instrutores_sem_paginacao retorna lista, não pagination object
         lista_instrutores = instrutores_paginados if isinstance(instrutores_paginados, list) else instrutores_paginados.items
 
         for i in lista_instrutores:
@@ -314,7 +308,6 @@ class HorarioService:
     @staticmethod
     def save_aula(data, user):
         try:
-            # CORREÇÃO: is_admin agora usa propriedade is_sens (contexto seguro)
             is_admin = user.is_sens or user.is_admin_escola or user.is_programador
 
             pelotao = data['pelotao']
@@ -333,17 +326,13 @@ class HorarioService:
             if not semana:
                 return False, "Semana não encontrada.", 404
 
-            # --- BLOCO DE VALIDAÇÕES DE INTEGRIDADE (Ignorado para Admin/Sens) ---
             if not is_admin:
-                
-                # 1. Validação de Dias da Semana (Sábado/Domingo)
                 if dia == 'sabado' and not semana.mostrar_sabado:
                     return False, "⚠️ AGENDAMENTO BLOQUEADO: O Sábado não está habilitado nesta semana.", 403
                 
                 if dia == 'domingo' and not semana.mostrar_domingo:
                     return False, "⚠️ AGENDAMENTO BLOQUEADO: O Domingo não está habilitado nesta semana.", 403
 
-                # 2. Validação de Períodos Especiais
                 for p in range(periodo_inicio, periodo_fim + 1):
                     if p == 13 and not semana.mostrar_periodo_13:
                         return False, "⚠️ AGENDAMENTO BLOQUEADO: O 13º tempo não está habilitado.", 403
@@ -358,7 +347,6 @@ class HorarioService:
                     if dia == 'domingo' and semana.periodos_domingo > 0 and p > semana.periodos_domingo:
                         return False, f"⚠️ AGENDAMENTO BLOQUEADO: Domingo nesta semana vai apenas até o {semana.periodos_domingo}º tempo.", 403
 
-            # --- VALIDAÇÃO DE CARGA HORÁRIA (Ignorado para Admin/Sens) ---
             disciplina = db.session.get(Disciplina, disciplina_id)
             if disciplina and not is_admin: 
                 total_agendado = db.session.scalar(
@@ -382,9 +370,7 @@ class HorarioService:
                     restante = disciplina.carga_horaria_prevista - total_agendado
                     if restante < 0: restante = 0
                     return False, f"⚠️ LIMITE EXCEDIDO: Faltam apenas {restante}h. Você tentou agendar {duracao}h.", 400
-            # ---------------------------------------------
 
-            # --- LÓGICA DE BLOQUEIO POR PRIORIDADE (Ignorado para Admin/Sens) ---
             if semana and getattr(semana, 'priority_active', False) and not is_admin:
                 allowed_names = []
                 raw_priority = getattr(semana, 'priority_disciplines', '[]') or '[]'
@@ -398,9 +384,7 @@ class HorarioService:
 
                 if not allowed_names or nome_disciplina_atual not in allowed_names:
                     return False, "⚠️ AGENDAMENTO BLOQUEADO: Apenas as disciplinas prioritárias podem ser agendadas nesta semana.", 403
-            # -------------------------------------------------------------
 
-            # instrutor(es)
             instrutor_id_1, instrutor_id_2 = None, None
             if is_admin:
                 instrutor_id_from_form = data.get('instrutor_id', '')
@@ -426,6 +410,7 @@ class HorarioService:
                         DisciplinaTurma.pelotao == pelotao
                     )
                 )
+                
                 if vinculo_dt:
                     if vinculo_dt.instrutor_id_1 == instrutor_id_1 and vinculo_dt.instrutor_id_2:
                         instrutor_id_2 = vinculo_dt.instrutor_id_2
@@ -513,7 +498,6 @@ class HorarioService:
             current_app.logger.error(f"Erro ao salvar aula: {e}")
             return False, 'Erro interno do servidor ao salvar.', 500
 
-    # (Métodos restantes permanecem iguais...)
     @staticmethod
     def remove_aula(horario_id, user):
         aula = db.session.get(Horario, int(horario_id))
@@ -529,16 +513,20 @@ class HorarioService:
 
     @staticmethod
     def get_aulas_pendentes():
-        return db.session.scalars(
-            select(Horario)
-            .options(
-                joinedload(Horario.disciplina).joinedload(Disciplina.ciclo),
-                joinedload(Horario.instrutor).joinedload(Instrutor.user),
-                joinedload(Horario.semana),
-            )
-            .where(Horario.status == 'pendente')
-            .order_by(Horario.id.desc())
-        ).all()
+        # CORREÇÃO: Filtrar pela escola atual
+        school_id = UserService.get_current_school_id()
+        
+        query = select(Horario).options(
+            joinedload(Horario.disciplina).joinedload(Disciplina.ciclo),
+            joinedload(Horario.instrutor).joinedload(Instrutor.user),
+            joinedload(Horario.semana),
+        ).where(Horario.status == 'pendente')
+
+        if school_id:
+            # Faz JOIN com Turma para filtrar por school_id
+            query = query.join(Turma, Horario.pelotao == Turma.nome).where(Turma.school_id == school_id)
+
+        return db.session.scalars(query.order_by(Horario.id.desc())).all()
 
     @staticmethod
     def get_aulas_pendentes_agrupadas():
