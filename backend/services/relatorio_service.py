@@ -9,7 +9,7 @@ from datetime import date, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import aliased
 
-# Importações seguras que não dependem do banco de dados ou de outros serviços locais
+# Importações seguras
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
@@ -48,13 +48,8 @@ class RelatorioService:
 
     @staticmethod
     def _get_dia_offset(dia_semana_str: str) -> int:
-        """
-        Converte string do dia da semana (ex: 'segunda-feira') para offset numérico (0=seg, 6=dom).
-        Normaliza strings para evitar erros com acentos ou casing.
-        """
         if not dia_semana_str:
             return 0
-        
         s = dia_semana_str.lower().strip()
         if 'segunda' in s: return 0
         if 'terca' in s or 'terça' in s: return 1
@@ -69,34 +64,25 @@ class RelatorioService:
     def get_horas_aula_por_instrutor(
         data_inicio: date,
         data_fim: date,
-        is_rr_filter: bool,
+        mode_rr: str | None, # Alterado de bool para str/None ('exclude_rr', 'only_rr', None)
         instrutor_ids_filter: List[int] | None
     ) -> List[Dict[str, Any]]:
         """
         Busca e formata os dados de horas-aula por instrutor, filtrando pela ESCOLA SELECIONADA.
-        
-        CORREÇÃO (SOMA DE CARGA HORÁRIA POR TURMA/PELOTÃO + FILTRO DE ESCOLA):
-        - Utiliza o campo 'pelotao' do Horario para distinguir as turmas.
-        - Filtra pelo school_id do ciclo da semana.
-        - Soma a carga horária da disciplina para cada pelotão distinto encontrado.
-        - Mantém a deduplicação de slots de horário para não pagar a mesma aula duas vezes.
+        mode_rr: 'exclude_rr' (Mensal), 'only_rr' (RR) ou None (Todos).
         """
         from ..models import db, Horario, User, Instrutor, Disciplina, Semana, Ciclo
         from ..services.user_service import UserService
 
-        # Recupera o ID da escola selecionada na sessão
         school_id = UserService.get_current_school_id()
         if not school_id:
-            # Se não tiver escola selecionada, retorna vazio para evitar vazamento de dados
             return []
 
-        # Criar aliases para permitir o join duplo (instrutor 1 e instrutor 2)
         Instrutor1 = aliased(Instrutor)
         User1 = aliased(User)
         Instrutor2 = aliased(Instrutor)
         User2 = aliased(User)
 
-        # Seleciona todos os dados, INCLUINDO a Semana e o Horario (que contem o pelotao)
         query = (
             select(
                 Horario,
@@ -106,54 +92,46 @@ class RelatorioService:
                 Semana
             )
             .join(Semana, Horario.semana_id == Semana.id)
-            .join(Ciclo, Semana.ciclo_id == Ciclo.id)  # Join com Ciclo para acessar school_id
+            .join(Ciclo, Semana.ciclo_id == Ciclo.id)
             .join(Disciplina, Horario.disciplina_id == Disciplina.id)
-            # Join Obrigatório para o Instrutor 1 (Titular)
             .join(Instrutor1, Horario.instrutor_id == Instrutor1.id)
             .join(User1, Instrutor1.user_id == User1.id)
-            # Join Opcional (Left Join) para o Instrutor 2 (Auxiliar/Monitor)
             .outerjoin(Instrutor2, Horario.instrutor_id_2 == Instrutor2.id)
             .outerjoin(User2, Instrutor2.user_id == User2.id)
             .filter(
                 Semana.data_inicio <= data_fim,
                 Semana.data_fim >= data_inicio,
-                Ciclo.school_id == school_id  # FILTRO DE ESCOLA ADICIONADO
+                Ciclo.school_id == school_id
             )
         )
 
         rows = db.session.execute(query).all()
 
-        # Dicionário para agregação: matricula -> dados
         dados_agrupados = {}
-        
-        # Conjunto para garantir unicidade do pagamento por SLOT DE TEMPO
-        # Chave: (instrutor_id, data_real_da_aula, periodo_aula)
         slots_pagos = set()
 
         def processar_instrutor(user_obj, instrutor_obj, disciplina_obj, data_aula, periodo_aula, duracao, pelotao_str):
-            """Soma horas apenas se o slot (Instrutor+Dia+Periodo) ainda não foi pago."""
             if not user_obj or not instrutor_obj:
                 return
 
-            # Chave robusta de unicidade: Quem + Quando + Qual Periodo
-            chave_slot = (instrutor_obj.id, data_aula, periodo_aula)
+            # Filtros de Relatório (Lógica RR corrigida)
+            if mode_rr == 'only_rr' and not instrutor_obj.is_rr:
+                return # Pedia RR, mas este não é. Ignora.
             
-            # Se já pagamos este instrutor neste horário específico, ignoramos duplicatas do banco
-            if chave_slot in slots_pagos:
-                return
+            if mode_rr == 'exclude_rr' and instrutor_obj.is_rr:
+                return # Pedia SEM RR, mas este é RR. Ignora.
 
-            # Aplica Filtros de Relatório
-            if is_rr_filter and not instrutor_obj.is_rr:
-                return
             if instrutor_ids_filter and instrutor_obj.id not in instrutor_ids_filter:
                 return
 
-            # Marca slot como pago
+            chave_slot = (instrutor_obj.id, data_aula, periodo_aula)
+            if chave_slot in slots_pagos:
+                return
+
             slots_pagos.add(chave_slot)
 
             chave_agrupamento = user_obj.matricula
             
-            # Inicializa a estrutura do instrutor se não existir
             if chave_agrupamento not in dados_agrupados:
                 dados_agrupados[chave_agrupamento] = {
                     "info": {
@@ -166,61 +144,47 @@ class RelatorioService:
                     "disciplinas_map": {} 
                 }
 
-            # Inicializa a disciplina para este instrutor se não existir
             nome_disc = disciplina_obj.materia
             if nome_disc not in dados_agrupados[chave_agrupamento]["disciplinas_map"]:
                 dados_agrupados[chave_agrupamento]["disciplinas_map"][nome_disc] = {
                     "nome": nome_disc,
-                    "ch_total": 0,  # Começa com 0 e soma conforme encontra pelotões
+                    "ch_total": 0,
                     "ch_a_pagar": 0,
-                    "_pelotoes_contabilizados": set() # Controle interno para somar CH Total uma vez por turma
+                    "_pelotoes_contabilizados": set()
                 }
 
             item_disciplina = dados_agrupados[chave_agrupamento]["disciplinas_map"][nome_disc]
-            
-            # Normaliza o nome do pelotão para evitar duplicidade por espaços extras
             pelotao_clean = pelotao_str.strip() if pelotao_str else "PADRAO"
 
-            # --- Lógica de Soma de CH Total por Turma (Pelotão) ---
-            # Se este pelotão ainda não foi contabilizado para esta disciplina deste instrutor, soma a CH Total
             if pelotao_clean not in item_disciplina["_pelotoes_contabilizados"]:
                 item_disciplina["ch_total"] += (disciplina_obj.carga_horaria_prevista or 0)
                 item_disciplina["_pelotoes_contabilizados"].add(pelotao_clean)
 
-            # Soma a duração das aulas a pagar
             item_disciplina["ch_a_pagar"] += duracao
 
-        # Itera sobre todas as linhas retornadas
         for row in rows:
-            horario = row[0]   # Objeto Horario
-            disciplina = row[1] # Objeto Disciplina
-            inst1 = row[2]      # Objeto Instrutor (1)
-            usr1 = row[3]       # Objeto User (1)
-            inst2 = row[4]      # Objeto Instrutor (2)
-            usr2 = row[5]       # Objeto User (2)
-            semana = row[6]     # Objeto Semana
+            horario = row[0]
+            disciplina = row[1]
+            inst1 = row[2]
+            usr1 = row[3]
+            inst2 = row[4]
+            usr2 = row[5]
+            semana = row[6]
 
             duracao = horario.duracao or 1
             periodo = horario.periodo
-            
-            # Obtém o pelotão diretamente do horário (string)
             pelotao = getattr(horario, 'pelotao', '')
 
-            # Calcula a data real da aula para evitar duplicidade de semanas sobrepostas
             offset_dias = RelatorioService._get_dia_offset(horario.dia_semana)
             data_aula = semana.data_inicio + timedelta(days=offset_dias)
 
-            # 1. Processa Instrutor 1 (Titular)
             if inst1 and usr1:
                 processar_instrutor(usr1, inst1, disciplina, data_aula, periodo, duracao, pelotao)
 
-            # 2. Processa Instrutor 2 (Auxiliar/Dupla)
             if inst2 and usr2:
-                # Segurança contra erro de cadastro (mesmo ID nos dois campos)
                 if not (inst1 and inst1.id == inst2.id):
                     processar_instrutor(usr2, inst2, disciplina, data_aula, periodo, duracao, pelotao)
 
-        # Formata a saída final
         lista_final = []
         chaves_ordenadas = sorted(dados_agrupados.keys())
 
@@ -228,7 +192,6 @@ class RelatorioService:
             item = dados_agrupados[chave]
             lista_disciplinas = list(item["disciplinas_map"].values())
             
-            # Remove chaves internas auxiliares antes de retornar para não sujar o template
             for d in lista_disciplinas:
                 if "_pelotoes_contabilizados" in d:
                     del d["_pelotoes_contabilizados"]
@@ -242,9 +205,6 @@ class RelatorioService:
 
     @staticmethod
     def export_to_google_sheets(contexto: Dict[str, Any]) -> Tuple[bool, str]:
-        """
-        Gera o arquivo XLSX em memória e faz o upload para o Google Drive.
-        """
         from .xlsx_service import gerar_mapa_gratificacao_xlsx
         
         try:

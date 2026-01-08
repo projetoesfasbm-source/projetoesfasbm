@@ -34,7 +34,6 @@ def _build_filename(prefix: str, label: Optional[str], extension: str, fallback:
 @login_required
 @admin_or_programmer_required
 def index():
-    # Verifica se há uma escola selecionada no contexto atual
     school_id = UserService.get_current_school_id()
     if not school_id:
         flash('Selecione uma escola para acessar os relatórios.', 'warning')
@@ -47,7 +46,6 @@ def index():
 @login_required
 @admin_or_programmer_required
 def gerar_relatorio_horas_aula():
-    # Verifica se há uma escola selecionada
     school_id = UserService.get_current_school_id()
     if not school_id:
         flash('Selecione uma escola para gerar relatórios.', 'warning')
@@ -58,9 +56,8 @@ def gerar_relatorio_horas_aula():
 
     todos_instrutores = []
     if report_type == 'por_instrutor':
-        paginated_instrutores = InstrutorService.get_all_instrutores(current_user)
-        if paginated_instrutores:
-            todos_instrutores = paginated_instrutores.items
+        # CORREÇÃO 1: Busca a lista COMPLETA sem paginação para o dropdown
+        todos_instrutores = InstrutorService.get_all_instrutores_sem_paginacao(current_user)
 
     report_defaults = {
         "curso_nome": "Curso Técnico em Segurança Pública",
@@ -88,7 +85,14 @@ def gerar_relatorio_horas_aula():
             flash('A data de fim não pode ser anterior à data de início.', 'warning')
             return redirect(url_for('relatorios.gerar_relatorio_horas_aula', tipo=report_type))
 
-        is_rr_filter = report_type == 'efetivo_rr'
+        # CORREÇÃO 2: Lógica refinada para o filtro RR
+        mode_rr = None
+        if report_type == 'mensal':
+            mode_rr = 'exclude_rr'  # Exportação Mensal: TODOS MENOS RR
+        elif report_type == 'efetivo_rr':
+            mode_rr = 'only_rr'     # Exportação RR: SOMENTE RR
+        # Se for 'por_instrutor', mode_rr continua None (filtra apenas pelos IDs selecionados)
+
         instrutor_ids_filter = None
         if report_type == 'por_instrutor':
             instrutor_ids_raw = request.form.getlist('instrutor_ids')
@@ -100,8 +104,9 @@ def gerar_relatorio_horas_aula():
                 flash('Seleção de instrutores inválida.', 'warning')
                 return redirect(url_for('relatorios.gerar_relatorio_horas_aula', tipo=report_type))
 
+        # Passamos mode_rr em vez de um booleano simples
         dados_relatorio = RelatorioService.get_horas_aula_por_instrutor(
-            data_inicio, data_fim, is_rr_filter, instrutor_ids_filter
+            data_inicio, data_fim, mode_rr, instrutor_ids_filter
         )
         valor_hora_aula = SiteConfigService.get_valor_hora_aula()
         
