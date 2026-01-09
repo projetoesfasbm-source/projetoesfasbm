@@ -4,12 +4,17 @@ from datetime import date
 from flask import current_app
 from sqlalchemy import select, and_, delete, or_
 from ..models.database import db
+
+# Models
 from ..models.semana import Semana
 from ..models.horario import Horario
 from ..models.ciclo import Ciclo
 from ..models.disciplina import Disciplina
 from ..models.disciplina_turma import DisciplinaTurma
 from ..models.turma import Turma
+# Importação do Model que você forneceu (Verifique se o nome do arquivo é este mesmo)
+from ..models.historico_disciplina import HistoricoDisciplina 
+
 from .user_service import UserService
 
 class SemanaService:
@@ -162,10 +167,11 @@ class SemanaService:
             db.session.rollback()
             return False, f"Erro ao deletar: {str(e)}"
 
+    # --- DELETAR CICLO: MODO CASCATA TOTAL ---
     @staticmethod
     def deletar_ciclo(ciclo_id):
         """
-        Deleta um ciclo e TODAS as suas dependências via SQL Direto para garantir Cascata.
+        Deleta um ciclo e TODAS as suas dependências (Histórico, Semanas, Aulas, Disciplinas).
         """
         ciclo = db.session.get(Ciclo, ciclo_id)
         if not ciclo:
@@ -176,43 +182,70 @@ class SemanaService:
              return False, "Permissão negada para excluir este ciclo."
 
         try:
-            # Subqueries para identificar o que apagar
-            sub_semanas = select(Semana.id).where(Semana.ciclo_id == ciclo_id)
-            sub_disciplinas = select(Disciplina.id).where(Disciplina.ciclo_id == ciclo_id)
-
-            # 1. Apagar Horários (dependem de Semana ou Disciplina)
-            db.session.execute(delete(Horario).where(
-                or_(
-                    Horario.semana_id.in_(sub_semanas),
-                    Horario.disciplina_id.in_(sub_disciplinas)
-                )
-            ))
-
-            # 2. Apagar Vínculos de Turma/Instrutor (dependem de Disciplina)
-            db.session.execute(delete(DisciplinaTurma).where(
-                DisciplinaTurma.disciplina_id.in_(sub_disciplinas)
-            ))
-
-            # 3. Apagar Semanas (dependem de Ciclo)
-            db.session.execute(delete(Semana).where(Semana.ciclo_id == ciclo_id))
-
-            # 4. Apagar Disciplinas (dependem de Ciclo)
-            db.session.execute(delete(Disciplina).where(Disciplina.ciclo_id == ciclo_id))
-
-            # 5. Apagar Turmas (Se houver vinculo direto com Ciclo)
-            if hasattr(Turma, 'ciclo_id'):
-                db.session.execute(delete(Turma).where(Turma.ciclo_id == ciclo_id))
-
-            # 6. Apagar o Ciclo
-            db.session.execute(delete(Ciclo).where(Ciclo.id == ciclo_id))
+            # 1. IDENTIFICAR IDs RELACIONADOS
+            # Recupera IDs de todas as Disciplinas deste ciclo
+            subquery_disciplinas = select(Disciplina.id).where(Disciplina.ciclo_id == ciclo.id)
             
-            # Limpa sessão para evitar inconsistências
+            # Recupera IDs de todas as Semanas deste ciclo
+            subquery_semanas = select(Semana.id).where(Semana.ciclo_id == ciclo.id)
+
+            # 2. LIMPEZA PROFUNDA (ORDEM DE DEPENDÊNCIA)
+            
+            # A) Apagar HISTÓRICO DAS DISCIPLINAS (O culpado do erro anterior)
+            # Como o histórico aponta para disciplinas, deve ser apagado antes delas.
+            db.session.execute(
+                delete(HistoricoDisciplina).where(
+                    HistoricoDisciplina.disciplina_id.in_(subquery_disciplinas)
+                )
+            )
+
+            # B) Apagar HORÁRIOS (Aulas)
+            # Ligados às disciplinas OU semanas do ciclo
+            db.session.execute(
+                delete(Horario).where(
+                    or_(
+                        Horario.semana_id.in_(subquery_semanas),
+                        Horario.disciplina_id.in_(subquery_disciplinas)
+                    )
+                )
+            )
+
+            # C) Apagar VÍNCULOS (DisciplinaTurma)
+            db.session.execute(
+                delete(DisciplinaTurma).where(
+                    DisciplinaTurma.disciplina_id.in_(subquery_disciplinas)
+                )
+            )
+
+            # D) Apagar SEMANAS do ciclo
+            db.session.execute(
+                delete(Semana).where(Semana.ciclo_id == ciclo.id)
+            )
+
+            # E) Apagar DISCIPLINAS do ciclo
+            # (Agora é seguro apagar, pois o histórico foi removido no passo A)
+            db.session.execute(
+                delete(Disciplina).where(Disciplina.ciclo_id == ciclo.id)
+            )
+
+            # F) Apagar TURMAS do ciclo (Se o modelo Turma tiver ciclo_id)
+            if hasattr(Turma, 'ciclo_id'):
+                db.session.execute(
+                    delete(Turma).where(Turma.ciclo_id == ciclo.id)
+                )
+
+            # 3. FINALMENTE, APAGAR O CICLO
+            db.session.execute(
+                delete(Ciclo).where(Ciclo.id == ciclo.id)
+            )
+            
+            # Limpa a sessão para garantir consistência
             db.session.expire_all()
             
             db.session.commit()
-            return True, "Ciclo e todos os dados associados foram excluídos com sucesso."
+            return True, "Ciclo Excluído! Todos os dados (incluindo notas e histórico) foram apagados."
             
         except Exception as e:
             db.session.rollback()
-            current_app.logger.error(f"Erro ao excluir ciclo: {str(e)}")
+            current_app.logger.error(f"Erro fatal ao excluir ciclo: {str(e)}")
             return False, f"Erro ao excluir ciclo: {str(e)}"
