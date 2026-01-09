@@ -1,5 +1,3 @@
-# backend/controllers/semana_controller.py
-
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required
 from sqlalchemy import select
@@ -58,16 +56,28 @@ def gerenciar_semanas(ciclo_id):
     
     form.ciclo_id.choices = [(c.id, c.nome) for c in ciclos]
 
-    # Query: Semanas que pertencem a ciclos desta escola
+    # --- LÓGICA DE SELEÇÃO AUTOMÁTICA ---
+    # Se um ID foi passado, verifica se ele é válido para esta escola
+    if ciclo_id:
+        if not any(c.id == ciclo_id for c in ciclos):
+            ciclo_id = None # Ciclo inválido ou de outra escola
+
+    # Se não temos um ciclo selecionado (ou era inválido), mas existem ciclos:
+    # Seleciona automaticamente o ÚLTIMO ciclo criado (maior ID)
+    if not ciclo_id and ciclos:
+        ultimo_ciclo = max(ciclos, key=lambda c: c.id)
+        ciclo_id = ultimo_ciclo.id
+
+    # Query Base: Semanas
     query = select(Semana).join(Ciclo).where(Ciclo.school_id == school_id).order_by(Semana.data_inicio.desc())
     
+    # Aplica o filtro do ciclo selecionado
     if ciclo_id:
-        # Validação extra: o ciclo pertence à escola?
-        if any(c.id == ciclo_id for c in ciclos):
-            query = query.where(Semana.ciclo_id == ciclo_id)
-            form.ciclo_id.data = ciclo_id
-        else:
-            ciclo_id = None # Ciclo inválido ou de outra escola
+        query = query.where(Semana.ciclo_id == ciclo_id)
+        form.ciclo_id.data = ciclo_id # Preenche o form de adição com o ciclo atual
+    else:
+        # Se não houver ciclos na escola, garante que não traga semanas soltas (segurança)
+        query = query.where(Semana.id == -1) 
     
     semanas = db.session.execute(query).scalars().all()
 
@@ -174,9 +184,12 @@ def adicionar_ciclo():
         )
         if not exists:
             # CRIA O CICLO VINCULADO À ESCOLA
-            db.session.add(Ciclo(nome=nome_ciclo, school_id=school_id))
+            novo_ciclo = Ciclo(nome=nome_ciclo, school_id=school_id)
+            db.session.add(novo_ciclo)
             db.session.commit()
             flash(f"Ciclo '{nome_ciclo}' criado com sucesso!", "success")
+            # Redireciona para o novo ciclo criado
+            return redirect(url_for('semana.gerenciar_semanas', ciclo_id=novo_ciclo.id))
         else:
             flash(f"Já existe um ciclo com o nome '{nome_ciclo}' nesta escola.", "danger")
     else:
