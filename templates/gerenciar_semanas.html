@@ -18,16 +18,16 @@
                 <div class="ciclo-item {% if ciclo.id == ciclo_selecionado_id %}active{% endif %}">
                     <a href="{{ url_for('semana.gerenciar_semanas', ciclo_id=ciclo.id) }}" class="ciclo-name">{{ ciclo.nome }}</a>
                     
-                    {# --- ALTERAÇÃO AQUI: Botão Excluir Visível e Alerta de Cascata --- #}
+                    {# --- ALTERAÇÃO AQUI: Botão "Excluir" visível e Alerta de Cascata --- #}
                     <form method="POST" action="{{ url_for('semana.deletar_ciclo', ciclo_id=ciclo.id) }}" 
-                          onsubmit="return confirm('ATENÇÃO: Ao excluir o ciclo \'{{ ciclo.nome }}\', TODAS as semanas e aulas vinculadas a ele serão APAGADAS PERMANENTEMENTE.\n\nDeseja realmente continuar?');" 
+                          onsubmit="return confirm('⚠️ ATENÇÃO CRÍTICA ⚠️\n\nAo excluir o ciclo \'{{ ciclo.nome }}\', VOCÊ APAGARÁ TODAS AS SEMANAS E AULAS vinculadas a ele.\n\nIsso limpará toda a grade horária deste ciclo.\nDeseja realmente EXCLUIR TUDO?');" 
                           style="display: inline;">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="btn btn-sm btn-danger fw-bold" style="min-width: 80px;">
-                            <i class="fas fa-trash me-1"></i> Excluir
+                            Excluir
                         </button>
                     </form>
-                    {# ------------------------------------------------------------- #}
+                    {# ---------------------------------------------------------------- #}
                     
                 </div>
             {% else %}
@@ -45,6 +45,7 @@
         </form>
     </div>
 
+    {# ... (Restante do arquivo permanece igual) ... #}
     <div class="table-container">
         
         <div class="card p-3 mb-4 bg-light border-0 shadow-sm">

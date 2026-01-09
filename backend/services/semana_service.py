@@ -7,32 +7,23 @@ from ..models.database import db
 from ..models.semana import Semana
 from ..models.horario import Horario
 from ..models.ciclo import Ciclo
+from ..models.disciplina import Disciplina  # <--- IMPORTANTE: Importar Disciplina
 from .user_service import UserService
 
 class SemanaService:
     
     @staticmethod
     def get_semana_selecionada(semana_id_str=None, ciclo_id=None):
-        """
-        Busca uma semana específica ou a atual, GARANTINDO que pertença à escola ativa (via Ciclo).
-        """
         active_school_id = UserService.get_current_school_id()
         if not active_school_id:
             return None
 
-        # 1. Busca por ID (se fornecido)
         if semana_id_str and str(semana_id_str).isdigit():
             semana = db.session.get(Semana, int(semana_id_str))
-            
-            # BLINDAGEM: Verifica se o CICLO da semana pertence à escola atual
             if semana and semana.ciclo and semana.ciclo.school_id == active_school_id:
                 return semana
-            # Se não pertence, ignora (retorna None)
 
-        # 2. Busca Automática (Semana Atual ou Última)
         today = date.today()
-        
-        # Query base: Semanas cujos Ciclos são da escola ativa
         stmt = (
             select(Semana)
             .join(Ciclo)
@@ -42,7 +33,6 @@ class SemanaService:
         if ciclo_id:
             stmt = stmt.where(Semana.ciclo_id == ciclo_id)
 
-        # Tenta achar a semana que engloba "hoje"
         semana_atual = db.session.scalars(
             stmt.where(
                 Semana.data_inicio <= today,
@@ -53,7 +43,6 @@ class SemanaService:
         if semana_atual:
             return semana_atual
 
-        # Se não houver semana hoje, retorna a última cadastrada
         return db.session.scalars(
             stmt.order_by(Semana.data_inicio.desc())
         ).first()
@@ -68,7 +57,6 @@ class SemanaService:
         if not all([nome, data_inicio, data_fim, ciclo_id]):
             return False, 'Todos os campos, incluindo o ciclo, são obrigatórios.'
 
-        # --- VALIDAÇÃO DE ESCOLA ---
         active_school_id = UserService.get_current_school_id()
         ciclo = db.session.get(Ciclo, ciclo_id)
         
@@ -81,7 +69,6 @@ class SemanaService:
         if data_inicio > data_fim:
             return False, 'A data de início não pode ser posterior à data de fim.'
 
-        # Verifica conflito apenas dentro do mesmo ciclo
         semana_conflitante = db.session.scalar(
             select(Semana).where(
                 Semana.ciclo_id == ciclo_id,
@@ -122,7 +109,6 @@ class SemanaService:
         semana = db.session.get(Semana, semana_id)
         if not semana: return False, 'Semana não encontrada.'
         
-        # Proteção: Só edita se for da escola ativa (via Ciclo)
         active_school = UserService.get_current_school_id()
         if active_school and semana.ciclo.school_id != active_school:
             return False, "Permissão negada: Semana pertence a outra escola."
@@ -131,7 +117,6 @@ class SemanaService:
         semana.data_inicio = data.get('data_inicio')
         semana.data_fim = data.get('data_fim')
         
-        # Se mudar de ciclo, verifica se o novo ciclo é da mesma escola
         novo_ciclo_id = data.get('ciclo_id')
         if novo_ciclo_id and int(novo_ciclo_id) != semana.ciclo_id:
              novo_ciclo = db.session.get(Ciclo, novo_ciclo_id)
@@ -162,7 +147,6 @@ class SemanaService:
         semana = db.session.get(Semana, semana_id)
         if not semana: return False, 'Semana não encontrada.'
         
-        # Proteção
         active_school = UserService.get_current_school_id()
         if active_school and semana.ciclo.school_id != active_school:
             return False, "Permissão negada."
@@ -176,11 +160,11 @@ class SemanaService:
             db.session.rollback()
             return False, f"Erro ao deletar: {str(e)}"
 
-    # --- NOVO MÉTODO: DELETAR CICLO COM CASCATA ---
     @staticmethod
     def deletar_ciclo(ciclo_id):
         """
-        Deleta um ciclo e TODAS as suas dependências (Semanas, Aulas).
+        Deleta um ciclo e TODAS as suas dependências (Semanas, Aulas E DISCIPLINAS).
+        Realiza exclusão em cascata manual completa.
         """
         ciclo = db.session.get(Ciclo, ciclo_id)
         if not ciclo:
@@ -191,19 +175,28 @@ class SemanaService:
              return False, "Permissão negada para excluir este ciclo."
 
         try:
-            # Busca todas as semanas do ciclo
+            # 1. Busca todas as semanas do ciclo
             semanas = db.session.scalars(select(Semana).where(Semana.ciclo_id == ciclo.id)).all()
             
             for semana in semanas:
-                # Deleta aulas associadas à semana
+                # 1.1 Deleta aulas associadas à semana
                 db.session.query(Horario).filter(Horario.semana_id == semana.id).delete()
-                # Deleta a semana
+                # 1.2 Deleta a semana
                 db.session.delete(semana)
             
-            # Por fim, deleta o ciclo
+            # 2. NOVA ETAPA: Deletar DISCIPLINAS associadas ao Ciclo
+            # Isso é necessário pois Disciplina tem FK para Ciclo
+            disciplinas = db.session.scalars(select(Disciplina).where(Disciplina.ciclo_id == ciclo.id)).all()
+            for disciplina in disciplinas:
+                # Opcional: Se Disciplina tiver dependentes (como Notas, Faltas), teria que limpar aqui também.
+                # Assumindo que DisciplinaTurma e Horarios (já limpos) são os principais.
+                db.session.delete(disciplina)
+
+            # 3. Por fim, deleta o ciclo
             db.session.delete(ciclo)
+            
             db.session.commit()
-            return True, "Ciclo e todos os dados associados foram excluídos com sucesso."
+            return True, "Ciclo, semanas, aulas e disciplinas foram excluídos com sucesso."
             
         except Exception as e:
             db.session.rollback()
