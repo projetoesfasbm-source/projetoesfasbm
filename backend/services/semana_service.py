@@ -2,12 +2,14 @@
 
 from datetime import date
 from flask import current_app
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, delete, or_
 from ..models.database import db
 from ..models.semana import Semana
 from ..models.horario import Horario
 from ..models.ciclo import Ciclo
-from ..models.disciplina import Disciplina  # <--- IMPORTANTE: Importar Disciplina
+from ..models.disciplina import Disciplina
+from ..models.disciplina_turma import DisciplinaTurma
+from ..models.turma import Turma
 from .user_service import UserService
 
 class SemanaService:
@@ -163,8 +165,7 @@ class SemanaService:
     @staticmethod
     def deletar_ciclo(ciclo_id):
         """
-        Deleta um ciclo e TODAS as suas dependências (Semanas, Aulas E DISCIPLINAS).
-        Realiza exclusão em cascata manual completa.
+        Deleta um ciclo e TODAS as suas dependências via SQL Direto para garantir Cascata.
         """
         ciclo = db.session.get(Ciclo, ciclo_id)
         if not ciclo:
@@ -175,29 +176,43 @@ class SemanaService:
              return False, "Permissão negada para excluir este ciclo."
 
         try:
-            # 1. Busca todas as semanas do ciclo
-            semanas = db.session.scalars(select(Semana).where(Semana.ciclo_id == ciclo.id)).all()
-            
-            for semana in semanas:
-                # 1.1 Deleta aulas associadas à semana
-                db.session.query(Horario).filter(Horario.semana_id == semana.id).delete()
-                # 1.2 Deleta a semana
-                db.session.delete(semana)
-            
-            # 2. NOVA ETAPA: Deletar DISCIPLINAS associadas ao Ciclo
-            # Isso é necessário pois Disciplina tem FK para Ciclo
-            disciplinas = db.session.scalars(select(Disciplina).where(Disciplina.ciclo_id == ciclo.id)).all()
-            for disciplina in disciplinas:
-                # Opcional: Se Disciplina tiver dependentes (como Notas, Faltas), teria que limpar aqui também.
-                # Assumindo que DisciplinaTurma e Horarios (já limpos) são os principais.
-                db.session.delete(disciplina)
+            # Subqueries para identificar o que apagar
+            sub_semanas = select(Semana.id).where(Semana.ciclo_id == ciclo_id)
+            sub_disciplinas = select(Disciplina.id).where(Disciplina.ciclo_id == ciclo_id)
 
-            # 3. Por fim, deleta o ciclo
-            db.session.delete(ciclo)
+            # 1. Apagar Horários (dependem de Semana ou Disciplina)
+            db.session.execute(delete(Horario).where(
+                or_(
+                    Horario.semana_id.in_(sub_semanas),
+                    Horario.disciplina_id.in_(sub_disciplinas)
+                )
+            ))
+
+            # 2. Apagar Vínculos de Turma/Instrutor (dependem de Disciplina)
+            db.session.execute(delete(DisciplinaTurma).where(
+                DisciplinaTurma.disciplina_id.in_(sub_disciplinas)
+            ))
+
+            # 3. Apagar Semanas (dependem de Ciclo)
+            db.session.execute(delete(Semana).where(Semana.ciclo_id == ciclo_id))
+
+            # 4. Apagar Disciplinas (dependem de Ciclo)
+            db.session.execute(delete(Disciplina).where(Disciplina.ciclo_id == ciclo_id))
+
+            # 5. Apagar Turmas (Se houver vinculo direto com Ciclo)
+            if hasattr(Turma, 'ciclo_id'):
+                db.session.execute(delete(Turma).where(Turma.ciclo_id == ciclo_id))
+
+            # 6. Apagar o Ciclo
+            db.session.execute(delete(Ciclo).where(Ciclo.id == ciclo_id))
+            
+            # Limpa sessão para evitar inconsistências
+            db.session.expire_all()
             
             db.session.commit()
-            return True, "Ciclo, semanas, aulas e disciplinas foram excluídos com sucesso."
+            return True, "Ciclo e todos os dados associados foram excluídos com sucesso."
             
         except Exception as e:
             db.session.rollback()
+            current_app.logger.error(f"Erro ao excluir ciclo: {str(e)}")
             return False, f"Erro ao excluir ciclo: {str(e)}"

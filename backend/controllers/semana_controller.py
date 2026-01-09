@@ -187,18 +187,12 @@ def adicionar_ciclo():
 @login_required
 @admin_or_programmer_required
 def deletar_ciclo(ciclo_id):
-    ciclo = db.session.get(Ciclo, ciclo_id)
-    school_id = UserService.get_current_school_id()
+    # CORREÇÃO: Chama o Service que faz a limpeza em cascata
+    success, message = SemanaService.deletar_ciclo(ciclo_id)
     
-    if ciclo and ciclo.school_id == school_id:
-        if ciclo.semanas or ciclo.disciplinas:
-            flash("Não é possível deletar um ciclo que contém semanas ou disciplinas associadas.", "danger")
-        else:
-            db.session.delete(ciclo)
-            db.session.commit()
-            flash(f"Ciclo '{ciclo.nome}' deletado com sucesso.", "success")
-    else:
-        flash("Ciclo não encontrado ou permissão negada.", "danger")
+    category = 'success' if success else 'danger'
+    flash(message, category)
+    
     return redirect(url_for('semana.gerenciar_semanas'))
 
 @semana_bp.route('/<int:semana_id>/salvar-prioridade', methods=['POST'])
