@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Editar Semana - {{ semana.nome }}{% endblock %}
+{% block title %}Editar Semana{% endblock %}
 
 {% block content %}
 <div class="content-header">
@@ -8,75 +8,104 @@
     <p>Ajuste as informações da semana letiva selecionada.</p>
 </div>
 
-<div class="table-container" style="max-width: 700px; margin: 0 auto;">
-    <div class="table-header">
-        {# --- CORREÇÃO APLICADA AQUI --- #}
-        <h3>Editando: {{ semana.nome }} ({{ semana.ciclo.nome }})</h3>
-    </div>
-    
-    <form method="POST" action="{{ url_for('semana.editar_semana', semana_id=semana.id) }}" style="padding: 1rem 0;">
-        <div class="form-group">
-            <label for="nome">Nome da Semana</label>
-            <input type="text" id="nome" name="nome" class="form-control" value="{{ semana.nome }}" required>
-        </div>
-        <div class="form-group">
-            <label for="data_inicio">Data de Início</label>
-            <input type="date" id="data_inicio" name="data_inicio" class="form-control" value="{{ semana.data_inicio.strftime('%Y-%m-%d') }}" required>
-        </div>
-        <div class="form-group">
-            <label for="data_fim">Data de Fim</label>
-            <input type="date" id="data_fim" name="data_fim" class="form-control" value="{{ semana.data_fim.strftime('%Y-%m-%d') }}" required>
-        </div>
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white py-3">
+                <h5 class="mb-0 fw-bold">Editando: {{ semana.nome }} ({{ semana.ciclo.nome }})</h5>
+            </div>
+            <div class="card-body p-4">
+                
+                {# Início do Formulário #}
+                <form method="POST" action="{{ url_for('semana.editar_semana', semana_id=semana.id) }}">
+                    
+                    {# --- CORREÇÃO DO ERRO CSRF AQUI --- #}
+                    {{ form.hidden_tag() }} 
+                    {# ---------------------------------- #}
 
-        <div class="visibility-options">
-            <div class="period-group">
-                <strong>Períodos Extras:</strong>
-                <label class="checkbox-item"><input type="checkbox" name="mostrar_periodo_13" {% if semana.mostrar_periodo_13 %}checked{% endif %}> 13º</label>
-                <label class="checkbox-item"><input type="checkbox" name="mostrar_periodo_14" {% if semana.mostrar_periodo_14 %}checked{% endif %}> 14º</label>
-                <label class="checkbox-item"><input type="checkbox" name="mostrar_periodo_15" {% if semana.mostrar_periodo_15 %}checked{% endif %}> 15º</label>
-            </div>
-            <div class="weekend-container">
-                <div class="weekend-group">
-                    <label class="checkbox-item"><input type="checkbox" name="mostrar_sabado" data-target="periodos_sabado" {% if semana.mostrar_sabado %}checked{% endif %}> Habilitar Sábado</label>
-                    <input type="number" name="periodos_sabado" class="form-control period-input" value="{{ semana.periodos_sabado or '' }}" min="1" max="15" {% if not semana.mostrar_sabado %}disabled{% endif %}>
-                </div>
-                <div class="weekend-group">
-                    <label class="checkbox-item"><input type="checkbox" name="mostrar_domingo" data-target="periodos_domingo" {% if semana.mostrar_domingo %}checked{% endif %}> Habilitar Domingo</label>
-                    <input type="number" name="periodos_domingo" class="form-control period-input" value="{{ semana.periodos_domingo or '' }}" min="1" max="15" {% if not semana.mostrar_domingo %}disabled{% endif %}>
-                </div>
+                    <div class="mb-3">
+                        {{ form.nome.label(class="form-label fw-bold") }}
+                        {{ form.nome(class="form-control", placeholder="Ex: Semana 01") }}
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            {{ form.data_inicio.label(class="form-label fw-bold") }}
+                            {{ form.data_inicio(class="form-control") }}
+                        </div>
+                        <div class="col-md-6">
+                            {{ form.data_fim.label(class="form-label fw-bold") }}
+                            {{ form.data_fim(class="form-control") }}
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold d-block">Períodos Extras:</label>
+                        <div class="d-flex gap-3">
+                            <div class="form-check">
+                                {{ form.mostrar_periodo_13(class="form-check-input") }}
+                                <label class="form-check-label" for="mostrar_periodo_13">13º Tempo</label>
+                            </div>
+                            <div class="form-check">
+                                {{ form.mostrar_periodo_14(class="form-check-input") }}
+                                <label class="form-check-label" for="mostrar_periodo_14">14º Tempo</label>
+                            </div>
+                            <div class="form-check">
+                                {{ form.mostrar_periodo_15(class="form-check-input") }}
+                                <label class="form-check-label" for="mostrar_periodo_15">15º Tempo</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row align-items-center mb-4">
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-center gap-2 p-2 border rounded bg-light">
+                                <div class="form-check form-switch mb-0">
+                                    {{ form.mostrar_sabado(class="form-check-input", role="switch", id="switchSabado", onchange="toggleInput('periodos_sabado', this.checked)") }}
+                                    <label class="form-check-label fw-bold" for="switchSabado">Habilitar Sábado</label>
+                                </div>
+                                {{ form.periodos_sabado(class="form-control form-control-sm text-center", style="width: 70px;", id="periodos_sabado", placeholder="Qtd") }}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-center gap-2 p-2 border rounded bg-light">
+                                <div class="form-check form-switch mb-0">
+                                    {{ form.mostrar_domingo(class="form-check-input", role="switch", id="switchDomingo", onchange="toggleInput('periodos_domingo', this.checked)") }}
+                                    <label class="form-check-label fw-bold" for="switchDomingo">Habilitar Domingo</label>
+                                </div>
+                                {{ form.periodos_domingo(class="form-control form-control-sm text-center", style="width: 70px;", id="periodos_domingo", placeholder="Qtd") }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2">
+                        <a href="{{ url_for('semana.gerenciar_semanas', ciclo_id=semana.ciclo_id) }}" class="btn btn-outline-secondary">Cancelar</a>
+                        <button type="submit" class="btn btn-primary fw-bold px-4">Salvar Alterações</button>
+                    </div>
+
+                </form>
             </div>
         </div>
-        
-        <div class="form-actions">
-            <a href="{{ url_for('semana.gerenciar_semanas') }}" class="btn btn-secondary">Cancelar</a>
-            <button type="submit" class="btn btn-primary">Salvar Alterações</button>
-        </div>
-    </form>
+    </div>
 </div>
 
-<style>
-.visibility-options {
-    display: flex; flex-wrap: wrap; gap: 1rem 2rem; align-items: center;
-    margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--color-border);
-}
-.period-group { display: flex; align-items: center; gap: 1rem; }
-.checkbox-item { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; }
-.weekend-container { display: flex; flex-wrap: wrap; gap: 1.5rem; }
-.weekend-group { display: flex; align-items: center; gap: 0.5rem; }
-.period-input { width: 120px; }
-</style>
-
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('input[type="checkbox"][data-target]').forEach(checkbox => {
-        checkbox.addEventListener('change', function() {
-            const targetInput = document.querySelector(`input[name="${this.dataset.target}"]`);
-            targetInput.disabled = !this.checked;
-            if (!this.checked) {
-                targetInput.value = '';
-            }
-        });
+    // Função simples para habilitar/desabilitar os inputs de quantidade
+    function toggleInput(inputId, isChecked) {
+        const input = document.getElementById(inputId);
+        if (input) {
+            input.disabled = !isChecked;
+            if (!isChecked) input.value = '';
+        }
+    }
+
+    // Inicializa o estado correto ao carregar a página
+    document.addEventListener('DOMContentLoaded', function() {
+        toggleInput('periodos_sabado', document.getElementById('switchSabado').checked);
+        toggleInput('periodos_domingo', document.getElementById('switchDomingo').checked);
     });
-});
 </script>
+
 {% endblock %}
