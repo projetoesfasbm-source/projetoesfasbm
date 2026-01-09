@@ -27,8 +27,15 @@ class DisciplinaForm(FlaskForm):
     carga_horaria_prevista = IntegerField('Carga Horária Total Prevista', validators=[DataRequired(), NumberRange(min=1)])
     carga_horaria_cumprida = IntegerField('Carga Horária Já Cumprida (Legado)', validators=[Optional(), NumberRange(min=0)], default=0)
     ciclo_id = SelectField('Ciclo', coerce=int, validators=[DataRequired()])
-    turma_ids = SelectMultipleField('Turmas', coerce=int, validators=[DataRequired(message="Selecione pelo menos uma turma.")],
-                                      option_widget=CheckboxInput(), widget=ListWidget(prefix_label=False))
+    
+    # CORREÇÃO 1: Removido DataRequired daqui para evitar o bug do HTML5 exigir todos os checkboxes
+    turma_ids = SelectMultipleField(
+        'Turmas', 
+        coerce=int, 
+        validators=[Optional()], # Alterado para Optional para não travar no navegador
+        option_widget=CheckboxInput(), 
+        widget=ListWidget(prefix_label=False)
+    )
     submit = SubmitField('Salvar')
 
 class DeleteForm(FlaskForm):
@@ -77,13 +84,22 @@ def adicionar_disciplina():
         return redirect(url_for('disciplina.listar_disciplinas'))
         
     form = DisciplinaForm()
-    ciclos = db.session.scalars(select(Ciclo).order_by(Ciclo.nome)).all()
+    
+    # CORREÇÃO 2: Filtrar ciclos apenas da escola atual
+    ciclos = db.session.scalars(
+        select(Ciclo).where(Ciclo.school_id == school_id).order_by(Ciclo.nome)
+    ).all()
     form.ciclo_id.choices = [(c.id, c.nome) for c in ciclos]
     
     turmas = TurmaService.get_turmas_by_school(school_id)
     form.turma_ids.choices = [(t.id, t.nome) for t in turmas]
     
     if form.validate_on_submit():
+        # Validação manual para garantir que pelo menos uma turma foi selecionada
+        if not form.turma_ids.data:
+            flash("Selecione pelo menos uma turma.", "warning")
+            return render_template('adicionar_disciplina.html', form=form)
+
         success, message = DisciplinaService.create_disciplina(form.data, school_id)
         flash(message, 'success' if success else 'danger')
         if success:
@@ -97,8 +113,15 @@ def adicionar_disciplina():
 @school_admin_or_programmer_required
 def editar_disciplina(disciplina_id):
     disciplina = db.session.get(Disciplina, disciplina_id)
+    school_id = UserService.get_current_school_id() # Necessário para o filtro
+
     if not disciplina:
         flash('Disciplina não encontrada.', 'danger')
+        return redirect(url_for('disciplina.listar_disciplinas'))
+
+    # Verifica se a disciplina pertence à escola atual (segurança)
+    if school_id and disciplina.turma.school_id != school_id:
+        flash('Permissão negada.', 'danger')
         return redirect(url_for('disciplina.listar_disciplinas'))
 
     class EditDisciplinaForm(FlaskForm):
@@ -110,8 +133,14 @@ def editar_disciplina(disciplina_id):
         submit = SubmitField('Salvar')
 
     form = EditDisciplinaForm(obj=disciplina)
-    ciclos = db.session.scalars(select(Ciclo).order_by(Ciclo.nome)).all()
+    
+    # CORREÇÃO 2: Filtrar ciclos apenas da escola atual também na edição
+    ciclos = db.session.scalars(
+        select(Ciclo).where(Ciclo.school_id == school_id).order_by(Ciclo.nome)
+    ).all()
     form.ciclo_id.choices = [(c.id, c.nome) for c in ciclos]
+    
+    # No edit, a turma é fixa ou única, mantendo lógica original
     form.turma_id.choices = [(disciplina.turma.id, disciplina.turma.nome)]
     
     if form.validate_on_submit():
@@ -129,6 +158,13 @@ def excluir_disciplina(disciplina_id):
     if form.validate_on_submit():
         disciplina = db.session.get(Disciplina, disciplina_id)
         turma_id = disciplina.turma_id if disciplina else None
+        
+        # Segurança extra antes de excluir
+        school_id = UserService.get_current_school_id()
+        if disciplina and school_id and disciplina.turma.school_id != school_id:
+             flash('Permissão negada.', 'danger')
+             return redirect(url_for('disciplina.listar_disciplinas'))
+
         success, message = DisciplinaService.delete_disciplina(disciplina_id)
         flash(message, 'success' if success else 'danger')
         return redirect(url_for('disciplina.listar_disciplinas', turma_id=turma_id))

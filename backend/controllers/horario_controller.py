@@ -142,7 +142,7 @@ def index():
     instrutor_turmas_vinculadas = []
     priority_active = False
     priority_allowed_names = [] 
-    all_materias_names = []     
+    all_materias_names = []      
 
     if school_id:
         try:
@@ -167,7 +167,8 @@ def index():
         if current_user.is_sens or current_user.is_admin_escola or current_user.is_programador:
             can_schedule_in_this_turma = True
             
-        elif current_user.role == 'instrutor' and current_user.instrutor_profile:
+        # --- CORREÇÃO AQUI: Permite Instrutor OU CAL, desde que tenha perfil de instrutor ---
+        elif (current_user.role == 'instrutor' or current_user.is_cal) and current_user.instrutor_profile:
             instrutor_id = current_user.instrutor_profile.id
             
             pelotao_names = db.session.scalars(select(DisciplinaTurma.pelotao).where(or_(DisciplinaTurma.instrutor_id_1 == instrutor_id, DisciplinaTurma.instrutor_id_2 == instrutor_id)).distinct()).all()

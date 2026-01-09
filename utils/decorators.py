@@ -57,13 +57,31 @@ def can_schedule_classes_required(f):
             return redirect(url_for('auth.login'))
             
         school_id = UserService.get_current_school_id()
-        if (current_user.is_instrutor_in_school(school_id) or 
-            current_user.is_sens_in_school(school_id) or
-            current_user.is_admin_escola_in_school(school_id) or 
-            current_user.is_programador):
+        
+        # --- VERIFICAÇÃO ORIGINAL (Provável causa do erro para CAL) ---
+        is_instrutor = current_user.is_instrutor_in_school(school_id)
+        is_sens = current_user.is_sens_in_school(school_id)
+        is_admin = current_user.is_admin_escola_in_school(school_id)
+        is_prog = current_user.is_programador
+        
+        # Tenta verificar se tem perfil, mesmo que a Role seja diferente
+        has_instrutor_profile = getattr(current_user, 'instrutor_profile', None) is not None
+
+        # CORREÇÃO LÓGICA: Se tiver perfil de instrutor, libera, mesmo sendo CAL/Outro
+        if (is_instrutor or is_sens or is_admin or is_prog or has_instrutor_profile):
             return f(*args, **kwargs)
             
-        flash('Sem permissão para agendar nesta escola.', 'danger')
+        # --- DEBUG (PRONT) ATIVADO ---
+        # Se cair aqui, mostra exatamente o que falhou
+        debug_msg = (
+            f"DEBUG PERMISSÃO: Role='{current_user.role}' | "
+            f"School_ID={school_id} | "
+            f"Check_Instrutor={is_instrutor} | "
+            f"Tem_Perfil_Instrutor={has_instrutor_profile}"
+        )
+        flash(debug_msg, 'danger')
+        # flash('Sem permissão para agendar nesta escola.', 'danger') # Original comentada
+        
         return redirect(url_for('main.dashboard'))
     return decorated_function
 
