@@ -8,98 +8,83 @@
     <p>Selecione a turma para carregar suas disciplinas e então vincule os instrutores.</p>
 </div>
 
-{# VERIFICAÇÃO DE PERMISSÃO: Adicionado 'admin_sens' #}
-{% if current_user.role in ['programador', 'admin_escola', 'super_admin', 'sens', 'admin_sens'] %}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
 
-    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
-
-    <div class="table-container" style="max-width: 700px; margin: 0 auto;">
-        <form method="POST" action="{{ url_for('vinculo.adicionar_vinculo') }}">
-            {{ form.hidden_tag() }}
-            <div class="form-group">
-                <label for="turma_select" class="form-label">1. Selecione a Turma</label>
-                <select id="turma_select" name="turma_id" class="form-control" required>
-                    <option value="">-- Selecione uma turma para carregar as disciplinas --</option>
-                    {% for turma in turmas %}
-                    <option value="{{ turma.id }}">{{ turma.nome }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="form-group">
-                {{ form.disciplina_id.label(class="form-label", text='2. Selecione a Disciplina') }}
-                {{ form.disciplina_id(class="form-control", disabled=True) }}
-            </div>
-            <div class="form-group">
-                {{ form.instrutor_id_1.label(class="form-label", text='3. Selecione o Instrutor 1') }}
-                {{ form.instrutor_id_1(class="form-control select2-enable", style="width: 100%") }}
-            </div>
-            <div class="form-group">
-                {{ form.instrutor_id_2.label(class="form-label", text='4. Selecione o Instrutor 2 (Opcional)') }}
-                {{ form.instrutor_id_2(class="form-control select2-enable", style="width: 100%") }}
-                <small class="form-text text-muted">Deixe como "-- Nenhum --" para vincular apenas um instrutor.</small>
-            </div>
-
-            <div class="form-actions">
-                <a href="{{ url_for('vinculo.gerenciar_vinculos') }}" class="btn btn-secondary">Cancelar</a>
-                <button type="submit" class="btn btn-primary">Adicionar Vínculo</button>
-            </div>
-        </form>
-    </div>
-
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-
-    <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const turmaSelect = document.getElementById('turma_select');
-        const disciplinaSelect = document.getElementById('disciplina_id');
-
-        $('.select2-enable').select2({
-            theme: 'bootstrap-5',
-            width: '100%',
-            placeholder: "Pesquise um instrutor...",
-            allowClear: true
-        });
-
-        turmaSelect.addEventListener('change', function() {
-            const turmaId = this.value;
-            disciplinaSelect.innerHTML = '<option value="">Carregando...</option>';
-            disciplinaSelect.disabled = true;
-
-            if (!turmaId) {
-                disciplinaSelect.innerHTML = '<option value="">-- Selecione uma turma --</option>';
-                return;
-            }
-
-            fetch(`/disciplina/api/por-turma/${turmaId}`)
-                .then(response => response.json())
-                .then(data => {
-                    disciplinaSelect.innerHTML = '<option value="" selected disabled>-- Selecione uma disciplina --</option>';
-                    data.forEach(disciplina => {
-                        const option = new Option(disciplina.materia, disciplina.id);
-                        disciplinaSelect.add(option);
-                    });
-                    disciplinaSelect.disabled = false;
-                })
-                .catch(error => {
-                    console.error('Erro:', error);
-                    disciplinaSelect.innerHTML = '<option value="">Erro ao carregar</option>';
-                });
-        });
-    });
-    </script>
-
-{% else %}
-    <div class="alert alert-danger d-flex align-items-center shadow-sm" role="alert" style="max-width: 600px; margin: 2rem auto;">
-        <i class="fas fa-lock fa-2x me-3"></i>
-        <div>
-            <h4 class="alert-heading mb-1">Acesso Restrito</h4>
-            <p class="mb-0">Acesso exclusivo para SENS e Administração.</p>
+<div class="table-container" style="max-width: 700px; margin: 0 auto;">
+    <form method="POST" action="{{ url_for('vinculo.adicionar_vinculo') }}">
+        {{ form.hidden_tag() }}
+        <div class="form-group">
+            <label for="turma_select" class="form-label">1. Selecione a Turma</label>
+            <select id="turma_select" name="turma_id" class="form-control" required>
+                <option value="">-- Selecione uma turma para carregar as disciplinas --</option>
+                {% for turma in turmas %}
+                <option value="{{ turma.id }}">{{ turma.nome }}</option>
+                {% endfor %}
+            </select>
         </div>
-    </div>
-    <div class="text-center mt-3">
-        <a href="{{ url_for('index.index') }}" class="btn btn-secondary"><i class="fas fa-arrow-left me-1"></i> Voltar</a>
-    </div>
-{% endif %}
+        <div class="form-group">
+            {{ form.disciplina_id.label(class="form-label", text='2. Selecione a Disciplina') }}
+            {{ form.disciplina_id(class="form-control", disabled=True) }}
+        </div>
+        <div class="form-group">
+            {{ form.instrutor_id_1.label(class="form-label", text='3. Selecione o Instrutor 1') }}
+            {{ form.instrutor_id_1(class="form-control select2-enable", style="width: 100%") }}
+        </div>
+        <div class="form-group">
+            {{ form.instrutor_id_2.label(class="form-label", text='4. Selecione o Instrutor 2 (Opcional)') }}
+            {{ form.instrutor_id_2(class="form-control select2-enable", style="width: 100%") }}
+            <small class="form-text text-muted">Deixe como "-- Nenhum --" para vincular apenas um instrutor.</small>
+        </div>
+
+        <div class="form-actions">
+            <a href="{{ url_for('vinculo.gerenciar_vinculos') }}" class="btn btn-secondary">Cancelar</a>
+            <button type="submit" class="btn btn-primary">Adicionar Vínculo</button>
+        </div>
+    </form>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const turmaSelect = document.getElementById('turma_select');
+    const disciplinaSelect = document.getElementById('disciplina_id');
+
+    $('.select2-enable').select2({
+        theme: 'bootstrap-5',
+        width: '100%',
+        placeholder: "Pesquise um instrutor...",
+        allowClear: true
+    });
+
+    turmaSelect.addEventListener('change', function() {
+        const turmaId = this.value;
+        disciplinaSelect.innerHTML = '<option value="">Carregando...</option>';
+        disciplinaSelect.disabled = true;
+
+        if (!turmaId) {
+            disciplinaSelect.innerHTML = '<option value="">-- Selecione uma turma --</option>';
+            return;
+        }
+
+        fetch(`/disciplina/api/por-turma/${turmaId}`)
+            .then(response => response.json())
+            .then(data => {
+                disciplinaSelect.innerHTML = '<option value="" selected disabled>-- Selecione uma disciplina --</option>';
+                data.forEach(disciplina => {
+                    const option = new Option(disciplina.materia, disciplina.id);
+                    disciplinaSelect.add(option);
+                });
+                disciplinaSelect.disabled = false;
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                disciplinaSelect.innerHTML = '<option value="">Erro ao carregar</option>';
+            });
+    });
+});
+</script>
+
 {% endblock %}

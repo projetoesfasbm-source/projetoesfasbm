@@ -63,10 +63,8 @@ class InstrutorService:
             .join(User, Instrutor.user_id == User.id)
             .where(
                 User.is_active.is_(True),
-                User.role == 'instrutor',
-                # AQUI ESTÁ A CORREÇÃO CRUCIAL:
-                # Filtra especificamente o perfil de instrutor criado para ESTA escola.
-                # Isso ignora perfis do mesmo usuário em outras escolas.
+                # CORREÇÃO: Removido filtro de role global. 
+                # Se existe na tabela Instrutor para esta escola, é instrutor.
                 Instrutor.school_id == active_school_id
             )
             .options(joinedload(Instrutor.user))
@@ -98,8 +96,8 @@ class InstrutorService:
             .join(User, Instrutor.user_id == User.id)
             .where(
                 User.is_active.is_(True),
-                User.role == 'instrutor',
-                # CORREÇÃO DE BLINDAGEM AQUI TAMBÉM
+                # CORREÇÃO: Removido filtro de role global. 
+                # Garante que lista todos com perfil nesta escola.
                 Instrutor.school_id == active_school_id
             )
             .options(joinedload(Instrutor.user))
@@ -181,7 +179,6 @@ class InstrutorService:
                     return False, f"A Matrícula '{matricula}' já existe, mas o e-mail não confere."
 
                 # Verifica se já existe perfil PARA ESTA ESCOLA ESPECÍFICA
-                # (Garante que não criamos duplicatas dentro da mesma escola)
                 existing_profile = db.session.scalar(select(Instrutor).where(
                     Instrutor.user_id == existing_user.id,
                     Instrutor.school_id == school_id

@@ -56,7 +56,8 @@
                     {% endif %}
                 </div>
                 
-                {% if current_user.role in ['programador', 'admin_escola'] %}
+                {# CORREÇÃO: Usando o nome correto do método definido em user.py #}
+                {% if current_user.is_sens_in_school(turma.school_id) %}
                 <button type="button" 
                         class="btn btn-sm btn-secondary" 
                         data-bs-toggle="modal" 

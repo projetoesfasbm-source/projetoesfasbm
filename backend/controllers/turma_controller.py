@@ -1,6 +1,6 @@
 # backend/controllers/turma_controller.py
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, abort
 from flask_login import login_required, current_user
 from sqlalchemy import select, or_
 from flask_wtf import FlaskForm
@@ -13,7 +13,7 @@ from ..models.turma import Turma, TurmaStatus
 from ..models.aluno import Aluno
 from ..models.user import User 
 from ..models.user_school import UserSchool
-from ..models.turma_cargo import TurmaCargo # IMPORTADO O MODELO
+from ..models.turma_cargo import TurmaCargo 
 from ..services.turma_service import TurmaService
 from ..services.user_service import UserService 
 from utils.decorators import admin_or_programmer_required, school_admin_or_programmer_required, can_view_management_pages_required
@@ -74,9 +74,18 @@ def detalhes_turma(turma_id):
 
 @turma_bp.route('/<int:turma_id>/salvar-cargos', methods=['POST'])
 @login_required
-@school_admin_or_programmer_required
+# Sem decorators restritivos, validamos manualmente abaixo usando o método correto do User
 def salvar_cargos_turma(turma_id):
     school_id = UserService.get_current_school_id()
+    if not school_id:
+        flash("Sessão expirada ou escola não selecionada.", "warning")
+        return redirect(url_for('main.dashboard'))
+
+    # CORREÇÃO: Nome do método atualizado para bater com o user.py (is_sens_in_school)
+    if not current_user.is_sens_in_school(school_id):
+        flash("Permissão negada. Apenas Chefia de Ensino (SENS) ou Comandante podem alterar cargos.", "danger")
+        return redirect(url_for('turma.detalhes_turma', turma_id=turma_id))
+
     turma = db.session.get(Turma, turma_id)
     if not turma or turma.school_id != school_id:
         flash('Turma não encontrada.', 'danger')
@@ -86,10 +95,6 @@ def salvar_cargos_turma(turma_id):
     flash(message, 'success' if success else 'danger')
     return redirect(url_for('turma.detalhes_turma', turma_id=turma_id))
 
-# ... (Rotas cadastrar_turma, editar_turma, excluir_turma mantidas do original, sem alterações necessárias) ...
-# Para garantir que não falte nada, vou omitir aqui mas elas continuam existindo no arquivo original.
-# Se precisar delas completas aqui me avise, mas o foco é a correção dos cargos.
-# ADICIONE AQUI AS ROTAS CADASTRAR, EDITAR e EXCLUIR do seu arquivo original ou do passo anterior.
 @turma_bp.route('/cadastrar', methods=['GET', 'POST'])
 @login_required
 @school_admin_or_programmer_required
