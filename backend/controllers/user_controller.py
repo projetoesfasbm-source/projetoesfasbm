@@ -13,7 +13,7 @@ from flask import (
     request, url_for, jsonify, abort
 )
 from flask_login import current_user, login_required
-from sqlalchemy import text, select
+from sqlalchemy import text, select, case
 from sqlalchemy.exc import IntegrityError
 from werkzeug.security import generate_password_hash
 from flask_wtf import FlaskForm
@@ -266,15 +266,28 @@ def listar_admins_escola():
         flash("Selecione uma escola para gerenciar usuários.", "warning")
         return redirect(url_for('main.dashboard'))
 
-    # CORREÇÃO: Busca tuplas (User, UserSchool) para ler o cargo da escola
+    # ORDENAÇÃO INTELIGENTE:
+    # Prioridade:
+    # 1. Admin Geral (admin_escola)
+    # 2. Chefes SENS/CAL (admin_sens, admin_cal)
+    # 3. Instrutores (instrutor)
+    # 4. Outros/Alunos (aluno, etc)
+    
+    role_priority = case(
+        (UserSchool.role == 'admin_escola', 1),
+        (UserSchool.role == 'admin_sens', 2),
+        (UserSchool.role == 'admin_cal', 2),
+        (UserSchool.role == 'instrutor', 3),
+        else_=4
+    )
+
+    # Busca TODOS os usuários vinculados a esta escola (não removemos mais os alunos)
+    # Isso permite que todos apareçam na lista para filtro e gestão.
     results = db.session.execute(
         select(User, UserSchool)
         .join(UserSchool)
-        .where(
-            UserSchool.school_id == school_id,
-            UserSchool.role != 'aluno' # Mostra quem tem cargo na escola
-        )
-        .order_by(User.nome_completo)
+        .where(UserSchool.school_id == school_id)
+        .order_by(role_priority, User.nome_completo)
     ).all()
     
     # Passa 'usuarios_com_role' para o template

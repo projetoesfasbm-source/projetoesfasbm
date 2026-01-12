@@ -13,15 +13,15 @@
                             <i class="fas fa-user-shield me-2"></i>Gerenciar Equipe e Permissões
                         </h4>
                         <p class="text-muted mb-0 small">
-                            Defina os papéis de acesso da equipe nesta escola: 
-                            <span class="badge bg-warning text-dark mx-1">CAL (Justiça)</span> 
-                            <span class="badge bg-info text-dark mx-1">SENS (Ensino)</span>
-                            <span class="badge bg-dark mx-1">Admin Geral</span>
+                            Defina os papéis de acesso da equipe nesta escola. A lista abaixo exibe <strong>todos</strong> os usuários vinculados.
                         </p>
                     </div>
                     <div>
                         <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary">
                             <i class="fas fa-arrow-left me-1"></i> Voltar
+                        </a>
+                        <a href="{{ url_for('user.criar_admin_escola') }}" class="btn btn-success ms-2">
+                            <i class="fas fa-plus me-1"></i> Novo Admin
                         </a>
                     </div>
                 </div>
@@ -30,10 +30,22 @@
     </div>
 
     <div class="row mb-3">
-        <div class="col-md-6 col-12">
-            <div class="input-group shadow-sm">
+        <div class="col-md-8 col-12 d-flex gap-2">
+            <div class="input-group shadow-sm flex-grow-1">
                 <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted"></i></span>
                 <input type="text" id="searchInput" class="form-control border-start-0" placeholder="Buscar por nome, matrícula, posto ou e-mail..." onkeyup="filterTable()">
+            </div>
+            
+            <div class="input-group shadow-sm" style="max-width: 250px;">
+                <span class="input-group-text bg-white border-end-0"><i class="fas fa-filter text-muted"></i></span>
+                <select id="roleFilter" class="form-select border-start-0" onchange="filterTable()">
+                    <option value="all">Todos os Acessos</option>
+                    <option value="admin_escola">Comandante / Admin Geral</option>
+                    <option value="admin_sens">Chefe SENS (Ensino)</option>
+                    <option value="admin_cal">Chefe CAL (Justiça)</option>
+                    <option value="instrutor">Instrutor</option>
+                    <option value="aluno">Aluno / Acesso Básico</option>
+                </select>
             </div>
         </div>
     </div>
@@ -54,7 +66,7 @@
                     <tbody>
                         {% if usuarios_com_role %}
                             {% for usuario, vinculo in usuarios_com_role %}
-                            <tr>
+                            <tr data-role="{{ vinculo.role }}">
                                 <td class="ps-4">
                                     <div class="d-flex align-items-center">
                                         <div class="avatar-circle me-3 bg-light text-primary d-flex align-items-center justify-content-center rounded-circle border" style="width: 40px; height: 40px; font-weight: bold;">
@@ -75,7 +87,6 @@
                                     <small class="text-muted">Matrícula: <span class="user-matricula">{{ usuario.matricula or '-' }}</span></small>
                                 </td>
                                 <td>
-                                    {# CORREÇÃO: Verifica vinculo.role, não usuario.role #}
                                     {% if vinculo.role == 'admin_escola' %}
                                         <span class="badge bg-dark">Comandante / Admin Geral</span>
                                     {% elif usuario.role == 'programador' %}
@@ -87,7 +98,7 @@
                                     {% elif vinculo.role == 'instrutor' %}
                                         <span class="badge bg-secondary">Instrutor</span>
                                     {% else %}
-                                        <span class="badge bg-light text-dark border">{{ vinculo.role }}</span>
+                                        <span class="badge bg-light text-dark border">Aluno / Básico</span>
                                     {% endif %}
                                 </td>
                                 <td>
@@ -97,6 +108,8 @@
                                         <div class="text-dark small"><i class="fas fa-balance-scale me-1"></i> Apenas Justiça/Disciplina</div>
                                     {% elif vinculo.role == 'admin_sens' %}
                                         <div class="text-dark small"><i class="fas fa-book me-1"></i> Ensino, Turmas e Horários</div>
+                                    {% elif vinculo.role == 'instrutor' %}
+                                        <div class="text-secondary small"><i class="fas fa-chalkboard-teacher me-1"></i> Aulas e Diários</div>
                                     {% else %}
                                         <div class="text-muted small">Acesso Básico</div>
                                     {% endif %}
@@ -130,7 +143,7 @@
                     <div class="text-muted opacity-50 mb-3">
                         <i class="fas fa-search fa-3x"></i>
                     </div>
-                    <h5>Nenhum resultado encontrado</h5>
+                    <h5>Nenhum resultado encontrado para os filtros aplicados</h5>
                 </div>
             </div>
         </div>
@@ -156,29 +169,6 @@
                             <p class="mb-3">Selecione o nível de acesso para: <br><strong>{{ usuario.nome_completo or usuario.username }}</strong></p>
                             
                             <div class="list-group">
-                                {# Verifica vinculo.role para marcar o radio button correto #}
-                                <label class="list-group-item d-flex gap-3 align-items-center list-group-item-action p-3">
-                                    <input class="form-check-input flex-shrink-0" type="radio" name="novo_role" value="admin_cal" {{ 'checked' if vinculo.role == 'admin_cal' else '' }}>
-                                    <div class="w-100">
-                                        <div class="d-flex justify-content-between">
-                                            <strong>Chefe CAL (Corpo de Alunos)</strong>
-                                            <i class="fas fa-balance-scale text-warning"></i>
-                                        </div>
-                                        <small class="text-muted d-block">Gerencia Justiça, Disciplina e Questionários.</small>
-                                    </div>
-                                </label>
-                                
-                                <label class="list-group-item d-flex gap-3 align-items-center list-group-item-action p-3">
-                                    <input class="form-check-input flex-shrink-0" type="radio" name="novo_role" value="admin_sens" {{ 'checked' if vinculo.role == 'admin_sens' else '' }}>
-                                    <div class="w-100">
-                                        <div class="d-flex justify-content-between">
-                                            <strong>Chefe SENS (Seção de Ensino)</strong>
-                                            <i class="fas fa-book text-info"></i>
-                                        </div>
-                                        <small class="text-muted d-block">Gerencia Quadro Horário, Turmas, Alunos e Notas.</small>
-                                    </div>
-                                </label>
-
                                 <label class="list-group-item d-flex gap-3 align-items-center list-group-item-action p-3">
                                     <input class="form-check-input flex-shrink-0" type="radio" name="novo_role" value="admin_escola" {{ 'checked' if vinculo.role == 'admin_escola' else '' }}>
                                     <div class="w-100">
@@ -191,13 +181,46 @@
                                 </label>
 
                                 <label class="list-group-item d-flex gap-3 align-items-center list-group-item-action p-3">
+                                    <input class="form-check-input flex-shrink-0" type="radio" name="novo_role" value="admin_sens" {{ 'checked' if vinculo.role == 'admin_sens' else '' }}>
+                                    <div class="w-100">
+                                        <div class="d-flex justify-content-between">
+                                            <strong>Chefe SENS (Seção de Ensino)</strong>
+                                            <i class="fas fa-book text-info"></i>
+                                        </div>
+                                        <small class="text-muted d-block">Gerencia Quadro Horário, Turmas, Alunos e Notas.</small>
+                                    </div>
+                                </label>
+
+                                <label class="list-group-item d-flex gap-3 align-items-center list-group-item-action p-3">
+                                    <input class="form-check-input flex-shrink-0" type="radio" name="novo_role" value="admin_cal" {{ 'checked' if vinculo.role == 'admin_cal' else '' }}>
+                                    <div class="w-100">
+                                        <div class="d-flex justify-content-between">
+                                            <strong>Chefe CAL (Corpo de Alunos)</strong>
+                                            <i class="fas fa-balance-scale text-warning"></i>
+                                        </div>
+                                        <small class="text-muted d-block">Gerencia Justiça, Disciplina e Questionários.</small>
+                                    </div>
+                                </label>
+
+                                <label class="list-group-item d-flex gap-3 align-items-center list-group-item-action p-3">
                                     <input class="form-check-input flex-shrink-0" type="radio" name="novo_role" value="instrutor" {{ 'checked' if vinculo.role == 'instrutor' else '' }}>
                                     <div class="w-100">
                                         <div class="d-flex justify-content-between">
-                                            <strong>Instrutor / Sem Função Adm.</strong>
+                                            <strong>Instrutor</strong>
                                             <i class="fas fa-chalkboard-teacher text-secondary"></i>
                                         </div>
-                                        <small class="text-muted d-block">Apenas visualiza suas aulas e perfil.</small>
+                                        <small class="text-muted d-block">Apenas visualiza suas aulas e lança chamadas/conteúdos.</small>
+                                    </div>
+                                </label>
+
+                                <label class="list-group-item d-flex gap-3 align-items-center list-group-item-action p-3">
+                                    <input class="form-check-input flex-shrink-0" type="radio" name="novo_role" value="aluno" {{ 'checked' if vinculo.role == 'aluno' else '' }}>
+                                    <div class="w-100">
+                                        <div class="d-flex justify-content-between">
+                                            <strong>Aluno / Usuário Básico</strong>
+                                            <i class="fas fa-user text-muted"></i>
+                                        </div>
+                                        <small class="text-muted d-block">Sem permissões administrativas.</small>
                                     </div>
                                 </label>
                             </div>
@@ -216,23 +239,37 @@
 
 <script>
     document.addEventListener("DOMContentLoaded", function() {
+        // Move os modais para o final do body para evitar problemas de z-index/backdrop
         let modals = document.querySelectorAll('.permission-modal');
         modals.forEach(modal => document.body.appendChild(modal));
     });
 
     function filterTable() {
-        let input = document.getElementById("searchInput");
-        let filter = input.value.toUpperCase();
+        // Obter valores dos inputs
+        let textInput = document.getElementById("searchInput");
+        let textFilter = textInput.value.toUpperCase();
+        
+        let roleSelect = document.getElementById("roleFilter");
+        let roleFilter = roleSelect.value; // 'all', 'admin_escola', etc.
+
         let table = document.getElementById("usersTable");
         let tr = table.getElementsByTagName("tr");
         let hasVisibleRow = false;
 
+        // Loop pelas linhas (começando de 1 para pular o cabeçalho)
         for (let i = 1; i < tr.length; i++) { 
             let row = tr[i];
+            
+            // Pular se for a linha de "Nenhum resultado" original (id="noResultsRow")
+            if (row.id === "noResultsRow") continue;
+
             let nameEl = row.querySelector(".user-name");
             let emailEl = row.querySelector(".user-email");
             let matriculaEl = row.querySelector(".user-matricula");
             let postoEl = row.querySelector(".user-posto");
+            
+            // Obter o role da linha via data attribute
+            let rowRole = row.getAttribute('data-role');
 
             if (nameEl) {
                 let nameValue = nameEl.textContent || nameEl.innerText;
@@ -240,11 +277,19 @@
                 let matriculaValue = matriculaEl ? (matriculaEl.textContent || matriculaEl.innerText) : "";
                 let postoValue = postoEl ? (postoEl.textContent || postoEl.innerText) : "";
 
-                if (nameValue.toUpperCase().indexOf(filter) > -1 || 
-                    emailValue.toUpperCase().indexOf(filter) > -1 ||
-                    matriculaValue.toUpperCase().indexOf(filter) > -1 ||
-                    postoValue.toUpperCase().indexOf(filter) > -1) {
-                    
+                // Verifica correspondência de texto
+                let textMatch = (
+                    nameValue.toUpperCase().indexOf(textFilter) > -1 || 
+                    emailValue.toUpperCase().indexOf(textFilter) > -1 ||
+                    matriculaValue.toUpperCase().indexOf(textFilter) > -1 ||
+                    postoValue.toUpperCase().indexOf(textFilter) > -1
+                );
+
+                // Verifica correspondência de role
+                let roleMatch = (roleFilter === 'all' || rowRole === roleFilter);
+
+                // Exibe apenas se AMBOS corresponderem
+                if (textMatch && roleMatch) {
                     row.style.display = "";
                     hasVisibleRow = true;
                 } else {
@@ -253,21 +298,27 @@
             }
         }
 
+        // Lógica de "Nenhum resultado encontrado"
         let noResultDiv = document.getElementById("searchNoResults");
         let tableHead = table.getElementsByTagName("thead")[0];
-        let noResultsRow = document.getElementById("noResultsRow"); // Linha original de vazio
+        let noResultsRowOriginal = document.getElementById("noResultsRow"); // A linha que vem do backend quando a lista está vazia
         
         if (noResultDiv) {
-            if (!hasVisibleRow && filter !== "") {
-                noResultDiv.classList.remove("d-none");
-                if(tableHead) tableHead.style.display = "none"; 
-                if(noResultsRow) noResultsRow.style.display = "none";
+            // Se filtrou e não sobrou nada
+            if (!hasVisibleRow) {
+                // Se a tabela original já estava vazia (noResultsRow visível), não mostramos o aviso de busca
+                if (noResultsRowOriginal && noResultsRowOriginal.style.display !== "none") {
+                     noResultDiv.classList.add("d-none");
+                } else {
+                     // Caso contrário (tinha dados, mas o filtro escondeu tudo), mostra o aviso
+                     noResultDiv.classList.remove("d-none");
+                     if(tableHead) tableHead.style.display = "none"; 
+                }
             } else {
+                // Tem resultados visíveis
                 noResultDiv.classList.add("d-none");
                 if(tableHead) tableHead.style.display = "";
-                if (!hasVisibleRow && filter === "" && noResultsRow) {
-                     noResultsRow.style.display = "";
-                }
+                if(noResultsRowOriginal) noResultsRowOriginal.style.display = "none";
             }
         }
     }
