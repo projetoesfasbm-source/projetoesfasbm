@@ -87,6 +87,7 @@ class User(UserMixin, db.Model):
             return current_global_role
             
         for us in self.user_schools:
+            # COMPARAÇÃO ROBUSTA (STR vs STR)
             if str(us.school_id) == str(school_id):
                 return str(us.role).lower().strip()
         
@@ -109,7 +110,7 @@ class User(UserMixin, db.Model):
     def is_sens_in_school(self, school_id: int | None) -> bool:
         if self.is_programador_check(): return True
         role = self.get_role_in_school(school_id)
-        # Permite ADMIN_SENS ou ADMIN_ESCOLA (Comandante)
+        # SENS inclui ADMIN_SENS e ADMIN_ESCOLA (Comandante tem acesso a tudo)
         return role in [self.ROLE_ADMIN_SENS, self.ROLE_ADMIN_ESCOLA]
         
     def is_instrutor_in_school(self, school_id: int | None) -> bool:
