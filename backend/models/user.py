@@ -1,12 +1,10 @@
-# backend/models/user.py
-
 from __future__ import annotations
 import typing as t
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from .database import db
-from flask import session # Mantemos como fallback
+from flask import session
 
 if t.TYPE_CHECKING:
     from .site_config import SiteConfig
@@ -22,9 +20,9 @@ class User(UserMixin, db.Model):
 
     # --- CONSTANTES DE PERMISSÃO ---
     ROLE_PROGRAMADOR = 'programador'
-    ROLE_ADMIN_ESCOLA = 'admin_escola' # Comandante
-    ROLE_ADMIN_CAL = 'admin_cal'       # Chefe CAL
-    ROLE_ADMIN_SENS = 'admin_sens'     # Chefe SENS
+    ROLE_ADMIN_ESCOLA = 'admin_escola'
+    ROLE_ADMIN_CAL = 'admin_cal'
+    ROLE_ADMIN_SENS = 'admin_sens'
     ROLE_INSTRUTOR = 'instrutor'
     ROLE_ALUNO = 'aluno'
 
@@ -45,7 +43,6 @@ class User(UserMixin, db.Model):
     # --- RELACIONAMENTOS ---
     aluno_profile: Mapped['Aluno'] = relationship('Aluno', back_populates='user', uselist=False, cascade="all, delete-orphan")
     instrutor_profile: Mapped['Instrutor'] = relationship('Instrutor', back_populates='user', uselist=False, cascade="all, delete-orphan")
-    # Carregamento eager para garantir que as permissões estejam disponíveis
     user_schools: Mapped[list['UserSchool']] = relationship('UserSchool', back_populates='user', cascade="all, delete-orphan", lazy='selectin')
 
     notifications: Mapped[list['Notification']] = relationship('Notification', back_populates='user', cascade="all, delete-orphan")
@@ -69,41 +66,36 @@ class User(UserMixin, db.Model):
         return f'<User {self.username or self.matricula}>'
 
     # =================================================================
-    # LÓGICA DE PERMISSÕES (CORRIGIDA)
+    # LÓGICA DE PERMISSÕES
     # =================================================================
 
     def _get_active_school_id(self):
-        """Tenta recuperar o ID da escola ativa do contexto ou sessão."""
-        # 1. Verifica se foi injetado pelo before_request (mais seguro)
         if hasattr(self, 'temp_active_school_id'):
             return self.temp_active_school_id
-        # 2. Fallback para sessão direta
         try:
             sid = session.get('active_school_id')
             return int(sid) if sid else None
         except:
             return None
 
-    def get_role_in_school(self, school_id: int | None) -> str:
-        """Retorna o cargo do usuário na escola específica."""
-        # Super usuários globais
-        if self.role == self.ROLE_PROGRAMADOR: return self.ROLE_PROGRAMADOR
-        if self.role == 'super_admin': return 'super_admin'
+    def get_role_in_school(self, school_id: int | str | None) -> str:
+        current_global_role = str(self.role).lower().strip()
+        if current_global_role == self.ROLE_PROGRAMADOR: return self.ROLE_PROGRAMADOR
+        if current_global_role == 'super_admin': return 'super_admin'
             
         if not school_id:
-            return self.role 
+            return current_global_role
             
-        # Busca na lista (agora carregada com lazy='selectin' para garantir)
         for us in self.user_schools:
-            if us.school_id == int(school_id):
-                return us.role
+            if str(us.school_id) == str(school_id):
+                return str(us.role).lower().strip()
         
         return self.ROLE_ALUNO
 
-    # --- Verificadores Contextuais (passando ID explícito) ---
+    # --- Verificadores Contextuais ---
 
     def is_programador_check(self) -> bool:
-        return self.role == self.ROLE_PROGRAMADOR
+        return str(self.role).lower().strip() == self.ROLE_PROGRAMADOR
 
     def is_admin_escola_in_school(self, school_id: int | None) -> bool:
         if self.is_programador_check(): return True
@@ -112,13 +104,12 @@ class User(UserMixin, db.Model):
     def is_cal_in_school(self, school_id: int | None) -> bool:
         if self.is_programador_check(): return True
         role = self.get_role_in_school(school_id)
-        # CAL é Admin ou CAL
         return role in [self.ROLE_ADMIN_CAL, self.ROLE_ADMIN_ESCOLA]
 
     def is_sens_in_school(self, school_id: int | None) -> bool:
         if self.is_programador_check(): return True
         role = self.get_role_in_school(school_id)
-        # SENS é Admin ou SENS
+        # Permite ADMIN_SENS ou ADMIN_ESCOLA (Comandante)
         return role in [self.ROLE_ADMIN_SENS, self.ROLE_ADMIN_ESCOLA]
         
     def is_instrutor_in_school(self, school_id: int | None) -> bool:
@@ -131,29 +122,24 @@ class User(UserMixin, db.Model):
         role = self.get_role_in_school(school_id)
         return role in [self.ROLE_ADMIN_SENS, self.ROLE_ADMIN_CAL, self.ROLE_ADMIN_ESCOLA]
 
-    # --- PROPRIEDADES LEGADAS INTELIGENTES (RESOLUÇÃO DO PROBLEMA) ---
-    # Estas propriedades agora buscam automaticamente a escola ativa.
+    # --- PROPRIEDADES INTELIGENTES ---
     
     @property
     def is_programador(self):
-        return self.role == self.ROLE_PROGRAMADOR
+        return self.is_programador_check()
 
     @property
     def is_admin_escola(self):
-        # Admin Geral: Tem acesso a tudo que SENS e CAL têm
-        if self.is_programador: return True
         sid = self._get_active_school_id()
         return self.is_admin_escola_in_school(sid)
 
     @property
     def is_cal(self):
-        # Quem é Admin Escola TAMBÉM é CAL (tem permissão de justiça)
         sid = self._get_active_school_id()
         return self.is_cal_in_school(sid)
 
     @property
     def is_sens(self):
-        # Quem é Admin Escola TAMBÉM é SENS (tem permissão de ensino)
         sid = self._get_active_school_id()
         return self.is_sens_in_school(sid)
 

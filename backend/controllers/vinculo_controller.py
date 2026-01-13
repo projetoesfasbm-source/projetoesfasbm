@@ -1,6 +1,4 @@
-# backend/controllers/vinculo_controller.py
-
-from flask import Blueprint, render_template, request, redirect, url_for, flash, abort
+from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required, current_user
 from sqlalchemy import select
 from flask_wtf import FlaskForm
@@ -15,7 +13,6 @@ from ..services.user_service import UserService
 from ..services.vinculo_service import VinculoService
 from ..services.instrutor_service import InstrutorService
 from ..services.turma_service import TurmaService
-# Removidos decoradores restritivos para usarmos verificação manual e precisa
 from utils.decorators import can_view_management_pages_required
 
 vinculo_bp = Blueprint('vinculo', __name__, url_prefix='/vinculos')
@@ -38,10 +35,10 @@ def gerenciar_vinculos():
         flash("Nenhuma escola associada ou selecionada.", "warning")
         return redirect(url_for('main.dashboard'))
 
-    # PERMISSÃO: SENS, Admin Escola ou Programador
-    # O método is_sens_in_school já retorna True para Admin Escola também.
+    # Verifica permissão SENS ou Programador
+    # Se passou pelo @can_view_management_pages_required, já é staff, mas validamos especificidade aqui
     if not (current_user.is_programador or current_user.is_sens_in_school(school_id)):
-        flash("Permissão negada. Apenas SENS ou Comando podem gerenciar vínculos.", "danger")
+        flash("Acesso restrito à Seção de Ensino.", "danger")
         return redirect(url_for('main.dashboard'))
 
     turma_filtrada_id = request.args.get('turma_id', type=int)
@@ -56,11 +53,15 @@ def gerenciar_vinculos():
     turmas = TurmaService.get_turmas_by_school(school_id)
     delete_form = DeleteForm()
     
+    # Passa a permissão explicitamente para o template
+    can_manage = True 
+    
     return render_template('gerenciar_vinculos.html', 
                            vinculos=vinculos, 
                            turmas=turmas,
                            turma_filtrada_id=turma_filtrada_id,
-                           delete_form=delete_form)
+                           delete_form=delete_form,
+                           can_manage_vinculos=can_manage)
 
 @vinculo_bp.route('/adicionar', methods=['GET', 'POST'])
 @login_required
@@ -69,13 +70,12 @@ def adicionar_vinculo():
     if not school_id:
         return redirect(url_for('main.dashboard'))
 
-    # PERMISSÃO
+    # PERMISSÃO IDENTICA AO ADMIN ESCOLA/SENS
     if not (current_user.is_programador or current_user.is_sens_in_school(school_id)):
         flash("Permissão negada.", "danger")
         return redirect(url_for('vinculo.gerenciar_vinculos'))
 
     form = VinculoForm()
-    
     instrutores = InstrutorService.get_all_instrutores_sem_paginacao(user=current_user)
     turmas = TurmaService.get_turmas_by_school(school_id)
 
@@ -89,11 +89,9 @@ def adicionar_vinculo():
     form.instrutor_id_1.choices = [(0, '-- Nenhum --')] + instrutor_choices
     form.instrutor_id_2.choices = [(0, '-- Nenhum --')] + instrutor_choices
     
-    # Carregamento dinâmico de disciplinas
     if request.method == 'POST':
         turma_id_selecionada = request.form.get('turma_id', type=int)
-        turma_check = db.session.get(Turma, turma_id_selecionada)
-        if turma_id_selecionada and turma_check and turma_check.school_id == school_id:
+        if turma_id_selecionada:
             disciplinas_da_turma = db.session.scalars(
                 select(Disciplina).where(Disciplina.turma_id == turma_id_selecionada).order_by(Disciplina.materia)
             ).all()
@@ -123,9 +121,9 @@ def editar_vinculo(vinculo_id):
     if not school_id:
         return redirect(url_for('main.dashboard'))
 
-    # PERMISSÃO DE ACESSO
+    # PERMISSÃO IDENTICA AO ADMIN ESCOLA/SENS
     if not (current_user.is_programador or current_user.is_sens_in_school(school_id)):
-        flash("Permissão negada. Você não tem permissão para editar vínculos.", "danger")
+        flash("Permissão negada.", "danger")
         return redirect(url_for('vinculo.gerenciar_vinculos'))
 
     vinculo = db.session.get(DisciplinaTurma, vinculo_id)
@@ -134,37 +132,20 @@ def editar_vinculo(vinculo_id):
         flash("Vínculo não encontrado.", "danger")
         return redirect(url_for('vinculo.gerenciar_vinculos'))
         
-    # --- CORREÇÃO CRÍTICA DA VALIDAÇÃO DA TURMA ---
-    # Tenta recuperar a turma de forma segura, priorizando o relacionamento direto/ID
-    turma_atual = None
-    
-    # 1. Tenta pelo relacionamento direto (se existir no modelo)
-    if hasattr(vinculo, 'turma') and vinculo.turma:
-        turma_atual = vinculo.turma
-        
-    # 2. Se falhar, tenta pelo ID da turma armazenado
-    elif hasattr(vinculo, 'turma_id') and vinculo.turma_id:
-        turma_atual = db.session.get(Turma, vinculo.turma_id)
-    
-    # 3. Fallback: Se não tiver ID, tenta pelo nome (string 'pelotao'), 
-    #    mas filtrando EXPLICITAMENTE pela escola atual para evitar conflito de nomes.
-    if not turma_atual and vinculo.pelotao:
-        turma_atual = db.session.scalar(
-            select(Turma).where(
-                Turma.nome == vinculo.pelotao,
-                Turma.school_id == school_id
-            )
+    turma_atual = db.session.scalar(
+        select(Turma).where(
+            Turma.nome == vinculo.pelotao,
+            Turma.school_id == school_id
         )
-
-    # Se após todas as tentativas não acharmos a turma OU a turma não for desta escola:
-    if not turma_atual or turma_atual.school_id != school_id:
-        flash("Este vínculo pertence a uma turma que não está nesta escola ou foi removida.", "danger")
+    )
+    
+    if not turma_atual:
+        flash("Este vínculo pertence a uma turma de outra escola.", "danger")
         return redirect(url_for('vinculo.gerenciar_vinculos'))
 
     form = VinculoForm(obj=vinculo)
     
     instrutores = InstrutorService.get_all_instrutores_sem_paginacao(user=current_user)
-    
     instrutor_choices = []
     for i in instrutores:
         nome = i.user.nome_de_guerra or i.user.username
@@ -174,9 +155,7 @@ def editar_vinculo(vinculo_id):
 
     form.instrutor_id_1.choices = [(0, '-- Nenhum --')] + instrutor_choices
     form.instrutor_id_2.choices = [(0, '-- Nenhum --')] + instrutor_choices
-
-    if turma_atual:
-        form.disciplina_id.choices = [(d.id, d.materia) for d in turma_atual.disciplinas]
+    form.disciplina_id.choices = [(d.id, d.materia) for d in turma_atual.disciplinas]
     
     if form.validate_on_submit():
         success, message = VinculoService.edit_vinculo(vinculo_id, form.data)
@@ -197,7 +176,7 @@ def excluir_vinculo(vinculo_id):
     if not school_id:
         return redirect(url_for('main.dashboard'))
 
-    # PERMISSÃO
+    # PERMISSÃO IDENTICA AO ADMIN ESCOLA/SENS
     if not (current_user.is_programador or current_user.is_sens_in_school(school_id)):
         flash("Permissão negada.", "danger")
         return redirect(url_for('vinculo.gerenciar_vinculos'))
@@ -208,23 +187,15 @@ def excluir_vinculo(vinculo_id):
         flash("Vínculo não encontrado.", "danger")
         return redirect(url_for('vinculo.gerenciar_vinculos'))
         
-    # --- MESMA CORREÇÃO DE VALIDAÇÃO PARA EXCLUSÃO ---
-    turma_atual = None
-    if hasattr(vinculo, 'turma') and vinculo.turma:
-        turma_atual = vinculo.turma
-    elif hasattr(vinculo, 'turma_id') and vinculo.turma_id:
-        turma_atual = db.session.get(Turma, vinculo.turma_id)
-    
-    if not turma_atual and vinculo.pelotao:
-        turma_atual = db.session.scalar(
-            select(Turma).where(
-                Turma.nome == vinculo.pelotao,
-                Turma.school_id == school_id
-            )
+    turma_atual = db.session.scalar(
+        select(Turma).where(
+            Turma.nome == vinculo.pelotao,
+            Turma.school_id == school_id
         )
+    )
     
-    if not turma_atual or turma_atual.school_id != school_id:
-        flash("Este vínculo pertence a uma turma que não está nesta escola.", "danger")
+    if not turma_atual:
+        flash("Este vínculo pertence a uma turma de outra escola.", "danger")
         return redirect(url_for('vinculo.gerenciar_vinculos'))
     
     turma_id_para_redirecionar = turma_atual.id
