@@ -108,9 +108,9 @@ class User(UserMixin, db.Model):
         return role in [self.ROLE_ADMIN_CAL, self.ROLE_ADMIN_ESCOLA]
 
     def is_sens_in_school(self, school_id: int | None) -> bool:
+        """SENS inclui ADMIN_SENS e ADMIN_ESCOLA (Comandante tem acesso total)"""
         if self.is_programador_check(): return True
         role = self.get_role_in_school(school_id)
-        # SENS inclui ADMIN_SENS e ADMIN_ESCOLA (Comandante tem acesso a tudo)
         return role in [self.ROLE_ADMIN_SENS, self.ROLE_ADMIN_ESCOLA]
         
     def is_instrutor_in_school(self, school_id: int | None) -> bool:
@@ -119,6 +119,7 @@ class User(UserMixin, db.Model):
         return role == self.ROLE_INSTRUTOR
 
     def is_staff_in_school(self, school_id: int | None) -> bool:
+        """Staff inclui SENS, CAL e Comandante"""
         if self.is_programador_check(): return True
         role = self.get_role_in_school(school_id)
         return role in [self.ROLE_ADMIN_SENS, self.ROLE_ADMIN_CAL, self.ROLE_ADMIN_ESCOLA]

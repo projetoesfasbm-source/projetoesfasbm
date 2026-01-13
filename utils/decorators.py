@@ -1,4 +1,3 @@
-# utils/decorators.py
 from functools import wraps
 from flask import abort, flash, redirect, url_for
 from flask_login import current_user
@@ -58,36 +57,22 @@ def can_schedule_classes_required(f):
             
         school_id = UserService.get_current_school_id()
         
-        # --- VERIFICAÇÃO ORIGINAL (Provável causa do erro para CAL) ---
         is_instrutor = current_user.is_instrutor_in_school(school_id)
         is_sens = current_user.is_sens_in_school(school_id)
         is_admin = current_user.is_admin_escola_in_school(school_id)
         is_prog = current_user.is_programador
         
-        # Tenta verificar se tem perfil, mesmo que a Role seja diferente
         has_instrutor_profile = getattr(current_user, 'instrutor_profile', None) is not None
 
-        # CORREÇÃO LÓGICA: Se tiver perfil de instrutor, libera, mesmo sendo CAL/Outro
         if (is_instrutor or is_sens or is_admin or is_prog or has_instrutor_profile):
             return f(*args, **kwargs)
             
-        # --- DEBUG (PRONT) ATIVADO ---
-        # Se cair aqui, mostra exatamente o que falhou
-        debug_msg = (
-            f"DEBUG PERMISSÃO: Role='{current_user.role}' | "
-            f"School_ID={school_id} | "
-            f"Check_Instrutor={is_instrutor} | "
-            f"Tem_Perfil_Instrutor={has_instrutor_profile}"
-        )
-        flash(debug_msg, 'danger')
-        # flash('Sem permissão para agendar nesta escola.', 'danger') # Original comentada
-        
         return redirect(url_for('main.dashboard'))
     return decorated_function
 
 def admin_or_programmer_required(f):
     """
-    Usado em admin_tools e vinculos.
+    Usado em admin_tools e áreas genéricas.
     Permite acesso se for Admin da Escola, Staff (SENS/CAL) ou Programador.
     """
     @wraps(f)
@@ -106,7 +91,6 @@ def admin_or_programmer_required(f):
 def school_admin_or_programmer_required(f):
     """
     Permite acesso ao SENS, Admin da Escola (Comandante) ou Programador.
-    Usado no AlunoController.
     """
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -122,6 +106,36 @@ def school_admin_or_programmer_required(f):
 
         flash('Permissão insuficiente para gerenciar dados escolares.', 'danger')
         return redirect(url_for('main.dashboard'))
+    return decorated_function
+
+def sens_or_admin_or_programmer_required(f):
+    """
+    NOVO DECORATOR (CORREÇÃO VÍNCULOS):
+    Permite acesso SOMENTE para:
+    - Programador
+    - Admin da Escola (Comandante)
+    - Chefe da SENS
+    
+    EXCLUI explicitamente: CAL, Instrutores e Alunos.
+    """
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return redirect(url_for('auth.login'))
+
+        school_id = UserService.get_current_school_id()
+
+        # Verifica permissões específicas para Vínculos (SENS ou Admin)
+        if (
+            current_user.is_programador or
+            current_user.is_admin_escola_in_school(school_id) or
+            current_user.is_sens_in_school(school_id)
+        ):
+            return f(*args, **kwargs)
+
+        flash("A edição de vínculos é exclusiva da SENS e da Administração.", "danger")
+        return redirect(url_for('main.dashboard'))
+
     return decorated_function
 
 def super_admin_required(f):

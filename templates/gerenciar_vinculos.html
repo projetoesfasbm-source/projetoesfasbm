@@ -12,7 +12,7 @@
     <div class="table-header">
         <h3>Vínculos Existentes</h3>
         
-        {# Se o usuário tem permissão (verificado no controller), mostra botão #}
+        {# Se o usuário tem permissão (verificado no controller), mostra botão de adicionar #}
         {% if can_manage_vinculos %}
         <a href="{{ url_for('vinculo.adicionar_vinculo') }}" class="btn btn-primary">
             <span>+</span> Inserir Novo Vínculo
@@ -69,7 +69,7 @@
                             <div class="btn-group">
                                 
                                 {% if can_manage_vinculos %}
-                                    <a href="{{ url_for('vinculo.editar_vinculo', vinculo_id=vinculo.id) }}" class="btn btn-sm btn-warning">Editar</a>
+                                    {# Botão Editar foi removido daqui #}
                                     <form method="POST" action="{{ url_for('vinculo.excluir_vinculo', vinculo_id=vinculo.id) }}" onsubmit="return confirm('Tem certeza que deseja deletar este vínculo?');" style="display: inline;">
                                         {{ delete_form.hidden_tag() }}
                                         <button type="submit" class="btn btn-sm btn-danger">Excluir</button>
