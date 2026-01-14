@@ -1,356 +1,343 @@
 import logging
-from sqlalchemy import select, func, desc, and_
-from sqlalchemy.orm import joinedload
-from datetime import datetime, date
-import traceback # Mantido apenas se necessário para formatação específica, mas preferível logger.exception
+from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, Response, g, session
+from flask_login import login_required, current_user
+from sqlalchemy import select
+from datetime import datetime
+from weasyprint import HTML
 
 from ..models.database import db
 from ..models.aluno import Aluno
-from ..models.user import User
 from ..models.turma import Turma
-from ..models.processo_disciplina import ProcessoDisciplina, StatusProcesso
-from ..models.fada_avaliacao import FadaAvaliacao
+from ..models.processo_disciplina import StatusProcesso
 from ..models.discipline_rule import DisciplineRule
 from ..models.elogio import Elogio
+from ..models.ciclo import Ciclo
+from ..services.justica_service import JusticaService
+from utils.decorators import cal_required
 
-# Configuração de Log Profissional
 logger = logging.getLogger(__name__)
+justica_bp = Blueprint('justica', __name__, url_prefix='/justica-e-disciplina')
 
-class JusticaService:
-    
-    FADA_NOTA_INICIAL = 8.0
-    FADA_PONTO_ELOGIO = 0.5
-    FADA_MAX_NOTA = 10.0
+@justica_bp.route('/')
+@login_required
+def index():
+    try:
+        # --- CORREÇÃO DE FLUXO DE CONTEXTO (FIX) ---
+        # Objetivo: Garantir que school_id nunca seja None se o usuário tiver vínculo.
+        
+        school_id = None
+        active_school = g.get('active_school')
+        
+        # 1. Prioridade: Contexto Global (Middleware)
+        if active_school:
+            school_id = active_school.id
+            
+        # 2. Fallback Seguro: Contexto de Sessão (Se o middleware falhar)
+        if not school_id and session.get('school_id'):
+            try: 
+                school_id = int(session.get('school_id'))
+            except: 
+                pass
 
-    @staticmethod
-    def _ensure_datetime(dt_input):
-        """Converte input seguro para DateTime com Timezone."""
-        if not dt_input:
-            return datetime.now().astimezone()
-        if isinstance(dt_input, datetime):
-            return dt_input
-        if isinstance(dt_input, date):
-            return datetime.combine(dt_input, datetime.min.time()).astimezone()
-        if isinstance(dt_input, str):
-            try:
-                return datetime.strptime(dt_input, '%Y-%m-%d').astimezone()
-            except ValueError:
-                logger.warning(f"Data inválida recebida: {dt_input}. Usando data atual.")
-                return datetime.now().astimezone()
-        return datetime.now().astimezone()
+        # 3. Fallback Estrito: Se for Aluno, usa a escola da turma atual
+        # Isso garante que alunos nunca vejam tela vazia se estiverem enturmados
+        if not school_id and getattr(current_user, 'role', '') == 'aluno':
+            if getattr(current_user, 'aluno_profile', None) and current_user.aluno_profile.turma:
+                school_id = current_user.aluno_profile.turma.school_id
 
-    @staticmethod
-    def get_pontuacao_config(school):
-        if not school: return False, 0.0
-        if school.npccal_type == 'ctsp': return False, 0.0
-        if school.npccal_type in ['cbfpm', 'cspm']: return True, JusticaService.FADA_PONTO_ELOGIO
-        return False, 0.0
-
-    @staticmethod
-    def get_processos_para_usuario(user, school_id_override=None):
-        try:
-            query = select(ProcessoDisciplina).join(ProcessoDisciplina.aluno).join(Aluno.turma)
-
-            # 1. Visão do Aluno: Vê os seus, mas filtrado pela escola atual para evitar mistura de dados
-            if getattr(user, 'role', '') == 'aluno':
-                if not getattr(user, 'aluno_profile', None): 
-                    return []
+        # Chama o serviço passando o ID resolvido (ou None, se realmente não tiver escola)
+        processos = JusticaService.get_processos_para_usuario(current_user, school_id_override=school_id)
+        
+        # Separação para a View
+        em = [p for p in processos if p.status != StatusProcesso.FINALIZADO]
+        fin = [p for p in processos if p.status == StatusProcesso.FINALIZADO]
+        
+        regras = []
+        turmas = []
+        permite_pontuacao = False
+        
+        # Carrega dados auxiliares apenas se tivermos uma escola definida
+        if school_id:
+            # Configuração de pontuação
+            # Se active_school for None mas temos school_id, precisamos simular o objeto ou buscar no banco
+            # Para simplificar, buscamos configs se active_school existir, senão assume padrão
+            if active_school:
+                permite_pontuacao, _ = JusticaService.get_pontuacao_config(active_school)
                 
-                query = query.where(ProcessoDisciplina.aluno_id == user.aluno_profile.id)
-                
-                # Reforço de segurança: se a escola foi passada, filtra explicitamente
-                if school_id_override:
-                    query = query.where(Turma.school_id == school_id_override)
-
-            # 2. Visão Admin/Instrutor: Vê todos da escola
+                # Regras da Escola
+                regras = db.session.scalars(
+                    select(DisciplineRule)
+                    .where(DisciplineRule.npccal_type == active_school.npccal_type)
+                    .order_by(DisciplineRule.codigo)
+                ).all()
             else:
-                if not school_id_override: 
-                    logger.warning(f"Tentativa de listar processos sem school_id por usuário {user.id}")
-                    return [] 
-                query = query.where(Turma.school_id == school_id_override)
+                # Fallback: Tenta buscar regras genéricas baseadas no ID se active_school falhou
+                regras = db.session.scalars(
+                    select(DisciplineRule).where(DisciplineRule.school_id == school_id).order_by(DisciplineRule.codigo)
+                ).all()
 
-            query = query.options(
-                joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.user),
-                joinedload(ProcessoDisciplina.regra)
-            ).order_by(ProcessoDisciplina.data_ocorrencia.desc())
-            
-            return db.session.scalars(query).all()
-
-        except Exception as e:
-            logger.exception(f"Erro crítico ao listar processos para usuário {user.id}")
-            return []
-
-    @staticmethod
-    def get_analise_disciplinar_data(school_id):
-        if not school_id: return {}
-        try:
-            base_join = (Aluno, ProcessoDisciplina.aluno_id == Aluno.id)
-            turma_join = (Turma, Aluno.turma_id == Turma.id)
-            school_filter = (Turma.school_id == school_id)
-
-            # Estatísticas por Status
-            stats = db.session.query(ProcessoDisciplina.status, func.count(ProcessoDisciplina.id))\
-                .join(*base_join).join(*turma_join).where(school_filter)\
-                .group_by(ProcessoDisciplina.status).all()
-            
-            # Infrações mais comuns
-            fatos = db.session.query(ProcessoDisciplina.codigo_infracao, func.count(ProcessoDisciplina.id).label('qtd'))\
-                .join(*base_join).join(*turma_join).where(school_filter)\
-                .group_by(ProcessoDisciplina.codigo_infracao).order_by(desc('qtd')).limit(5).all()
-            
-            fatos_fmt = []
-            for cod, qtd in fatos:
-                txt = "Outros / Sem Código"
-                if cod:
-                    r = db.session.scalar(select(DisciplineRule).where(DisciplineRule.codigo == str(cod)))
-                    if r: txt = r.descricao[:40] + "..."
-                fatos_fmt.append({'codigo': cod or 'S/C', 'total': qtd, 'descricao': txt})
-
-            # Alunos com mais ocorrências
-            alunos = db.session.query(User.nome_completo, func.count(ProcessoDisciplina.id).label('qtd'))\
-                .join(Aluno, ProcessoDisciplina.aluno_id == Aluno.id)\
-                .join(User, Aluno.user_id == User.id)\
-                .join(Turma, Aluno.turma_id == Turma.id)\
-                .where(Turma.school_id == school_id)\
-                .group_by(User.nome_completo).order_by(desc('qtd')).limit(5).all()
-
-            stats_dict = {k.value if hasattr(k, 'value') else str(k): v for k, v in stats}
-
-            return {'status_counts': stats_dict, 'common_facts': fatos_fmt, 'top_alunos': [{'nome': a[0], 'total': a[1]} for a in alunos]}
-        except Exception as e:
-            logger.exception(f"Erro ao gerar análise disciplinar para escola {school_id}")
-            return {'status_counts': {}, 'common_facts': [], 'top_alunos': []}
-
-    @staticmethod
-    def criar_processo(descricao, observacao, aluno_id, autor_id, pontos=0.0, codigo_infracao=None, regra_id=None, data_ocorrencia=None):
-        try:
-            dt_final = JusticaService._ensure_datetime(data_ocorrencia)
-            final_regra_id = regra_id
-            final_codigo = codigo_infracao
-            
-            if final_regra_id:
-                regra = db.session.get(DisciplineRule, final_regra_id)
-                if regra:
-                    final_codigo = regra.codigo 
-            
-            novo = ProcessoDisciplina(
-                aluno_id=aluno_id, 
-                relator_id=autor_id, 
-                fato_constatado=descricao, 
-                observacao=observacao, 
-                pontos=pontos,
-                codigo_infracao=final_codigo,
-                regra_id=final_regra_id,
-                status=StatusProcesso.AGUARDANDO_CIENCIA,
-                data_ocorrencia=dt_final
-            )
-            db.session.add(novo)
-            db.session.commit()
-            return True, "Registrado com sucesso."
-        except Exception as e:
-            db.session.rollback()
-            logger.exception("Erro ao criar processo disciplinar")
-            return False, "Erro interno ao registrar processo."
-
-    @staticmethod
-    def finalizar_processo(pid, decisao, fundamentacao, detalhes, turnos_sustacao=None):
-        try:
-            p = db.session.get(ProcessoDisciplina, pid)
-            if not p: return False, "Processo não encontrado."
-            
-            if turnos_sustacao and decisao == 'Sustação da Dispensa':
-                detalhes = f"Sustação: {turnos_sustacao} turnos. {detalhes or ''}"
-
-            p.status = StatusProcesso.FINALIZADO
-            p.decisao_final = decisao
-            p.fundamentacao = fundamentacao
-            p.detalhes_sancao = detalhes
-            p.data_decisao = datetime.now().astimezone()
-            
-            db.session.commit()
-            return True, "Processo finalizado com sucesso."
-        except Exception as e: 
-            db.session.rollback()
-            logger.exception(f"Erro ao finalizar processo {pid}")
-            return False, "Erro ao finalizar processo."
-
-    @staticmethod
-    def deletar_processo(pid):
-        try:
-            p = db.session.get(ProcessoDisciplina, pid)
-            if p:
-                db.session.delete(p)
-                db.session.commit()
-                return True, "Registro excluído."
-            return False, "Processo não encontrado."
-        except Exception as e: 
-            db.session.rollback()
-            logger.exception(f"Erro ao deletar processo {pid}")
-            return False, "Erro interno ao excluir."
-
-    @staticmethod
-    def registrar_ciente(pid, user):
-        try:
-            p = db.session.get(ProcessoDisciplina, pid)
-            if not p or p.aluno.user_id != user.id:
-                return False, "Usuário não autorizado."
-                
-            p.status = StatusProcesso.ALUNO_NOTIFICADO
-            p.ciente_aluno = True
-            p.data_ciente = datetime.now().astimezone()
-            db.session.commit()
-            return True, "Ciência registrada."
-        except Exception as e: 
-            db.session.rollback()
-            logger.exception(f"Erro ao registrar ciente no processo {pid}")
-            return False, "Erro ao registrar ciência."
-
-    @staticmethod
-    def enviar_defesa(pid, texto, user):
-        try:
-            p = db.session.get(ProcessoDisciplina, pid)
-            if not p or p.aluno.user_id != user.id:
-                return False, "Não autorizado."
-                
-            p.status = StatusProcesso.DEFESA_ENVIADA
-            p.defesa = texto
-            p.data_defesa = datetime.now().astimezone()
-            db.session.commit()
-            return True, "Defesa enviada com sucesso."
-        except Exception as e: 
-            db.session.rollback()
-            logger.exception(f"Erro ao enviar defesa no processo {pid}")
-            return False, "Erro interno ao enviar defesa."
-
-    @staticmethod
-    def get_alunos_para_fada(school_id):
-        if not school_id: return []
-        return db.session.scalars(
-            select(Aluno).join(Turma).join(User)
-            .where(Turma.school_id == school_id)
-            .order_by(User.nome_completo)
-        ).all()
-
-    @staticmethod
-    def calcular_previa_fada(aluno_id, ciclo_id=None):
-        """
-        Calcula nota FADA garantindo que apenas registros da escola atual sejam computados.
-        """
-        notas = {i: JusticaService.FADA_NOTA_INICIAL for i in range(1, 19)}
-        try:
-            aluno = db.session.get(Aluno, aluno_id)
-            if not aluno or not aluno.turma or not aluno.turma.school:
-                return notas
-            
-            escola_id = aluno.turma.school_id
-
-            # Escolas CTSP não possuem pontuação
-            if aluno.turma.school.npccal_type == 'ctsp':
-                return notas
-
-            # Filtra infrações da escola correta
-            punicoes = db.session.scalars(
-                select(ProcessoDisciplina)
-                .join(Aluno).join(Turma)
-                .where(
-                    ProcessoDisciplina.aluno_id == aluno_id, 
-                    ProcessoDisciplina.status == StatusProcesso.FINALIZADO,
-                    Turma.school_id == escola_id 
-                )
-                .options(joinedload(ProcessoDisciplina.regra))
+            # Turmas da Escola
+            turmas = db.session.scalars(
+                select(Turma).where(Turma.school_id == school_id).order_by(Turma.nome)
             ).all()
 
-            for p in punicoes:
-                pts = getattr(p, 'pontos', 0.0) or 0.0
-                attr = 8 # Padrão: Disciplina
-                if p.regra and p.regra.atributo_fada_id:
-                    attr = p.regra.atributo_fada_id
-                
-                if 1 <= attr <= 18:
-                    notas[attr] = max(0.0, notas[attr] - float(pts))
-            
-            # Elogios
-            elogios = db.session.scalars(select(Elogio).where(Elogio.aluno_id == aluno_id)).all()
-            for e in elogios:
-                pts = float(e.pontos) if e.pontos is not None else 0.0
-                if e.atributo_1 and 1 <= e.atributo_1 <= 18:
-                    notas[e.atributo_1] = min(JusticaService.FADA_MAX_NOTA, notas[e.atributo_1] + pts)
-                if e.atributo_2 and 1 <= e.atributo_2 <= 18:
-                    notas[e.atributo_2] = min(JusticaService.FADA_MAX_NOTA, notas[e.atributo_2] + pts)
-                    
-        except Exception as e:
-            logger.exception(f"Erro ao calcular FADA para aluno {aluno_id}")
-            
-        return notas
+        atributos = [(i, nome) for i, nome in enumerate([
+            'Expressão', 'Planejamento', 'Perseverança', 'Apresentação', 'Lealdade', 'Tato', 
+            'Equilíbrio', 'Disciplina', 'Responsabilidade', 'Maturidade', 'Assiduidade', 
+            'Pontualidade', 'Dicção', 'Liderança', 'Relacionamento', 'Ética', 'Produtividade', 'Eficiência'
+        ], start=1)]
 
-    @staticmethod
-    def salvar_fada(form_data, aluno_id, avaliador_id, nome_avaliador):
-        try:
-            cid = form_data.get('ciclo_id')
-            cid = int(cid) if cid else None
+        return render_template(
+            'justica/index.html', 
+            em_andamento=em, 
+            finalizados=fin, 
+            fatos_predefinidos=regras, 
+            turmas=turmas, 
+            permite_pontuacao=permite_pontuacao, 
+            atributos_fada=atributos, 
+            hoje=datetime.today().strftime('%Y-%m-%d')
+        )
+    except Exception as e:
+        logger.exception("Erro ao carregar painel de justiça")
+        flash("Ocorreu um erro ao carregar o painel.", 'danger')
+        return render_template('base.html')
+
+@justica_bp.route('/registrar-em-massa', methods=['POST'])
+@login_required
+@cal_required 
+def registrar_em_massa():
+    try:
+        school = g.get('active_school')
+        tipo = request.form.get('tipo_registro')
+        ids = request.form.getlist('alunos_selecionados') or ([request.form.get('aluno_id')] if request.form.get('aluno_id') else [])
+        
+        if not ids:
+            flash('Nenhum aluno selecionado.', 'warning')
+            return redirect(url_for('justica.index'))
+
+        dt_str = request.form.get('data_fato')
+        desc = request.form.get('descricao') or request.form.get('fato_descricao')
+        usa_pontuacao, valor_elogio = JusticaService.get_pontuacao_config(school)
+
+        count = 0
+        if tipo == 'infracao':
+            regra_id_str = request.form.get('regra_id')
+            pts = 0.0
+            cod = None
+            regra_fk = None
             
-            av = db.session.scalar(select(FadaAvaliacao).where(FadaAvaliacao.aluno_id == aluno_id, FadaAvaliacao.ciclo_id == cid))
-            if not av:
-                av = FadaAvaliacao(aluno_id=aluno_id, ciclo_id=cid)
-                db.session.add(av)
+            if regra_id_str:
+                r = db.session.get(DisciplineRule, int(regra_id_str))
+                if r: 
+                    pts = r.pontos if usa_pontuacao else 0.0
+                    cod = r.codigo
+                    regra_fk = r.id
             
-            av.avaliador_id = avaliador_id
-            av.nome_avaliador_custom = nome_avaliador
-            av.data_avaliacao = datetime.now().astimezone()
+            if not regra_fk and request.form.get('fato_pontos') and usa_pontuacao:
+                try: pts = float(request.form.get('fato_pontos'))
+                except: pass
+
+            obs = request.form.get('observacao', '')
+            for aid in ids:
+                JusticaService.criar_processo(
+                    descricao=desc, 
+                    observacao=obs, 
+                    aluno_id=int(aid), 
+                    autor_id=current_user.id, 
+                    pontos=pts, 
+                    codigo_infracao=cod, 
+                    regra_id=regra_fk,
+                    data_ocorrencia=dt_str
+                )
+                count += 1
+            flash(f'{count} infrações registradas.', 'success')
+
+        elif tipo == 'elogio':
+            a1, a2 = request.form.get('atributo_1'), request.form.get('atributo_2')
+            pts = valor_elogio if (a1 or a2) and usa_pontuacao else 0.0
             
-            campos = [f'attr_{i}' for i in range(1, 19)]
-            colunas_db = [
-                'attr_1_expressao', 'attr_2_planejamento', 'attr_3_perseveranca', 
-                'attr_4_apresentacao', 'attr_5_lealdade', 'attr_6_tato', 
-                'attr_7_equilibrio', 'attr_8_disciplina', 'attr_9_responsabilidade', 
-                'attr_10_maturidade', 'attr_11_assiduidade', 'attr_12_pontualidade', 
-                'attr_13_diccao', 'attr_14_lideranca', 'attr_15_relacionamento', 
-                'attr_16_etica', 'attr_17_produtividade', 'attr_18_eficiencia'
-            ]
+            dt_obj = JusticaService._ensure_datetime(dt_str)
             
-            soma = 0.0
-            for field, col in zip(campos, colunas_db):
-                try: val = float(form_data.get(field, 8.0))
-                except: val = 8.0
-                setattr(av, col, val)
-                soma += val
-            
-            av.media_final = soma / 18.0
-            av.justificativa_notas = form_data.get('justificativa_notas')
-            av.observacoes = form_data.get('observacoes')
-            av.adaptacao_carreira = form_data.get('adaptacao_carreira', 'Em adaptação')
-            
+            for aid in ids:
+                elogio = Elogio(
+                    aluno_id=int(aid), 
+                    registrado_por_id=current_user.id, 
+                    data_elogio=dt_obj, 
+                    descricao=desc, 
+                    pontos=pts, 
+                    atributo_1=int(a1) if a1 else None, 
+                    atributo_2=int(a2) if a2 else None
+                )
+                db.session.add(elogio)
+                count += 1
             db.session.commit()
-            return True, "Avaliação salva com sucesso!", av.id
-        except Exception as e:
-            db.session.rollback()
-            logger.exception("Erro ao salvar FADA")
-            return False, "Erro ao salvar avaliação.", None
+            flash(f'{count} elogios registrados.', 'success')
+        
+        else:
+            obs = request.form.get('observacao', '')
+            for aid in ids:
+                JusticaService.criar_processo(desc, obs, int(aid), current_user.id, 0.0, None, None, dt_str)
+                count += 1
+            flash(f'{count} registros criados.', 'success')
 
-    @staticmethod
-    def get_fada_por_id(id): return db.session.get(FadaAvaliacao, id)
+    except Exception as e:
+        db.session.rollback()
+        logger.exception("Erro ao registrar em massa")
+        flash('Erro ao processar registro.', 'danger')
+    return redirect(url_for('justica.index'))
 
-    @staticmethod
-    def get_processos_por_ids(ids, school_id):
-        if not ids or not school_id: return []
-        return db.session.scalars(
-            select(ProcessoDisciplina)
-            .join(Aluno).join(Turma)
-            .where(
-                ProcessoDisciplina.id.in_(ids),
-                Turma.school_id == school_id
+@justica_bp.route('/novo', methods=['POST'])
+@login_required
+def novo_processo(): return registrar_em_massa()
+
+@justica_bp.route('/analise')
+@login_required
+@cal_required 
+def analise():
+    try:
+        s = g.get('active_school')
+        dados = JusticaService.get_analise_disciplinar_data(s.id if s else None)
+        return render_template('justica/analise.html', dados=dados)
+    except Exception as e:
+        logger.exception("Erro no dashboard de análise")
+        flash("Erro ao carregar análise.", "danger")
+        return redirect(url_for('justica.index'))
+
+@justica_bp.route('/finalizar/<int:processo_id>', methods=['POST'])
+@login_required
+def finalizar_processo(processo_id):
+    decisao = request.form.get('decisao_final')
+    fund = request.form.get('fundamentacao')
+    det = request.form.get('detalhes_sancao')
+    sus = request.form.get('turnos_sustacao')
+    
+    ok, msg = JusticaService.finalizar_processo(processo_id, decisao, fund, det, sus)
+    flash(msg, 'success' if ok else 'danger')
+    return redirect(url_for('justica.index'))
+
+@justica_bp.route('/deletar/<int:processo_id>', methods=['POST'])
+@login_required
+def deletar_processo(processo_id):
+    ok, msg = JusticaService.deletar_processo(processo_id)
+    flash(msg, 'success' if ok else 'danger')
+    return redirect(url_for('justica.index'))
+
+@justica_bp.route('/dar-ciente/<int:processo_id>', methods=['POST'])
+@login_required
+def dar_ciente(processo_id):
+    ok, msg = JusticaService.registrar_ciente(processo_id, current_user)
+    flash(msg, 'success' if ok else 'danger')
+    return redirect(url_for('justica.index'))
+
+@justica_bp.route('/enviar-defesa/<int:processo_id>', methods=['POST'])
+@login_required
+def enviar_defesa(processo_id):
+    ok, msg = JusticaService.enviar_defesa(processo_id, request.form.get('defesa'), current_user)
+    flash(msg, 'success' if ok else 'danger')
+    return redirect(url_for('justica.index'))
+
+@justica_bp.route('/api/alunos')
+@login_required
+def api_get_alunos():
+    s = g.get('active_school')
+    if not s: return jsonify([])
+    q = request.args.get('q', '').lower()
+    return jsonify([{'id': a.id, 'text': a.user.nome_completo} for a in db.session.scalars(select(Aluno).join(User).join(Turma).where(Turma.school_id==s.id, User.role=='aluno', User.nome_completo.ilike(f'%{q}%')).limit(20)).all()])
+
+@justica_bp.route('/api/alunos-por-turma/<int:turma_id>')
+@login_required
+def api_alunos_por_turma(turma_id):
+    s = g.get('active_school')
+    t = db.session.get(Turma, turma_id)
+    
+    # Validação de segurança
+    if not s or not t or t.school_id != s.id:
+        return jsonify([]) 
+
+    return jsonify([{'id': a.id, 'nome': a.user.nome_completo, 'numero': a.num_aluno} for a in db.session.scalars(select(Aluno).where(Aluno.turma_id == turma_id).join(User).order_by(Aluno.num_aluno)).all()])
+
+@justica_bp.route('/api/aluno-details/<int:aluno_id>')
+@login_required
+def api_get_aluno_details(aluno_id):
+    a = db.session.get(Aluno, aluno_id)
+    if not a: return jsonify({'error': '404'}), 404
+    return jsonify({'nome_completo': a.user.nome_completo, 'matricula': a.user.matricula, 'posto_graduacao': a.user.posto_graduacao})
+
+@justica_bp.route('/exportar', methods=['GET', 'POST'])
+@login_required
+def exportar_selecao():
+    s = g.get('active_school')
+    sid = s.id if s else None
+
+    if request.method == 'POST':
+        ids = request.form.getlist('processo_ids')
+        ids_int = [int(i) for i in ids]
+        
+        processos = JusticaService.get_processos_por_ids(ids_int, sid)
+        
+        return Response(render_template('justica/export_bi_template.html', processos=processos), mimetype="application/msword", headers={"Content-disposition": "attachment; filename=export.doc"})
+    
+    lista = JusticaService.get_finalized_processos(sid)
+    return render_template('justica/exportar_selecao.html', processos=lista)
+
+@justica_bp.route('/fada')
+@login_required
+def fada_lista_alunos():
+    s = g.get('active_school')
+    return render_template('justica/fada_lista_alunos.html', alunos=JusticaService.get_alunos_para_fada(s.id if s else None))
+
+@justica_bp.route('/fada/avaliar/<int:aluno_id>', methods=['GET', 'POST'])
+@login_required
+def fada_avaliar_aluno(aluno_id):
+    try:
+        s = g.get('active_school')
+        aluno = db.session.get(Aluno, aluno_id)
+        
+        if not aluno or not aluno.turma:
+            flash('Aluno não encontrado.', 'danger')
+            return redirect(url_for('justica.fada_lista_alunos'))
+
+        # Validação de escola (Se admin não tem escola ativa, tenta validar pela turma do aluno)
+        sid = s.id if s else None
+        if sid and aluno.turma.school_id != sid:
+            flash('Aluno não pertence à escola ativa.', 'danger')
+            return redirect(url_for('justica.fada_lista_alunos'))
+
+        # Se não tem s (active_school), assume a escola do aluno para buscar ciclos
+        escola_aluno_id = aluno.turma.school_id
+        
+        ciclos = db.session.scalars(select(Ciclo).where(Ciclo.school_id == escola_aluno_id)).all()
+        cid = request.args.get('ciclo_id', type=int)
+        if not cid and ciclos: cid = ciclos[-1].id
+
+        previa = JusticaService.calcular_previa_fada(aluno_id, cid) if cid else None
+        nome_padrao = current_user.nome_completo or "Avaliador"
+
+        if request.method == 'POST':
+            ok, msg, av_id = JusticaService.salvar_fada(
+                request.form, 
+                aluno_id, 
+                current_user.id, 
+                request.form.get('nome_avaliador_custom', nome_padrao)
             )
-        ).all()
+            if ok:
+                flash(msg, 'success')
+                return redirect(url_for('justica.fada_gerar_pdf', avaliacao_id=av_id))
+            else: flash(msg, 'danger')
 
-    @staticmethod
-    def get_finalized_processos(school_id):
-        if not school_id: return []
-        return db.session.scalars(
-            select(ProcessoDisciplina)
-            .join(Aluno).join(Turma)
-            .where(
-                ProcessoDisciplina.status == StatusProcesso.FINALIZADO,
-                Turma.school_id == school_id
-            )
-            .order_by(ProcessoDisciplina.data_decisao.desc())
-        ).all()
+        return render_template('justica/fada_formulario.html', aluno=aluno, ciclos=ciclos, ciclo_atual=cid, dados_previa=previa, default_name=nome_padrao)
+    except Exception as e:
+        logger.exception("Erro ao abrir avaliação FADA")
+        flash(f"Erro ao abrir avaliação: {str(e)}", 'danger')
+        return redirect(url_for('justica.fada_lista_alunos'))
+
+@justica_bp.route('/fada/pdf/<int:avaliacao_id>')
+@login_required
+def fada_gerar_pdf(avaliacao_id):
+    try:
+        av = JusticaService.get_fada_por_id(avaliacao_id)
+        if not av: return "Não encontrado", 404
+        html = render_template('justica/fada_pdf_template.html', avaliacao=av, aluno=av.aluno, data_geracao=datetime.now())
+        return Response(HTML(string=html).write_pdf(), mimetype='application/pdf')
+    except Exception as e:
+        return f"Erro PDF: {e}", 500
