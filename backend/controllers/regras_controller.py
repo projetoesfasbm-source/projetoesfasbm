@@ -19,8 +19,23 @@ ATRIBUTOS_FADA = {
 @admin_or_programmer_required
 def index():
     tipo = g.active_school.npccal_type or 'cbfpm'
-    regras = DisciplineRule.query.filter_by(npccal_type=tipo).order_by(DisciplineRule.codigo).all()
-    return render_template('regras/index.html', regras=regras, atributos=ATRIBUTOS_FADA)
+    
+    # Busca todas as regras do tipo (sem order_by no banco para ordenar no Python)
+    regras_query = DisciplineRule.query.filter_by(npccal_type=tipo).all()
+    
+    # Lógica de Ordenação Numérica (Corrige o problema de 1, 10, 100, 2...)
+    def sort_key(regra):
+        try:
+            # Tenta converter o código para número inteiro para ordenar corretamente (1, 2, 10)
+            return int(regra.codigo)
+        except ValueError:
+            # Se tiver letras (ex: '14a'), retorna como string mesmo
+            return regra.codigo
+
+    # Ordena a lista usando a chave inteligente
+    regras_query.sort(key=sort_key)
+
+    return render_template('regras/index.html', regras=regras_query, atributos=ATRIBUTOS_FADA)
 
 @regras_bp.route('/nova', methods=['GET', 'POST'])
 @login_required
@@ -28,13 +43,16 @@ def index():
 def nova():
     if request.method == 'POST':
         try:
+            attr_fada = request.form.get('atributo_fada_id')
+            attr_fada = int(attr_fada) if attr_fada else None
+
             nova_regra = DisciplineRule(
                 npccal_type=request.form.get('npccal_type'),
                 codigo=request.form.get('codigo'),
                 descricao=request.form.get('descricao'),
                 gravidade=request.form.get('gravidade'),
                 pontos=float(request.form.get('pontos')),
-                atributo_fada_id=int(request.form.get('atributo_fada_id') or 0) or None
+                atributo_fada_id=attr_fada
             )
             db.session.add(nova_regra)
             db.session.commit()

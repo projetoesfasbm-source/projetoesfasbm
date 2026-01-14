@@ -12,37 +12,45 @@
     <div class="card shadow-sm">
         <div class="card-body p-0">
             <div class="table-responsive">
-                <table class="table table-striped table-hover mb-0">
+                <table class="table table-striped table-hover mb-0 align-middle">
                     <thead class="table-dark">
                         <tr>
-                            <th>Cód</th>
+                            <th style="width: 80px;" class="text-center">Cód</th>
                             <th>Descrição</th>
-                            <th>Gravidade</th>
-                            <th>Pontos</th>
-                            <th>Atributo FADA (Afetado)</th>
-                            <th class="text-end">Ações</th>
+                            <th style="width: 100px;" class="text-center">Gravidade</th>
+                            <th style="width: 80px;" class="text-center">Pontos</th>
+                            <th style="width: 250px;">Atributo FADA (Afetado)</th>
+                            <th style="width: 100px;" class="text-end">Ações</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for r in regras %}
                         <tr>
-                            <td class="fw-bold">{{ r.codigo }}</td>
-                            <td>{{ r.descricao|truncate(80) }}</td>
-                            <td>{{ r.gravidade or '-' }}</td>
-                            <td>{{ r.pontos }}</td>
+                            <td class="fw-bold text-center">{{ r.codigo }}</td>
+                            <td>{{ r.descricao|truncate(90) }}</td>
+                            <td class="text-center"><span class="badge bg-light text-dark border">{{ r.gravidade or '-' }}</span></td>
+                            <td class="text-center fw-bold">{{ r.pontos }}</td>
                             <td>
                                 {% if r.atributo_fada_id %}
-                                    <span class="badge bg-warning text-dark">{{ r.atributo_fada_id }} - {{ atributos[r.atributo_fada_id] }}</span>
+                                    <span class="badge bg-warning text-dark" style="font-size: 0.85rem;">
+                                        {{ r.atributo_fada_id }}. {{ atributos[r.atributo_fada_id] }}
+                                    </span>
                                 {% else %}
                                     <span class="badge bg-secondary">Nenhum</span>
                                 {% endif %}
                             </td>
                             <td class="text-end">
-                                <a href="{{ url_for('regras.editar', id=r.id) }}" class="btn btn-sm btn-outline-primary"><i class="fas fa-edit"></i></a>
+                                <a href="{{ url_for('regras.editar', id=r.id) }}" class="btn btn-sm btn-warning text-dark border" title="Editar">
+                                    <i class="fas fa-edit"></i> Editar
+                                </a>
                             </td>
                         </tr>
                         {% else %}
-                        <tr><td colspan="6" class="text-center py-4">Nenhuma regra cadastrada para este tipo de escola.</td></tr>
+                        <tr>
+                            <td colspan="6" class="text-center py-4 text-muted">
+                                Nenhuma regra cadastrada para este tipo de escola.
+                            </td>
+                        </tr>
                         {% endfor %}
                     </tbody>
                 </table>
