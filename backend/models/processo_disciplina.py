@@ -12,8 +12,8 @@ if t.TYPE_CHECKING:
     from .user import User
     from .discipline_rule import DisciplineRule
 
-# --- ENUM PARA USO NO CÓDIGO (Regras de Negócio) ---
-# Mantemos isso para garantir consistência em novos registros
+# Mantemos a classe apenas para usar as constantes no código (ex: StatusProcesso.FINALIZADO.value)
+# Mas NÃO vamos mais forçá-la dentro do banco de dados.
 class StatusProcesso(str, enum.Enum):
     AGUARDANDO_CIENCIA = 'Aguardando Ciência'
     ALUNO_NOTIFICADO = 'Aluno Notificado'
@@ -36,16 +36,17 @@ class ProcessoDisciplina(db.Model):
     
     pontos: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
 
-    # --- CORREÇÃO DE RESILIÊNCIA ---
-    # Usamos String(50) no banco para aceitar 'Finalizado', 'FINALIZADO', etc. sem travar.
-    # O Enum do Python é muito estrito e estava causando o 'LookupError', sumindo com os dados.
+    # --- AQUI ESTÁ A SOLUÇÃO DEFINITIVA ---
+    # Substituímos o tipo complexo Enum por String(50).
+    # Isso impede o "LookupError" e aceita o dado 'Finalizado' exatamente como ele está no banco.
     status: Mapped[str] = mapped_column(
-        String(50),
+        String(50), 
         default=StatusProcesso.AGUARDANDO_CIENCIA.value,
         nullable=False,
         index=True
     )
-    
+    # --------------------------------------
+
     # Timestamps
     data_ocorrencia: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     data_ciente: Mapped[t.Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -58,7 +59,7 @@ class ProcessoDisciplina(db.Model):
     fundamentacao: Mapped[t.Optional[str]] = mapped_column(Text, nullable=True)
     detalhes_sancao: Mapped[t.Optional[str]] = mapped_column(Text, nullable=True)
     
-    # Controle de Ciência
+    # Controle
     ciente_aluno: Mapped[bool] = mapped_column(default=False)
 
     # Relacionamentos
@@ -66,7 +67,7 @@ class ProcessoDisciplina(db.Model):
     relator: Mapped['User'] = relationship(foreign_keys=[relator_id])
     regra: Mapped['DisciplineRule'] = relationship(foreign_keys=[regra_id])
 
-    # Índices para performance
+    # Índices
     __table_args__ = (
         Index('idx_processo_status_data', 'status', 'data_ocorrencia'),
         Index('idx_processo_codigo', 'codigo_infracao'),
