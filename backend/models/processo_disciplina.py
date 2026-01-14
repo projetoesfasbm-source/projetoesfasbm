@@ -34,15 +34,15 @@ class ProcessoDisciplina(db.Model):
     
     pontos: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
 
-    # Uso de Enum para garantir consistência
+    # Uso de Enum com native_enum=False para garantir compatibilidade entre bancos (salva como String)
     status: Mapped[StatusProcesso] = mapped_column(
         Enum(StatusProcesso, name='status_processo_disciplinar', native_enum=False),
         default=StatusProcesso.AGUARDANDO_CIENCIA,
         nullable=False,
-        index=True  # Índice para filtros rápidos por status
+        index=True
     )
     
-    # Timestamps com Timezone
+    # Timestamps com Timezone explícito
     data_ocorrencia: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     data_ciente: Mapped[t.Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     data_defesa: Mapped[t.Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -60,7 +60,7 @@ class ProcessoDisciplina(db.Model):
     relator: Mapped['User'] = relationship(foreign_keys=[relator_id])
     regra: Mapped['DisciplineRule'] = relationship(foreign_keys=[regra_id])
 
-    # Índices Compostos para Performance em Dashboards
+    # Índices Compostos para Performance de Dashboards
     __table_args__ = (
         Index('idx_processo_status_data', 'status', 'data_ocorrencia'),
         Index('idx_processo_codigo', 'codigo_infracao'),

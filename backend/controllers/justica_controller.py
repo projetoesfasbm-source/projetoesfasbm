@@ -1,22 +1,21 @@
-# backend/controllers/justica_controller.py
-
+import logging
 from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, Response, g
 from flask_login import login_required, current_user
 from sqlalchemy import select
 from datetime import datetime
 from weasyprint import HTML
-import traceback 
 
 from ..models.database import db
 from ..models.aluno import Aluno
 from ..models.turma import Turma
-from ..models.user import User
+from ..models.processo_disciplina import StatusProcesso
 from ..models.discipline_rule import DisciplineRule
 from ..models.elogio import Elogio
 from ..models.ciclo import Ciclo
 from ..services.justica_service import JusticaService
 from utils.decorators import cal_required
 
+logger = logging.getLogger(__name__)
 justica_bp = Blueprint('justica', __name__, url_prefix='/justica-e-disciplina')
 
 @justica_bp.route('/')
@@ -26,11 +25,10 @@ def index():
         active_school = g.get('active_school')
         school_id = active_school.id if active_school else None
         
-        # Busca processos filtrados pela escola (segurança)
         processos = JusticaService.get_processos_para_usuario(current_user, school_id_override=school_id)
         
-        em = [p for p in processos if p.status != 'Finalizado']
-        fin = [p for p in processos if p.status == 'Finalizado']
+        em = [p for p in processos if p.status != StatusProcesso.FINALIZADO]
+        fin = [p for p in processos if p.status == StatusProcesso.FINALIZADO]
         
         regras = []
         turmas = []
@@ -61,8 +59,8 @@ def index():
             hoje=datetime.today().strftime('%Y-%m-%d')
         )
     except Exception as e:
-        traceback.print_exc()
-        flash(f"Erro ao carregar painel: {e}", 'danger')
+        logger.exception("Erro ao carregar painel de justiça")
+        flash("Ocorreu um erro ao carregar o painel.", 'danger')
         return render_template('base.html')
 
 @justica_bp.route('/registrar-em-massa', methods=['POST'])
@@ -79,30 +77,26 @@ def registrar_em_massa():
             return redirect(url_for('justica.index'))
 
         dt_str = request.form.get('data_fato')
-        dt = datetime.strptime(dt_str, '%Y-%m-%d').date() if dt_str else datetime.now().date()
         desc = request.form.get('descricao') or request.form.get('fato_descricao')
-        
-        # Configuração de Pontuação Centralizada
         usa_pontuacao, valor_elogio = JusticaService.get_pontuacao_config(school)
 
         count = 0
         if tipo == 'infracao':
-            regra_id = request.form.get('regra_id')
+            regra_id_str = request.form.get('regra_id')
             pts = 0.0
             cod = None
             regra_fk = None
             
-            # Se selecionou uma regra, busca dados para garantir integridade
-            if regra_id:
-                r = db.session.get(DisciplineRule, regra_id)
+            if regra_id_str:
+                r = db.session.get(DisciplineRule, int(regra_id_str))
                 if r: 
                     pts = r.pontos if usa_pontuacao else 0.0
                     cod = r.codigo
                     regra_fk = r.id
             
-            # Se for manual e tem pontos (override)
-            if not regra_id and request.form.get('fato_pontos') and usa_pontuacao:
-                pts = float(request.form.get('fato_pontos'))
+            if not regra_fk and request.form.get('fato_pontos') and usa_pontuacao:
+                try: pts = float(request.form.get('fato_pontos'))
+                except: pass
 
             obs = request.form.get('observacao', '')
             for aid in ids:
@@ -114,22 +108,21 @@ def registrar_em_massa():
                     pontos=pts, 
                     codigo_infracao=cod, 
                     regra_id=regra_fk,
-                    data_ocorrencia=dt
+                    data_ocorrencia=dt_str
                 )
                 count += 1
             flash(f'{count} infrações registradas.', 'success')
 
         elif tipo == 'elogio':
             a1, a2 = request.form.get('atributo_1'), request.form.get('atributo_2')
-            
-            # Pontos definidos pelo Service (0.0 para CTSP, 0.5 para CBFPM)
             pts = valor_elogio if (a1 or a2) and usa_pontuacao else 0.0
+            dt_obj = JusticaService._ensure_datetime(dt_str)
             
             for aid in ids:
                 elogio = Elogio(
                     aluno_id=int(aid), 
                     registrado_por_id=current_user.id, 
-                    data_elogio=dt, 
+                    data_elogio=dt_obj, 
                     descricao=desc, 
                     pontos=pts, 
                     atributo_1=int(a1) if a1 else None, 
@@ -141,16 +134,16 @@ def registrar_em_massa():
             flash(f'{count} elogios registrados.', 'success')
         
         else:
-            # Genérico (apenas registro)
             obs = request.form.get('observacao', '')
             for aid in ids:
-                JusticaService.criar_processo(desc, obs, int(aid), current_user.id, 0.0, None, None, dt)
+                JusticaService.criar_processo(desc, obs, int(aid), current_user.id, 0.0, None, None, dt_str)
                 count += 1
             flash(f'{count} registros criados.', 'success')
 
     except Exception as e:
         db.session.rollback()
-        flash(f'Erro: {e}', 'danger')
+        logger.exception("Erro ao registrar em massa")
+        flash('Erro ao processar registro.', 'danger')
     return redirect(url_for('justica.index'))
 
 @justica_bp.route('/novo', methods=['POST'])
@@ -166,7 +159,8 @@ def analise():
         dados = JusticaService.get_analise_disciplinar_data(s.id if s else None)
         return render_template('justica/analise.html', dados=dados)
     except Exception as e:
-        flash(f"Erro no dashboard: {e}", "danger")
+        logger.exception("Erro no dashboard de análise")
+        flash("Erro ao carregar análise.", "danger")
         return redirect(url_for('justica.index'))
 
 @justica_bp.route('/finalizar/<int:processo_id>', methods=['POST'])
@@ -176,8 +170,8 @@ def finalizar_processo(processo_id):
     fund = request.form.get('fundamentacao')
     det = request.form.get('detalhes_sancao')
     sus = request.form.get('turnos_sustacao')
-    if sus and decisao == 'Sustação da Dispensa': det = f"Sustação: {sus} turnos."
-    ok, msg = JusticaService.finalizar_processo(processo_id, decisao, fund, det)
+    
+    ok, msg = JusticaService.finalizar_processo(processo_id, decisao, fund, det, sus)
     flash(msg, 'success' if ok else 'danger')
     return redirect(url_for('justica.index'))
 
@@ -213,6 +207,13 @@ def api_get_alunos():
 @justica_bp.route('/api/alunos-por-turma/<int:turma_id>')
 @login_required
 def api_alunos_por_turma(turma_id):
+    s = g.get('active_school')
+    if not s: return jsonify([])
+    
+    turma = db.session.get(Turma, turma_id)
+    if not turma or turma.school_id != s.id:
+        return jsonify([]) 
+
     return jsonify([{'id': a.id, 'nome': a.user.nome_completo, 'numero': a.num_aluno} for a in db.session.scalars(select(Aluno).where(Aluno.turma_id == turma_id).join(User).order_by(Aluno.num_aluno)).all()])
 
 @justica_bp.route('/api/aluno-details/<int:aluno_id>')
@@ -225,10 +226,17 @@ def api_get_aluno_details(aluno_id):
 @justica_bp.route('/exportar', methods=['GET', 'POST'])
 @login_required
 def exportar_selecao():
+    school = g.get('active_school')
+    sid = school.id if school else None
+
     if request.method == 'POST':
         ids = request.form.getlist('processo_ids')
-        return Response(render_template('justica/export_bi_template.html', processos=JusticaService.get_processos_por_ids([int(i) for i in ids])), mimetype="application/msword", headers={"Content-disposition": "attachment; filename=export.doc"})
-    return render_template('justica/exportar_selecao.html', processos=JusticaService.get_finalized_processos())
+        ids_int = [int(i) for i in ids]
+        processos = JusticaService.get_processos_por_ids(ids_int, sid)
+        return Response(render_template('justica/export_bi_template.html', processos=processos), mimetype="application/msword", headers={"Content-disposition": "attachment; filename=export.doc"})
+    
+    lista = JusticaService.get_finalized_processos(sid)
+    return render_template('justica/exportar_selecao.html', processos=lista)
 
 @justica_bp.route('/fada')
 @login_required
@@ -243,19 +251,18 @@ def fada_avaliar_aluno(aluno_id):
     try:
         s = g.get('active_school')
         aluno = db.session.get(Aluno, aluno_id)
-        if not aluno:
-            flash('Aluno não encontrado', 'danger')
+        
+        if not aluno or not aluno.turma or aluno.turma.school_id != s.id:
+            flash('Aluno não encontrado ou não pertence a esta escola', 'danger')
             return redirect(url_for('justica.fada_lista_alunos'))
 
         ciclos = []
-        try:
-            ciclos = db.session.scalars(select(Ciclo).where(Ciclo.school_id == s.id)).all()
+        try: ciclos = db.session.scalars(select(Ciclo).where(Ciclo.school_id == s.id)).all()
         except: pass
 
         cid = request.args.get('ciclo_id', type=int)
         if not cid and ciclos: cid = ciclos[-1].id
 
-        # Calcula a prévia usando a lógica corrigida do Service
         previa = JusticaService.calcular_previa_fada(aluno_id, cid) if cid else None
         nome_padrao = current_user.nome_completo or "Avaliador"
 
@@ -273,8 +280,8 @@ def fada_avaliar_aluno(aluno_id):
 
         return render_template('justica/fada_formulario.html', aluno=aluno, ciclos=ciclos, ciclo_atual=cid, dados_previa=previa, default_name=nome_padrao)
     except Exception as e:
-        traceback.print_exc()
-        flash(f"Erro ao abrir avaliação: {str(e)}", 'danger')
+        logger.exception("Erro ao abrir formulário FADA")
+        flash(f"Erro ao abrir avaliação", 'danger')
         return redirect(url_for('justica.fada_lista_alunos'))
 
 @justica_bp.route('/fada/pdf/<int:avaliacao_id>')
@@ -286,4 +293,5 @@ def fada_gerar_pdf(avaliacao_id):
         html = render_template('justica/fada_pdf_template.html', avaliacao=av, aluno=av.aluno, data_geracao=datetime.now())
         return Response(HTML(string=html).write_pdf(), mimetype='application/pdf')
     except Exception as e:
-        return f"Erro PDF: {e}", 500
+        logger.exception("Erro ao gerar PDF FADA")
+        return f"Erro interno ao gerar PDF", 500

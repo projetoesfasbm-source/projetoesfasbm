@@ -1,7 +1,8 @@
+import logging
 from sqlalchemy import select, func, desc, and_
 from sqlalchemy.orm import joinedload
-from datetime import datetime, date, timezone
-import traceback
+from datetime import datetime, date
+import traceback # Mantido apenas se necessário para formatação específica, mas preferível logger.exception
 
 from ..models.database import db
 from ..models.aluno import Aluno
@@ -11,6 +12,9 @@ from ..models.processo_disciplina import ProcessoDisciplina, StatusProcesso
 from ..models.fada_avaliacao import FadaAvaliacao
 from ..models.discipline_rule import DisciplineRule
 from ..models.elogio import Elogio
+
+# Configuração de Log Profissional
+logger = logging.getLogger(__name__)
 
 class JusticaService:
     
@@ -30,7 +34,8 @@ class JusticaService:
         if isinstance(dt_input, str):
             try:
                 return datetime.strptime(dt_input, '%Y-%m-%d').astimezone()
-            except:
+            except ValueError:
+                logger.warning(f"Data inválida recebida: {dt_input}. Usando data atual.")
                 return datetime.now().astimezone()
         return datetime.now().astimezone()
 
@@ -44,50 +49,51 @@ class JusticaService:
     @staticmethod
     def get_processos_para_usuario(user, school_id_override=None):
         try:
-            # Visão do Aluno (Blindada ao próprio ID)
+            query = select(ProcessoDisciplina).join(ProcessoDisciplina.aluno).join(Aluno.turma)
+
+            # 1. Visão do Aluno: Vê os seus, mas filtrado pela escola atual para evitar mistura de dados
             if getattr(user, 'role', '') == 'aluno':
-                if not getattr(user, 'aluno_profile', None): return []
-                return db.session.scalars(
-                    select(ProcessoDisciplina)
-                    .where(ProcessoDisciplina.aluno_id == user.aluno_profile.id)
-                    .order_by(ProcessoDisciplina.data_ocorrencia.desc())
-                ).all()
+                if not getattr(user, 'aluno_profile', None): 
+                    return []
+                
+                query = query.where(ProcessoDisciplina.aluno_id == user.aluno_profile.id)
+                
+                # Reforço de segurança: se a escola foi passada, filtra explicitamente
+                if school_id_override:
+                    query = query.where(Turma.school_id == school_id_override)
 
-            # Visão Admin/Instrutor (Obrigatoriamente filtrada por escola)
-            school_id = school_id_override
-            if not school_id: return [] 
+            # 2. Visão Admin/Instrutor: Vê todos da escola
+            else:
+                if not school_id_override: 
+                    logger.warning(f"Tentativa de listar processos sem school_id por usuário {user.id}")
+                    return [] 
+                query = query.where(Turma.school_id == school_id_override)
 
-            query = (
-                select(ProcessoDisciplina)
-                .join(ProcessoDisciplina.aluno)
-                .join(Aluno.turma)
-                .where(Turma.school_id == school_id)
-                .options(
-                    joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.user),
-                    joinedload(ProcessoDisciplina.regra)
-                )
-                .order_by(ProcessoDisciplina.data_ocorrencia.desc())
-            )
+            query = query.options(
+                joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.user),
+                joinedload(ProcessoDisciplina.regra)
+            ).order_by(ProcessoDisciplina.data_ocorrencia.desc())
+            
             return db.session.scalars(query).all()
+
         except Exception as e:
-            print(f"ERRO AO LISTAR PROCESSOS: {e}")
+            logger.exception(f"Erro crítico ao listar processos para usuário {user.id}")
             return []
 
     @staticmethod
     def get_analise_disciplinar_data(school_id):
         if not school_id: return {}
         try:
-            # Query base segura com join em Turma
             base_join = (Aluno, ProcessoDisciplina.aluno_id == Aluno.id)
             turma_join = (Turma, Aluno.turma_id == Turma.id)
             school_filter = (Turma.school_id == school_id)
 
-            # Contagem por Status
+            # Estatísticas por Status
             stats = db.session.query(ProcessoDisciplina.status, func.count(ProcessoDisciplina.id))\
                 .join(*base_join).join(*turma_join).where(school_filter)\
                 .group_by(ProcessoDisciplina.status).all()
             
-            # Fatos mais comuns
+            # Infrações mais comuns
             fatos = db.session.query(ProcessoDisciplina.codigo_infracao, func.count(ProcessoDisciplina.id).label('qtd'))\
                 .join(*base_join).join(*turma_join).where(school_filter)\
                 .group_by(ProcessoDisciplina.codigo_infracao).order_by(desc('qtd')).limit(5).all()
@@ -100,7 +106,7 @@ class JusticaService:
                     if r: txt = r.descricao[:40] + "..."
                 fatos_fmt.append({'codigo': cod or 'S/C', 'total': qtd, 'descricao': txt})
 
-            # Alunos com mais registros
+            # Alunos com mais ocorrências
             alunos = db.session.query(User.nome_completo, func.count(ProcessoDisciplina.id).label('qtd'))\
                 .join(Aluno, ProcessoDisciplina.aluno_id == Aluno.id)\
                 .join(User, Aluno.user_id == User.id)\
@@ -108,20 +114,17 @@ class JusticaService:
                 .where(Turma.school_id == school_id)\
                 .group_by(User.nome_completo).order_by(desc('qtd')).limit(5).all()
 
-            # Converte enum para string na resposta
             stats_dict = {k.value if hasattr(k, 'value') else str(k): v for k, v in stats}
 
             return {'status_counts': stats_dict, 'common_facts': fatos_fmt, 'top_alunos': [{'nome': a[0], 'total': a[1]} for a in alunos]}
         except Exception as e:
-            print(f"Erro Analise: {e}")
+            logger.exception(f"Erro ao gerar análise disciplinar para escola {school_id}")
             return {'status_counts': {}, 'common_facts': [], 'top_alunos': []}
 
     @staticmethod
     def criar_processo(descricao, observacao, aluno_id, autor_id, pontos=0.0, codigo_infracao=None, regra_id=None, data_ocorrencia=None):
         try:
             dt_final = JusticaService._ensure_datetime(data_ocorrencia)
-
-            # Integridade: Se tem regra_id, o código DEVE ser o da regra
             final_regra_id = regra_id
             final_codigo = codigo_infracao
             
@@ -146,7 +149,8 @@ class JusticaService:
             return True, "Registrado com sucesso."
         except Exception as e:
             db.session.rollback()
-            return False, f"Erro ao registrar: {e}"
+            logger.exception("Erro ao criar processo disciplinar")
+            return False, "Erro interno ao registrar processo."
 
     @staticmethod
     def finalizar_processo(pid, decisao, fundamentacao, detalhes, turnos_sustacao=None):
@@ -154,7 +158,6 @@ class JusticaService:
             p = db.session.get(ProcessoDisciplina, pid)
             if not p: return False, "Processo não encontrado."
             
-            # Lógica de formatação movida do controller para cá
             if turnos_sustacao and decisao == 'Sustação da Dispensa':
                 detalhes = f"Sustação: {turnos_sustacao} turnos. {detalhes or ''}"
 
@@ -168,7 +171,8 @@ class JusticaService:
             return True, "Processo finalizado com sucesso."
         except Exception as e: 
             db.session.rollback()
-            return False, str(e)
+            logger.exception(f"Erro ao finalizar processo {pid}")
+            return False, "Erro ao finalizar processo."
 
     @staticmethod
     def deletar_processo(pid):
@@ -178,8 +182,11 @@ class JusticaService:
                 db.session.delete(p)
                 db.session.commit()
                 return True, "Registro excluído."
-            return False, "Não encontrado."
-        except: return False, "Erro ao excluir."
+            return False, "Processo não encontrado."
+        except Exception as e: 
+            db.session.rollback()
+            logger.exception(f"Erro ao deletar processo {pid}")
+            return False, "Erro interno ao excluir."
 
     @staticmethod
     def registrar_ciente(pid, user):
@@ -193,7 +200,10 @@ class JusticaService:
             p.data_ciente = datetime.now().astimezone()
             db.session.commit()
             return True, "Ciência registrada."
-        except: return False, "Erro ao registrar ciência."
+        except Exception as e: 
+            db.session.rollback()
+            logger.exception(f"Erro ao registrar ciente no processo {pid}")
+            return False, "Erro ao registrar ciência."
 
     @staticmethod
     def enviar_defesa(pid, texto, user):
@@ -207,7 +217,10 @@ class JusticaService:
             p.data_defesa = datetime.now().astimezone()
             db.session.commit()
             return True, "Defesa enviada com sucesso."
-        except: return False, "Erro ao enviar defesa."
+        except Exception as e: 
+            db.session.rollback()
+            logger.exception(f"Erro ao enviar defesa no processo {pid}")
+            return False, "Erro interno ao enviar defesa."
 
     @staticmethod
     def get_alunos_para_fada(school_id):
@@ -220,34 +233,43 @@ class JusticaService:
 
     @staticmethod
     def calcular_previa_fada(aluno_id, ciclo_id=None):
+        """
+        Calcula nota FADA garantindo que apenas registros da escola atual sejam computados.
+        """
         notas = {i: JusticaService.FADA_NOTA_INICIAL for i in range(1, 19)}
         try:
             aluno = db.session.get(Aluno, aluno_id)
             if not aluno or not aluno.turma or not aluno.turma.school:
                 return notas
             
-            # Lógica CTSP: Retorna notas cheias (sem cálculo)
+            escola_id = aluno.turma.school_id
+
+            # Escolas CTSP não possuem pontuação
             if aluno.turma.school.npccal_type == 'ctsp':
                 return notas
 
-            # Lógica CBFPM/CSPM
-            # Filtra apenas processos finalizados
+            # Filtra infrações da escola correta
             punicoes = db.session.scalars(
                 select(ProcessoDisciplina)
-                .where(ProcessoDisciplina.aluno_id == aluno_id, 
-                       ProcessoDisciplina.status == StatusProcesso.FINALIZADO)
+                .join(Aluno).join(Turma)
+                .where(
+                    ProcessoDisciplina.aluno_id == aluno_id, 
+                    ProcessoDisciplina.status == StatusProcesso.FINALIZADO,
+                    Turma.school_id == escola_id 
+                )
                 .options(joinedload(ProcessoDisciplina.regra))
             ).all()
 
             for p in punicoes:
                 pts = getattr(p, 'pontos', 0.0) or 0.0
-                attr = 8 # Default: Disciplina
+                attr = 8 # Padrão: Disciplina
                 if p.regra and p.regra.atributo_fada_id:
                     attr = p.regra.atributo_fada_id
                 
                 if 1 <= attr <= 18:
                     notas[attr] = max(0.0, notas[attr] - float(pts))
             
+            # Elogios
             elogios = db.session.scalars(select(Elogio).where(Elogio.aluno_id == aluno_id)).all()
             for e in elogios:
                 pts = float(e.pontos) if e.pontos is not None else 0.0
@@ -255,8 +277,9 @@ class JusticaService:
                     notas[e.atributo_1] = min(JusticaService.FADA_MAX_NOTA, notas[e.atributo_1] + pts)
                 if e.atributo_2 and 1 <= e.atributo_2 <= 18:
                     notas[e.atributo_2] = min(JusticaService.FADA_MAX_NOTA, notas[e.atributo_2] + pts)
+                    
         except Exception as e:
-            print(f"Erro calculo FADA: {e}")
+            logger.exception(f"Erro ao calcular FADA para aluno {aluno_id}")
             
         return notas
 
@@ -275,7 +298,6 @@ class JusticaService:
             av.nome_avaliador_custom = nome_avaliador
             av.data_avaliacao = datetime.now().astimezone()
             
-            # Atributos mapeados de 1 a 18
             campos = [f'attr_{i}' for i in range(1, 19)]
             colunas_db = [
                 'attr_1_expressao', 'attr_2_planejamento', 'attr_3_perseveranca', 
@@ -299,20 +321,18 @@ class JusticaService:
             av.adaptacao_carreira = form_data.get('adaptacao_carreira', 'Em adaptação')
             
             db.session.commit()
-            return True, "Avaliação salva!", av.id
+            return True, "Avaliação salva com sucesso!", av.id
         except Exception as e:
             db.session.rollback()
-            return False, f"Erro: {e}", None
+            logger.exception("Erro ao salvar FADA")
+            return False, "Erro ao salvar avaliação.", None
 
     @staticmethod
     def get_fada_por_id(id): return db.session.get(FadaAvaliacao, id)
 
     @staticmethod
     def get_processos_por_ids(ids, school_id):
-        """Busca segura: retorna apenas se os processos pertencerem à escola fornecida."""
         if not ids or not school_id: return []
-        
-        # JOIN Obrigatório com Turma para validar School ID
         return db.session.scalars(
             select(ProcessoDisciplina)
             .join(Aluno).join(Turma)
