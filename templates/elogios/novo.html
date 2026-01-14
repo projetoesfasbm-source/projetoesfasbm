@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Novo Elogio{% endblock %}
+{% block content %}
+<div class="container mt-4">
+    <div class="card shadow-sm">
+        <div class="card-header bg-success text-white">
+            <h4 class="mb-0"><i class="fas fa-star me-2"></i>Registrar Elogio</h4>
+            <p class="mb-0 small mt-1">Aluno: <strong>{{ aluno.user.nome_completo }}</strong> ({{ aluno.user.matricula }})</p>
+        </div>
+        <div class="card-body">
+            <form method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token else '' }}">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label fw-bold">Data do Fato</label>
+                        <input type="date" name="data_elogio" class="form-control" required value="{{ hoje }}">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Descrição do Elogio</label>
+                    <textarea name="descricao" class="form-control" rows="4" required placeholder="Descreva o motivo do elogio..."></textarea>
+                </div>
+                {% if usa_fada %}
+                <div class="card bg-light border-info mb-3">
+                    <div class="card-body">
+                        <h6 class="card-title text-info"><i class="fas fa-calculator me-1"></i> Pontuação FADA (CBFPM/CSPM)</h6>
+                        <p class="card-text small text-muted">Selecione até 2 atributos impactados. Gera <strong>+0.5 pontos</strong>.</p>
+                        <div class="row">
+                            <div class="col-md-6 mb-2">
+                                <label class="form-label">Atributo 1</label>
+                                <select name="atributo_1" class="form-select">
+                                    <option value="">-- Selecione --</option>
+                                    {% for id, nome in atributos %}<option value="{{ id }}">{{ id }}. {{ nome }}</option>{% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-2">
+                                <label class="form-label">Atributo 2</label>
+                                <select name="atributo_2" class="form-select">
+                                    <option value="">-- Selecione --</option>
+                                    {% for id, nome in atributos %}<option value="{{ id }}">{{ id }}. {{ nome }}</option>{% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="alert alert-secondary"><i class="fas fa-info-circle me-1"></i> Escola tipo CTSP: Registro apenas histórico.</div>
+                {% endif %}
+                <div class="mt-3 d-flex justify-content-between">
+                    <a href="{{ url_for('aluno.editar_aluno', aluno_id=aluno.id) }}" class="btn btn-outline-secondary">Cancelar</a>
+                    <button type="submit" class="btn btn-success">Salvar Elogio</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

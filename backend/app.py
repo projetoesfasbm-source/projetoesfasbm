@@ -3,10 +3,7 @@
 import os
 import click
 import firebase_admin
-# ### INÍCIO DA ALTERAÇÃO ###
-# Adicionado send_from_directory e g às importações do Flask
 from flask import Flask, render_template, g, session, send_from_directory
-# ### FIM DA ALTERAÇÃO ###
 from flask_login import LoginManager, current_user
 from flask_migrate import Migrate
 from flask_wtf.csrf import CSRFProtect
@@ -45,16 +42,15 @@ from backend.models.turma import Turma
 from backend.models.turma_cargo import TurmaCargo
 from backend.models.user_school import UserSchool
 from backend.models.fada_avaliacao import FadaAvaliacao
-# ### NOVOS MODELOS CHEFE DE TURMA ###
 from backend.models.diario_classe import DiarioClasse
 from backend.models.frequencia import FrequenciaAluno
+# ### NOVO MODELO ###
+from backend.models.elogio import Elogio
 # ------------------------------------------------------------
 from datetime import datetime, timezone
 try:
-    # 'zoneinfo' é padrão do Python 3.9+ (que você usa)
     from zoneinfo import ZoneInfo
 except ImportError:
-    # Fallback para versões mais antigas (se necessário, mas improvável)
     from backports.zoneinfo import ZoneInfo
 
 def create_app(config_class=Config):
@@ -89,26 +85,17 @@ def create_app(config_class=Config):
     # ### FILTRO DE FUSO HORÁRIO ###
     @app.template_filter('br_time')
     def format_datetime_as_brt(dt_utc, format_str=None):
-        """
-        Converte um datetime UTC para o fuso de Brasília (BRT).
-        Aceita um formato de string opcional.
-        """
         if not dt_utc:
             return "N/A"
-
         try:
             BRT = ZoneInfo("America/Sao_Paulo")
-
             if dt_utc.tzinfo is None:
                 dt_utc = dt_utc.replace(tzinfo=timezone.utc)
-
             dt_brt = dt_utc.astimezone(BRT)
-
             if format_str:
                 return dt_brt.strftime(format_str)
             else:
                 return dt_brt.strftime("%d/%m/%Y às %H:%M")
-
         except Exception as e:
             return str(dt_utc)
     # ### FIM DO FILTRO ###
@@ -142,20 +129,13 @@ def create_app(config_class=Config):
     # =========================================================
     @app.before_request
     def set_user_context():
-        """
-        Injeta o ID da escola ativa no objeto current_user ANTES de processar
-        qualquer rota ou template. Isso garante que as propriedades is_sens, 
-        is_cal, etc., funcionem corretamente nos templates antigos.
-        """
         if current_user.is_authenticated:
-            # 1. Tenta pegar da sessão 'Visualizar Como' (Super Admin)
             if current_user.role in ['super_admin', 'programador']:
                 view_as = session.get('view_as_school_id')
                 if view_as:
                     current_user.temp_active_school_id = int(view_as)
                     return
 
-            # 2. Pega da sessão padrão 'active_school_id'
             sid = session.get('active_school_id')
             if sid:
                 current_user.temp_active_school_id = int(sid)
@@ -193,8 +173,11 @@ def register_blueprints(app):
     from backend.controllers.turma_controller import turma_bp
     from backend.controllers.user_controller import user_bp
     from backend.controllers.vinculo_controller import vinculo_bp
-    # Importar controller do Chefe
     from backend.controllers.chefe_turma_controller import chefe_bp
+    
+    # ### NOVOS CONTROLLERS ###
+    from backend.controllers.elogio_controller import elogio_bp
+    from backend.controllers.regras_controller import regras_bp
 
     app.register_blueprint(admin_escola_bp)
     app.register_blueprint(tools_bp)
@@ -218,20 +201,18 @@ def register_blueprints(app):
     app.register_blueprint(turma_bp)
     app.register_blueprint(user_bp)
     app.register_blueprint(vinculo_bp)
-    # Registrar blueprint do Chefe
     app.register_blueprint(chefe_bp)
+    
+    # ### REGISTRO DE NOVOS BLUEPRINTS ###
+    app.register_blueprint(elogio_bp)
+    app.register_blueprint(regras_bp)
 
 def register_handlers_and_processors(app):
 
     @app.before_request
     def load_globals():
-        """
-        Carrega variáveis globais da requisição (escola e config) no objeto 'g'.
-        Isso é executado ANTES de qualquer rota.
-        """
         from backend.services.site_config_service import SiteConfigService
 
-        # 1. Carrega o SiteConfig
         if 'site_config' not in g:
             if app.config.get("TESTING", False):
                 SiteConfigService.init_default_configs()
@@ -239,22 +220,16 @@ def register_handlers_and_processors(app):
             configs = SiteConfigService.get_all_configs()
             g.site_config = {c.config_key: c.config_value for c in configs}
 
-        # 2. Carrega a Escola Ativa
         g.active_school = None
         school_id_to_load = None
 
         if current_user.is_authenticated:
-            # 1. Se for Super Admin ou Programador, a prioridade é a sessão "Visualizar Como".
             if current_user.role in ['super_admin', 'programador']:
                 school_id_to_load = session.get('view_as_school_id')
 
-            # 2. Se for qualquer outro usuário (ou um Super Admin não visualizando),
-            #    tenta carregar a escola do vínculo.
-            #    (Agora prioriza o active_school_id da sessão para evitar loading aleatório)
             if school_id_to_load is None:
                  school_id_to_load = session.get('active_school_id')
             
-            # Fallback para o primeiro vínculo se nada estiver na sessão
             if school_id_to_load is None and hasattr(current_user, 'user_schools') and current_user.user_schools:
                 school_id_to_load = current_user.user_schools[0].school_id
 
@@ -264,9 +239,6 @@ def register_handlers_and_processors(app):
 
     @app.context_processor
     def inject_globals_to_template():
-        """
-        Injeta as variáveis globais (que já foram carregadas) nos templates HTML.
-        """
         return {
             'site_config': g.get('site_config'),
             'active_school': g.get('active_school')
@@ -274,7 +246,6 @@ def register_handlers_and_processors(app):
 
     @app.after_request
     def add_header(response):
-        # Cabeçalhos de segurança e controle de cache
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
@@ -283,7 +254,6 @@ def register_handlers_and_processors(app):
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
 
-        # Política de Segurança de Conteúdo (CSP)
         csp = [
             "default-src 'self'",
             "script-src 'self' https://code.jquery.com https://cdn.jsdelivr.net 'unsafe-eval' 'unsafe-inline'",

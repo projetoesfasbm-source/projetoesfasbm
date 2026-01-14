@@ -21,7 +21,9 @@ from ..models.discipline_rule import DisciplineRule
 from ..models.school import School
 from ..models.user_school import UserSchool
 from ..models.fada_avaliacao import FadaAvaliacao
+from ..models.ciclo import Ciclo
 from ..services.justica_service import JusticaService
+from ..services.aluno_service import AlunoService
 # CORREÇÃO: Importa o decorador específico de CAL
 from utils.decorators import cal_required, admin_or_programmer_required
 
@@ -62,9 +64,8 @@ def index():
 
 @justica_bp.route('/analise')
 @login_required
-@cal_required # USO DO DECORADOR CORRETO: Permite CAL
+@cal_required 
 def analise():
-
     active_school = g.get('active_school')
     if not active_school or not active_school.npccal_type in ['cspm', 'cbfpm', 'ctsp']:
         flash('A Análise de Dados não se aplica a esta escola.', 'info')
@@ -83,7 +84,7 @@ def analise():
 
 @justica_bp.route('/finalizar/<int:processo_id>', methods=['POST'])
 @login_required
-@cal_required # USO DO DECORADOR CORRETO: Permite CAL
+@cal_required 
 def finalizar_processo(processo_id):
     decisao = request.form.get('decisao_final')
     fundamentacao = request.form.get('fundamentacao')
@@ -105,33 +106,56 @@ def finalizar_processo(processo_id):
 
 @justica_bp.route('/novo', methods=['POST'])
 @login_required
-@cal_required # USO DO DECORADOR CORRETO: Permite CAL
+@cal_required 
 def novo_processo():
-
     aluno_id = request.form.get('aluno_id')
     fato_descricao = request.form.get('fato_descricao')
     fato_pontos = request.form.get('fato_pontos')
     observacao = request.form.get('observacao')
+    
+    # Novos campos para suportar cálculo
+    regra_id = request.form.get('regra_id') # Se vier de um select
+    data_fato_str = request.form.get('data_fato') # Opcional, senão usa hoje
 
     if not aluno_id or not fato_descricao:
         flash('Aluno e Fato Constatado são obrigatórios.', 'danger')
         return redirect(url_for('justica.index'))
 
     active_school = g.get('active_school')
-    if active_school and active_school.npccal_type == 'ctsp':
-        pontos = 0.0
-    else:
+    
+    codigo_infracao = None
+    pontos = 0.0
+    
+    # Tenta pegar código da infração se uma regra foi selecionada (melhor para cálculo)
+    if regra_id:
+        regra = db.session.get(DisciplineRule, regra_id)
+        if regra:
+            codigo_infracao = regra.codigo
+            pontos = regra.pontos
+    elif fato_pontos:
         try:
-            pontos = float(fato_pontos) if fato_pontos else 0.0
+            pontos = float(fato_pontos)
         except ValueError:
             pontos = 0.0
+            
+    if active_school and active_school.npccal_type == 'ctsp':
+        pontos = 0.0
+
+    data_ocorrencia = None
+    if data_fato_str:
+        try:
+            data_ocorrencia = datetime.strptime(data_fato_str, '%Y-%m-%d').date()
+        except:
+            pass
 
     success, message = JusticaService.criar_processo(
         fato_descricao,
         observacao,
         int(aluno_id),
         current_user.id,
-        pontos
+        pontos,
+        codigo_infracao=codigo_infracao,
+        data_ocorrencia=data_ocorrencia
     )
     flash(message, 'success' if success else 'danger')
     return redirect(url_for('justica.index'))
@@ -157,7 +181,7 @@ def enviar_defesa(processo_id):
 
 @justica_bp.route('/deletar/<int:processo_id>', methods=['POST'])
 @login_required
-@cal_required # USO DO DECORADOR CORRETO: Permite CAL
+@cal_required 
 def deletar_processo(processo_id):
     success, message = JusticaService.deletar_processo(processo_id)
     flash(message, 'success' if success else 'danger')
@@ -165,7 +189,7 @@ def deletar_processo(processo_id):
 
 @justica_bp.route('/api/alunos')
 @login_required
-@cal_required # USO DO DECORADOR CORRETO: Permite CAL
+@cal_required 
 def api_get_alunos():
     search = request.args.get('q', '').lower()
 
@@ -203,7 +227,7 @@ def api_get_alunos():
 
 @justica_bp.route('/api/aluno-details/<int:aluno_id>')
 @login_required
-@cal_required # USO DO DECORADOR CORRETO: Permite CAL
+@cal_required 
 def api_get_aluno_details(aluno_id):
     aluno = db.session.get(Aluno, aluno_id)
     if not aluno or not aluno.user:
@@ -218,7 +242,7 @@ def api_get_aluno_details(aluno_id):
 
 @justica_bp.route('/exportar', methods=['GET', 'POST'])
 @login_required
-@cal_required # USO DO DECORADOR CORRETO: Permite CAL
+@cal_required 
 def exportar_selecao():
 
     active_school = g.get('active_school')
@@ -253,11 +277,11 @@ def exportar_selecao():
     processos_finalizados = JusticaService.get_finalized_processos()
     return render_template('justica/exportar_selecao.html', processos=processos_finalizados)
 
-# ### INÍCIO DAS NOVAS ROTAS FADA ###
+# ### ROTAS FADA ###
 
 @justica_bp.route('/fada')
 @login_required
-@cal_required # USO DO DECORADOR CORRETO: Permite CAL
+@cal_required 
 def fada_lista_alunos():
     """Mostra a lista de alunos da escola para avaliação FADA."""
     active_school = g.get('active_school')
@@ -274,9 +298,9 @@ def fada_lista_alunos():
 
 @justica_bp.route('/fada/avaliar/<int:aluno_id>', methods=['GET', 'POST'])
 @login_required
-@cal_required # USO DO DECORADOR CORRETO: Permite CAL
+@cal_required 
 def fada_avaliar_aluno(aluno_id):
-    """Exibe o formulário FADA para um aluno específico (GET) ou salva (POST)."""
+    """Exibe o formulário FADA com cálculo automático (GET) ou salva (POST)."""
 
     active_school = g.get('active_school')
     if active_school and active_school.npccal_type == 'ctsp':
@@ -288,18 +312,30 @@ def fada_avaliar_aluno(aluno_id):
         flash('Aluno não encontrado.', 'danger')
         return redirect(url_for('justica.fada_lista_alunos'))
 
+    # Carrega ciclos para o select
+    ciclos = db.session.query(Ciclo).filter_by(school_id=active_school.id).all()
+    ciclo_id = request.args.get('ciclo_id', type=int) or (ciclos[-1].id if ciclos else None)
+
     default_name = current_user.nome_completo or current_user.username
     if active_school and current_user.role == 'admin_escola':
         default_name = f"Administrador {active_school.nome}"
 
+    # CÁLCULO AUTOMÁTICO DA PRÉVIA
+    dados_previa = None
+    if ciclo_id:
+        dados_previa = JusticaService.calcular_previa_fada(aluno_id, ciclo_id)
+
     if request.method == 'POST':
         nome_avaliador_custom = request.form.get('nome_avaliador_custom', default_name)
-
+        
+        # Recalcula para garantir que os dados salvos estejam frescos, ou confia no form
+        # Aqui optamos por passar o form, mas o service pode validar
         success, message, avaliacao_id = JusticaService.salvar_fada(
             request.form,
             aluno_id,
             current_user.id,
-            nome_avaliador_custom
+            nome_avaliador_custom,
+            dados_calculados=None # Se quiser forçar o cálculo no save, passe dados_previa aqui
         )
 
         if success:
@@ -312,12 +348,15 @@ def fada_avaliar_aluno(aluno_id):
     return render_template(
         'justica/fada_formulario.html',
         aluno=aluno,
-        default_name=default_name
+        default_name=default_name,
+        ciclos=ciclos,
+        ciclo_atual=ciclo_id,
+        dados_previa=dados_previa # Passa a prévia calculada para o template preencher os campos
     )
 
 @justica_bp.route('/fada/pdf/<int:avaliacao_id>')
 @login_required
-@cal_required # USO DO DECORADOR CORRETO: Permite CAL
+@cal_required 
 def fada_gerar_pdf(avaliacao_id):
     """Gera o PDF de uma avaliação FADA preenchida."""
 
@@ -364,3 +403,59 @@ def fada_gerar_pdf(avaliacao_id):
         mimetype="application/pdf",
         headers={"Content-disposition": f"attachment; filename=fada_aluno_{avaliacao.aluno_id}.pdf"}
     )
+
+# --- NOVA ROTA: MALA DIRETA (PUNIÇÃO COLETIVA) ---
+@justica_bp.route('/registrar-em-massa', methods=['GET', 'POST'])
+@login_required
+@cal_required 
+def registrar_em_massa():
+    active_school = g.get('active_school')
+    
+    if request.method == 'POST':
+        try:
+            alunos_ids = request.form.getlist('alunos_selecionados')
+            regra_id = request.form.get('regra_id')
+            data_fato_str = request.form.get('data_fato')
+            descricao_base = request.form.get('descricao')
+            
+            if not alunos_ids or not regra_id:
+                flash('Selecione pelo menos um aluno e uma infração.', 'warning')
+                return redirect(url_for('justica.registrar_em_massa'))
+
+            regra = db.session.get(DisciplineRule, regra_id)
+            data_fato = None
+            if data_fato_str:
+                data_fato = datetime.strptime(data_fato_str, '%Y-%m-%d').date()
+
+            count = 0
+            for aluno_id in alunos_ids:
+                # Usa o service existente para garantir consistência
+                JusticaService.criar_processo(
+                    descricao_base,
+                    "", # Observação vazia
+                    int(aluno_id),
+                    current_user.id,
+                    regra.pontos,
+                    codigo_infracao=regra.codigo,
+                    data_ocorrencia=data_fato
+                )
+                count += 1
+            
+            flash(f'Sucesso! {count} processos foram abertos.', 'success')
+            return redirect(url_for('justica.index'))
+
+        except Exception as e:
+            flash(f'Erro ao registrar em massa: {str(e)}', 'danger')
+
+    turmas = Turma.query.filter_by(school_id=active_school.id).all()
+    tipo_npccal = active_school.npccal_type or 'cbfpm'
+    regras = DisciplineRule.query.filter_by(npccal_type=tipo_npccal).order_by(DisciplineRule.codigo).all()
+
+    return render_template('justica/registrar_em_massa.html', turmas=turmas, regras=regras)
+
+@justica_bp.route('/api/alunos-por-turma/<int:turma_id>')
+@login_required
+def api_alunos_por_turma(turma_id):
+    alunos = Aluno.query.filter_by(turma_id=turma_id).join(Aluno.user).order_by(Aluno.num_aluno).all()
+    data = [{'id': a.id, 'nome': a.user.nome_completo, 'numero': a.num_aluno, 'matricula': a.user.matricula} for a in alunos]
+    return jsonify(data)

@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Editar' if regra else 'Nova' }} Regra{% endblock %}
+{% block content %}
+<div class="container mt-4">
+    <div class="card shadow-sm">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0">{{ 'Editar' if regra else 'Nova' }} Regra Disciplinar</h4>
+        </div>
+        <div class="card-body">
+            <form method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token else '' }}">
+                
+                {% if not regra %}
+                <input type="hidden" name="npccal_type" value="{{ tipo_padrao }}">
+                {% endif %}
+
+                <div class="row">
+                    <div class="col-md-2 mb-3">
+                        <label class="form-label">Código (Art/Item)</label>
+                        <input type="text" name="codigo" class="form-control" required value="{{ regra.codigo if regra else '' }}">
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">Gravidade</label>
+                        <select name="gravidade" class="form-select">
+                            <option value="Leve" {% if regra and regra.gravidade == 'Leve' %}selected{% endif %}>Leve</option>
+                            <option value="Média" {% if regra and regra.gravidade == 'Média' %}selected{% endif %}>Média</option>
+                            <option value="Grave" {% if regra and regra.gravidade == 'Grave' %}selected{% endif %}>Grave</option>
+                            <option value="Gravíssima" {% if regra and regra.gravidade == 'Gravíssima' %}selected{% endif %}>Gravíssima</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2 mb-3">
+                        <label class="form-label">Pontos (Desconto)</label>
+                        <input type="number" step="0.01" name="pontos" class="form-control" required value="{{ regra.pontos if regra else '0.0' }}">
+                    </div>
+                    
+                    <div class="col-md-5 mb-3">
+                        <label class="form-label fw-bold text-danger">Atributo FADA Afetado</label>
+                        <select name="atributo_fada_id" class="form-select border-danger">
+                            <option value="">-- Nenhum (Afeta apenas NDisc) --</option>
+                            {% for id, nome in atributos.items() %}
+                            <option value="{{ id }}" {% if regra and regra.atributo_fada_id == id %}selected{% endif %}>
+                                {{ id }}. {{ nome }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">Selecione qual nota da FADA será reduzida ao cometer esta infração.</div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Descrição da Infração</label>
+                    <textarea name="descricao" class="form-control" rows="3" required>{{ regra.descricao if regra else '' }}</textarea>
+                </div>
+
+                <div class="d-flex justify-content-between">
+                    <a href="{{ url_for('regras.index') }}" class="btn btn-secondary">Cancelar</a>
+                    <div>
+                        {% if regra %}
+                        <button type="button" class="btn btn-danger me-2" onclick="confirmarExclusao()">Excluir</button>
+                        {% endif %}
+                        <button type="submit" class="btn btn-success">Salvar Regra</button>
+                    </div>
+                </div>
+            </form>
+            
+            {% if regra %}
+            <form id="form-excluir" action="{{ url_for('regras.excluir', id=regra.id) }}" method="POST" style="display:none;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token else '' }}">
+            </form>
+            <script>
+                function confirmarExclusao() {
+                    if(confirm('Tem certeza que deseja excluir esta regra?')) {
+                        document.getElementById('form-excluir').submit();
+                    }
+                }
+            </script>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

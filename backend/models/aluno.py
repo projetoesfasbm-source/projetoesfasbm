@@ -1,4 +1,3 @@
-# backend/models/aluno.py
 from __future__ import annotations
 import typing as t
 from datetime import date
@@ -8,13 +7,14 @@ from sqlalchemy import ForeignKey
 
 if t.TYPE_CHECKING:
     from .user import User
+    from .turma import Turma
     from .historico import HistoricoAluno
     from .historico_disciplina import HistoricoDisciplina
-    from .turma import Turma
     from .processo_disciplina import ProcessoDisciplina
     from .avaliacao import AvaliacaoAtitudinal
     from .fada_avaliacao import FadaAvaliacao 
     from .frequencia import FrequenciaAluno
+    from .elogio import Elogio
 
 class Aluno(db.Model):
     __tablename__ = 'alunos'
@@ -25,7 +25,6 @@ class Aluno(db.Model):
     num_aluno: Mapped[str] = mapped_column(db.String(20), nullable=True)
     funcao_atual: Mapped[t.Optional[str]] = mapped_column(db.String(50))
     foto_perfil: Mapped[str] = mapped_column(db.String(255), default='default.png')
-
     telefone: Mapped[t.Optional[str]] = mapped_column(db.String(20))
     data_nascimento: Mapped[t.Optional[date]] = mapped_column(db.Date)
 
@@ -35,17 +34,16 @@ class Aluno(db.Model):
     user_id: Mapped[int] = mapped_column(ForeignKey('users.id'), unique=True)
     user: Mapped["User"] = relationship(back_populates="aluno_profile")
 
-    # Relacionamentos de Histórico
+    # Relacionamentos
     historico: Mapped[list["HistoricoAluno"]] = relationship(back_populates="aluno", cascade="all, delete-orphan")
     historico_disciplinas: Mapped[list["HistoricoDisciplina"]] = relationship(back_populates="aluno", cascade="all, delete-orphan")
-
-    # Relacionamentos de Disciplina e Avaliação
     processos_disciplinares: Mapped[list["ProcessoDisciplina"]] = relationship(back_populates="aluno", cascade="all, delete-orphan")
     avaliacoes: Mapped[list["AvaliacaoAtitudinal"]] = relationship(back_populates="aluno", cascade="all, delete-orphan")
     fada_avaliacoes: Mapped[list['FadaAvaliacao']] = relationship('FadaAvaliacao', back_populates='aluno', lazy='dynamic', cascade="all, delete-orphan")
-    
-    # Relacionamento de Frequência com Cascade para permitir a exclusão
     frequencias: Mapped[list["FrequenciaAluno"]] = relationship("FrequenciaAluno", back_populates="aluno", cascade="all, delete-orphan")
+    
+    # NOVO: Relacionamento com Elogios
+    elogios: Mapped[list["Elogio"]] = relationship("Elogio", back_populates="aluno", cascade="all, delete-orphan")
 
     def __init__(self, user_id: int, opm: str,
                  id_aluno: t.Optional[str] = None, num_aluno: t.Optional[str] = None,

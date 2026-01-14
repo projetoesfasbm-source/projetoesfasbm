@@ -5,7 +5,7 @@
 {% block content %}
 <div class="content-header">
     <h1>Justiça e Disciplina</h1>
-    <p>Acompanhamento de processos disciplinares.</p>
+    <p>Acompanhamento de processos disciplinares e avaliação atitudinal.</p>
 </div>
 
 <div class="justice-page-layout">
@@ -15,21 +15,26 @@
                 <button class="btn btn-primary justice-option-btn active" data-target="inProgressContent">Em Andamento</button>
                 <button class="btn btn-warning justice-option-btn" data-target="finalizadosContent">Finalizados</button>
 
-                {# CORREÇÃO: Adicionado 'is_cal' para permitir gestão de justiça #}
+                {# PERMISSÕES DE GESTÃO #}
                 {% if current_user.is_cal or current_user.role in ['admin_escola', 'programador', 'super_admin'] %}
-                    <button class="btn btn-success justice-option-btn" data-target="newTransgressionContent">Nova Infração</button>
+                    <button class="btn btn-danger justice-option-btn" data-target="newTransgressionContent">Nova Infração</button>
+                    
+                    {# NOVO: Botão de Elogio #}
+                    <a href="{{ url_for('aluno.listar_alunos') }}" class="btn btn-success justice-option-btn">Novo Elogio</a>
+
+                    {# NOVO: Botão de Mala Direta #}
+                    <a href="{{ url_for('justica.registrar_em_massa') }}" class="btn btn-dark justice-option-btn">Mala Direta</a>
 
                     {% if permite_pontuacao %}
-                    <a href="{{ url_for('justica.fada_lista_alunos') }}" class="btn btn-info">Avaliação FADA</a>
+                        <a href="{{ url_for('justica.fada_lista_alunos') }}" class="btn btn-info justice-option-btn">Avaliação FADA</a>
                     {% endif %}
-
                 {% endif %}
 
-                {# CORREÇÃO: Adicionado 'is_cal' para exportação #}
+                {# EXPORTAÇÃO #}
                 {% if current_user.is_cal or current_user.role in ['admin_escola', 'programador', 'super_admin'] %}
-                <a href="{{ url_for('justica.exportar_selecao') }}" class="btn btn-info">Exportar para BI</a>
+                    <a href="{{ url_for('justica.exportar_selecao') }}" class="btn btn-secondary justice-option-btn">Exportar BI</a>
                 {% endif %}
-                </div>
+            </div>
 
             <div class="justice-content active" id="inProgressContent">
                 <h3 class="justice-content-title">Processos em Andamento</h3>
@@ -61,16 +66,16 @@
                 {% endif %}
             </div>
 
-            {# CORREÇÃO: Adicionado 'is_cal' para ver o formulário de nova infração #}
             {% if current_user.is_cal or current_user.role in ['admin_escola', 'programador', 'super_admin'] %}
             <div class="justice-content" id="newTransgressionContent">
-                <h3 class="justice-content-title">Registrar Nova Infração</h3>
+                <h3 class="justice-content-title">Registrar Nova Infração (Individual)</h3>
                 <form method="POST" action="{{ url_for('justica.novo_processo') }}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="fato_pontos" id="fato_pontos" value="0.0">
+                    <input type="hidden" name="regra_id" id="regra_id_hidden"> 
 
-                    <div class="form-group">
-                        <label for="aluno_search_input">Aluno</label>
+                    <div class="form-group mb-3">
+                        <label for="aluno_search_input" class="form-label fw-bold">Aluno</label>
                         <div class="search-form-container">
                             <div class="input-group">
                                 <input type="search" id="aluno_search_input" class="form-control" placeholder="Buscar por nome ou matrícula..." autocomplete="off">
@@ -82,15 +87,21 @@
                     </div>
 
                     <div id="transgression_fields" style="display: none;">
+                        
+                        <div class="form-group mb-3">
+                            <label class="form-label fw-bold">Data do Fato</label>
+                            <input type="date" name="data_fato" class="form-control" value="{{ now().strftime('%Y-%m-%d') if now else '' }}">
+                        </div>
 
                         {% if fatos_predefinidos %}
-                        <div class="form-group">
-                            <label for="fato_search_input">Fato Constatado</label>
-                            <input type="text" id="fato_search_input" class="form-control mb-2" placeholder="Pesquisar na lista de infrações...">
+                        <div class="form-group mb-3">
+                            <label for="fato_search_input" class="form-label fw-bold">Fato Constatado (Selecione da Lista)</label>
+                            <input type="text" id="fato_search_input" class="form-control mb-2" placeholder="Pesquisar código ou descrição...">
 
                             <div class="facts-list-container" id="facts-list-container">
                                 {% for rule in fatos_predefinidos %}
                                     <div class="result-item"
+                                     data-id="{{ rule.id }}" 
                                      data-fato="({{ rule.codigo }}) {{ rule.descricao }}"
                                      data-pontos="{{ rule.pontos if permite_pontuacao else '0.0' }}">
 
@@ -106,19 +117,20 @@
                         </div>
 
                         {% else %}
-                        <div class="form-group">
-                            <label for="fato_descricao_manual">Fato Constatado (Registro Manual)</label>
-                            <p class="form-text">Nenhuma infração pré-definida encontrada para esta escola. Registre o fato manualmente.</p>
-                            <textarea id="fato_descricao_manual" name="fato_descricao" class="form-control" rows="3" placeholder="Descreva o fato constatado..." required></textarea>
+                        <div class="form-group mb-3">
+                            <label for="fato_descricao_manual" class="form-label fw-bold">Fato Constatado (Manual)</label>
+                            <div class="alert alert-warning py-2 small">Nenhuma regra cadastrada. O cálculo automático da FADA não funcionará para este registro.</div>
+                            <textarea id="fato_descricao_manual" name="fato_descricao" class="form-control" rows="3" placeholder="Descreva o fato..." required></textarea>
                         </div>
                         {% endif %}
 
-                        <div class="form-group">
-                            <label for="observacao">Observação (Termo de Justificação)</label>
-                            <textarea id="observacao" name="observacao" class="form-control" rows="12"></textarea>
+                        <div class="form-group mb-3">
+                            <label for="observacao" class="form-label fw-bold">Termo de Justificação (Observação)</label>
+                            <textarea id="observacao" name="observacao" class="form-control" rows="10"></textarea>
                         </div>
-                        <div class="form-actions">
-                            <button type="submit" class="btn btn-primary">Registrar</button>
+                        
+                        <div class="form-actions d-flex justify-content-end">
+                            <button type="submit" class="btn btn-primary px-4"><i class="fas fa-save me-2"></i>Registrar Processo</button>
                         </div>
                     </div>
                 </form>
@@ -129,65 +141,85 @@
     </div>
 
     <div class="justice-sidebar">
-        {# CORREÇÃO: Adicionado 'is_cal' para ver análise #}
-        {% if (current_user.is_cal or current_user.role in ['admin_escola', 'programador', 'super_admin']) and permite_pontuacao %}
-        <a href="{{ url_for('justica.analise') }}" class="analysis-card">
-            <div class="analysis-card-icon">📊</div>
-            <div class="analysis-card-text">
-                <h4>Análise de Dados</h4>
-                <p>Gráficos e estatísticas sobre as infrações.</p>
-            </div>
-        </a>
+        {% if current_user.is_cal or current_user.role in ['admin_escola', 'programador', 'super_admin'] %}
+            
+            {% if permite_pontuacao %}
+            <a href="{{ url_for('justica.analise') }}" class="analysis-card mb-3">
+                <div class="analysis-card-icon">📊</div>
+                <div class="analysis-card-text">
+                    <h4>Análise de Dados</h4>
+                    <p>Estatísticas e Gráficos.</p>
+                </div>
+            </a>
+            
+            {# NOVO: Configuração de Regras #}
+            <a href="{{ url_for('regras.index') }}" class="analysis-card mb-3" style="background: linear-gradient(135deg, #6c757d, #495057);">
+                <div class="analysis-card-icon">⚙️</div>
+                <div class="analysis-card-text">
+                    <h4>Configurar Regras</h4>
+                    <p>Vincular infrações à FADA.</p>
+                </div>
+            </a>
+            {% endif %}
+
         {% endif %}
     </div>
 </div>
 
 <style>
-    /* Estilos CSS (sem alterações) */
+    /* Estilos CSS mantidos e ajustados */
     .justice-page-layout { display: grid; grid-template-columns: 1fr; gap: 1.5rem; }
     @media (min-width: 992px) { .justice-page-layout { grid-template-columns: 3fr 1fr; } }
-    .analysis-card { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 1.5rem; border-radius: var(--border-radius); background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light)); color: white; text-decoration: none; transition: all 0.3s ease; border: 2px solid transparent; min-height: 150px; box-shadow: var(--shadow-soft); }
-    .analysis-card:hover { transform: translateY(-5px); box-shadow: var(--shadow-medium); border-color: rgba(255, 255, 255, 0.5); }
-    .analysis-card-icon { font-size: 2.5rem; line-height: 1; margin-bottom: 0.75rem; }
-    .analysis-card-text h4 { font-size: 1.2rem; font-weight: 700; margin: 0 0 0.25rem 0; }
-    .analysis-card-text p { font-size: 0.8rem; opacity: 0.8; margin: 0; }
+    
+    .analysis-card { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 1.5rem; border-radius: var(--border-radius); background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light)); color: white; text-decoration: none; transition: all 0.3s ease; border: 2px solid transparent; min-height: 120px; box-shadow: var(--shadow-soft); }
+    .analysis-card:hover { transform: translateY(-5px); box-shadow: var(--shadow-medium); border-color: rgba(255, 255, 255, 0.5); color: white; }
+    .analysis-card-icon { font-size: 2rem; line-height: 1; margin-bottom: 0.5rem; }
+    .analysis-card-text h4 { font-size: 1.1rem; font-weight: 700; margin: 0; }
+    .analysis-card-text p { font-size: 0.8rem; opacity: 0.9; margin: 0; }
 
-    .facts-list-container { max-height: 250px; overflow-y: auto; border: 1px solid #ccc; border-radius: 8px; background: #f8fafc; padding: 0.5rem; }
-    .result-item { padding: 10px; cursor: pointer; border-radius: 4px; }
-    .result-item:hover { background-color: #e2e8f0; }
-    .result-item.selected { background-color: var(--color-primary); color: white; }
-    .result-item.selected .badge { background-color: white !important; color: var(--color-primary) !important; }
+    .facts-list-container { max-height: 300px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 6px; background: #fff; }
+    .result-item { padding: 12px; cursor: pointer; border-bottom: 1px solid #f1f1f1; transition: background 0.2s; }
+    .result-item:last-child { border-bottom: none; }
+    .result-item:hover { background-color: #f8f9fa; }
+    .result-item.selected { background-color: #e7f1ff; border-left: 4px solid var(--color-primary); }
 
     .justice-options { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.5rem; align-items: center; }
-    .justice-option-btn.active { filter: brightness(1.1); box-shadow: inset 0 2px 4px rgba(0,0,0,0.15); transform: translateY(1px); }
-    .justice-content { display: none; }
+    .justice-option-btn.active { box-shadow: inset 0 3px 5px rgba(0,0,0,0.125); border: 2px solid transparent; }
+    .justice-content { display: none; animation: fadeIn 0.3s; }
     .justice-content.active { display: block; }
-    .justice-content-title { margin-bottom: 1.5rem; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
-    .search-form-container { position: relative; }
-    .search-results { max-height: 200px; overflow-y: auto; border: 1px solid #ccc; border-radius: 0 0 8px 8px; background: white; position: absolute; width: 100%; z-index: 10; display: none; }
-    .selected-item-display { background-color: #e9ecef; padding: 10px; border-radius: 4px; margin-top: 5px; display: flex; justify-content: space-between; align-items: center; }
-    .remove-selected-btn { cursor: pointer; color: red; font-weight: bold; }
+    .search-results { max-height: 200px; overflow-y: auto; border: 1px solid #ccc; border-radius: 0 0 8px 8px; background: white; position: absolute; width: 100%; z-index: 1000; display: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .selected-item-display { background-color: #e9ecef; padding: 10px; border-radius: 4px; margin-top: 5px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #ced4da; }
+    .remove-selected-btn { cursor: pointer; color: #dc3545; font-size: 1.2rem; font-weight: bold; padding: 0 5px; }
 </style>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // --- Lógica das abas (sem alterações) ---
+    // --- Lógica das abas ---
     const optionBtns = document.querySelectorAll('.justice-option-btn');
     const contentDivs = document.querySelectorAll('.justice-content');
+    
+    // Verifica se é um botão de aba (tem data-target)
     optionBtns.forEach(btn => {
-        btn.addEventListener('click', function() {
-            optionBtns.forEach(b => b.classList.remove('active'));
-            this.classList.add('active');
-            contentDivs.forEach(div => div.classList.remove('active'));
-            const targetElement = document.getElementById(this.dataset.target);
-            if (targetElement) {
-                targetElement.classList.add('active');
-            }
-        });
+        if(btn.dataset.target) {
+            btn.addEventListener('click', function() {
+                // Remove active de todos os botões que são abas
+                optionBtns.forEach(b => {
+                    if(b.dataset.target) b.classList.remove('active');
+                });
+                this.classList.add('active');
+                
+                contentDivs.forEach(div => div.classList.remove('active'));
+                const targetElement = document.getElementById(this.dataset.target);
+                if (targetElement) {
+                    targetElement.classList.add('active');
+                }
+            });
+        }
     });
 
-    // --- Elementos do Formulário (sem alterações) ---
+    // --- Elementos do Formulário ---
     const alunoSearchInput = document.getElementById('aluno_search_input');
     const alunoResults = document.getElementById('aluno_results');
     const alunoHiddenInput = document.getElementById('aluno_id_hidden');
@@ -197,7 +229,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let observacaoTemplateOriginal = '';
 
-    // --- Busca de Aluno (sem alterações) ---
+    // --- Busca de Aluno ---
     if (alunoSearchInput) {
         let searchTimeout;
         alunoSearchInput.addEventListener('input', function() {
@@ -237,7 +269,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         function selectAluno(alunoId, alunoText) {
             alunoSearchInput.style.display = 'none';
-            alunoSelectedDisplay.innerHTML = `<span>${alunoText}</span><span class="remove-selected-btn" title="Remover seleção"> &times;</span>`;
+            alunoSelectedDisplay.innerHTML = `<span><strong>${alunoText}</strong></span><span class="remove-selected-btn" title="Remover seleção"> &times;</span>`;
             alunoSelectedDisplay.style.display = 'flex';
             alunoHiddenInput.value = alunoId;
             alunoResults.style.display = 'none';
@@ -255,12 +287,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     const autoridadePosto = "{{ current_user.posto_graduacao or 'POSTO DA AUTORIDADE' }}";
 
                     observacaoTemplateOriginal = `Tendo em vista as informações constantes na Parte Nº 000/CAl/EsFAS/${ano}, evidenciando a existência, em tese, de infração das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação:\n\n1. Justificante: ${details.posto_graduacao} ${details.nome_completo}, Id Func. ${details.matricula}.\n\n2. Descrição da conduta infracional: O(a) ${details.posto_graduacao} ${details.nome_completo}, Id Func. ${details.matricula}, no dia ${dia} de ${mes} de ${ano}, ...... \nCom isso, incorreu no item...\n\n3. Cientifico-lhe que a contar do recebimento da presente, abre-se o prazo de 24 horas, para que, querendo, apresente resposta escrita com as provas que entender cabíveis. Fica advertido o acusado que a não entrega da justificação dentro do prazo estipulado, implicará em reconhecimento como verdadeiros os fatos imputados.\n\n\n${autoridadeNome}\n${autoridadePosto}`;
+                    
                     observacaoTextarea.value = observacaoTemplateOriginal;
                     transgressionFields.style.display = 'block';
 
                     updateObservacaoComFato(null);
 
                     document.getElementById('fato_pontos').value = '0.0';
+                    const regraHidden = document.getElementById('regra_id_hidden');
+                    if(regraHidden) regraHidden.value = '';
 
                     const fatoHiddenInput = document.getElementById('fato_hidden_input');
                     if (fatoHiddenInput) {
@@ -291,13 +326,14 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // --- Lógica do Fato Constatado (Seletor) (sem alterações) ---
+    // --- Lógica do Fato Constatado (Seletor) ---
     const fatoSearchInput = document.getElementById('fato_search_input');
 
     if (fatoSearchInput) {
         const fatoListContainer = document.getElementById('facts-list-container');
         const fatoHiddenInput = document.getElementById('fato_hidden_input');
         const fatoPontosInput = document.getElementById('fato_pontos');
+        const regraIdInput = document.getElementById('regra_id_hidden');
         const fatoItems = fatoListContainer.querySelectorAll('.result-item');
 
         fatoSearchInput.addEventListener('input', function() {
@@ -315,16 +351,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 const fatoText = this.dataset.fato;
                 const pontos = this.dataset.pontos || 0.0;
+                const regraId = this.dataset.id; // Pega o ID da regra
 
                 fatoHiddenInput.value = fatoText;
                 fatoPontosInput.value = pontos;
+                if(regraIdInput) regraIdInput.value = regraId; // Salva o ID para cálculo
 
                 updateObservacaoComFato(fatoText);
             });
         });
     }
 
-    // --- Função 'updateObservacao' (sem alterações) ---
     function updateObservacaoComFato(fatoText) {
         let textoObservacao = observacaoTemplateOriginal;
 
@@ -345,29 +382,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
         observacaoTextarea.value = textoObservacao;
     }
-
-    // --- Lógica de Toggle do Formulário "Analisar" (sem alterações) ---
-    const botoesToggleForm = document.querySelectorAll('.js-toggle-analise-form');
-    botoesToggleForm.forEach(function(botao) {
-        botao.addEventListener('click', function(event) {
-            event.preventDefault();
-            const targetFormId = this.dataset.targetForm;
-            const formElement = document.querySelector(targetFormId);
-            const botaoPrincipal = this.closest('.card-body').querySelector('.btn-group .js-toggle-analise-form');
-            const textoBotao = botaoPrincipal ? botaoPrincipal.querySelector('.js-toggle-text') : null;
-
-            if (formElement) {
-                if (formElement.style.display === 'none' || formElement.style.display === '') {
-                    formElement.style.display = 'block';
-                    if (textoBotao) textoBotao.textContent = 'Fechar';
-                } else {
-                    formElement.style.display = 'none';
-                    if (textoBotao) textoBotao.textContent = 'Analisar';
-                }
-            }
-        });
-    });
-
 });
 </script>
 {% endblock %}

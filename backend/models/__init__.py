@@ -1,70 +1,41 @@
-# backend/models/__init__.py
-
 from .database import db
-
 from .user import User
 from .school import School
 from .user_school import UserSchool
-from .aluno import Aluno
-from .instrutor import Instrutor
 from .turma import Turma
-from .ciclo import Ciclo
+from .aluno import Aluno
 from .disciplina import Disciplina
-from .disciplina_turma import DisciplinaTurma
-from .horario import Horario
-from .semana import Semana
 from .historico import HistoricoAluno
 from .historico_disciplina import HistoricoDisciplina
-from .password_reset_token import PasswordResetToken
-from .site_config import SiteConfig
-from .image_asset import ImageAsset
 from .turma_cargo import TurmaCargo
+from .semana import Semana
+from .horario import Horario
+from .instrutor import Instrutor
+from .disciplina_turma import DisciplinaTurma
+from .processo_disciplina import ProcessoDisciplina
+from .discipline_rule import DisciplineRule
+from .avaliacao import AvaliacaoAtitudinal
+from .notification import Notification
+from .site_config import SiteConfig
+from .password_reset_token import PasswordResetToken
+from .push_subscription import PushSubscription
+from .image_asset import ImageAsset
+from .diario_classe import DiarioClasse
+from .frequencia import FrequenciaAluno
+from .fada_avaliacao import FadaAvaliacao
+from .ciclo import Ciclo
 from .questionario import Questionario
 from .pergunta import Pergunta
 from .opcao_resposta import OpcaoResposta
 from .resposta import Resposta
-from .processo_disciplina import ProcessoDisciplina
-from .notification import Notification
-from .push_subscription import PushSubscription
-from .fada_avaliacao import FadaAvaliacao
-# ### INÍCIO DA ALTERAÇÃO ###
-# Importa os nomes corretos das classes
-from .discipline_rule import DisciplineRule
-from .avaliacao import AvaliacaoAtitudinal
-# ### FIM DA ALTERAÇÃO ###
-
+from .elogio import Elogio # <--- Adicionado
 
 __all__ = [
-    'db',
-    'User',
-    'School',
-    'UserSchool',
-    'Aluno',
-    'Instrutor',
-    'Turma',
-    'Ciclo',
-    'Disciplina',
-    'DisciplinaTurma',
-    'Horario',
-    'Semana',
-    'HistoricoAluno',
-    'HistoricoDisciplina',
-    'PasswordResetToken',
-    'SiteConfig',
-    'ImageAsset',
-    'TurmaCargo',
-    'Questionario',
-    'Pergunta',
-    'OpcaoResposta',
-    'Resposta',
-    'ProcessoDisciplina',
-    'Notification',
-    'PushSubscription',
-    
-    # ### INÍCIO DA ALTERAÇÃO ###
-    # Adiciona os nomes corretos à lista __all__
-    'DisciplineRule',
-    'AvaliacaoAtitudinal', # Nome corrigido
-    'FadaAvaliacao'
-    # ### FIM DA ALTERAÇÃO ###
+    "db", "User", "School", "UserSchool", "Turma", "Aluno", "Disciplina",
+    "HistoricoAluno", "HistoricoDisciplina", "TurmaCargo", "Semana", "Horario",
+    "Instrutor", "DisciplinaTurma", "ProcessoDisciplina", "DisciplineRule",
+    "AvaliacaoAtitudinal", "Notification", "SiteConfig", "PasswordResetToken",
+    "PushSubscription", "ImageAsset", "DiarioClasse", "FrequenciaAluno",
+    "FadaAvaliacao", "Ciclo", "Questionario", "Pergunta", "OpcaoResposta",
+    "Resposta", "Elogio"
 ]
