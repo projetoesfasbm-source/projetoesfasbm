@@ -1,3 +1,5 @@
+# backend/controllers/elogio_controller.py
+
 from flask import Blueprint, render_template, request, flash, redirect, url_for, g
 from flask_login import login_required, current_user
 from datetime import datetime
@@ -5,6 +7,7 @@ from ..models.database import db
 from ..models.aluno import Aluno
 from ..models.elogio import Elogio
 from ..services.aluno_service import AlunoService
+from ..services.justica_service import JusticaService # Import crucial para centralizar lógica
 from utils.decorators import admin_or_programmer_required
 
 elogio_bp = Blueprint('elogio', __name__, url_prefix='/elogio')
@@ -27,7 +30,9 @@ def novo_elogio(aluno_id):
         return redirect(url_for('aluno.listar_alunos'))
 
     active_school = g.get('active_school')
-    usa_fada = active_school and active_school.npccal_type in ['cbfpm', 'cspm']
+    
+    # Usa o Service para determinar regras de pontuação (Centralizado)
+    usa_fada, valor_ponto = JusticaService.get_pontuacao_config(active_school)
 
     if request.method == 'POST':
         descricao = request.form.get('descricao')
@@ -37,14 +42,18 @@ def novo_elogio(aluno_id):
         attr1 = None
         attr2 = None
 
+        # Lógica de Pontuação baseada na configuração recuperada
         if usa_fada:
             try:
                 raw_attr1 = request.form.get('atributo_1')
                 raw_attr2 = request.form.get('atributo_2')
                 attr1 = int(raw_attr1) if raw_attr1 else None
                 attr2 = int(raw_attr2) if raw_attr2 else None
+                
+                # Se selecionou atributo, aplica o valor padrão da escola (ex: 0.5)
                 if attr1 or attr2:
-                    pontos = 0.5
+                    pontos = valor_ponto
+                    
             except ValueError:
                 pass
         

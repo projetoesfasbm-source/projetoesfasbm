@@ -1,24 +1,21 @@
-from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, Response, g, session
+# backend/controllers/justica_controller.py
+
+from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, Response, g
 from flask_login import login_required, current_user
-from sqlalchemy import select, or_
+from sqlalchemy import select
 from datetime import datetime
 from weasyprint import HTML
-import locale
 import traceback 
 
 from ..models.database import db
 from ..models.aluno import Aluno
 from ..models.turma import Turma
+from ..models.user import User
 from ..models.discipline_rule import DisciplineRule
-from ..models.processo_disciplina import ProcessoDisciplina
 from ..models.elogio import Elogio
 from ..models.ciclo import Ciclo
-from ..models.fada_avaliacao import FadaAvaliacao
 from ..services.justica_service import JusticaService
 from utils.decorators import cal_required
-
-try: from zoneinfo import ZoneInfo
-except ImportError: from backports.zoneinfo import ZoneInfo
 
 justica_bp = Blueprint('justica', __name__, url_prefix='/justica-e-disciplina')
 
@@ -27,11 +24,9 @@ justica_bp = Blueprint('justica', __name__, url_prefix='/justica-e-disciplina')
 def index():
     try:
         active_school = g.get('active_school')
-        
-        # CORREÇÃO: Passamos o ID da escola explicitamente para o Service
         school_id = active_school.id if active_school else None
         
-        # Busca processos usando o ID da escola garantido
+        # Busca processos filtrados pela escola (segurança)
         processos = JusticaService.get_processos_para_usuario(current_user, school_id_override=school_id)
         
         em = [p for p in processos if p.status != 'Finalizado']
@@ -39,16 +34,32 @@ def index():
         
         regras = []
         turmas = []
-        permite = False
+        permite_pontuacao, _ = JusticaService.get_pontuacao_config(active_school)
         
         if active_school:
-            permite = active_school.npccal_type in ['cspm', 'cbfpm']
-            regras = db.session.scalars(select(DisciplineRule).where(DisciplineRule.npccal_type == active_school.npccal_type).order_by(DisciplineRule.codigo)).all()
-            turmas = db.session.scalars(select(Turma).where(Turma.school_id == active_school.id).order_by(Turma.nome)).all()
+            regras = db.session.scalars(
+                select(DisciplineRule)
+                .where(DisciplineRule.npccal_type == active_school.npccal_type)
+                .order_by(DisciplineRule.codigo)
+            ).all()
+            turmas = db.session.scalars(select(Turma).where(Turma.school_id == school_id).order_by(Turma.nome)).all()
 
-        atributos = [(1, 'Expressão'), (2, 'Planejamento'), (3, 'Perseverança'), (4, 'Apresentação'), (5, 'Lealdade'), (6, 'Tato'), (7, 'Equilíbrio'), (8, 'Disciplina'), (9, 'Responsabilidade'), (10, 'Maturidade'), (11, 'Assiduidade'), (12, 'Pontualidade'), (13, 'Dicção'), (14, 'Liderança'), (15, 'Relacionamento'), (16, 'Ética'), (17, 'Produtividade'), (18, 'Eficiência')]
+        atributos = [(i, nome) for i, nome in enumerate([
+            'Expressão', 'Planejamento', 'Perseverança', 'Apresentação', 'Lealdade', 'Tato', 
+            'Equilíbrio', 'Disciplina', 'Responsabilidade', 'Maturidade', 'Assiduidade', 
+            'Pontualidade', 'Dicção', 'Liderança', 'Relacionamento', 'Ética', 'Produtividade', 'Eficiência'
+        ], start=1)]
 
-        return render_template('justica/index.html', em_andamento=em, finalizados=fin, fatos_predefinidos=regras, turmas=turmas, permite_pontuacao=permite, atributos_fada=atributos, hoje=datetime.today().strftime('%Y-%m-%d'))
+        return render_template(
+            'justica/index.html', 
+            em_andamento=em, 
+            finalizados=fin, 
+            fatos_predefinidos=regras, 
+            turmas=turmas, 
+            permite_pontuacao=permite_pontuacao, 
+            atributos_fada=atributos, 
+            hoje=datetime.today().strftime('%Y-%m-%d')
+        )
     except Exception as e:
         traceback.print_exc()
         flash(f"Erro ao carregar painel: {e}", 'danger')
@@ -71,31 +82,69 @@ def registrar_em_massa():
         dt = datetime.strptime(dt_str, '%Y-%m-%d').date() if dt_str else datetime.now().date()
         desc = request.form.get('descricao') or request.form.get('fato_descricao')
         
+        # Configuração de Pontuação Centralizada
+        usa_pontuacao, valor_elogio = JusticaService.get_pontuacao_config(school)
+
         count = 0
         if tipo == 'infracao':
             regra_id = request.form.get('regra_id')
-            pts = float(request.form.get('fato_pontos') or 0.0)
+            pts = 0.0
             cod = None
+            regra_fk = None
+            
+            # Se selecionou uma regra, busca dados para garantir integridade
             if regra_id:
                 r = db.session.get(DisciplineRule, regra_id)
-                if r: pts, cod = r.pontos, r.codigo
+                if r: 
+                    pts = r.pontos if usa_pontuacao else 0.0
+                    cod = r.codigo
+                    regra_fk = r.id
+            
+            # Se for manual e tem pontos (override)
+            if not regra_id and request.form.get('fato_pontos') and usa_pontuacao:
+                pts = float(request.form.get('fato_pontos'))
+
             obs = request.form.get('observacao', '')
             for aid in ids:
-                JusticaService.criar_processo(desc, obs, int(aid), current_user.id, pts, cod, dt)
+                JusticaService.criar_processo(
+                    descricao=desc, 
+                    observacao=obs, 
+                    aluno_id=int(aid), 
+                    autor_id=current_user.id, 
+                    pontos=pts, 
+                    codigo_infracao=cod, 
+                    regra_id=regra_fk,
+                    data_ocorrencia=dt
+                )
                 count += 1
             flash(f'{count} infrações registradas.', 'success')
+
         elif tipo == 'elogio':
             a1, a2 = request.form.get('atributo_1'), request.form.get('atributo_2')
-            pts = 0.5 if (a1 or a2) and school.npccal_type in ['cbfpm', 'cspm'] else 0.0
+            
+            # Pontos definidos pelo Service (0.0 para CTSP, 0.5 para CBFPM)
+            pts = valor_elogio if (a1 or a2) and usa_pontuacao else 0.0
+            
             for aid in ids:
-                db.session.add(Elogio(aluno_id=int(aid), registrado_por_id=current_user.id, data_elogio=dt, descricao=desc, pontos=pts, atributo_1=int(a1) if a1 else None, atributo_2=int(a2) if a2 else None))
+                elogio = Elogio(
+                    aluno_id=int(aid), 
+                    registrado_por_id=current_user.id, 
+                    data_elogio=dt, 
+                    descricao=desc, 
+                    pontos=pts, 
+                    atributo_1=int(a1) if a1 else None, 
+                    atributo_2=int(a2) if a2 else None
+                )
+                db.session.add(elogio)
                 count += 1
             db.session.commit()
             flash(f'{count} elogios registrados.', 'success')
+        
         else:
+            # Genérico (apenas registro)
             obs = request.form.get('observacao', '')
             for aid in ids:
-                JusticaService.criar_processo(desc, obs, int(aid), current_user.id, 0.0, None, dt)
+                JusticaService.criar_processo(desc, obs, int(aid), current_user.id, 0.0, None, None, dt)
                 count += 1
             flash(f'{count} registros criados.', 'success')
 
@@ -113,7 +162,8 @@ def novo_processo(): return registrar_em_massa()
 @cal_required 
 def analise():
     try:
-        dados = JusticaService.get_analise_disciplinar_data()
+        s = g.get('active_school')
+        dados = JusticaService.get_analise_disciplinar_data(s.id if s else None)
         return render_template('justica/analise.html', dados=dados)
     except Exception as e:
         flash(f"Erro no dashboard: {e}", "danger")
@@ -126,7 +176,7 @@ def finalizar_processo(processo_id):
     fund = request.form.get('fundamentacao')
     det = request.form.get('detalhes_sancao')
     sus = request.form.get('turnos_sustacao')
-    if sus and decisao == 'Sustação da Dispensa': det = f"Sustação: {sus}"
+    if sus and decisao == 'Sustação da Dispensa': det = f"Sustação: {sus} turnos."
     ok, msg = JusticaService.finalizar_processo(processo_id, decisao, fund, det)
     flash(msg, 'success' if ok else 'danger')
     return redirect(url_for('justica.index'))
@@ -205,11 +255,17 @@ def fada_avaliar_aluno(aluno_id):
         cid = request.args.get('ciclo_id', type=int)
         if not cid and ciclos: cid = ciclos[-1].id
 
+        # Calcula a prévia usando a lógica corrigida do Service
         previa = JusticaService.calcular_previa_fada(aluno_id, cid) if cid else None
         nome_padrao = current_user.nome_completo or "Avaliador"
 
         if request.method == 'POST':
-            ok, msg, av_id = JusticaService.salvar_fada(request.form, aluno_id, current_user.id, request.form.get('nome_avaliador_custom', nome_padrao))
+            ok, msg, av_id = JusticaService.salvar_fada(
+                request.form, 
+                aluno_id, 
+                current_user.id, 
+                request.form.get('nome_avaliador_custom', nome_padrao)
+            )
             if ok:
                 flash(msg, 'success')
                 return redirect(url_for('justica.fada_gerar_pdf', avaliacao_id=av_id))

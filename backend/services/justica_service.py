@@ -1,27 +1,50 @@
-from flask import g, url_for, session
-from ..services.email_service import EmailService
-from sqlalchemy import select, func, desc
-from datetime import datetime
+from sqlalchemy import select, func, desc, and_
+from sqlalchemy.orm import joinedload
+from datetime import datetime, date, timezone
+import traceback
+
 from ..models.database import db
 from ..models.aluno import Aluno
 from ..models.user import User
 from ..models.turma import Turma
-# from ..models.user_school import UserSchool  <-- REMOVIDO PARA TESTE
-from ..models.processo_disciplina import ProcessoDisciplina
+from ..models.processo_disciplina import ProcessoDisciplina, StatusProcesso
 from ..models.fada_avaliacao import FadaAvaliacao
 from ..models.discipline_rule import DisciplineRule
 from ..models.elogio import Elogio
-from ..models.ciclo import Ciclo
-from ..services.notification_service import NotificationService
-from sqlalchemy.orm import joinedload
-import traceback
 
 class JusticaService:
     
+    FADA_NOTA_INICIAL = 8.0
+    FADA_PONTO_ELOGIO = 0.5
+    FADA_MAX_NOTA = 10.0
+
+    @staticmethod
+    def _ensure_datetime(dt_input):
+        """Converte input seguro para DateTime com Timezone."""
+        if not dt_input:
+            return datetime.now().astimezone()
+        if isinstance(dt_input, datetime):
+            return dt_input
+        if isinstance(dt_input, date):
+            return datetime.combine(dt_input, datetime.min.time()).astimezone()
+        if isinstance(dt_input, str):
+            try:
+                return datetime.strptime(dt_input, '%Y-%m-%d').astimezone()
+            except:
+                return datetime.now().astimezone()
+        return datetime.now().astimezone()
+
+    @staticmethod
+    def get_pontuacao_config(school):
+        if not school: return False, 0.0
+        if school.npccal_type == 'ctsp': return False, 0.0
+        if school.npccal_type in ['cbfpm', 'cspm']: return True, JusticaService.FADA_PONTO_ELOGIO
+        return False, 0.0
+
     @staticmethod
     def get_processos_para_usuario(user, school_id_override=None):
         try:
-            # 1. Se for Aluno, vê só os dele
+            # Visão do Aluno (Blindada ao próprio ID)
             if getattr(user, 'role', '') == 'aluno':
                 if not getattr(user, 'aluno_profile', None): return []
                 return db.session.scalars(
@@ -30,170 +53,284 @@ class JusticaService:
                     .order_by(ProcessoDisciplina.data_ocorrencia.desc())
                 ).all()
 
-            # 2. MODO FORÇA BRUTA (ADMIN/CAL)
-            # Retorna TODOS os processos do banco, sem filtrar escola.
-            # Isso serve para diagnosticar se o problema é o filtro.
-            print("--- MODO DEBUG: Buscando TODOS os processos ---")
-            return db.session.scalars(
-                select(ProcessoDisciplina)
-                .options(joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.user))
-                .order_by(ProcessoDisciplina.data_ocorrencia.desc())
-                .limit(200) # Limite de segurança
-            ).all()
+            # Visão Admin/Instrutor (Obrigatoriamente filtrada por escola)
+            school_id = school_id_override
+            if not school_id: return [] 
 
+            query = (
+                select(ProcessoDisciplina)
+                .join(ProcessoDisciplina.aluno)
+                .join(Aluno.turma)
+                .where(Turma.school_id == school_id)
+                .options(
+                    joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.user),
+                    joinedload(ProcessoDisciplina.regra)
+                )
+                .order_by(ProcessoDisciplina.data_ocorrencia.desc())
+            )
+            return db.session.scalars(query).all()
         except Exception as e:
-            print(f"ERRO CRÍTICO NO SERVICE: {e}")
-            traceback.print_exc()
+            print(f"ERRO AO LISTAR PROCESSOS: {e}")
             return []
 
     @staticmethod
-    def get_analise_disciplinar_data():
+    def get_analise_disciplinar_data(school_id):
+        if not school_id: return {}
         try:
-            # MODO FORÇA BRUTA: Estatísticas de TUDO que há no banco
+            # Query base segura com join em Turma
+            base_join = (Aluno, ProcessoDisciplina.aluno_id == Aluno.id)
+            turma_join = (Turma, Aluno.turma_id == Turma.id)
+            school_filter = (Turma.school_id == school_id)
+
+            # Contagem por Status
             stats = db.session.query(ProcessoDisciplina.status, func.count(ProcessoDisciplina.id))\
+                .join(*base_join).join(*turma_join).where(school_filter)\
                 .group_by(ProcessoDisciplina.status).all()
             
+            # Fatos mais comuns
             fatos = db.session.query(ProcessoDisciplina.codigo_infracao, func.count(ProcessoDisciplina.id).label('qtd'))\
+                .join(*base_join).join(*turma_join).where(school_filter)\
                 .group_by(ProcessoDisciplina.codigo_infracao).order_by(desc('qtd')).limit(5).all()
             
             fatos_fmt = []
             for cod, qtd in fatos:
-                txt = "..."
+                txt = "Outros / Sem Código"
                 if cod:
-                    r = db.session.query(DisciplineRule).filter_by(codigo=str(cod)).first()
-                    if r: txt = r.descricao[:30] + "..."
+                    r = db.session.scalar(select(DisciplineRule).where(DisciplineRule.codigo == str(cod)))
+                    if r: txt = r.descricao[:40] + "..."
                 fatos_fmt.append({'codigo': cod or 'S/C', 'total': qtd, 'descricao': txt})
 
+            # Alunos com mais registros
             alunos = db.session.query(User.nome_completo, func.count(ProcessoDisciplina.id).label('qtd'))\
-                .join(Aluno).join(ProcessoDisciplina)\
+                .join(Aluno, ProcessoDisciplina.aluno_id == Aluno.id)\
+                .join(User, Aluno.user_id == User.id)\
+                .join(Turma, Aluno.turma_id == Turma.id)\
+                .where(Turma.school_id == school_id)\
                 .group_by(User.nome_completo).order_by(desc('qtd')).limit(5).all()
 
-            return {'status_counts': dict(stats), 'common_facts': fatos_fmt, 'top_alunos': [{'nome': a[0], 'total': a[1]} for a in alunos]}
+            # Converte enum para string na resposta
+            stats_dict = {k.value if hasattr(k, 'value') else str(k): v for k, v in stats}
+
+            return {'status_counts': stats_dict, 'common_facts': fatos_fmt, 'top_alunos': [{'nome': a[0], 'total': a[1]} for a in alunos]}
         except Exception as e:
             print(f"Erro Analise: {e}")
             return {'status_counts': {}, 'common_facts': [], 'top_alunos': []}
 
-    # --- MÉTODOS DE AÇÃO (CRIAR, FINALIZAR, ETC) MANTIDOS IGUAIS ---
     @staticmethod
-    def criar_processo(descricao, observacao, aluno_id, autor_id, pontos=0.0, codigo_infracao=None, data_ocorrencia=None):
+    def criar_processo(descricao, observacao, aluno_id, autor_id, pontos=0.0, codigo_infracao=None, regra_id=None, data_ocorrencia=None):
         try:
-            dt = data_ocorrencia if data_ocorrencia else datetime.now().date()
+            dt_final = JusticaService._ensure_datetime(data_ocorrencia)
+
+            # Integridade: Se tem regra_id, o código DEVE ser o da regra
+            final_regra_id = regra_id
+            final_codigo = codigo_infracao
+            
+            if final_regra_id:
+                regra = db.session.get(DisciplineRule, final_regra_id)
+                if regra:
+                    final_codigo = regra.codigo 
+            
             novo = ProcessoDisciplina(
-                aluno_id=aluno_id, relator_id=autor_id, codigo_infracao=codigo_infracao,
-                fato_constatado=descricao, observacao=observacao, pontos=pontos,
-                status='Aguardando Ciência', data_ocorrencia=dt
+                aluno_id=aluno_id, 
+                relator_id=autor_id, 
+                fato_constatado=descricao, 
+                observacao=observacao, 
+                pontos=pontos,
+                codigo_infracao=final_codigo,
+                regra_id=final_regra_id,
+                status=StatusProcesso.AGUARDANDO_CIENCIA,
+                data_ocorrencia=dt_final
             )
             db.session.add(novo)
             db.session.commit()
-            return True, "Registrado."
+            return True, "Registrado com sucesso."
         except Exception as e:
             db.session.rollback()
-            return False, f"Erro: {e}"
+            return False, f"Erro ao registrar: {e}"
 
     @staticmethod
-    def finalizar_processo(pid, decisao, fundamentacao, detalhes):
+    def finalizar_processo(pid, decisao, fundamentacao, detalhes, turnos_sustacao=None):
         try:
             p = db.session.get(ProcessoDisciplina, pid)
-            if not p: return False, "Não encontrado."
-            p.status, p.decisao_final, p.fundamentacao, p.detalhes_sancao = 'Finalizado', decisao, fundamentacao, detalhes
-            p.data_decisao = datetime.now()
+            if not p: return False, "Processo não encontrado."
+            
+            # Lógica de formatação movida do controller para cá
+            if turnos_sustacao and decisao == 'Sustação da Dispensa':
+                detalhes = f"Sustação: {turnos_sustacao} turnos. {detalhes or ''}"
+
+            p.status = StatusProcesso.FINALIZADO
+            p.decisao_final = decisao
+            p.fundamentacao = fundamentacao
+            p.detalhes_sancao = detalhes
+            p.data_decisao = datetime.now().astimezone()
+            
             db.session.commit()
-            return True, "Finalizado."
-        except Exception as e: return False, str(e)
+            return True, "Processo finalizado com sucesso."
+        except Exception as e: 
+            db.session.rollback()
+            return False, str(e)
 
     @staticmethod
     def deletar_processo(pid):
         try:
             p = db.session.get(ProcessoDisciplina, pid)
-            db.session.delete(p)
-            db.session.commit()
-            return True, "Excluído."
-        except: return False, "Erro."
+            if p:
+                db.session.delete(p)
+                db.session.commit()
+                return True, "Registro excluído."
+            return False, "Não encontrado."
+        except: return False, "Erro ao excluir."
 
     @staticmethod
     def registrar_ciente(pid, user):
         try:
             p = db.session.get(ProcessoDisciplina, pid)
-            p.status, p.ciente_aluno, p.data_ciente = 'Aluno Notificado', True, datetime.now()
+            if not p or p.aluno.user_id != user.id:
+                return False, "Usuário não autorizado."
+                
+            p.status = StatusProcesso.ALUNO_NOTIFICADO
+            p.ciente_aluno = True
+            p.data_ciente = datetime.now().astimezone()
             db.session.commit()
-            return True, "Ok."
-        except: return False, "Erro."
+            return True, "Ciência registrada."
+        except: return False, "Erro ao registrar ciência."
 
     @staticmethod
     def enviar_defesa(pid, texto, user):
         try:
             p = db.session.get(ProcessoDisciplina, pid)
-            p.status, p.defesa, p.data_defesa = 'Defesa Enviada', texto, datetime.now()
+            if not p or p.aluno.user_id != user.id:
+                return False, "Não autorizado."
+                
+            p.status = StatusProcesso.DEFESA_ENVIADA
+            p.defesa = texto
+            p.data_defesa = datetime.now().astimezone()
             db.session.commit()
-            return True, "Ok."
-        except: return False, "Erro."
+            return True, "Defesa enviada com sucesso."
+        except: return False, "Erro ao enviar defesa."
 
-    # --- FADA (FORÇA BRUTA) ---
     @staticmethod
     def get_alunos_para_fada(school_id):
-        # Retorna TODOS os alunos (ignora filtro complexo para teste)
-        return db.session.scalars(select(Aluno).join(User).order_by(User.nome_completo).limit(100)).all()
+        if not school_id: return []
+        return db.session.scalars(
+            select(Aluno).join(Turma).join(User)
+            .where(Turma.school_id == school_id)
+            .order_by(User.nome_completo)
+        ).all()
 
     @staticmethod
     def calcular_previa_fada(aluno_id, ciclo_id=None):
-        notas = {i: 8.0 for i in range(1, 19)}
+        notas = {i: JusticaService.FADA_NOTA_INICIAL for i in range(1, 19)}
         try:
-            punicoes = db.session.scalars(select(ProcessoDisciplina).where(ProcessoDisciplina.aluno_id == aluno_id, ProcessoDisciplina.status == 'Finalizado')).all()
+            aluno = db.session.get(Aluno, aluno_id)
+            if not aluno or not aluno.turma or not aluno.turma.school:
+                return notas
+            
+            # Lógica CTSP: Retorna notas cheias (sem cálculo)
+            if aluno.turma.school.npccal_type == 'ctsp':
+                return notas
+
+            # Lógica CBFPM/CSPM
+            # Filtra apenas processos finalizados
+            punicoes = db.session.scalars(
+                select(ProcessoDisciplina)
+                .where(ProcessoDisciplina.aluno_id == aluno_id, 
+                       ProcessoDisciplina.status == StatusProcesso.FINALIZADO)
+                .options(joinedload(ProcessoDisciplina.regra))
+            ).all()
+
             for p in punicoes:
-                pts = getattr(p, 'pontos', 0) or 0.0
-                attr = 8
-                if p.codigo_infracao:
-                    try:
-                        r = db.session.scalar(select(DisciplineRule).where(DisciplineRule.codigo == str(p.codigo_infracao)))
-                        if r and r.atributo_fada_id: attr = r.atributo_fada_id
-                    except: pass
-                if 1 <= attr <= 18: notas[attr] = max(0.0, notas[attr] - float(pts))
+                pts = getattr(p, 'pontos', 0.0) or 0.0
+                attr = 8 # Default: Disciplina
+                if p.regra and p.regra.atributo_fada_id:
+                    attr = p.regra.atributo_fada_id
+                
+                if 1 <= attr <= 18:
+                    notas[attr] = max(0.0, notas[attr] - float(pts))
             
             elogios = db.session.scalars(select(Elogio).where(Elogio.aluno_id == aluno_id)).all()
             for e in elogios:
-                pts = e.pontos or 0.5
-                if e.atributo_1: notas[e.atributo_1] = min(10.0, notas[e.atributo_1] + pts)
-                if e.atributo_2: notas[e.atributo_2] = min(10.0, notas[e.atributo_2] + pts)
-        except: pass
+                pts = float(e.pontos) if e.pontos is not None else 0.0
+                if e.atributo_1 and 1 <= e.atributo_1 <= 18:
+                    notas[e.atributo_1] = min(JusticaService.FADA_MAX_NOTA, notas[e.atributo_1] + pts)
+                if e.atributo_2 and 1 <= e.atributo_2 <= 18:
+                    notas[e.atributo_2] = min(JusticaService.FADA_MAX_NOTA, notas[e.atributo_2] + pts)
+        except Exception as e:
+            print(f"Erro calculo FADA: {e}")
+            
         return notas
 
     @staticmethod
-    def salvar_fada(form_data, aluno_id, avaliador_id, nome, dados=None):
+    def salvar_fada(form_data, aluno_id, avaliador_id, nome_avaliador):
         try:
             cid = form_data.get('ciclo_id')
+            cid = int(cid) if cid else None
+            
             av = db.session.scalar(select(FadaAvaliacao).where(FadaAvaliacao.aluno_id == aluno_id, FadaAvaliacao.ciclo_id == cid))
             if not av:
                 av = FadaAvaliacao(aluno_id=aluno_id, ciclo_id=cid)
                 db.session.add(av)
             
-            av.avaliador_id, av.nome_avaliador_custom, av.data_avaliacao = avaliador_id, nome, datetime.now()
+            av.avaliador_id = avaliador_id
+            av.nome_avaliador_custom = nome_avaliador
+            av.data_avaliacao = datetime.now().astimezone()
             
-            # Mapa simples
-            for i in range(1, 19):
-                try: val = float(form_data.get(f'attr_{i}', 8.0))
+            # Atributos mapeados de 1 a 18
+            campos = [f'attr_{i}' for i in range(1, 19)]
+            colunas_db = [
+                'attr_1_expressao', 'attr_2_planejamento', 'attr_3_perseveranca', 
+                'attr_4_apresentacao', 'attr_5_lealdade', 'attr_6_tato', 
+                'attr_7_equilibrio', 'attr_8_disciplina', 'attr_9_responsabilidade', 
+                'attr_10_maturidade', 'attr_11_assiduidade', 'attr_12_pontualidade', 
+                'attr_13_diccao', 'attr_14_lideranca', 'attr_15_relacionamento', 
+                'attr_16_etica', 'attr_17_produtividade', 'attr_18_eficiencia'
+            ]
+            
+            soma = 0.0
+            for field, col in zip(campos, colunas_db):
+                try: val = float(form_data.get(field, 8.0))
                 except: val = 8.0
-                # Ajuste os nomes aqui conforme seu model REAL. 
-                # Se der erro aqui, é porque os nomes no model são diferentes.
-                colunas = ['attr_1_expressao', 'attr_2_planejamento', 'attr_3_perseveranca', 'attr_4_apresentacao', 'attr_5_lealdade', 'attr_6_tato', 'attr_7_equilibrio', 'attr_8_disciplina', 'attr_9_responsabilidade', 'attr_10_maturidade', 'attr_11_assiduidade', 'attr_12_pontualidade', 'attr_13_diccao', 'attr_14_lideranca', 'attr_15_relacionamento', 'attr_16_etica', 'attr_17_produtividade', 'attr_18_eficiencia']
-                if i <= len(colunas): setattr(av, colunas[i-1], val)
+                setattr(av, col, val)
+                soma += val
             
-            av.media_final = sum([getattr(av, c) for c in colunas]) / 18.0
-            av.justificativa_notas, av.observacoes, av.adaptacao_carreira = form_data.get('justificativa_notas'), form_data.get('observacoes'), form_data.get('adaptacao_carreira')
+            av.media_final = soma / 18.0
+            av.justificativa_notas = form_data.get('justificativa_notas')
+            av.observacoes = form_data.get('observacoes')
+            av.adaptacao_carreira = form_data.get('adaptacao_carreira', 'Em adaptação')
+            
             db.session.commit()
-            return True, "Salvo!", av.id
+            return True, "Avaliação salva!", av.id
         except Exception as e:
             db.session.rollback()
-            return False, str(e), None
+            return False, f"Erro: {e}", None
 
     @staticmethod
     def get_fada_por_id(id): return db.session.get(FadaAvaliacao, id)
 
     @staticmethod
-    def get_processos_por_ids(ids):
-        # SEM FILTRO DE ESCOLA
-        return db.session.scalars(select(ProcessoDisciplina).where(ProcessoDisciplina.id.in_(ids))).all()
+    def get_processos_por_ids(ids, school_id):
+        """Busca segura: retorna apenas se os processos pertencerem à escola fornecida."""
+        if not ids or not school_id: return []
+        
+        # JOIN Obrigatório com Turma para validar School ID
+        return db.session.scalars(
+            select(ProcessoDisciplina)
+            .join(Aluno).join(Turma)
+            .where(
+                ProcessoDisciplina.id.in_(ids),
+                Turma.school_id == school_id
+            )
+        ).all()
 
     @staticmethod
-    def get_finalized_processos():
-        # SEM FILTRO DE ESCOLA
-        return db.session.scalars(select(ProcessoDisciplina).where(ProcessoDisciplina.status == 'Finalizado').order_by(ProcessoDisciplina.data_decisao.desc())).all()
+    def get_finalized_processos(school_id):
+        if not school_id: return []
+        return db.session.scalars(
+            select(ProcessoDisciplina)
+            .join(Aluno).join(Turma)
+            .where(
+                ProcessoDisciplina.status == StatusProcesso.FINALIZADO,
+                Turma.school_id == school_id
+            )
+            .order_by(ProcessoDisciplina.data_decisao.desc())
+        ).all()

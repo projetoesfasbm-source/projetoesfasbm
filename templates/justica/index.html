@@ -68,7 +68,7 @@
             <div class="justice-content" id="newInfracaoContent">
                 <div class="card border-danger shadow-sm">
                     <div class="card-header bg-danger text-white">
-                        <h4 class="mb-0">Registrar Infração (Individual ou Coletiva)</h4>
+                        <h4 class="mb-0">Registrar Infração</h4>
                     </div>
                     <div class="card-body">
                         <form method="POST" action="{{ url_for('justica.registrar_em_massa') }}">
@@ -84,53 +84,42 @@
                                         <option value="{{ turma.id }}">{{ turma.nome }}</option>
                                         {% endfor %}
                                     </select>
-                                    
                                     <div class="d-flex justify-content-between mb-1">
-                                        <small class="text-muted">Marque os alunos envolvidos:</small>
+                                        <small class="text-muted">Marque os alunos:</small>
                                         <a href="#" onclick="toggleTodos('listaAlunosInfracao'); atualizarTextoInteligente(); return false;" class="small text-danger">Marcar Todos</a>
                                     </div>
-                                    
                                     <div id="listaAlunosInfracao" class="border rounded bg-light p-2" style="max-height: 400px; overflow-y: auto;">
-                                        <div class="text-center text-muted small py-3">Selecione uma turma para carregar.</div>
+                                        <div class="text-center text-muted small py-3">Selecione uma turma.</div>
                                     </div>
                                 </div>
 
                                 <div class="col-md-7 mb-3">
                                     <label class="form-label fw-bold">2. Detalhes da Infração</label>
-                                    
                                     <div class="mb-3">
-                                        <label class="small text-muted">Enquadramento (Regra)</label>
+                                        <label class="small text-muted">Enquadramento</label>
                                         <select id="regraSelect" name="regra_id" class="form-select" required onchange="atualizarTextoInteligente()">
-                                            <option value="" data-desc="">-- Selecione a Infração --</option>
+                                            <option value="">-- Selecione --</option>
                                             {% for regra in fatos_predefinidos %}
                                             <option value="{{ regra.id }}" data-desc="no item {{ regra.codigo }} - '{{ regra.descricao }}'">
-                                                {{ regra.codigo }} - {{ regra.descricao[:80] }}... 
-                                                {% if permite_pontuacao %}({{ regra.pontos }} pts){% endif %}
+                                                {{ regra.codigo }} - {{ regra.descricao[:80] }}...
                                             </option>
                                             {% endfor %}
                                         </select>
                                     </div>
-
                                     <div class="mb-3">
-                                        <label class="small text-muted">Data do Fato</label>
+                                        <label class="small text-muted">Data</label>
                                         <input type="date" name="data_fato" class="form-control" value="{{ hoje }}">
                                     </div>
-
                                     <div class="mb-3">
-                                        <label class="small text-muted">Descrição do Fato (Fato Constatado)</label>
-                                        <textarea id="campoDescricao" name="descricao" class="form-control" rows="3" required placeholder="Descreva o fato constatado..."></textarea>
+                                        <label class="small text-muted">Fato Constatado</label>
+                                        <textarea id="campoDescricao" name="descricao" class="form-control" rows="3" required></textarea>
                                     </div>
-
                                     <div class="form-group mb-3">
-                                        <label class="small text-muted">Termo de Justificação (Automático)</label>
-                                        <textarea id="campoObservacao" name="observacao" class="form-control" rows="8" placeholder="O texto padrão aparecerá aqui ao selecionar um aluno..."></textarea>
-                                        <div class="form-text small">Se selecionar 1 aluno, preenche com os dados dele. Se selecionar vários, usa dados genéricos.</div>
+                                        <label class="small text-muted">Termo de Justificação</label>
+                                        <textarea id="campoObservacao" name="observacao" class="form-control" rows="8"></textarea>
                                     </div>
-
                                     <div class="text-end">
-                                        <button type="submit" class="btn btn-danger btn-lg">
-                                            <i class="fas fa-gavel me-1"></i> Registrar Infração
-                                        </button>
+                                        <button type="submit" class="btn btn-danger btn-lg"><i class="fas fa-gavel me-1"></i> Registrar</button>
                                     </div>
                                 </div>
                             </div>
@@ -148,7 +137,6 @@
                         <form method="POST" action="{{ url_for('justica.registrar_em_massa') }}">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <input type="hidden" name="tipo_registro" value="elogio">
-
                             <div class="row">
                                 <div class="col-md-5 mb-3 border-end">
                                     <label class="form-label fw-bold">1. Selecione a Turma</label>
@@ -158,35 +146,24 @@
                                         <option value="{{ turma.id }}">{{ turma.nome }}</option>
                                         {% endfor %}
                                     </select>
-                                    
-                                    <div class="d-flex justify-content-between mb-1">
-                                        <small class="text-muted">Marque os alunos elogiados:</small>
-                                        <a href="#" onclick="toggleTodos('listaAlunosElogio'); return false;" class="small text-success">Marcar Todos</a>
-                                    </div>
-                                    
                                     <div id="listaAlunosElogio" class="border rounded bg-light p-2" style="max-height: 400px; overflow-y: auto;">
-                                        <div class="text-center text-muted small py-3">Selecione uma turma para carregar.</div>
+                                        <div class="text-center text-muted small py-3">Selecione uma turma.</div>
                                     </div>
                                 </div>
-
                                 <div class="col-md-7 mb-3">
-                                    <label class="form-label fw-bold">2. Detalhes do Elogio</label>
-                                    
+                                    <label class="form-label fw-bold">2. Detalhes</label>
                                     <div class="mb-3">
-                                        <label class="small text-muted">Data do Fato</label>
+                                        <label class="small text-muted">Data</label>
                                         <input type="date" name="data_fato" class="form-control" value="{{ hoje }}">
                                     </div>
-
                                     <div class="mb-3">
-                                        <label class="small text-muted">Motivo do Elogio</label>
-                                        <textarea name="descricao" class="form-control" rows="4" required placeholder="Descreva o motivo do elogio..."></textarea>
+                                        <label class="small text-muted">Motivo</label>
+                                        <textarea name="descricao" class="form-control" rows="5" required></textarea>
                                     </div>
-
                                     {% if permite_pontuacao %}
                                     <div class="card bg-light border-success mb-3">
                                         <div class="card-body py-2">
-                                            <small class="text-success fw-bold"><i class="fas fa-plus-circle"></i> Pontuação FADA (+0.5 pts)</small>
-                                            <p class="small text-muted mb-1">Selecione até 2 atributos impactados positivamente:</p>
+                                            <small class="text-success fw-bold">Pontuação FADA (+0.5)</small>
                                             <div class="row g-2">
                                                 <div class="col-6">
                                                     <select name="atributo_1" class="form-select form-select-sm">
@@ -208,11 +185,8 @@
                                         </div>
                                     </div>
                                     {% endif %}
-
                                     <div class="text-end">
-                                        <button type="submit" class="btn btn-success btn-lg">
-                                            <i class="fas fa-star me-1"></i> Registrar Elogio
-                                        </button>
+                                        <button type="submit" class="btn btn-success btn-lg"><i class="fas fa-star me-1"></i> Registrar</button>
                                     </div>
                                 </div>
                             </div>
@@ -227,14 +201,6 @@
     <div class="justice-sidebar">
         {% if (current_user.is_cal or current_user.role in ['admin_escola', 'programador', 'super_admin']) and permite_pontuacao %}
         <div class="d-grid gap-2">
-            <a href="{{ url_for('justica.analise') }}" class="analysis-card mb-2">
-                <div class="analysis-card-icon">📊</div>
-                <div class="analysis-card-text">
-                    <h4>Dashboard</h4>
-                    <p>Estatísticas Gerais.</p>
-                </div>
-            </a>
-            
             <a href="{{ url_for('regras.index') }}" class="analysis-card mb-2" style="background: linear-gradient(135deg, #6c757d, #495057);">
                 <div class="analysis-card-icon">⚙️</div>
                 <div class="analysis-card-text">
@@ -243,7 +209,6 @@
                 </div>
             </a>
 
-            {% if permite_pontuacao %}
             <a href="{{ url_for('justica.fada_lista_alunos') }}" class="analysis-card mb-2" style="background: linear-gradient(135deg, #17a2b8, #138496);">
                 <div class="analysis-card-icon">📝</div>
                 <div class="analysis-card-text">
@@ -251,14 +216,12 @@
                     <p>Ficha Individual.</p>
                 </div>
             </a>
-            {% endif %}
         </div>
         {% endif %}
     </div>
 </div>
 
 <style>
-    /* Estilos CSS */
     .justice-page-layout { display: grid; grid-template-columns: 1fr; gap: 1.5rem; }
     @media (min-width: 992px) { .justice-page-layout { grid-template-columns: 3fr 1fr; } }
     .analysis-card { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 1rem; border-radius: 8px; background: linear-gradient(135deg, #0d6efd, #0a58ca); color: white; text-decoration: none; transition: all 0.3s ease; min-height: 100px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
@@ -266,7 +229,6 @@
     .analysis-card-icon { font-size: 1.5rem; margin-bottom: 0.5rem; }
     .analysis-card-text h4 { font-size: 1rem; font-weight: 700; margin: 0; }
     .analysis-card-text p { font-size: 0.75rem; margin: 0; opacity: 0.9; }
-
     .justice-options { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.5rem; }
     .justice-content { display: none; animation: fadeIn 0.3s; }
     .justice-content.active { display: block; }
@@ -312,7 +274,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     return;
                 }
                 let html = '';
-                // Adiciona o evento onclick para atualizar o texto sempre que clicar num aluno
                 data.forEach(a => {
                     html += `
                     <div class="form-check border-bottom py-1">
@@ -335,7 +296,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const algumDesmarcado = Array.from(checks).some(c => !c.checked);
         checks.forEach(c => c.checked = algumDesmarcado);
         
-        // Atualiza o texto se for na aba de infração
         if(containerId === 'listaAlunosInfracao') {
             atualizarTextoInteligente();
         }
@@ -355,15 +315,11 @@ document.addEventListener('DOMContentLoaded', function() {
         const autoridadeNome = "{{ current_user.nome_completo or 'AUTORIDADE' }}";
         const autoridadePosto = "{{ current_user.posto_graduacao or 'POSTO' }}";
 
-        // Template Base
         let template = `Tendo em vista as informações constantes na Parte Nº 000/CAl/EsFAS/${hoje.getFullYear()}, evidenciando a existência, em tese, de infração das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação:\n\n`;
 
         if (checks.length === 1) {
-            // MODO INDIVIDUAL: Busca dados específicos (como era antes)
             const alunoId = checks[0].value;
             const url = "{{ url_for('justica.api_get_aluno_details', aluno_id=0) }}".replace('0', alunoId);
-            
-            // Coloca um loading ou placeholder enquanto busca
             observacaoBox.value = "Carregando dados do aluno...";
 
             fetch(url)
@@ -383,7 +339,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
 
         } else if (checks.length > 1) {
-            // MODO COLETIVO: Usa termos genéricos
             template += `1. Justificante: Aluno(a) selecionado(a) na lista anexa.\n\n`;
             template += `2. Descrição da conduta infracional: O(a) militar em questão, no dia ${dataStr}, ...\n`;
             template += `Com isso, incorreu ${regraDesc}.\n\n`;
@@ -393,7 +348,6 @@ document.addEventListener('DOMContentLoaded', function() {
             observacaoBox.value = template;
         
         } else {
-            // NENHUM SELECIONADO
             observacaoBox.value = "Selecione pelo menos um aluno para gerar o termo.";
         }
     };
