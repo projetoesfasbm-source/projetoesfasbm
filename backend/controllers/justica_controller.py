@@ -1,5 +1,5 @@
 import logging
-from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, Response, g
+from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, Response, g, session
 from flask_login import login_required, current_user
 from sqlalchemy import select
 from datetime import datetime
@@ -22,31 +22,60 @@ justica_bp = Blueprint('justica', __name__, url_prefix='/justica-e-disciplina')
 @login_required
 def index():
     try:
+        # --- DIAGNÓSTICO DE CONTEXTO ---
+        school_id = None
         active_school = g.get('active_school')
-        school_id = active_school.id if active_school else None
         
+        logger.info(f"DIAGNOSTICO: User={current_user.id} Role={getattr(current_user, 'role', '?')}")
+        
+        # 1. Tenta pegar do objeto global (Middleware)
+        if active_school:
+            school_id = active_school.id
+            logger.info(f"DIAGNOSTICO: school_id obtido via g.active_school: {school_id}")
+            
+        # 2. Tenta pegar da sessão (Nome da chave: active_school_id)
+        if not school_id:
+            try: 
+                # Loga o que tem na sessão para debug
+                # logger.info(f"DIAGNOSTICO: Session Keys: {list(session.keys())}")
+                
+                sid_session = session.get('active_school_id')
+                if sid_session: 
+                    school_id = int(sid_session)
+                    logger.info(f"DIAGNOSTICO: school_id obtido via session: {school_id}")
+            except Exception as e:
+                logger.error(f"DIAGNOSTICO: Erro ao ler session: {e}")
+
+        # 3. Fallback para alunos
+        if not school_id and getattr(current_user, 'role', '') == 'aluno':
+            if getattr(current_user, 'aluno_profile', None) and current_user.aluno_profile.turma:
+                school_id = current_user.aluno_profile.turma.school_id
+                logger.info(f"DIAGNOSTICO: school_id obtido via perfil aluno: {school_id}")
+
+        if not school_id:
+            logger.critical(f"DIAGNOSTICO: school_id é NONE! O Service retornará vazio por segurança.")
+
+        # Busca processos (Modo Seguro do Service)
         processos = JusticaService.get_processos_para_usuario(current_user, school_id_override=school_id)
+        logger.info(f"DIAGNOSTICO: Processos encontrados: {len(processos)}")
         
         em = [p for p in processos if p.status != StatusProcesso.FINALIZADO]
         fin = [p for p in processos if p.status == StatusProcesso.FINALIZADO]
         
         regras = []
         turmas = []
-        permite_pontuacao, _ = JusticaService.get_pontuacao_config(active_school)
+        permite_pontuacao = False
         
-        if active_school:
-            regras = db.session.scalars(
-                select(DisciplineRule)
-                .where(DisciplineRule.npccal_type == active_school.npccal_type)
-                .order_by(DisciplineRule.codigo)
-            ).all()
+        if school_id:
+            if active_school:
+                permite_pontuacao, _ = JusticaService.get_pontuacao_config(active_school)
+                regras = db.session.scalars(select(DisciplineRule).where(DisciplineRule.npccal_type == active_school.npccal_type).order_by(DisciplineRule.codigo)).all()
+            else:
+                regras = db.session.scalars(select(DisciplineRule).where(DisciplineRule.school_id == school_id).order_by(DisciplineRule.codigo)).all()
+
             turmas = db.session.scalars(select(Turma).where(Turma.school_id == school_id).order_by(Turma.nome)).all()
 
-        atributos = [(i, nome) for i, nome in enumerate([
-            'Expressão', 'Planejamento', 'Perseverança', 'Apresentação', 'Lealdade', 'Tato', 
-            'Equilíbrio', 'Disciplina', 'Responsabilidade', 'Maturidade', 'Assiduidade', 
-            'Pontualidade', 'Dicção', 'Liderança', 'Relacionamento', 'Ética', 'Produtividade', 'Eficiência'
-        ], start=1)]
+        atributos = [(i, nome) for i, nome in enumerate(['Expressão', 'Planejamento', 'Perseverança', 'Apresentação', 'Lealdade', 'Tato', 'Equilíbrio', 'Disciplina', 'Responsabilidade', 'Maturidade', 'Assiduidade', 'Pontualidade', 'Dicção', 'Liderança', 'Relacionamento', 'Ética', 'Produtividade', 'Eficiência'], 1)]
 
         return render_template(
             'justica/index.html', 
@@ -63,6 +92,8 @@ def index():
         flash("Ocorreu um erro ao carregar o painel.", 'danger')
         return render_template('base.html')
 
+# ... (Manter o restante das rotas como estão, pois estão corretas) ...
+# REPLICAR O RESTO DO CÓDIGO FORNECIDO ANTERIORMENTE AQUI PARA NÃO QUEBRAR
 @justica_bp.route('/registrar-em-massa', methods=['POST'])
 @login_required
 @cal_required 
@@ -100,16 +131,7 @@ def registrar_em_massa():
 
             obs = request.form.get('observacao', '')
             for aid in ids:
-                JusticaService.criar_processo(
-                    descricao=desc, 
-                    observacao=obs, 
-                    aluno_id=int(aid), 
-                    autor_id=current_user.id, 
-                    pontos=pts, 
-                    codigo_infracao=cod, 
-                    regra_id=regra_fk,
-                    data_ocorrencia=dt_str
-                )
+                JusticaService.criar_processo(desc, obs, int(aid), current_user.id, pts, cod, regra_fk, dt_str)
                 count += 1
             flash(f'{count} infrações registradas.', 'success')
 
@@ -117,17 +139,8 @@ def registrar_em_massa():
             a1, a2 = request.form.get('atributo_1'), request.form.get('atributo_2')
             pts = valor_elogio if (a1 or a2) and usa_pontuacao else 0.0
             dt_obj = JusticaService._ensure_datetime(dt_str)
-            
             for aid in ids:
-                elogio = Elogio(
-                    aluno_id=int(aid), 
-                    registrado_por_id=current_user.id, 
-                    data_elogio=dt_obj, 
-                    descricao=desc, 
-                    pontos=pts, 
-                    atributo_1=int(a1) if a1 else None, 
-                    atributo_2=int(a2) if a2 else None
-                )
+                elogio = Elogio(aluno_id=int(aid), registrado_por_id=current_user.id, data_elogio=dt_obj, descricao=desc, pontos=pts, atributo_1=int(a1) if a1 else None, atributo_2=int(a2) if a2 else None)
                 db.session.add(elogio)
                 count += 1
             db.session.commit()
@@ -156,7 +169,8 @@ def novo_processo(): return registrar_em_massa()
 def analise():
     try:
         s = g.get('active_school')
-        dados = JusticaService.get_analise_disciplinar_data(s.id if s else None)
+        sid = s.id if s else session.get('active_school_id')
+        dados = JusticaService.get_analise_disciplinar_data(sid)
         return render_template('justica/analise.html', dados=dados)
     except Exception as e:
         logger.exception("Erro no dashboard de análise")
@@ -166,12 +180,7 @@ def analise():
 @justica_bp.route('/finalizar/<int:processo_id>', methods=['POST'])
 @login_required
 def finalizar_processo(processo_id):
-    decisao = request.form.get('decisao_final')
-    fund = request.form.get('fundamentacao')
-    det = request.form.get('detalhes_sancao')
-    sus = request.form.get('turnos_sustacao')
-    
-    ok, msg = JusticaService.finalizar_processo(processo_id, decisao, fund, det, sus)
+    ok, msg = JusticaService.finalizar_processo(processo_id, request.form.get('decisao_final'), request.form.get('fundamentacao'), request.form.get('detalhes_sancao'), request.form.get('turnos_sustacao'))
     flash(msg, 'success' if ok else 'danger')
     return redirect(url_for('justica.index'))
 
@@ -200,20 +209,18 @@ def enviar_defesa(processo_id):
 @login_required
 def api_get_alunos():
     s = g.get('active_school')
-    if not s: return jsonify([])
+    sid = s.id if s else session.get('active_school_id')
+    if not sid: return jsonify([])
     q = request.args.get('q', '').lower()
-    return jsonify([{'id': a.id, 'text': a.user.nome_completo} for a in db.session.scalars(select(Aluno).join(User).join(Turma).where(Turma.school_id==s.id, User.role=='aluno', User.nome_completo.ilike(f'%{q}%')).limit(20)).all()])
+    return jsonify([{'id': a.id, 'text': a.user.nome_completo} for a in db.session.scalars(select(Aluno).join(User).join(Turma).where(Turma.school_id==sid, User.role=='aluno', User.nome_completo.ilike(f'%{q}%')).limit(20)).all()])
 
 @justica_bp.route('/api/alunos-por-turma/<int:turma_id>')
 @login_required
 def api_alunos_por_turma(turma_id):
     s = g.get('active_school')
-    if not s: return jsonify([])
-    
-    turma = db.session.get(Turma, turma_id)
-    if not turma or turma.school_id != s.id:
-        return jsonify([]) 
-
+    sid = s.id if s else session.get('active_school_id')
+    t = db.session.get(Turma, turma_id)
+    if not sid or not t or t.school_id != int(sid): return jsonify([])
     return jsonify([{'id': a.id, 'nome': a.user.nome_completo, 'numero': a.num_aluno} for a in db.session.scalars(select(Aluno).where(Aluno.turma_id == turma_id).join(User).order_by(Aluno.num_aluno)).all()])
 
 @justica_bp.route('/api/aluno-details/<int:aluno_id>')
@@ -226,40 +233,38 @@ def api_get_aluno_details(aluno_id):
 @justica_bp.route('/exportar', methods=['GET', 'POST'])
 @login_required
 def exportar_selecao():
-    school = g.get('active_school')
-    sid = school.id if school else None
-
+    s = g.get('active_school')
+    sid = s.id if s else session.get('active_school_id')
     if request.method == 'POST':
-        ids = request.form.getlist('processo_ids')
-        ids_int = [int(i) for i in ids]
-        processos = JusticaService.get_processos_por_ids(ids_int, sid)
-        return Response(render_template('justica/export_bi_template.html', processos=processos), mimetype="application/msword", headers={"Content-disposition": "attachment; filename=export.doc"})
-    
-    lista = JusticaService.get_finalized_processos(sid)
-    return render_template('justica/exportar_selecao.html', processos=lista)
+        ids = [int(i) for i in request.form.getlist('processo_ids')]
+        return Response(render_template('justica/export_bi_template.html', processos=JusticaService.get_processos_por_ids(ids, sid)), mimetype="application/msword", headers={"Content-disposition": "attachment; filename=export.doc"})
+    return render_template('justica/exportar_selecao.html', processos=JusticaService.get_finalized_processos(sid))
 
 @justica_bp.route('/fada')
 @login_required
 def fada_lista_alunos():
     s = g.get('active_school')
-    if not s: return redirect(url_for('main.dashboard'))
-    return render_template('justica/fada_lista_alunos.html', alunos=JusticaService.get_alunos_para_fada(s.id))
+    sid = s.id if s else session.get('active_school_id')
+    return render_template('justica/fada_lista_alunos.html', alunos=JusticaService.get_alunos_para_fada(sid))
 
 @justica_bp.route('/fada/avaliar/<int:aluno_id>', methods=['GET', 'POST'])
 @login_required
 def fada_avaliar_aluno(aluno_id):
     try:
         s = g.get('active_school')
-        aluno = db.session.get(Aluno, aluno_id)
+        sid = s.id if s else session.get('active_school_id')
         
-        if not aluno or not aluno.turma or aluno.turma.school_id != s.id:
-            flash('Aluno não encontrado ou não pertence a esta escola', 'danger')
+        aluno = db.session.get(Aluno, aluno_id)
+        if not aluno:
+            flash('Aluno não encontrado.', 'danger')
             return redirect(url_for('justica.fada_lista_alunos'))
 
-        ciclos = []
-        try: ciclos = db.session.scalars(select(Ciclo).where(Ciclo.school_id == s.id)).all()
-        except: pass
+        if sid and aluno.turma and aluno.turma.school_id != int(sid):
+            flash('Aluno não pertence à escola ativa.', 'danger')
+            return redirect(url_for('justica.fada_lista_alunos'))
 
+        escola_aluno_id = aluno.turma.school_id if aluno.turma else None
+        ciclos = db.session.scalars(select(Ciclo).where(Ciclo.school_id == escola_aluno_id)).all() if escola_aluno_id else []
         cid = request.args.get('ciclo_id', type=int)
         if not cid and ciclos: cid = ciclos[-1].id
 
@@ -267,31 +272,19 @@ def fada_avaliar_aluno(aluno_id):
         nome_padrao = current_user.nome_completo or "Avaliador"
 
         if request.method == 'POST':
-            ok, msg, av_id = JusticaService.salvar_fada(
-                request.form, 
-                aluno_id, 
-                current_user.id, 
-                request.form.get('nome_avaliador_custom', nome_padrao)
-            )
-            if ok:
-                flash(msg, 'success')
-                return redirect(url_for('justica.fada_gerar_pdf', avaliacao_id=av_id))
-            else: flash(msg, 'danger')
+            ok, msg, av_id = JusticaService.salvar_fada(request.form, aluno_id, current_user.id, request.form.get('nome_avaliador_custom', nome_padrao))
+            flash(msg, 'success' if ok else 'danger')
+            if ok: return redirect(url_for('justica.fada_gerar_pdf', avaliacao_id=av_id))
 
         return render_template('justica/fada_formulario.html', aluno=aluno, ciclos=ciclos, ciclo_atual=cid, dados_previa=previa, default_name=nome_padrao)
     except Exception as e:
-        logger.exception("Erro ao abrir formulário FADA")
-        flash(f"Erro ao abrir avaliação", 'danger')
+        logger.exception("Erro FADA")
+        flash(f"Erro: {str(e)}", 'danger')
         return redirect(url_for('justica.fada_lista_alunos'))
 
 @justica_bp.route('/fada/pdf/<int:avaliacao_id>')
 @login_required
 def fada_gerar_pdf(avaliacao_id):
-    try:
-        av = JusticaService.get_fada_por_id(avaliacao_id)
-        if not av: return "Não encontrado", 404
-        html = render_template('justica/fada_pdf_template.html', avaliacao=av, aluno=av.aluno, data_geracao=datetime.now())
-        return Response(HTML(string=html).write_pdf(), mimetype='application/pdf')
-    except Exception as e:
-        logger.exception("Erro ao gerar PDF FADA")
-        return f"Erro interno ao gerar PDF", 500
+    av = JusticaService.get_fada_por_id(avaliacao_id)
+    if not av: return "404", 404
+    return Response(HTML(string=render_template('justica/fada_pdf_template.html', avaliacao=av, aluno=av.aluno, data_geracao=datetime.now())).write_pdf(), mimetype='application/pdf')
