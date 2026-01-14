@@ -68,7 +68,7 @@
             <div class="justice-content" id="newInfracaoContent">
                 <div class="card border-danger shadow-sm">
                     <div class="card-header bg-danger text-white">
-                        <h4 class="mb-0">Registrar Infração</h4>
+                        <h4 class="mb-0">Registrar Infração (Individual ou Coletiva)</h4>
                     </div>
                     <div class="card-body">
                         <form method="POST" action="{{ url_for('justica.registrar_em_massa') }}">
@@ -86,7 +86,7 @@
                                     </select>
                                     
                                     <div class="d-flex justify-content-between mb-1">
-                                        <small class="text-muted">Marque os alunos:</small>
+                                        <small class="text-muted">Marque os alunos envolvidos:</small>
                                         <a href="#" onclick="toggleTodos('listaAlunosInfracao'); atualizarTextoInteligente(); return false;" class="small text-danger">Marcar Todos</a>
                                     </div>
                                     
@@ -158,12 +158,14 @@
                                         <option value="{{ turma.id }}">{{ turma.nome }}</option>
                                         {% endfor %}
                                     </select>
+                                    
                                     <div class="d-flex justify-content-between mb-1">
-                                        <small class="text-muted">Alunos:</small>
+                                        <small class="text-muted">Marque os alunos elogiados:</small>
                                         <a href="#" onclick="toggleTodos('listaAlunosElogio'); return false;" class="small text-success">Marcar Todos</a>
                                     </div>
+                                    
                                     <div id="listaAlunosElogio" class="border rounded bg-light p-2" style="max-height: 400px; overflow-y: auto;">
-                                        <div class="text-center text-muted small py-3">Selecione uma turma.</div>
+                                        <div class="text-center text-muted small py-3">Selecione uma turma para carregar.</div>
                                     </div>
                                 </div>
 
@@ -171,19 +173,20 @@
                                     <label class="form-label fw-bold">2. Detalhes do Elogio</label>
                                     
                                     <div class="mb-3">
-                                        <label class="small text-muted">Data</label>
+                                        <label class="small text-muted">Data do Fato</label>
                                         <input type="date" name="data_fato" class="form-control" value="{{ hoje }}">
                                     </div>
 
                                     <div class="mb-3">
                                         <label class="small text-muted">Motivo do Elogio</label>
-                                        <textarea name="descricao" class="form-control" rows="5" required placeholder="Descreva o motivo do elogio..."></textarea>
+                                        <textarea name="descricao" class="form-control" rows="4" required placeholder="Descreva o motivo do elogio..."></textarea>
                                     </div>
 
                                     {% if permite_pontuacao %}
                                     <div class="card bg-light border-success mb-3">
                                         <div class="card-body py-2">
                                             <small class="text-success fw-bold"><i class="fas fa-plus-circle"></i> Pontuação FADA (+0.5 pts)</small>
+                                            <p class="small text-muted mb-1">Selecione até 2 atributos impactados positivamente:</p>
                                             <div class="row g-2">
                                                 <div class="col-6">
                                                     <select name="atributo_1" class="form-select form-select-sm">
@@ -227,8 +230,8 @@
             <a href="{{ url_for('justica.analise') }}" class="analysis-card mb-2">
                 <div class="analysis-card-icon">📊</div>
                 <div class="analysis-card-text">
-                    <h4>Análise FADA</h4>
-                    <p>Estatísticas gerais.</p>
+                    <h4>Dashboard</h4>
+                    <p>Estatísticas Gerais.</p>
                 </div>
             </a>
             
@@ -239,12 +242,23 @@
                     <p>Vincular infrações.</p>
                 </div>
             </a>
+
+            {% if permite_pontuacao %}
+            <a href="{{ url_for('justica.fada_lista_alunos') }}" class="analysis-card mb-2" style="background: linear-gradient(135deg, #17a2b8, #138496);">
+                <div class="analysis-card-icon">📝</div>
+                <div class="analysis-card-text">
+                    <h4>Avaliação FADA</h4>
+                    <p>Ficha Individual.</p>
+                </div>
+            </a>
+            {% endif %}
         </div>
         {% endif %}
     </div>
 </div>
 
 <style>
+    /* Estilos CSS */
     .justice-page-layout { display: grid; grid-template-columns: 1fr; gap: 1.5rem; }
     @media (min-width: 992px) { .justice-page-layout { grid-template-columns: 3fr 1fr; } }
     .analysis-card { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 1rem; border-radius: 8px; background: linear-gradient(135deg, #0d6efd, #0a58ca); color: white; text-decoration: none; transition: all 0.3s ease; min-height: 100px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
@@ -252,6 +266,7 @@
     .analysis-card-icon { font-size: 1.5rem; margin-bottom: 0.5rem; }
     .analysis-card-text h4 { font-size: 1rem; font-weight: 700; margin: 0; }
     .analysis-card-text p { font-size: 0.75rem; margin: 0; opacity: 0.9; }
+
     .justice-options { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.5rem; }
     .justice-content { display: none; animation: fadeIn 0.3s; }
     .justice-content.active { display: block; }
