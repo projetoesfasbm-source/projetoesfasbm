@@ -85,7 +85,10 @@ def index():
             
     except Exception as e:
         logger.exception("Erro crítico no index de justiça")
-        flash("Erro ao carregar dados de Justiça e Disciplina.", "danger")
+        # Alteração para ver o erro na tela:
+        import traceback
+        erro_detalhado = f"{str(e)} | {traceback.format_exc()[-150:]}"
+        flash(f"ERRO TÉCNICO REAL: {erro_detalhado}", "danger") 
         return redirect(url_for('main.dashboard'))
 
 @justica_bp.route('/registrar-em-massa', methods=['POST'])
