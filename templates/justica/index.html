@@ -17,7 +17,6 @@
                 <button class="btn btn-warning justice-option-btn" data-target="finalizadosContent">Finalizados</button>
 
                 {% if current_user.is_cal or current_user.role in ['admin_escola', 'programador', 'super_admin'] %}
-                    
                     <button class="btn btn-danger justice-option-btn" data-target="newInfracaoContent">
                         <i class="fas fa-exclamation-triangle me-1"></i>Nova Infração
                     </button>
@@ -25,7 +24,6 @@
                     <button class="btn btn-success justice-option-btn" data-target="newElogioContent">
                         <i class="fas fa-star me-1"></i>Novo Elogio
                     </button>
-
                 {% endif %}
 
                 {% if current_user.is_cal or current_user.role in ['admin_escola', 'programador', 'super_admin'] %}
@@ -86,7 +84,7 @@
                                     </select>
                                     <div class="d-flex justify-content-between mb-1">
                                         <small class="text-muted">Marque os alunos:</small>
-                                        <a href="#" onclick="toggleTodos('listaAlunosInfracao'); atualizarTextoInteligente(); return false;" class="small text-danger">Marcar Todos</a>
+                                        <a href="#" onclick="toggleTodos('listaAlunosInfracao'); return false;" class="small text-danger">Marcar Todos</a>
                                     </div>
                                     <div id="listaAlunosInfracao" class="border rounded bg-light p-2" style="max-height: 400px; overflow-y: auto;">
                                         <div class="text-center text-muted small py-3">Selecione uma turma.</div>
@@ -96,9 +94,9 @@
                                 <div class="col-md-7 mb-3">
                                     <label class="form-label fw-bold">2. Detalhes da Infração</label>
                                     <div class="mb-3">
-                                        <label class="small text-muted">Enquadramento</label>
+                                        <label class="small text-muted">Enquadramento (Regra)</label>
                                         <select id="regraSelect" name="regra_id" class="form-select" required onchange="atualizarTextoInteligente()">
-                                            <option value="">-- Selecione --</option>
+                                            <option value="">-- Selecione a Regra --</option>
                                             {% for regra in fatos_predefinidos %}
                                             <option value="{{ regra.id }}" data-desc="no item {{ regra.codigo }} - '{{ regra.descricao }}'">
                                                 {{ regra.codigo }} - {{ regra.descricao[:80] }}...
@@ -107,19 +105,19 @@
                                         </select>
                                     </div>
                                     <div class="mb-3">
-                                        <label class="small text-muted">Data</label>
-                                        <input type="date" name="data_fato" class="form-control" value="{{ hoje }}">
+                                        <label class="small text-muted">Data do Fato</label>
+                                        <input type="date" name="data_fato" class="form-control" value="{{ hoje }}" required>
                                     </div>
                                     <div class="mb-3">
-                                        <label class="small text-muted">Fato Constatado</label>
-                                        <textarea id="campoDescricao" name="descricao" class="form-control" rows="3" required></textarea>
+                                        <label class="small text-muted">Fato Constatado (Resumo)</label>
+                                        <textarea id="campoDescricao" name="descricao" class="form-control" rows="3" placeholder="Ex: Aluno chegou atrasado para a formatura matinal." required></textarea>
                                     </div>
                                     <div class="form-group mb-3">
-                                        <label class="small text-muted">Termo de Justificação</label>
+                                        <label class="small text-muted">Termo de Justificação / Observação Técnica</label>
                                         <textarea id="campoObservacao" name="observacao" class="form-control" rows="8"></textarea>
                                     </div>
                                     <div class="text-end">
-                                        <button type="submit" class="btn btn-danger btn-lg"><i class="fas fa-gavel me-1"></i> Registrar</button>
+                                        <button type="submit" class="btn btn-danger btn-lg"><i class="fas fa-gavel me-1"></i> Registrar Infração</button>
                                     </div>
                                 </div>
                             </div>
@@ -154,17 +152,17 @@
                                     <label class="form-label fw-bold">2. Detalhes</label>
                                     <div class="mb-3">
                                         <label class="small text-muted">Data</label>
-                                        <input type="date" name="data_fato" class="form-control" value="{{ hoje }}">
+                                        <input type="date" name="data_fato" class="form-control" value="{{ hoje }}" required>
                                     </div>
                                     <div class="mb-3">
-                                        <label class="small text-muted">Motivo</label>
-                                        <textarea name="descricao" class="form-control" rows="5" required></textarea>
+                                        <label class="small text-muted">Motivo do Elogio</label>
+                                        <textarea name="descricao" class="form-control" rows="5" placeholder="Descreva os motivos do elogio..." required></textarea>
                                     </div>
                                     {% if permite_pontuacao %}
                                     <div class="card bg-light border-success mb-3">
                                         <div class="card-body py-2">
-                                            <small class="text-success fw-bold">Pontuação FADA (+0.5)</small>
-                                            <div class="row g-2">
+                                            <small class="text-success fw-bold">Vincular Atributos FADA (+0.5 pontos)</small>
+                                            <div class="row g-2 mt-1">
                                                 <div class="col-6">
                                                     <select name="atributo_1" class="form-select form-select-sm">
                                                         <option value="">-- Atributo 1 --</option>
@@ -186,7 +184,7 @@
                                     </div>
                                     {% endif %}
                                     <div class="text-end">
-                                        <button type="submit" class="btn btn-success btn-lg"><i class="fas fa-star me-1"></i> Registrar</button>
+                                        <button type="submit" class="btn btn-success btn-lg"><i class="fas fa-star me-1"></i> Registrar Elogio</button>
                                     </div>
                                 </div>
                             </div>
@@ -199,23 +197,25 @@
     </div>
 
     <div class="justice-sidebar">
-        {% if (current_user.is_cal or current_user.role in ['admin_escola', 'programador', 'super_admin']) and permite_pontuacao %}
+        {% if (current_user.is_cal or current_user.role in ['admin_escola', 'programador', 'super_admin']) %}
         <div class="d-grid gap-2">
             <a href="{{ url_for('regras.index') }}" class="analysis-card mb-2" style="background: linear-gradient(135deg, #6c757d, #495057);">
                 <div class="analysis-card-icon">⚙️</div>
                 <div class="analysis-card-text">
                     <h4>Configurar Regras</h4>
-                    <p>Vincular infrações.</p>
+                    <p>Gerenciar códigos de infração.</p>
                 </div>
             </a>
 
+            {% if permite_pontuacao %}
             <a href="{{ url_for('justica.fada_lista_alunos') }}" class="analysis-card mb-2" style="background: linear-gradient(135deg, #17a2b8, #138496);">
                 <div class="analysis-card-icon">📝</div>
                 <div class="analysis-card-text">
                     <h4>Avaliação FADA</h4>
-                    <p>Ficha Individual.</p>
+                    <p>Ficha Individual Atitudinal.</p>
                 </div>
             </a>
+            {% endif %}
         </div>
         {% endif %}
     </div>
@@ -224,7 +224,7 @@
 <style>
     .justice-page-layout { display: grid; grid-template-columns: 1fr; gap: 1.5rem; }
     @media (min-width: 992px) { .justice-page-layout { grid-template-columns: 3fr 1fr; } }
-    .analysis-card { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 1rem; border-radius: 8px; background: linear-gradient(135deg, #0d6efd, #0a58ca); color: white; text-decoration: none; transition: all 0.3s ease; min-height: 100px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .analysis-card { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 1rem; border-radius: 8px; color: white; text-decoration: none; transition: all 0.3s ease; min-height: 100px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
     .analysis-card:hover { transform: translateY(-3px); color: white; box-shadow: 0 6px 8px rgba(0,0,0,0.15); }
     .analysis-card-icon { font-size: 1.5rem; margin-bottom: 0.5rem; }
     .analysis-card-text h4 { font-size: 1rem; font-weight: 700; margin: 0; }
@@ -233,19 +233,20 @@
     .justice-content { display: none; animation: fadeIn 0.3s; }
     .justice-content.active { display: block; }
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .form-check:hover { background-color: rgba(0,0,0,0.05); }
 </style>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     
-    // --- Lógica das abas ---
+    // --- Controle de Abas ---
     const optionBtns = document.querySelectorAll('.justice-option-btn');
     const contentDivs = document.querySelectorAll('.justice-content');
     
     optionBtns.forEach(btn => {
         if(btn.dataset.target) {
             btn.addEventListener('click', function() {
-                optionBtns.forEach(b => { if(b.dataset.target) b.classList.remove('active'); });
+                optionBtns.forEach(b => b.classList.remove('active'));
                 this.classList.add('active');
                 contentDivs.forEach(div => div.classList.remove('active'));
                 const target = document.getElementById(this.dataset.target);
@@ -254,7 +255,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // --- CARREGAR ALUNOS DA TURMA ---
+    // --- CARREGAR ALUNOS DA TURMA (AJAX) ---
     window.carregarAlunos = function(turmaId, containerId) {
         const container = document.getElementById(containerId);
         if (!turmaId) {
@@ -262,7 +263,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        container.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-secondary"></div> Carregando...</div>';
+        container.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-secondary"></div> Carregando alunos...</div>';
         
         const url = "{{ url_for('justica.api_alunos_por_turma', turma_id=0) }}".replace('0', turmaId);
 
@@ -270,14 +271,15 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => response.json())
             .then(data => {
                 if (data.length === 0) {
-                    container.innerHTML = '<div class="alert alert-warning small m-2">Nenhum aluno nesta turma.</div>';
+                    container.innerHTML = '<div class="alert alert-warning small m-2">Nenhum aluno encontrado nesta turma.</div>';
                     return;
                 }
                 let html = '';
                 data.forEach(a => {
+                    // IMPORTANTE: name="alunos_selecionados" para o backend receber a lista
                     html += `
                     <div class="form-check border-bottom py-1">
-                        <input class="form-check-input aluno-check-${containerId}" type="checkbox" name="alunos_selecionados" value="${a.id}" id="${containerId}_${a.id}" onchange="atualizarTextoInteligente()">
+                        <input class="form-check-input aluno-check-${containerId}" type="checkbox" name="alunos_selecionados" value="${a.id}" id="${containerId}_${a.id}" onchange="if('${containerId}'=='listaAlunosInfracao') atualizarTextoInteligente()">
                         <label class="form-check-label w-100" for="${containerId}_${a.id}" style="cursor:pointer; margin-left: 5px;">
                             <strong>${a.numero || '-'}</strong> - ${a.nome}
                         </label>
@@ -293,6 +295,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     window.toggleTodos = function(containerId) {
         const checks = document.querySelectorAll(`.aluno-check-${containerId}`);
+        if(checks.length === 0) return;
         const algumDesmarcado = Array.from(checks).some(c => !c.checked);
         checks.forEach(c => c.checked = algumDesmarcado);
         
@@ -301,12 +304,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     };
 
-    // --- LÓGICA DO TEXTO PADRÃO INTELIGENTE ---
+    // --- LÓGICA DO TERMO DE JUSTIFICAÇÃO AUTOMÁTICO ---
     window.atualizarTextoInteligente = function() {
         const checks = document.querySelectorAll('.aluno-check-listaAlunosInfracao:checked');
         const regraSelect = document.getElementById('regraSelect');
         const selectedOption = regraSelect.options[regraSelect.selectedIndex];
-        const regraDesc = selectedOption.getAttribute('data-desc') || "(Selecione a infração)";
+        const regraDesc = selectedOption.getAttribute('data-desc') || "(Selecione o enquadramento)";
         
         const observacaoBox = document.getElementById('campoObservacao');
         const hoje = new Date();
@@ -319,36 +322,29 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (checks.length === 1) {
             const alunoId = checks[0].value;
-            const url = "{{ url_for('justica.api_get_aluno_details', aluno_id=0) }}".replace('0', alunoId);
-            observacaoBox.value = "Carregando dados do aluno...";
+            // API opcional para pegar detalhes extras se existir, caso contrário usa o nome da lista
+            const labelNode = checks[0].nextElementSibling;
+            const alunoNomeFull = labelNode ? labelNode.innerText : "Militar Selecionado";
 
-            fetch(url)
-                .then(r => r.json())
-                .then(details => {
-                    const nome = details.nome_completo || "NOME";
-                    const posto = details.posto_graduacao || "POSTO";
-                    const mat = details.matricula || "MAT";
-
-                    template += `1. Justificante: ${posto} ${nome}, Id Func. ${mat}.\n\n`;
-                    template += `2. Descrição da conduta infracional: O(a) ${posto} ${nome}, Id Func. ${mat}, no dia ${dataStr}, ...\n`;
-                    template += `Com isso, incorreu ${regraDesc}.\n\n`;
-                    template += `3. Cientifico-lhe que a contar do recebimento da presente, abre-se o prazo de 24 horas, para que, querendo, apresente resposta escrita com as provas que entender cabíveis. Fica advertido o acusado que a não entrega da justificação dentro do prazo estipulado, implicará em reconhecimento como verdadeiros os fatos imputados.\n\n\n`;
-                    template += `${autoridadeNome}\n${autoridadePosto}`;
-                    
-                    observacaoBox.value = template;
-                });
+            template += `1. Justificante: ${alunoNomeFull}.\n\n`;
+            template += `2. Descrição da conduta infracional: O(a) militar acima nominado(a), no dia ${dataStr}, ...\n`;
+            template += `Com isso, incorreu ${regraDesc}.\n\n`;
+            template += `3. Cientifico-lhe que a contar do recebimento da presente, abre-se o prazo de 24 horas para que, querendo, apresente resposta escrita com as provas que entender cabíveis. Fica advertido o acusado que a não entrega da justificação dentro do prazo estipulado implicará em reconhecimento como verdadeiros os fatos imputados.\n\n\n`;
+            template += `${autoridadeNome}\n${autoridadePosto}`;
+            
+            observacaoBox.value = template;
 
         } else if (checks.length > 1) {
-            template += `1. Justificante: Aluno(a) selecionado(a) na lista anexa.\n\n`;
-            template += `2. Descrição da conduta infracional: O(a) militar em questão, no dia ${dataStr}, ...\n`;
-            template += `Com isso, incorreu ${regraDesc}.\n\n`;
-            template += `3. Cientifico-lhe que a contar do recebimento da presente, abre-se o prazo de 24 horas... (Texto padrão de defesa).\n\n\n`;
+            template += `1. Justificante: Alunos selecionados conforme relação anexa (${checks.length} alunos).\n\n`;
+            template += `2. Descrição da conduta infracional: Os militares em questão, no dia ${dataStr}, ...\n`;
+            template += `Com isso, incorreram ${regraDesc}.\n\n`;
+            template += `3. Cientifico-lhes que a contar do recebimento da presente, abre-se o prazo de 24 horas... (procedimento de defesa padrão).\n\n\n`;
             template += `${autoridadeNome}\n${autoridadePosto}`;
             
             observacaoBox.value = template;
         
         } else {
-            observacaoBox.value = "Selecione pelo menos um aluno para gerar o termo.";
+            observacaoBox.value = "Aguardando seleção de alunos e regra para gerar o termo...";
         }
     };
 });

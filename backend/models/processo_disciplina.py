@@ -12,8 +12,7 @@ if t.TYPE_CHECKING:
     from .user import User
     from .discipline_rule import DisciplineRule
 
-# Mantemos a classe apenas para usar as constantes no código (ex: StatusProcesso.FINALIZADO.value)
-# Mas NÃO vamos mais forçá-la dentro do banco de dados.
+# Enum herdando de str para facilitar serialização, mas o banco usará String puro
 class StatusProcesso(str, enum.Enum):
     AGUARDANDO_CIENCIA = 'Aguardando Ciência'
     ALUNO_NOTIFICADO = 'Aluno Notificado'
@@ -27,7 +26,7 @@ class ProcessoDisciplina(db.Model):
     aluno_id: Mapped[int] = mapped_column(ForeignKey('alunos.id'), nullable=False, index=True)
     relator_id: Mapped[int] = mapped_column(ForeignKey('users.id'), nullable=False, index=True)
 
-    # Campos de Rastreabilidade
+    # Campos de Rastreabilidade e Regra
     regra_id: Mapped[t.Optional[int]] = mapped_column(ForeignKey('discipline_rules.id'), nullable=True, index=True)
     codigo_infracao: Mapped[t.Optional[str]] = mapped_column(String(50), nullable=True) 
     
@@ -36,16 +35,16 @@ class ProcessoDisciplina(db.Model):
     
     pontos: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
 
-    # --- AQUI ESTÁ A SOLUÇÃO DEFINITIVA ---
-    # Substituímos o tipo complexo Enum por String(50).
-    # Isso impede o "LookupError" e aceita o dado 'Finalizado' exatamente como ele está no banco.
+    # --- CORREÇÃO CRÍTICA DE TIPO ---
+    # Define como String(50) para aceitar qualquer texto, evitando erro de Enum no banco.
+    # Usa .value no default para inserir a string literal, não o objeto Python.
     status: Mapped[str] = mapped_column(
         String(50), 
-        default=StatusProcesso.AGUARDANDO_CIENCIA.value,
+        default=StatusProcesso.AGUARDANDO_CIENCIA.value, 
         nullable=False,
         index=True
     )
-    # --------------------------------------
+    # --------------------------------
 
     # Timestamps
     data_ocorrencia: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -67,7 +66,7 @@ class ProcessoDisciplina(db.Model):
     relator: Mapped['User'] = relationship(foreign_keys=[relator_id])
     regra: Mapped['DisciplineRule'] = relationship(foreign_keys=[regra_id])
 
-    # Índices
+    # Índices compostos para performance
     __table_args__ = (
         Index('idx_processo_status_data', 'status', 'data_ocorrencia'),
         Index('idx_processo_codigo', 'codigo_infracao'),
