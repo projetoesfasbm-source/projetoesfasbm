@@ -2,20 +2,22 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Termo de Justificação</title>
+    <title>Termo de Justificação e Solução</title>
     <style>
         @page {
             size: A4;
-            margin: 1.27cm;
+            margin: 2cm 1.5cm 1.5cm 1.5cm;
         }
         body {
             font-family: 'Times New Roman', Times, serif;
             font-size: 12pt;
             line-height: 1.5;
             margin: 0;
+            color: #000;
         }
         .processo-container {
             page-break-after: always;
+            padding-top: 1cm;
         }
         .processo-container:last-child {
             page-break-after: avoid;
@@ -23,97 +25,145 @@
         .header {
             text-align: center;
             font-weight: bold;
+            margin-bottom: 1.5cm;
+            line-height: 1.2;
         }
         .title {
             text-align: center;
             font-weight: bold;
-            margin-top: 1cm;
-            margin-bottom: 1cm;
+            margin: 1cm 0;
+            text-decoration: underline;
         }
-        p, .section {
+        p {
             text-align: justify;
-            margin-bottom: 0.5cm;
+            margin-bottom: 0.3cm;
+            margin-top: 0;
+        }
+        .section-title {
+            font-weight: bold;
+            margin-top: 0.8cm;
+            margin-bottom: 0.3cm;
+            text-transform: uppercase;
         }
         .signature-block {
             text-align: center;
-            margin-top: 1.5cm;
+            margin-top: 2cm;
+            page-break-inside: avoid;
         }
         .signature-line {
             display: inline-block;
             border-top: 1px solid #000;
-            width: 250px;
-            margin-top: 2cm;
+            width: 300px;
+            margin-bottom: 0.2cm;
+        }
+        .info-box {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin: 10px 0;
+            background-color: #fafafa;
+        }
+        .field-value {
+            font-weight: bold;
         }
     </style>
 </head>
 <body>
 
-    <div class="header">
-        <p style="text-align: center;">ESTADO DO RIO GRANDE DO SUL</p>
-        <p style="text-align: center;">SECRETARIA DA SEGURANÇA PÚBLICA</p>
-        <p style="text-align: center;">BRIGADA MILITAR</p>
-        <p style="text-align: center;">DE – EsFAS</p>
-    </div>
-
     {% for processo in processos %}
-    <div class="processo-container {% if not loop.first %}subsequente{% endif %}">
+    <div class="processo-container">
+        
+        <div class="header">
+            ESTADO DO RIO GRANDE DO SUL<br>
+            SECRETARIA DA SEGURANÇA PÚBLICA<br>
+            BRIGADA MILITAR<br>
+            DE – EsFAS
+        </div>
 
         <div class="title">
-            TERMO DE JUSTIFICAÇÃO Nº {{ "%03d"|format(processo.id) }}
+            TERMO DE JUSTIFICAÇÃO Nº {{ "%03d"|format(processo.id) }} / {{ processo.data_ocorrencia.year }}
         </div>
 
-        <p>Tendo em vista as informações constantes na Parte Nº 000/CAl/EsFAS/{{ processo.data_ocorrencia | br_time('%Y') }}, evidenciando a existência, em tese, de infração das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação:</p>
+        <p><strong>1. DO FATO:</strong></p>
+        <p>
+            No dia {{ processo.data_ocorrencia.strftime('%d/%m/%Y') }}, o(a) 
+            <span class="field-value">{{ processo.aluno.user.posto_graduacao }} {{ processo.aluno.user.nome_completo }}</span>, 
+            Matrícula <span class="field-value">{{ processo.aluno.user.matricula }}</span>, 
+            teve a seguinte conduta observada:
+        </p>
+        <p style="padding-left: 1cm; font-style: italic;">
+            "{{ processo.fato_constatado }}"
+        </p>
+        {% if processo.codigo_infracao %}
+        <p>Enquadramento: Item {{ processo.codigo_infracao }}.</p>
+        {% endif %}
 
-        <div class="section">
-            <p><strong>1. Justificante:</strong> {{ processo.aluno.user.posto_graduacao or '(POSTO/GRADUAÇÃO)' }} {{ processo.aluno.user.nome_completo or '(NOME COMPLETO)' }} Id Func. {{ processo.aluno.user.matricula or '(MATRICULA)' }}</p>
-
-            <p><strong>2. Descrição da conduta infracional:</strong> O(a) {{ processo.aluno.user.posto_graduacao or '(POSTO/GRADUAÇÃO)' }} {{ processo.aluno.user.nome_completo or '(NOME COMPLETO)' }} Id Func. {{ processo.aluno.user.matricula or '(MATRICULA)' }}, no dia {{ processo.data_ocorrencia | br_time('%d de %B de %Y') }},
-            {% set parts = processo.fato_constatado.split('-', 1) %}
-            {% if parts | length == 2 %}
-                {% set romano = parts[0].strip() %}
-                {% set descricao = parts[1].strip().rstrip(';') %}
-                {{ descricao }}. Com isso, incorreu no item {{ romano }} - {{ descricao }};
+        <p class="section-title">2. DA DEFESA:</p>
+        <p>
+            Oportunizado o direito à ampla defesa e ao contraditório, o discente apresentou as seguintes razões:
+        </p>
+        <div style="border: 1px solid #000; padding: 10px; min-height: 3cm;">
+            {% if processo.defesa %}
+                {{ processo.defesa }}
             {% else %}
-                {{ processo.fato_constatado }}. Com isso, incorreu no item (FATO NÃO PADRONIZADO);
+                <p style="text-align: center; color: #666; margin-top: 1cm;">(Espaço reservado para defesa escrita ou "NADA A DECLARAR")</p>
             {% endif %}
+        </div>
+        
+        {% if not processo.defesa %}
+        <div style="margin-top: 1cm; text-align: center;">
+            <div class="signature-line"></div>
+            <p>Assinatura do Aluno</p>
+        </div>
+        {% endif %}
+
+        <p class="section-title">3. DA SOLUÇÃO:</p>
+        
+        <p><strong>Diante do exposto, o Comandante/Chefe RESOLVE:</strong></p>
+
+        {% if processo.status == 'Finalizado' %}
+            <p>a) <strong>FUNDAMENTAÇÃO:</strong> {{ processo.fundamentacao }}</p>
+            
+            <p>b) <strong>DECISÃO:</strong> 
+                {% if processo.decisao_final == 'Justificado' %}
+                    Considerar a conduta <strong>JUSTIFICADA</strong>.
+                {% else %}
+                    Punir o militar com <strong>{{ processo.decisao_final|upper }}</strong>.
+                {% endif %}
             </p>
 
-            <p><strong>3. Cientifico-lhe</strong> que a contar do recebimento da presente, abre-se o prazo de 24 horas, para que, querendo, apresente resposta escrita com as provas que entender cabíveis. Fica advertido o acusado que a não entrega da justificação dentro do prazo estipulado, implicará em reconhecimento como verdadeiros os fatos imputados.</p>
-        </div>
+            {% if processo.detalhes_sancao and processo.decisao_final != 'Justificado' %}
+            <p>c) <strong>QUANTIDADE/DETALHES:</strong> {{ processo.detalhes_sancao }}</p>
+            {% endif %}
+            
+            <p>d) <strong>PUBLICAÇÃO:</strong> Publique-se em Boletim Interno e registre-se na ficha individual.</p>
+
+        {% else %}
+            <p>a) <strong>FUNDAMENTAÇÃO:</strong> __________________________________________________________________________<br>
+            __________________________________________________________________________________________________<br>
+            __________________________________________________________________________________________________</p>
+            
+            <p>b) <strong>DECISÃO:</strong> ( ) Justificar &nbsp;&nbsp; ( ) Advertência &nbsp;&nbsp; ( ) Repreensão &nbsp;&nbsp; ( ) Detenção &nbsp;&nbsp; ( ) ____________</p>
+
+            <p>c) <strong>QUANTIDADE:</strong> _________________ dias/turnos.</p>
+            
+            <p>d) <strong>PUBLICAÇÃO:</strong> Publique-se em Boletim Interno.</p>
+        {% endif %}
 
         <div class="signature-block">
-            <p>{{ processo.relator.nome_completo or 'NOME COMPLETO' }} – {{ processo.relator.posto_graduacao or 'POSTO/GRADUAÇÃO' }}</p>
-            <p>{{ 'POSTO/GRAD' }} Disciplina do CAl</p>
+            <p>Quartel em Santa Maria, {{ hoje|default(processo.data_decisao.strftime('%d/%m/%Y') if processo.data_decisao else '_____/_____/_____') }}.</p>
+            <br><br>
+            <div class="signature-line"></div>
+            <p><strong>COMANDANTE / CHEFE DA DIVISÃO DE ENSINO</strong></p>
         </div>
 
-        <div style="margin-top: 1.5cm;">
-            <p>Recebi em ___/___/___ às _______</p>
-            <div class="signature-line" style="margin-top: 0.5cm;"></div>
-            <p style="text-align: center;">(ME JUSTIFICANTE)</p>
-        </div>
-
-        <div style="margin-top: 1.5cm;">
-            <p><strong>RAZÕES DE DEFESA:</strong></p>
-            <p>{{ processo.defesa or '__________________________________________________________________' }}</p>
-            <div class="signature-line" style="margin-top: 1cm;"></div>
-            <p style="text-align: center;">ASSINATURA</p>
-        </div>
-
-        <div style="margin-top: 1.5cm;">
-            <p><strong>Diante do Exposto, RESOLVO:</strong></p>
-            <p>Considerar: {{ processo.fundamentacao or '________________________________________________________' }}</p>
-            <p>________________________________________________________</p>
-            <p>Dar Ciência ao ME da presente solução;</p>
-            <p>Publicar a presente solução em Aditamento;</p>
-            <p>Arquivar a presente solução na pasta individual do Aluno.</p>
-        </div>
-
-        <div class="signature-block">
-            <p>NOME COMPLETO – POSTO/GRADUAÇÃO</p>
-            <p>Subcomandante do CAl</p>
-        </div>
     </div>
     {% endfor %}
 
+    <script>
+        window.onload = function() {
+            // Descomente a linha abaixo se quiser que a janela de impressão abra automaticamente
+            // window.print();
+        }
+    </script>
 </body>
 </html>

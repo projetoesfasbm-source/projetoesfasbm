@@ -85,10 +85,8 @@ def index():
             
     except Exception as e:
         logger.exception("Erro crítico no index de justiça")
-        # Alteração para ver o erro na tela:
-        import traceback
-        erro_detalhado = f"{str(e)} | {traceback.format_exc()[-150:]}"
-        flash(f"ERRO TÉCNICO REAL: {erro_detalhado}", "danger") 
+        # Mensagem padrão restaurada para segurança em produção
+        flash("Erro ao carregar dados de Justiça e Disciplina.", "danger")
         return redirect(url_for('main.dashboard'))
 
 @justica_bp.route('/registrar-em-massa', methods=['POST'])
@@ -158,7 +156,8 @@ def api_alunos_por_turma(turma_id):
             .join(User)
             .order_by(Aluno.num_aluno)
         ).all()
-        return jsonify([{'id': a.id, 'nome': a.user.nome_completo, 'numero': a.num_aluno} for a in alunos])
+        # O 'or' vazio garante que não apareça 'null' no front
+        return jsonify([{'id': a.id, 'nome': a.user.nome_completo, 'numero': a.num_aluno or ''} for a in alunos])
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -219,3 +218,38 @@ def enviar_defesa(pid):
     ok, msg = JusticaService.enviar_defesa(pid, texto, current_user)
     flash(msg, 'success' if ok else 'danger')
     return redirect(url_for('justica.index'))
+
+# --- NOVA ROTA DE IMPRESSÃO ---
+@justica_bp.route('/imprimir-processos', methods=['POST'])
+@login_required
+def imprimir_processos():
+    """Gera o HTML para impressão dos processos selecionados no formato de BI."""
+    try:
+        # Pega lista de IDs (checkboxes) ou ID único (botão individual)
+        ids = request.form.getlist('processos_selecionados')
+        if not ids and request.form.get('processo_id'):
+            ids = [request.form.get('processo_id')]
+            
+        if not ids:
+            flash("Nenhum processo selecionado para impressão.", "warning")
+            return redirect(url_for('justica.index'))
+
+        # Converte para inteiros
+        ids = [int(x) for x in ids]
+
+        # Busca os processos no banco
+        processos = db.session.scalars(
+            select(ProcessoDisciplina)
+            .where(ProcessoDisciplina.id.in_(ids))
+            .order_by(ProcessoDisciplina.data_ocorrencia.desc())
+        ).all()
+
+        return render_template(
+            'justica/export_bi_template.html', 
+            processos=processos,
+            hoje=datetime.today().strftime('%d de %B de %Y')
+        )
+    except Exception as e:
+        logger.exception("Erro ao gerar impressão")
+        flash(f"Erro ao gerar documento: {e}", "danger")
+        return redirect(url_for('justica.index'))

@@ -143,6 +143,38 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    
+    // --- CORREÇÃO: Lógica do Botão Analisar ---
+    document.body.addEventListener('click', function(e) {
+        // Verifica se clicou no botão ou no ícone dentro dele
+        const btn = e.target.closest('.js-toggle-analise-form');
+        
+        if (btn) {
+            e.preventDefault();
+            
+            // Pega o ID do formulário (ex: #analise-form-123)
+            const targetSelector = btn.getAttribute('data-target-form');
+            const formContainer = document.querySelector(targetSelector);
+            
+            if (formContainer) {
+                // Alterna visualização
+                if (formContainer.style.display === 'none') {
+                    formContainer.style.display = 'block';
+                    // Muda estilo para "Cancelar"
+                    btn.classList.remove('btn-success');
+                    btn.classList.add('btn-secondary');
+                    btn.querySelector('.js-toggle-text').textContent = 'Cancelar';
+                } else {
+                    formContainer.style.display = 'none';
+                    // Restaura estilo para "Analisar"
+                    btn.classList.add('btn-success');
+                    btn.classList.remove('btn-secondary');
+                    btn.querySelector('.js-toggle-text').textContent = 'Analisar';
+                }
+            }
+        }
+    });
+
     // --- Tabs ---
     document.querySelectorAll('.justice-option-btn').forEach(btn => {
         btn.addEventListener('click', function() {
@@ -164,7 +196,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 container.innerHTML = data.map(a => `
                     <div class="form-check border-bottom py-1">
                         <input class="form-check-input aluno-check-${containerId}" type="checkbox" name="alunos_selecionados" value="${a.id}" id="chk_${containerId}_${a.id}" onchange="if('${containerId}'=='listaAlunosInfracao') atualizarTextoInteligente()">
-                        <label class="form-check-label" for="chk_${containerId}_${a.id}">${a.numero} - ${a.nome}</label>
+                        <label class="form-check-label" for="chk_${containerId}_${a.id}">
+                            ${a.numero ? a.numero + ' - ' : ''}${a.nome}
+                        </label>
                     </div>
                 `).join('');
             });
