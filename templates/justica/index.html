@@ -16,20 +16,13 @@
                 <button class="btn btn-primary justice-option-btn active" data-target="inProgressContent">Em Andamento</button>
                 <button class="btn btn-warning justice-option-btn" data-target="finalizadosContent">Finalizados</button>
 
-                {% if current_user.is_cal or current_user.role in ['admin_escola', 'programador', 'super_admin'] %}
+                {% if current_user.role != 'aluno' %}
                     <button class="btn btn-danger justice-option-btn" data-target="newInfracaoContent">
                         <i class="fas fa-exclamation-triangle me-1"></i>Nova Infração
                     </button>
-                    
                     <button class="btn btn-success justice-option-btn" data-target="newElogioContent">
                         <i class="fas fa-star me-1"></i>Novo Elogio
                     </button>
-                {% endif %}
-
-                {% if current_user.is_cal or current_user.role in ['admin_escola', 'programador', 'super_admin'] %}
-                    <a href="{{ url_for('justica.exportar_selecao') }}" class="btn btn-secondary justice-option-btn">
-                        <i class="fas fa-download me-1"></i>Exportar BI
-                    </a>
                 {% endif %}
             </div>
 
@@ -37,11 +30,7 @@
                 <h3 class="justice-content-title">Processos em Andamento</h3>
                 {% if em_andamento %}
                     {% for processo in em_andamento %}
-                        {% if current_user.role == 'aluno' %}
-                            {% include 'partials/_processo_card_aluno.html' %}
-                        {% else %}
-                            {% include 'partials/_processo_card_admin.html' %}
-                        {% endif %}
+                        {% include 'partials/_processo_card_admin.html' if current_user.role != 'aluno' else 'partials/_processo_card_aluno.html' %}
                     {% endfor %}
                 {% else %}
                     <div class="alert alert-info">Nenhum processo em andamento.</div>
@@ -52,11 +41,7 @@
                 <h3 class="justice-content-title">Processos Finalizados</h3>
                 {% if finalizados %}
                     {% for processo in finalizados %}
-                        {% if current_user.role == 'aluno' %}
-                            {% include 'partials/_processo_card_aluno.html' %}
-                        {% else %}
-                            {% include 'partials/_processo_card_admin.html' %}
-                        {% endif %}
+                        {% include 'partials/_processo_card_admin.html' if current_user.role != 'aluno' else 'partials/_processo_card_aluno.html' %}
                     {% endfor %}
                 {% else %}
                     <div class="alert alert-info">Nenhum processo finalizado.</div>
@@ -65,60 +50,49 @@
 
             <div class="justice-content" id="newInfracaoContent">
                 <div class="card border-danger shadow-sm">
-                    <div class="card-header bg-danger text-white">
-                        <h4 class="mb-0">Registrar Infração</h4>
-                    </div>
+                    <div class="card-header bg-danger text-white"><h4 class="mb-0">Registrar Infração</h4></div>
                     <div class="card-body">
                         <form method="POST" action="{{ url_for('justica.registrar_em_massa') }}">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <input type="hidden" name="tipo_registro" value="infracao">
-
                             <div class="row">
                                 <div class="col-md-5 mb-3 border-end">
-                                    <label class="form-label fw-bold">1. Selecione a Turma</label>
+                                    <label class="form-label fw-bold">1. Turma</label>
                                     <select class="form-select mb-2" onchange="carregarAlunos(this.value, 'listaAlunosInfracao')">
                                         <option value="">-- Escolha --</option>
                                         {% for turma in turmas %}
                                         <option value="{{ turma.id }}">{{ turma.nome }}</option>
                                         {% endfor %}
                                     </select>
-                                    <div class="d-flex justify-content-between mb-1">
-                                        <small class="text-muted">Marque os alunos:</small>
-                                        <a href="#" onclick="toggleTodos('listaAlunosInfracao'); return false;" class="small text-danger">Marcar Todos</a>
-                                    </div>
-                                    <div id="listaAlunosInfracao" class="border rounded bg-light p-2" style="max-height: 400px; overflow-y: auto;">
+                                    <a href="#" onclick="toggleTodos('listaAlunosInfracao'); return false;" class="small text-danger">Marcar Todos</a>
+                                    <div id="listaAlunosInfracao" class="border rounded bg-light p-2" style="max-height: 350px; overflow-y: auto;">
                                         <div class="text-center text-muted small py-3">Selecione uma turma.</div>
                                     </div>
                                 </div>
-
                                 <div class="col-md-7 mb-3">
-                                    <label class="form-label fw-bold">2. Detalhes da Infração</label>
-                                    <div class="mb-3">
-                                        <label class="small text-muted">Enquadramento (Regra)</label>
+                                    <label class="form-label fw-bold">2. Detalhes</label>
+                                    <div class="mb-2">
+                                        <label class="small">Enquadramento</label>
                                         <select id="regraSelect" name="regra_id" class="form-select" required onchange="atualizarTextoInteligente()">
-                                            <option value="">-- Selecione a Regra --</option>
+                                            <option value="">-- Selecione --</option>
                                             {% for regra in fatos_predefinidos %}
-                                            <option value="{{ regra.id }}" data-desc="no item {{ regra.codigo }} - '{{ regra.descricao }}'">
-                                                {{ regra.codigo }} - {{ regra.descricao[:80] }}...
-                                            </option>
+                                            <option value="{{ regra.id }}" data-desc="no item {{ regra.codigo }} - '{{ regra.descricao }}'">{{ regra.codigo }} - {{ regra.descricao[:60] }}...</option>
                                             {% endfor %}
                                         </select>
                                     </div>
-                                    <div class="mb-3">
-                                        <label class="small text-muted">Data do Fato</label>
-                                        <input type="date" name="data_fato" class="form-control" value="{{ hoje }}" required>
+                                    <div class="mb-2">
+                                        <label class="small">Data</label>
+                                        <input type="date" name="data_fato" class="form-control" value="{{ hoje }}">
                                     </div>
-                                    <div class="mb-3">
-                                        <label class="small text-muted">Fato Constatado (Resumo)</label>
-                                        <textarea id="campoDescricao" name="descricao" class="form-control" rows="3" placeholder="Ex: Aluno chegou atrasado para a formatura matinal." required></textarea>
+                                    <div class="mb-2">
+                                        <label class="small">Fato Constatado (Resumo)</label>
+                                        <textarea name="descricao" class="form-control" rows="2" required></textarea>
                                     </div>
-                                    <div class="form-group mb-3">
-                                        <label class="small text-muted">Termo de Justificação / Observação Técnica</label>
-                                        <textarea id="campoObservacao" name="observacao" class="form-control" rows="8"></textarea>
+                                    <div class="mb-2">
+                                        <label class="small">Termo de Justificação</label>
+                                        <textarea id="campoObservacao" name="observacao" class="form-control" rows="6"></textarea>
                                     </div>
-                                    <div class="text-end">
-                                        <button type="submit" class="btn btn-danger btn-lg"><i class="fas fa-gavel me-1"></i> Registrar Infração</button>
-                                    </div>
+                                    <div class="text-end"><button type="submit" class="btn btn-danger">Registrar</button></div>
                                 </div>
                             </div>
                         </form>
@@ -128,64 +102,26 @@
 
             <div class="justice-content" id="newElogioContent">
                 <div class="card border-success shadow-sm">
-                    <div class="card-header bg-success text-white">
-                        <h4 class="mb-0">Registrar Elogio</h4>
-                    </div>
+                    <div class="card-header bg-success text-white"><h4 class="mb-0">Registrar Elogio</h4></div>
                     <div class="card-body">
                         <form method="POST" action="{{ url_for('justica.registrar_em_massa') }}">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <input type="hidden" name="tipo_registro" value="elogio">
                             <div class="row">
-                                <div class="col-md-5 mb-3 border-end">
-                                    <label class="form-label fw-bold">1. Selecione a Turma</label>
+                                <div class="col-md-5 border-end">
+                                    <label class="form-label">Turma</label>
                                     <select class="form-select mb-2" onchange="carregarAlunos(this.value, 'listaAlunosElogio')">
                                         <option value="">-- Escolha --</option>
                                         {% for turma in turmas %}
                                         <option value="{{ turma.id }}">{{ turma.nome }}</option>
                                         {% endfor %}
                                     </select>
-                                    <div id="listaAlunosElogio" class="border rounded bg-light p-2" style="max-height: 400px; overflow-y: auto;">
-                                        <div class="text-center text-muted small py-3">Selecione uma turma.</div>
-                                    </div>
+                                    <div id="listaAlunosElogio" class="border rounded p-2" style="max-height:300px; overflow-y:auto;"></div>
                                 </div>
-                                <div class="col-md-7 mb-3">
-                                    <label class="form-label fw-bold">2. Detalhes</label>
-                                    <div class="mb-3">
-                                        <label class="small text-muted">Data</label>
-                                        <input type="date" name="data_fato" class="form-control" value="{{ hoje }}" required>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label class="small text-muted">Motivo do Elogio</label>
-                                        <textarea name="descricao" class="form-control" rows="5" placeholder="Descreva os motivos do elogio..." required></textarea>
-                                    </div>
-                                    {% if permite_pontuacao %}
-                                    <div class="card bg-light border-success mb-3">
-                                        <div class="card-body py-2">
-                                            <small class="text-success fw-bold">Vincular Atributos FADA (+0.5 pontos)</small>
-                                            <div class="row g-2 mt-1">
-                                                <div class="col-6">
-                                                    <select name="atributo_1" class="form-select form-select-sm">
-                                                        <option value="">-- Atributo 1 --</option>
-                                                        {% for id, nome in atributos_fada %}
-                                                        <option value="{{ id }}">{{ id }}. {{ nome }}</option>
-                                                        {% endfor %}
-                                                    </select>
-                                                </div>
-                                                <div class="col-6">
-                                                    <select name="atributo_2" class="form-select form-select-sm">
-                                                        <option value="">-- Atributo 2 --</option>
-                                                        {% for id, nome in atributos_fada %}
-                                                        <option value="{{ id }}">{{ id }}. {{ nome }}</option>
-                                                        {% endfor %}
-                                                    </select>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    {% endif %}
-                                    <div class="text-end">
-                                        <button type="submit" class="btn btn-success btn-lg"><i class="fas fa-star me-1"></i> Registrar Elogio</button>
-                                    </div>
+                                <div class="col-md-7">
+                                    <label class="form-label">Motivo</label>
+                                    <textarea name="descricao" class="form-control" rows="5" required></textarea>
+                                    <div class="text-end mt-3"><button type="submit" class="btn btn-success">Registrar Elogio</button></div>
                                 </div>
                             </div>
                         </form>
@@ -195,156 +131,68 @@
 
         </div>
     </div>
-
-    <div class="justice-sidebar">
-        {% if (current_user.is_cal or current_user.role in ['admin_escola', 'programador', 'super_admin']) %}
-        <div class="d-grid gap-2">
-            <a href="{{ url_for('regras.index') }}" class="analysis-card mb-2" style="background: linear-gradient(135deg, #6c757d, #495057);">
-                <div class="analysis-card-icon">⚙️</div>
-                <div class="analysis-card-text">
-                    <h4>Configurar Regras</h4>
-                    <p>Gerenciar códigos de infração.</p>
-                </div>
-            </a>
-
-            {% if permite_pontuacao %}
-            <a href="{{ url_for('justica.fada_lista_alunos') }}" class="analysis-card mb-2" style="background: linear-gradient(135deg, #17a2b8, #138496);">
-                <div class="analysis-card-icon">📝</div>
-                <div class="analysis-card-text">
-                    <h4>Avaliação FADA</h4>
-                    <p>Ficha Individual Atitudinal.</p>
-                </div>
-            </a>
-            {% endif %}
-        </div>
-        {% endif %}
-    </div>
 </div>
 
 <style>
-    .justice-page-layout { display: grid; grid-template-columns: 1fr; gap: 1.5rem; }
+    .justice-page-layout { display: grid; grid-template-columns: 1fr; gap: 1rem; }
     @media (min-width: 992px) { .justice-page-layout { grid-template-columns: 3fr 1fr; } }
-    .analysis-card { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 1rem; border-radius: 8px; color: white; text-decoration: none; transition: all 0.3s ease; min-height: 100px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-    .analysis-card:hover { transform: translateY(-3px); color: white; box-shadow: 0 6px 8px rgba(0,0,0,0.15); }
-    .analysis-card-icon { font-size: 1.5rem; margin-bottom: 0.5rem; }
-    .analysis-card-text h4 { font-size: 1rem; font-weight: 700; margin: 0; }
-    .analysis-card-text p { font-size: 0.75rem; margin: 0; opacity: 0.9; }
-    .justice-options { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.5rem; }
-    .justice-content { display: none; animation: fadeIn 0.3s; }
+    .justice-options { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+    .justice-content { display: none; }
     .justice-content.active { display: block; }
-    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-    .form-check:hover { background-color: rgba(0,0,0,0.05); }
 </style>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    
-    // --- Controle de Abas ---
-    const optionBtns = document.querySelectorAll('.justice-option-btn');
-    const contentDivs = document.querySelectorAll('.justice-content');
-    
-    optionBtns.forEach(btn => {
-        if(btn.dataset.target) {
-            btn.addEventListener('click', function() {
-                optionBtns.forEach(b => b.classList.remove('active'));
-                this.classList.add('active');
-                contentDivs.forEach(div => div.classList.remove('active'));
-                const target = document.getElementById(this.dataset.target);
-                if(target) target.classList.add('active');
-            });
-        }
+    // --- Tabs ---
+    document.querySelectorAll('.justice-option-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.justice-option-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.justice-content').forEach(c => c.classList.remove('active'));
+            this.classList.add('active');
+            document.getElementById(this.dataset.target).classList.add('active');
+        });
     });
 
-    // --- CARREGAR ALUNOS DA TURMA (AJAX) ---
+    // --- Alunos ---
     window.carregarAlunos = function(turmaId, containerId) {
         const container = document.getElementById(containerId);
-        if (!turmaId) {
-            container.innerHTML = '<div class="text-center text-muted small py-3">Selecione uma turma.</div>';
-            return;
-        }
-        
-        container.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-secondary"></div> Carregando alunos...</div>';
-        
-        const url = "{{ url_for('justica.api_alunos_por_turma', turma_id=0) }}".replace('0', turmaId);
-
-        fetch(url)
-            .then(response => response.json())
+        if(!turmaId) return;
+        container.innerHTML = 'Carregando...';
+        fetch(`/justica-e-disciplina/api/alunos-por-turma/${turmaId}`)
+            .then(r => r.json())
             .then(data => {
-                if (data.length === 0) {
-                    container.innerHTML = '<div class="alert alert-warning small m-2">Nenhum aluno encontrado nesta turma.</div>';
-                    return;
-                }
-                let html = '';
-                data.forEach(a => {
-                    // IMPORTANTE: name="alunos_selecionados" para o backend receber a lista
-                    html += `
+                container.innerHTML = data.map(a => `
                     <div class="form-check border-bottom py-1">
-                        <input class="form-check-input aluno-check-${containerId}" type="checkbox" name="alunos_selecionados" value="${a.id}" id="${containerId}_${a.id}" onchange="if('${containerId}'=='listaAlunosInfracao') atualizarTextoInteligente()">
-                        <label class="form-check-label w-100" for="${containerId}_${a.id}" style="cursor:pointer; margin-left: 5px;">
-                            <strong>${a.numero || '-'}</strong> - ${a.nome}
-                        </label>
-                    </div>`;
-                });
-                container.innerHTML = html;
-            })
-            .catch(err => {
-                console.error(err);
-                container.innerHTML = '<div class="text-danger small text-center">Erro ao carregar alunos.</div>';
+                        <input class="form-check-input aluno-check-${containerId}" type="checkbox" name="alunos_selecionados" value="${a.id}" id="chk_${containerId}_${a.id}" onchange="if('${containerId}'=='listaAlunosInfracao') atualizarTextoInteligente()">
+                        <label class="form-check-label" for="chk_${containerId}_${a.id}">${a.numero} - ${a.nome}</label>
+                    </div>
+                `).join('');
             });
     };
 
-    window.toggleTodos = function(containerId) {
-        const checks = document.querySelectorAll(`.aluno-check-${containerId}`);
-        if(checks.length === 0) return;
-        const algumDesmarcado = Array.from(checks).some(c => !c.checked);
-        checks.forEach(c => c.checked = algumDesmarcado);
-        
-        if(containerId === 'listaAlunosInfracao') {
-            atualizarTextoInteligente();
-        }
+    window.toggleTodos = function(cId) {
+        const checks = document.querySelectorAll(`.aluno-check-${cId}`);
+        const status = Array.from(checks).some(c => !c.checked);
+        checks.forEach(c => c.checked = status);
+        if(cId === 'listaAlunosInfracao') atualizarTextoInteligente();
     };
 
-    // --- LÓGICA DO TERMO DE JUSTIFICAÇÃO AUTOMÁTICO ---
+    // --- Texto Inteligente ---
     window.atualizarTextoInteligente = function() {
         const checks = document.querySelectorAll('.aluno-check-listaAlunosInfracao:checked');
-        const regraSelect = document.getElementById('regraSelect');
-        const selectedOption = regraSelect.options[regraSelect.selectedIndex];
-        const regraDesc = selectedOption.getAttribute('data-desc') || "(Selecione o enquadramento)";
+        const regSel = document.getElementById('regraSelect');
+        const regraDesc = regSel.options[regSel.selectedIndex].getAttribute('data-desc') || "";
+        const box = document.getElementById('campoObservacao');
         
-        const observacaoBox = document.getElementById('campoObservacao');
-        const hoje = new Date();
-        const dataStr = hoje.toLocaleDateString('pt-BR', {day: 'numeric', month: 'long', year: 'numeric'});
-        
-        const autoridadeNome = "{{ current_user.nome_completo or 'AUTORIDADE' }}";
-        const autoridadePosto = "{{ current_user.posto_graduacao or 'POSTO' }}";
-
-        let template = `Tendo em vista as informações constantes na Parte Nº 000/CAl/EsFAS/${hoje.getFullYear()}, evidenciando a existência, em tese, de infração das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação:\n\n`;
-
-        if (checks.length === 1) {
-            const alunoId = checks[0].value;
-            // API opcional para pegar detalhes extras se existir, caso contrário usa o nome da lista
-            const labelNode = checks[0].nextElementSibling;
-            const alunoNomeFull = labelNode ? labelNode.innerText : "Militar Selecionado";
-
-            template += `1. Justificante: ${alunoNomeFull}.\n\n`;
-            template += `2. Descrição da conduta infracional: O(a) militar acima nominado(a), no dia ${dataStr}, ...\n`;
-            template += `Com isso, incorreu ${regraDesc}.\n\n`;
-            template += `3. Cientifico-lhe que a contar do recebimento da presente, abre-se o prazo de 24 horas para que, querendo, apresente resposta escrita com as provas que entender cabíveis. Fica advertido o acusado que a não entrega da justificação dentro do prazo estipulado implicará em reconhecimento como verdadeiros os fatos imputados.\n\n\n`;
-            template += `${autoridadeNome}\n${autoridadePosto}`;
-            
-            observacaoBox.value = template;
-
-        } else if (checks.length > 1) {
-            template += `1. Justificante: Alunos selecionados conforme relação anexa (${checks.length} alunos).\n\n`;
-            template += `2. Descrição da conduta infracional: Os militares em questão, no dia ${dataStr}, ...\n`;
-            template += `Com isso, incorreram ${regraDesc}.\n\n`;
-            template += `3. Cientifico-lhes que a contar do recebimento da presente, abre-se o prazo de 24 horas... (procedimento de defesa padrão).\n\n\n`;
-            template += `${autoridadeNome}\n${autoridadePosto}`;
-            
-            observacaoBox.value = template;
-        
-        } else {
-            observacaoBox.value = "Aguardando seleção de alunos e regra para gerar o termo...";
+        if(checks.length === 1) {
+            box.value = "Carregando dados do aluno...";
+            fetch(`/justica-e-disciplina/api/aluno-details/${checks[0].value}`)
+                .then(r => r.json())
+                .then(d => {
+                    box.value = `Termo de Justificação:\n1. Justificante: ${d.posto_graduacao} ${d.nome_completo}, Id ${d.matricula}.\n2. Conduta: O militar acima, na data de hoje, incorreu ${regraDesc}.\n3. Prazo: 24h para defesa.`;
+                });
+        } else if(checks.length > 1) {
+            box.value = `Termo de Justificação Coletivo:\n1. Justificantes: Conforme lista anexa (${checks.length} alunos).\n2. Conduta: Os militares incorreram ${regraDesc}.\n3. Prazo: 24h para defesa.`;
         }
     };
 });
