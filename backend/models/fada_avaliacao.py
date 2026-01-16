@@ -1,62 +1,58 @@
-# backend/models/fada_avaliacao.py
-
-from __future__ import annotations
-import typing as t
-from datetime import datetime, timezone
+from datetime import datetime
+from typing import Optional
+from sqlalchemy import ForeignKey, Float, Integer, String, Text, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy import ForeignKey, Integer, String, Text, DateTime, Float, func
 from .database import db
 
-if t.TYPE_CHECKING:
-    from .aluno import Aluno
-    from .user import User
-
 class FadaAvaliacao(db.Model):
-    __tablename__ = 'fada_avaliacao'
+    __tablename__ = 'fada_avaliacoes'
 
     id: Mapped[int] = mapped_column(primary_key=True)
     aluno_id: Mapped[int] = mapped_column(ForeignKey('alunos.id'), nullable=False)
     avaliador_id: Mapped[int] = mapped_column(ForeignKey('users.id'), nullable=False)
     
-    data_avaliacao: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), 
-        nullable=False, 
-        default=lambda: datetime.now(timezone.utc)
-    )
+    # Vincula ao Ciclo (ex: 1º Ciclo, 2º Ciclo) se houver, ou Data
+    data_avaliacao: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now)
+    observacao: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    # Relações
-    aluno: Mapped['Aluno'] = relationship('Aluno', back_populates='fada_avaliacoes')
-    avaliador: Mapped['User'] = relationship('User')
+    # Atributos (Notas de 0 a 10 ou Conceitos)
+    # Assumindo notas numéricas conforme padrão FADA
+    expressao: Mapped[float] = mapped_column(Float, default=0.0)
+    planejamento: Mapped[float] = mapped_column(Float, default=0.0)
+    perseveranca: Mapped[float] = mapped_column(Float, default=0.0)
+    apresentacao: Mapped[float] = mapped_column(Float, default=0.0)
+    lealdade: Mapped[float] = mapped_column(Float, default=0.0)
+    tato: Mapped[float] = mapped_column(Float, default=0.0)
+    equilibrio: Mapped[float] = mapped_column(Float, default=0.0)
+    disciplina: Mapped[float] = mapped_column(Float, default=0.0)
+    responsabilidade: Mapped[float] = mapped_column(Float, default=0.0)
+    maturidade: Mapped[float] = mapped_column(Float, default=0.0)
+    assiduidade: Mapped[float] = mapped_column(Float, default=0.0)
+    pontualidade: Mapped[float] = mapped_column(Float, default=0.0)
+    diccao: Mapped[float] = mapped_column(Float, default=0.0)
+    lideranca: Mapped[float] = mapped_column(Float, default=0.0)
+    relacionamento: Mapped[float] = mapped_column(Float, default=0.0)
+    etica: Mapped[float] = mapped_column(Float, default=0.0)
+    produtividade: Mapped[float] = mapped_column(Float, default=0.0)
+    eficiencia: Mapped[float] = mapped_column(Float, default=0.0)
 
-    # 18 Atributos (conforme PDF)
-    attr_1_expressao: Mapped[float] = mapped_column(Float, nullable=False, default=8.0)
-    attr_2_planejamento: Mapped[float] = mapped_column(Float, nullable=False, default=8.0)
-    attr_3_perseveranca: Mapped[float] = mapped_column(Float, nullable=False, default=8.0)
-    attr_4_apresentacao: Mapped[float] = mapped_column(Float, nullable=False, default=8.0)
-    attr_5_lealdade: Mapped[float] = mapped_column(Float, nullable=False, default=8.0)
-    attr_6_tato: Mapped[float] = mapped_column(Float, nullable=False, default=8.0)
-    attr_7_equilibrio: Mapped[float] = mapped_column(Float, nullable=False, default=8.0)
-    attr_8_disciplina: Mapped[float] = mapped_column(Float, nullable=False, default=8.0)
-    attr_9_responsabilidade: Mapped[float] = mapped_column(Float, nullable=False, default=8.0)
-    attr_10_maturidade: Mapped[float] = mapped_column(Float, nullable=False, default=8.0)
-    attr_11_assiduidade: Mapped[float] = mapped_column(Float, nullable=False, default=8.0)
-    attr_12_pontualidade: Mapped[float] = mapped_column(Float, nullable=False, default=8.0)
-    attr_13_diccao: Mapped[float] = mapped_column(Float, nullable=False, default=8.0)
-    attr_14_lideranca: Mapped[float] = mapped_column(Float, nullable=False, default=8.0)
-    attr_15_relacionamento: Mapped[float] = mapped_column(Float, nullable=False, default=8.0)
-    attr_16_etica: Mapped[float] = mapped_column(Float, nullable=False, default=8.0)
-    attr_17_produtividade: Mapped[float] = mapped_column(Float, nullable=False, default=8.0)
-    attr_18_eficiencia: Mapped[float] = mapped_column(Float, nullable=False, default=8.0)
+    # Média calculada
+    media_final: Mapped[float] = mapped_column(Float, default=0.0)
 
-    # Campos de texto
-    justificativa_notas: Mapped[t.Optional[str]] = mapped_column(Text)
-    observacoes: Mapped[t.Optional[str]] = mapped_column(Text)
-    
-    adaptacao_carreira: Mapped[str] = mapped_column(String(50), nullable=False, default='Em adaptação à carreira militar')
+    aluno = relationship("Aluno", backref="fada_avaliacoes")
+    avaliador = relationship("User", foreign_keys=[avaliador_id])
 
-    # --- INÍCIO DA ADIÇÃO ---
-    nome_avaliador_custom: Mapped[t.Optional[str]] = mapped_column(String(200))
-    # --- FIM DA ADIÇÃO ---
-
-    def __repr__(self):
-        return f"<FadaAvaliacao id={self.id} aluno_id={self.aluno_id}>"
+    def calcular_media(self):
+        atributos = [
+            self.expressao, self.planejamento, self.perseveranca, self.apresentacao,
+            self.lealdade, self.tato, self.equilibrio, self.disciplina,
+            self.responsabilidade, self.maturidade, self.assiduidade, self.pontualidade,
+            self.diccao, self.lideranca, self.relacionamento, self.etica,
+            self.produtividade, self.eficiencia
+        ]
+        # Filtra None caso exista
+        validos = [a for a in atributos if a is not None]
+        if validos:
+            self.media_final = sum(validos) / len(validos)
+        else:
+            self.media_final = 0.0

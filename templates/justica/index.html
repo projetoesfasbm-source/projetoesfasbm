@@ -23,6 +23,9 @@
                     <button class="btn btn-success justice-option-btn" data-target="newElogioContent">
                         <i class="fas fa-star me-1"></i>Novo Elogio
                     </button>
+                    <button class="btn btn-info text-white justice-option-btn" data-target="fadaContent">
+                        <i class="fas fa-clipboard-list me-1"></i>FADA (Avaliação)
+                    </button>
                 {% endif %}
             </div>
 
@@ -38,7 +41,13 @@
             </div>
 
             <div class="justice-content" id="finalizadosContent">
-                <h3 class="justice-content-title">Processos Finalizados</h3>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h3 class="justice-content-title mb-0">Processos Finalizados</h3>
+                    <a href="{{ url_for('justica.exportar_selecao') }}" class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-print"></i> Exportar / Imprimir
+                    </a>
+                </div>
+                
                 {% if finalizados %}
                     {% for processo in finalizados %}
                         {% include 'partials/_processo_card_admin.html' if current_user.role != 'aluno' else 'partials/_processo_card_aluno.html' %}
@@ -137,6 +146,8 @@
                 </div>
             </div>
 
+            {% include 'justica/fada_formulario.html' %}
+
         </div>
     </div>
 </div>
@@ -177,13 +188,23 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // --- Tabs ---
+    // --- Tabs (Navegação entre botões) ---
     document.querySelectorAll('.justice-option-btn').forEach(btn => {
         btn.addEventListener('click', function() {
+            // Remove ativo de todos os botões
             document.querySelectorAll('.justice-option-btn').forEach(b => b.classList.remove('active'));
+            // Remove ativo de todos os conteúdos
             document.querySelectorAll('.justice-content').forEach(c => c.classList.remove('active'));
+            
+            // Ativa o botão clicado e o conteúdo alvo
             this.classList.add('active');
-            document.getElementById(this.dataset.target).classList.add('active');
+            const targetId = this.dataset.target;
+            const targetEl = document.getElementById(targetId);
+            if(targetEl) {
+                targetEl.classList.add('active');
+            } else {
+                console.error("Alvo não encontrado: " + targetId);
+            }
         });
     });
 
@@ -195,14 +216,17 @@ document.addEventListener('DOMContentLoaded', function() {
         fetch(`/justica-e-disciplina/api/alunos-por-turma/${turmaId}`)
             .then(r => r.json())
             .then(data => {
-                container.innerHTML = data.map(a => `
-                    <div class="form-check border-bottom py-1">
-                        <input class="form-check-input aluno-check-${containerId}" type="checkbox" name="alunos_selecionados" value="${a.id}" id="chk_${containerId}_${a.id}" onchange="if('${containerId}'=='listaAlunosInfracao') atualizarTextoInteligente()">
-                        <label class="form-check-label" for="chk_${containerId}_${a.id}">
-                            ${a.numero ? a.numero + ' - ' : ''}${a.nome}
-                        </label>
-                    </div>
-                `).join('');
+                // Se for a lista de checkbox (Infração/Elogio)
+                if (containerId === 'listaAlunosInfracao' || containerId === 'listaAlunosElogio') {
+                    container.innerHTML = data.map(a => `
+                        <div class="form-check border-bottom py-1">
+                            <input class="form-check-input aluno-check-${containerId}" type="checkbox" name="alunos_selecionados" value="${a.id}" id="chk_${containerId}_${a.id}" onchange="if('${containerId}'=='listaAlunosInfracao') atualizarTextoInteligente()">
+                            <label class="form-check-label" for="chk_${containerId}_${a.id}">
+                                ${a.numero ? a.numero + ' - ' : ''}${a.nome}
+                            </label>
+                        </div>
+                    `).join('');
+                } 
             });
     };
 
@@ -216,7 +240,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // --- Função Auxiliar Data por Extenso ---
     function getDataPorExtenso(dateString) {
         if (!dateString) return "data não informada";
-        // Espera formato YYYY-MM-DD
         const parts = dateString.split('-');
         if (parts.length !== 3) return dateString;
         
@@ -232,7 +255,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return `${dia} de ${mes} de ${ano}`;
     }
 
-    // --- Texto Inteligente (Termo de Justificação Completo) ---
+    // --- Texto Inteligente (Termo de Justificação) ---
     window.atualizarTextoInteligente = function() {
         const checks = document.querySelectorAll('.aluno-check-listaAlunosInfracao:checked');
         const regSel = document.getElementById('regraSelect');
@@ -248,35 +271,40 @@ document.addEventListener('DOMContentLoaded', function() {
         const dataExtenso = getDataPorExtenso(dataInput);
         const anoAtual = new Date().getFullYear();
 
+        // Texto Padrão (Conforme solicitado)
+        const templateBase = (nomes, verbo, sujeito) => `Termo de Justificação:
+Tendo em vista as informações constantes na Parte Nº ___/___Pel/CAl/EsFAS/${anoAtual}, evidenciando a existência, em tese, de infração das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação:
+
+1. Justificante(s): ${nomes}.
+
+2. Descrição da conduta infracional: ${sujeito}, no dia ${dataExtenso}, ${descFato}. Com isso, ${verbo} ${regraDesc}.
+
+3. Cientifico-lhes que a contar do recebimento da presente, abre-se o prazo de 24 horas, para que, querendo, apresentem resposta escrita com as provas que entenderem cabíveis. Fica advertido o acusado que a não entrega da justificação dentro do prazo estipulado, implicará em reconhecimento como verdadeiros os fatos imputados.
+
+[NOME, POSTO/GRADUAÇÃO E FUNÇÃO DO RESPONSÁVEL]`;
+
         if(checks.length === 1) {
-            box.value = "Carregando dados do aluno...";
+            box.value = "Carregando dados...";
             fetch(`/justica-e-disciplina/api/aluno-details/${checks[0].value}`)
                 .then(r => r.json())
                 .then(d => {
+                    const idFunc = `Id Func. ${d.matricula}`;
+                    const nomeCompleto = `${d.posto_graduacao} ${d.nome_completo}, ${idFunc}`;
+                    
                     const termo = `Termo de Justificação:
-Tendo em vista as informações constantes na Parte Nº ___/___/CAl/EsFHEP-SM/${anoAtual}, evidenciando a existência, em tese, de infração das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação:
+Tendo em vista as informações constantes na Parte Nº ___/___Pel/CAl/EsFAS/${anoAtual}, evidenciando a existência, em tese, de infração das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação:
 
-1. Justificante: ${d.posto_graduacao} ${d.nome_completo}, Id Func. ${d.matricula}.
+1. Justificante: ${nomeCompleto}.
 
-2. Descrição da conduta infracional: O ${d.posto_graduacao} ${d.nome_completo}, Id Func. ${d.matricula}, no dia ${dataExtenso}, ${descFato}. Com isso, incorreu ${regraDesc}.
+2. Descrição da conduta infracional: O ${nomeCompleto}, no dia ${dataExtenso}, ${descFato}. Com isso, incorreu ${regraDesc}.
 
 3. Cientifico-lhe que a contar do recebimento da presente, abre-se o prazo de 24 horas, para que, querendo, apresente resposta escrita com as provas que entender cabíveis. Fica advertido o acusado que a não entrega da justificação dentro do prazo estipulado, implicará em reconhecimento como verdadeiros os fatos imputados.
 
 [NOME, POSTO/GRADUAÇÃO E FUNÇÃO DO RESPONSÁVEL]`;
-
                     box.value = termo;
                 });
         } else if(checks.length > 1) {
-            box.value = `Termo de Justificação:
-Tendo em vista as informações constantes na Parte Nº ___/___/CAl/EsFHEP-SM/${anoAtual}, evidenciando a existência, em tese, de infração das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação:
-
-1. Justificantes: Conforme lista de ${checks.length} alunos selecionados.
-
-2. Descrição da conduta infracional: Os militares selecionados, no dia ${dataExtenso}, ${descFato}. Com isso, incorreram ${regraDesc}.
-
-3. Cientifico-lhes que a contar do recebimento da presente, abre-se o prazo de 24 horas, para que, querendo, apresentem resposta escrita com as provas que entenderem cabíveis.
-
-[NOME, POSTO/GRADUAÇÃO E FUNÇÃO DO RESPONSÁVEL]`;
+            box.value = templateBase(`Conforme lista de ${checks.length} alunos selecionados`, "incorreram", "Os militares selecionados");
         }
     };
 });

@@ -1,7 +1,8 @@
 import logging
-from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, Response, g, session
+from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, g, session
 from flask_login import login_required, current_user
-from sqlalchemy import select
+from sqlalchemy import select, desc
+from sqlalchemy.orm import joinedload
 from datetime import datetime
 
 from ..models.database import db
@@ -11,6 +12,7 @@ from ..models.turma import Turma
 from ..models.processo_disciplina import StatusProcesso, ProcessoDisciplina
 from ..models.discipline_rule import DisciplineRule
 from ..models.elogio import Elogio
+from ..models.fada_avaliacao import FadaAvaliacao
 from ..services.justica_service import JusticaService
 from utils.decorators import cal_required
 
@@ -35,8 +37,16 @@ def index():
         school_id = _get_current_school_id()
         processos = JusticaService.get_processos_para_usuario(current_user, school_id_override=school_id)
         
-        em_andamento = [p for p in processos if str(p.status) != StatusProcesso.FINALIZADO.value]
-        finalizados = [p for p in processos if str(p.status) == StatusProcesso.FINALIZADO.value]
+        # CORREÇÃO CRÍTICA: Filtro case-insensitive para garantir que apareça
+        em_andamento = []
+        finalizados = []
+        
+        for p in processos:
+            s = str(p.status).lower()
+            if s == 'finalizado':
+                finalizados.append(p)
+            else:
+                em_andamento.append(p)
         
         permite_pontuacao = False
         regras = []
@@ -51,26 +61,128 @@ def index():
                 regras = db.session.scalars(select(DisciplineRule).limit(100)).all()
             turmas = db.session.scalars(select(Turma).where(Turma.school_id == school_id).order_by(Turma.nome)).all()
 
-        atributos = [(i, n) for i, n in enumerate(['Expressão', 'Planejamento', 'Perseverança', 'Apresentação', 'Lealdade', 'Tato', 'Equilíbrio', 'Disciplina', 'Responsabilidade', 'Maturidade', 'Assiduidade', 'Pontualidade', 'Dicção', 'Liderança', 'Relacionamento', 'Ética', 'Produtividade', 'Eficiência'], 1)]
-
-        # Passamos a hora atual para o input de Time
+        # Atributos para FADA (Nome do campo no banco, Nome visual)
+        atributos = [
+            ('expressao', 'Expressão'), ('planejamento', 'Planejamento'), ('perseveranca', 'Perseverança'),
+            ('apresentacao', 'Apresentação'), ('lealdade', 'Lealdade'), ('tato', 'Tato'),
+            ('equilibrio', 'Equilíbrio'), ('disciplina', 'Disciplina'), ('responsabilidade', 'Responsabilidade'),
+            ('maturidade', 'Maturidade'), ('assiduidade', 'Assiduidade'), ('pontualidade', 'Pontualidade'),
+            ('diccao', 'Dicção'), ('lideranca', 'Liderança'), ('relacionamento', 'Relacionamento'),
+            ('etica', 'Ética'), ('produtividade', 'Produtividade'), ('eficiencia', 'Eficiência')
+        ]
+        
         agora_hora = datetime.now().strftime('%H:%M')
 
         return render_template('justica/index.html', 
             em_andamento=em_andamento, finalizados=finalizados, fatos_predefinidos=regras, 
             turmas=turmas, permite_pontuacao=permite_pontuacao, atributos_fada=atributos, 
-            hoje=datetime.today().strftime('%Y-%m-%d'),
-            agora_hora=agora_hora) # Nova variável
+            hoje=datetime.today().strftime('%Y-%m-%d'), agora_hora=agora_hora)
             
-    except Exception as e:
+    except Exception:
         logger.exception("Erro index justica")
         flash("Erro ao carregar dados.", "danger")
         return redirect(url_for('main.dashboard'))
+
+# --- ROTAS DE EXPORTAÇÃO ---
+
+@justica_bp.route('/exportar-selecao', methods=['GET'])
+@login_required
+def exportar_selecao():
+    """Tela para selecionar quais processos finalizados exportar"""
+    try:
+        school_id = _get_current_school_id()
+        # Busca apenas os finalizados para seleção
+        query = select(ProcessoDisciplina).join(ProcessoDisciplina.aluno).outerjoin(Aluno.turma).where(ProcessoDisciplina.status == StatusProcesso.FINALIZADO)
+        
+        if school_id:
+            query = query.where(Turma.school_id == school_id)
+            
+        processos = db.session.scalars(query.order_by(ProcessoDisciplina.data_decisao.desc())).all()
+        
+        return render_template('justica/exportar_selecao.html', processos=processos)
+    except Exception:
+        logger.exception("Erro tela exportacao")
+        return redirect(url_for('justica.index'))
+
+@justica_bp.route('/imprimir-processos', methods=['POST'])
+@login_required
+def imprimir_processos():
+    """Gera o HTML para impressão dos selecionados"""
+    try:
+        ids = request.form.getlist('processo_ids')
+        ids = [int(x) for x in ids if x]
+        
+        if not ids:
+            flash("Nenhum processo selecionado.", "warning")
+            return redirect(url_for('justica.exportar_selecao'))
+            
+        processos = db.session.scalars(
+            select(ProcessoDisciplina)
+            .where(ProcessoDisciplina.id.in_(ids))
+            .options(joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.user), joinedload(ProcessoDisciplina.regra))
+            .order_by(ProcessoDisciplina.data_ocorrencia.desc())
+        ).unique().all()
+        
+        hoje_extenso = datetime.now().strftime('%d de %B de %Y')
+        meses = {'January': 'janeiro', 'February': 'fevereiro', 'March': 'março', 'April': 'abril', 'May': 'maio', 'June': 'junho', 'July': 'julho', 'August': 'agosto', 'September': 'setembro', 'October': 'outubro', 'November': 'novembro', 'December': 'dezembro'}
+        for eng, pt in meses.items(): hoje_extenso = hoje_extenso.replace(eng, pt).replace(eng.lower(), pt)
+
+        return render_template('justica/export_bi_template.html', processos=processos, hoje=hoje_extenso)
+    except Exception:
+        logger.exception("Erro ao gerar impressão")
+        flash("Erro técnico na impressão.", "danger")
+        return redirect(url_for('justica.index'))
+
+# --- ROTAS FADA (AVALIAÇÃO ATITUDINAL) ---
+
+@justica_bp.route('/fada/registrar', methods=['POST'])
+@login_required
+@cal_required
+def registrar_fada():
+    try:
+        aluno_id = request.form.get('aluno_id')
+        if not aluno_id:
+            flash("Aluno não selecionado.", "warning")
+            return redirect(url_for('justica.index'))
+            
+        nova_fada = FadaAvaliacao(
+            aluno_id=int(aluno_id),
+            avaliador_id=current_user.id,
+            observacao=request.form.get('observacao'),
+            data_avaliacao=datetime.now()
+        )
+        
+        # Popula os atributos dinamicamente
+        campos = [
+            'expressao', 'planejamento', 'perseveranca', 'apresentacao', 'lealdade', 'tato',
+            'equilibrio', 'disciplina', 'responsabilidade', 'maturidade', 'assiduidade',
+            'pontualidade', 'diccao', 'lideranca', 'relacionamento', 'etica', 'produtividade', 'eficiencia'
+        ]
+        
+        for campo in campos:
+            valor = request.form.get(campo)
+            if valor:
+                setattr(nova_fada, campo, float(valor))
+        
+        nova_fada.calcular_media()
+        db.session.add(nova_fada)
+        db.session.commit()
+        
+        flash(f"Avaliação FADA registrada. Média: {nova_fada.media_final:.2f}", "success")
+        return redirect(url_for('justica.index'))
+    except Exception:
+        db.session.rollback()
+        logger.exception("Erro ao registrar FADA")
+        flash("Erro ao salvar avaliação.", "danger")
+        return redirect(url_for('justica.index'))
+
+# --- OUTRAS ROTAS (Mantidas) ---
 
 @justica_bp.route('/registrar-em-massa', methods=['POST'])
 @login_required
 @cal_required 
 def registrar_em_massa():
+    # ... (Manter código existente da resposta anterior) ...
     try:
         ids = request.form.getlist('alunos_selecionados')
         if not ids and request.form.get('aluno_id'): ids = [request.form.get('aluno_id')]
@@ -78,15 +190,12 @@ def registrar_em_massa():
 
         tipo = request.form.get('tipo_registro')
         dt_str = request.form.get('data_fato')
-        hr_str = request.form.get('hora_fato') # Captura a hora
+        hr_str = request.form.get('hora_fato')
         desc = request.form.get('descricao')
         obs = request.form.get('observacao', '')
 
-        # Combina Data e Hora se ambos existirem
-        if dt_str and hr_str:
-            dt_completa = f"{dt_str} {hr_str}"
-        else:
-            dt_completa = dt_str
+        if dt_str and hr_str: dt_completa = f"{dt_str} {hr_str}"
+        else: dt_completa = dt_str
 
         count = 0
         if tipo == 'infracao':
@@ -108,7 +217,6 @@ def registrar_em_massa():
         return redirect(url_for('justica.index'))
     except: db.session.rollback(); flash("Erro técnico.", "danger"); return redirect(url_for('justica.index'))
 
-# ... (Manter demais rotas: cron, finalizar, apis, deletar, ciente, defesa, imprimir IGUAIS ao anterior) ...
 @justica_bp.route('/cron/verificar-revelia', methods=['GET'])
 def cron_verificar_revelia():
     ok, msgs = JusticaService.verificar_prazos_revelia_automatica()
@@ -158,12 +266,3 @@ def registrar_ciente(pid):
 @login_required
 def enviar_defesa(pid):
     JusticaService.enviar_defesa(pid, request.form.get('defesa_texto'), current_user); return redirect(url_for('justica.index'))
-
-@justica_bp.route('/imprimir-processos', methods=['POST'])
-@login_required
-def imprimir_processos():
-    ids = request.form.getlist('processos_selecionados') or [request.form.get('processo_id')]
-    ids = [int(x) for x in ids if x]
-    if not ids: return redirect(url_for('justica.index'))
-    processos = db.session.scalars(select(ProcessoDisciplina).where(ProcessoDisciplina.id.in_(ids)).order_by(ProcessoDisciplina.data_ocorrencia.desc())).all()
-    return render_template('justica/export_bi_template.html', processos=processos, hoje=datetime.today().strftime('%d de %B de %Y'))

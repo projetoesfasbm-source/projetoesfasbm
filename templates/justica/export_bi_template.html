@@ -29,7 +29,7 @@
         <p><strong>1. DO FATO:</strong></p>
         <p>No dia {{ processo.data_ocorrencia.strftime('%d/%m/%Y') }}, o(a) <strong>{{ processo.aluno.user.posto_graduacao }} {{ processo.aluno.user.nome_completo }}</strong>, Matrícula {{ processo.aluno.user.matricula }}, teve a seguinte conduta observada:</p>
         <p style="padding-left: 1cm; font-style: italic;">"{{ processo.fato_constatado }}"</p>
-        
+
         <p class="section-title">2. DA DEFESA:</p>
         <div style="border: 1px solid #000; padding: 10px; min-height: 3cm;">
             {{ processo.defesa if processo.defesa else "(Espaço reservado para defesa escrita)" }}
@@ -45,15 +45,15 @@
             <div class="sancao-box">
                 <p><strong>DECISÃO:</strong> {{ processo.decisao_final }}</p>
                 <p><strong>FUNDAMENTAÇÃO:</strong> {{ processo.fundamentacao }}</p>
-                
+
                 {% if processo.tipo_sancao %}
-                <p><strong>SANÇÃO APLICADA:</strong> {{ processo.tipo_sancao }} 
+                <p><strong>SANÇÃO APLICADA:</strong> {{ processo.tipo_sancao }}
                    {% if processo.dias_sancao %}({{ processo.dias_sancao }} dias){% endif %}
                 </p>
                 {% endif %}
-                
+
                 <p><strong>ENQUADRAMENTO:</strong> {{ processo.origem_punicao }}</p>
-                
+
                 {% if processo.is_crime %}
                 <p style="color: red; font-weight: bold; text-align: center;">*** CONFIGURA CRIME (Art. 13 CPM/Comum) ***</p>
                 {% endif %}

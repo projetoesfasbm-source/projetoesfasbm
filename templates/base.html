@@ -248,6 +248,13 @@
                 {% if current_user.is_staff_in_school(active_sid) or current_user.is_instrutor_in_school(active_sid) or current_user.role in ['super_admin', 'aluno'] %}
                     <div class="nav-separator">ACADÊMICO</div>
                     <a href="{{ url_for('horario.index') }}" class="nav-link {% if request.endpoint and ('horario.' in request.endpoint or 'semana.' in request.endpoint) %}active{% endif %}"><div class="nav-icon">📅</div> Quadro Horário</a>
+                    
+                    {# LINK EXCLUSIVO PARA INSTRUTOR: ASSINAR DIÁRIOS #}
+                    {% if current_user.is_instrutor_in_school(active_sid) %}
+                        <a href="{{ url_for('diario.listar_pendentes') }}" class="nav-link {% if request.endpoint and 'diario.' in request.endpoint %}active{% endif %}">
+                            <div class="nav-icon">✍️</div> Validar Diários
+                        </a>
+                    {% endif %}
                 {% endif %}
 
                 {# APENAS SENS #}

@@ -34,28 +34,19 @@ class JusticaService:
             return datetime.combine(dt_input, datetime.min.time()).astimezone()
         if isinstance(dt_input, str):
             dt_input = dt_input.strip()
-            
-            # Formato Completo (Data + Hora) - NOVO
             try:
                 return datetime.strptime(dt_input, '%Y-%m-%d %H:%M').astimezone()
             except ValueError:
                 pass
-
-            # Formato apenas Data (Padrão HTML)
             try: 
                 return datetime.strptime(dt_input, '%Y-%m-%d').astimezone()
             except ValueError:
                 pass
-            
-            # Formato BR
             try:
                 return datetime.strptime(dt_input, '%d/%m/%Y').astimezone()
             except ValueError:
-                logger.warning(f"Data inválida: '{dt_input}'. Usando atual.")
                 return datetime.now().astimezone()
         return datetime.now().astimezone()
-
-    # ... (Manter o restante dos métodos inalterados: get_pontuacao_config, verificar_prazos, calcular_ndisc_aluno, etc.) ...
     
     @staticmethod
     def get_pontuacao_config(school):
@@ -68,10 +59,11 @@ class JusticaService:
     def verificar_prazos_revelia_automatica():
         try:
             limite = datetime.now().astimezone() - timedelta(hours=24)
-            processos = db.session.scalars(select(ProcessoDisciplina).where(ProcessoDisciplina.status == StatusProcesso.AGUARDANDO_CIENCIA.value).where(ProcessoDisciplina.data_ocorrencia <= limite)).all()
+            # Comparação direta com string (sem .value)
+            processos = db.session.scalars(select(ProcessoDisciplina).where(ProcessoDisciplina.status == StatusProcesso.AGUARDANDO_CIENCIA).where(ProcessoDisciplina.data_ocorrencia <= limite)).all()
             log_msgs = []
             for p in processos:
-                p.status = StatusProcesso.ALUNO_NOTIFICADO.value
+                p.status = StatusProcesso.ALUNO_NOTIFICADO
                 p.ciente_aluno = True
                 p.data_ciente = datetime.now().astimezone()
                 p.observacao = (p.observacao or "") + "\n[SISTEMA] Ciência dada por REVELIA (24h expiradas)."
@@ -80,7 +72,7 @@ class JusticaService:
                     aluno_id=p.aluno_id, relator_id=p.relator_id,
                     fato_constatado=f"Deixou de dar ciência no processo disciplinar ID {p.id} no prazo de 24h.",
                     codigo_infracao=JusticaService.CODIGO_REVELIA, pontos=0.5, origem_punicao='NPCCAL',
-                    status=StatusProcesso.AGUARDANDO_CIENCIA.value, data_ocorrencia=datetime.now().astimezone()
+                    status=StatusProcesso.AGUARDANDO_CIENCIA, data_ocorrencia=datetime.now().astimezone()
                 )
                 db.session.add(nova_infracao)
                 log_msgs.append(f"Proc {p.id} -> Revelia + Nova Infração.")
@@ -109,7 +101,8 @@ class JusticaService:
         if ciclos and idx_corte < len(ciclos):
             if ciclos[idx_corte].data_inicio: data_corte = ciclos[idx_corte].data_inicio
 
-        query = select(ProcessoDisciplina).where(ProcessoDisciplina.aluno_id == aluno_id, ProcessoDisciplina.status == StatusProcesso.FINALIZADO.value, ProcessoDisciplina.pontos > 0)
+        # Comparação direta com string (sem .value)
+        query = select(ProcessoDisciplina).where(ProcessoDisciplina.aluno_id == aluno_id, ProcessoDisciplina.status == StatusProcesso.FINALIZADO, ProcessoDisciplina.pontos > 0)
         if data_corte:
             dt_corte = datetime.combine(data_corte, datetime.min.time()).astimezone()
             query = query.where(ProcessoDisciplina.data_ocorrencia >= dt_corte)
@@ -123,12 +116,26 @@ class JusticaService:
         try:
             p = db.session.get(ProcessoDisciplina, pid)
             if not p: return False, "Processo não encontrado."
-            p.status = StatusProcesso.FINALIZADO.value; p.decisao_final = decisao; p.fundamentacao = fundamentacao; p.detalhes_sancao = detalhes
-            p.is_crime = is_crime; p.tipo_sancao = tipo_sancao; p.dias_sancao = dias_sancao if dias_sancao else 0; p.origem_punicao = origem
-            if decisao in ['IMPROCEDENTE', 'ANULADO', 'ARQUIVADO']: p.pontos = 0.0
+            
+            # Atribuição direta da string
+            p.status = StatusProcesso.FINALIZADO 
+            p.decisao_final = decisao
+            p.fundamentacao = fundamentacao
+            p.detalhes_sancao = detalhes
+            p.is_crime = is_crime
+            p.tipo_sancao = tipo_sancao
+            p.dias_sancao = dias_sancao if dias_sancao else 0
+            p.origem_punicao = origem
+            
+            if decisao in ['IMPROCEDENTE', 'ANULADO', 'ARQUIVADO']: 
+                p.pontos = 0.0
+            
             p.data_decisao = datetime.now().astimezone()
-            db.session.commit(); return True, "Processo finalizado."
-        except Exception as e: db.session.rollback(); return False, str(e)
+            db.session.commit()
+            return True, "Processo finalizado."
+        except Exception as e: 
+            db.session.rollback()
+            return False, str(e)
 
     @staticmethod
     def get_processos_para_usuario(user, school_id_override=None):
@@ -152,7 +159,9 @@ class JusticaService:
             cod = regra.codigo if regra else codigo_infracao
             novo = ProcessoDisciplina(
                 aluno_id=aluno_id, relator_id=autor_id, fato_constatado=descricao, observacao=observacao, pontos=pontos, 
-                codigo_infracao=cod, regra_id=regra_id, status=StatusProcesso.AGUARDANDO_CIENCIA.value, data_ocorrencia=dt, origem_punicao='NPCCAL'
+                codigo_infracao=cod, regra_id=regra_id, 
+                status=StatusProcesso.AGUARDANDO_CIENCIA, # String direta
+                data_ocorrencia=dt, origem_punicao='NPCCAL'
             )
             db.session.add(novo); db.session.commit(); return True, "Sucesso"
         except Exception as e: db.session.rollback(); return False, str(e)
@@ -169,7 +178,7 @@ class JusticaService:
     def registrar_ciente(pid, user):
         try:
             p = db.session.get(ProcessoDisciplina, pid)
-            p.status = StatusProcesso.ALUNO_NOTIFICADO.value; p.ciente_aluno = True; p.data_ciente = datetime.now().astimezone()
+            p.status = StatusProcesso.ALUNO_NOTIFICADO; p.ciente_aluno = True; p.data_ciente = datetime.now().astimezone()
             db.session.commit(); return True, "Ciente"
         except: db.session.rollback(); return False, "Erro"
 
@@ -177,7 +186,7 @@ class JusticaService:
     def enviar_defesa(pid, texto, user):
         try:
             p = db.session.get(ProcessoDisciplina, pid)
-            p.status = StatusProcesso.DEFESA_ENVIADA.value; p.defesa = texto; p.data_defesa = datetime.now().astimezone()
+            p.status = StatusProcesso.DEFESA_ENVIADA; p.defesa = texto; p.data_defesa = datetime.now().astimezone()
             db.session.commit(); return True, "Enviado"
         except: db.session.rollback(); return False, "Erro"
         

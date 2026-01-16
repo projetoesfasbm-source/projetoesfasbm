@@ -1,93 +1,61 @@
-{% extends "base.html" %}
-
-{% block title %}Preencher FADA - {{ aluno.user.nome_completo }}{% endblock %}
-
-{% block content %}
-<div class="content-header">
-    <h1>Avaliação FADA</h1>
-    <p>Preenchendo a Ficha de Avaliação de Desempenho Atitudinal para:</p>
-    <h4>{{ aluno.user.posto_graduacao or '' }} {{ aluno.user.nome_completo }} ({{ aluno.user.matricula or 'N/A' }})</h4>
-</div>
-
-<form method="POST"> 
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    
-    <div class="card mb-3 border-primary">
-        <div class="card-body bg-light">
-            <div class="row align-items-center">
-                <div class="col-md-6">
-                    <label class="fw-bold">Selecione o Ciclo/Módulo:</label>
-                    <select name="ciclo_id" class="form-select" required onchange="window.location.href='{{ url_for('justica.fada_avaliar_aluno', aluno_id=aluno.id) }}?ciclo_id='+this.value">
-                        <option value="">-- Selecione --</option>
-                        {% for c in ciclos %}
-                        <option value="{{ c.id }}" {% if ciclo_atual == c.id %}selected{% endif %}>
-                            {{ c.nome }} ({{ c.data_inicio.strftime('%d/%m') }} a {{ c.data_fim.strftime('%d/%m') }})
-                        </option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-6 text-end">
-                    <span class="text-muted small">Mudar o ciclo recalcula a nota automaticamente.</span>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="card">
-        <div class="card-header bg-dark text-white">
-            Atributos Avaliados (Base: 8.0)
+<div class="justice-content" id="fadaContent">
+    <div class="card border-primary shadow-sm">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0"><i class="fas fa-clipboard-list me-2"></i>Avaliação Atitudinal (FADA)</h4>
         </div>
         <div class="card-body">
-            <p class="form-text">As notas abaixo foram calculadas automaticamente com base nas infrações e elogios deste ciclo. Você pode alterá-las manualmente.</p>
-            <div class="row g-3">
+            <form method="POST" action="{{ url_for('justica.registrar_fada') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 
-                {% set atributos = [
-                    (1, 'Expressão oral e escrita'), (2, 'Planejamento e método'), (3, 'Perseverança e Tenacidade'),
-                    (4, 'Apresentação pessoal'), (5, 'Lealdade'), (6, 'Tato'), (7, 'Equilíbrio emocional'),
-                    (8, 'Disciplina'), (9, 'Responsabilidade'), (10, 'Maturidade'), (11, 'Assiduidade'),
-                    (12, 'Pontualidade'), (13, 'Dicção de voz e comando'), (14, 'Liderança'), (15, 'Relacionamento interpessoal'),
-                    (16, 'Ética'), (17, 'Produtividade'), (18, 'Eficiência')
-                ] %}
-
-                {% for id, nome in atributos %}
-                <div class="col-md-4">
-                    <div class="form-group p-2 border rounded bg-light h-100">
-                        <label for="attr_{{ id }}" class="form-label small fw-bold mb-1">{{ id }}. {{ nome }}</label>
-                        <div class="input-group input-group-sm">
-                            <input type="number" step="0.1" min="0" max="10" class="form-control fw-bold text-center {{ 'text-danger' if dados_previa and dados_previa[id] < 8 else 'text-success' }}" 
-                                   id="attr_{{ id }}" name="attr_{{ id }}" 
-                                   value="{{ "%.1f"|format(dados_previa[id]) if dados_previa else '8.0' }}">
-                            <span class="input-group-text">pts</span>
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">1. Selecionar Aluno</label>
+                        <select name="aluno_id" class="form-select" required>
+                            <option value="">-- Escolha o Aluno --</option>
+                            {% for turma in turmas %}
+                                <optgroup label="{{ turma.nome }}">
+                                    </optgroup>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text text-muted">
+                            Dica: Para carregar a lista completa, selecione a turma no menu de infração primeiro ou implemente o carregamento automático aqui.
                         </div>
                     </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">2. Observações Gerais</label>
+                        <textarea name="observacao" class="form-control" rows="1" placeholder="Ex: Demonstrou evolução significativa neste ciclo."></textarea>
+                    </div>
                 </div>
-                {% endfor %}
-                
-            </div>
+
+                <h5 class="mb-3 border-bottom pb-2">3. Atributos Avaliados</h5>
+                <div class="row">
+                    {% if atributos_fada %}
+                        {% for attr_db, attr_nome in atributos_fada %}
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label small fw-bold mb-1">{{ attr_nome }}</label>
+                            <select name="{{ attr_db }}" class="form-select form-select-sm">
+                                <option value="10" selected>10 (Excelente)</option>
+                                <option value="9">9 (Muito Bom)</option>
+                                <option value="8">8 (Bom)</option>
+                                <option value="7">7 (Regular)</option>
+                                <option value="6">6 (Insuficiente)</option>
+                                <option value="5">5 (Crítico)</option>
+                            </select>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="col-12 text-danger">
+                            Erro: Atributos FADA não carregados. Verifique o Controller.
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="text-end mt-3 pt-3 border-top">
+                    <button type="submit" class="btn btn-primary btn-lg">
+                        <i class="fas fa-save me-1"></i> Salvar Avaliação
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
-
-    <div class="card mt-4">
-        <div class="card-header">Justificativas e Observações</div>
-        <div class="card-body">
-            <div class="form-group mb-3">
-                <label>Justificativa (Obrigatória se nota < 7 ou > 9)</label>
-                <textarea class="form-control" name="justificativa_notas" rows="3"></textarea>
-            </div>
-            <div class="form-group mb-3">
-                <label>Parecer sobre Adaptação</label>
-                <div>
-                    <input type="radio" name="adaptacao_carreira" value="Adaptado à carreira militar" id="adp1"><label for="adp1" class="me-3"> Adaptado</label>
-                    <input type="radio" name="adaptacao_carreira" value="Em adaptação à carreira militar" id="adp2" checked><label for="adp2" class="me-3"> Em adaptação</label>
-                    <input type="radio" name="adaptacao_carreira" value="Não adaptado à carreira militar" id="adp3"><label for="adp3"> Não adaptado</label>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="mt-4 text-end">
-        <input type="hidden" name="nome_avaliador_custom" value="{{ default_name }}">
-        <button type="submit" class="btn btn-success btn-lg"><i class="fas fa-save"></i> Salvar e Gerar PDF</button>
-    </div>
-</form>
-{% endblock %}
+</div>

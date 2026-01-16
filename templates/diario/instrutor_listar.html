@@ -2,49 +2,43 @@
 
 {% block content %}
 <div class="container mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><i class="fas fa-signature me-2"></i>Validação de Diários de Classe</h2>
-    </div>
-
+    <h2><i class="fas fa-signature me-2"></i>Validação de Diários</h2>
+    
     {% if diarios %}
-    <div class="card shadow-sm">
-        <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-hover mb-0">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Data</th>
-                            <th>Turma</th>
-                            <th>Disciplina</th>
-                            <th>Período</th>
-                            <th>Status</th>
-                            <th class="text-end">Ação</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for diario in diarios %}
-                        <tr>
-                            <td>{{ diario.data_aula.strftime('%d/%m/%Y') }}</td>
-                            <td>{{ diario.horario.turma.nome if diario.horario.turma else 'N/D' }}</td>
-                            <td>{{ diario.horario.disciplina.materia if diario.horario.disciplina else 'N/D' }}</td>
-                            <td>{{ diario.horario.periodo }}º Periodo</td>
-                            <td><span class="badge bg-warning text-dark">Pendente</span></td>
-                            <td class="text-end">
-                                <a href="{{ url_for('diario.assinar', diario_id=diario.id) }}" class="btn btn-primary btn-sm">
-                                    <i class="fas fa-pen-nib me-1"></i> Revisar e Assinar
-                                </a>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+    <div class="card shadow-sm mt-3">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Data</th>
+                        <th>Turma</th>
+                        <th>Disciplina</th>
+                        <th>Período</th>
+                        <th>Status</th>
+                        <th class="text-end">Ação</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for diario in diarios %}
+                    <tr>
+                        <td>{{ diario.data_aula.strftime('%d/%m/%Y') }}</td>
+                        <td>{{ diario.turma.nome }}</td>
+                        <td>{{ diario.disciplina.materia }}</td>
+                        <td>{{ diario.periodo }}º</td>
+                        <td><span class="badge bg-warning text-dark">Pendente</span></td>
+                        <td class="text-end">
+                            <a href="{{ url_for('diario.assinar', diario_id=diario.id) }}" class="btn btn-primary btn-sm">
+                                <i class="fas fa-pen-nib"></i> Assinar
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
     </div>
     {% else %}
-    <div class="alert alert-info">
-        <i class="fas fa-check-circle me-2"></i> Não há diários pendentes de assinatura no momento.
-    </div>
+    <div class="alert alert-info mt-3">Nenhum diário pendente.</div>
     {% endif %}
 </div>
 {% endblock %}

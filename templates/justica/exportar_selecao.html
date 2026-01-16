@@ -1,70 +1,71 @@
 {% extends "base.html" %}
 
-{% block title %}Exportar Processos para BI{% endblock %}
+{% block title %}Exportar Processos{% endblock %}
 
 {% block content %}
-<div class="content-header">
-    <h1>Exportar Processos Finalizados</h1>
-    <p>Selecione os processos disciplinares que você deseja exportar para um documento.</p>
-</div>
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Exportar Processos Finalizados</h2>
+        <a href="{{ url_for('justica.index') }}" class="btn btn-outline-secondary">Voltar</a>
+    </div>
 
-<div class="table-container">
-    <form method="POST" action="{{ url_for('justica.exportar_selecao') }}">
+    <form method="POST" action="{{ url_for('justica.imprimir_processos') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         
-        <div class="table-responsive">
-            {% if processos %}
-                <table class="table-styled">
-                    <thead>
-                        <tr>
-                            <th style="width: 50px;"><input type="checkbox" id="select-all"></th>
-                            <th>Aluno</th>
-                            <th>Fato Constatado</th>
-                            <th>Decisão Final</th>
-                            <th>Data da Decisão</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for processo in processos %}
-                        <tr>
-                            <td><input type="checkbox" name="processo_ids" value="{{ processo.id }}" class="process-checkbox"></td>
-                            <td data-label="Aluno">{{ processo.aluno.user.nome_completo }}</td>
-                            <td data-label="Fato">{{ processo.fato_constatado | truncate(80) }}</td>
-                            <td data-label="Decisão">{{ processo.decisao_final or 'N/A' }}</td>
-                            <td data-label="Data">{{ processo.data_decisao.strftime('%d/%m/%Y') if processo.data_decisao else 'N/A' }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            {% else %}
-                <div class="empty-state">
-                    <h2>Nenhum Processo Finalizado</h2>
-                    <p>Não há processos com o status "Finalizado" para exportar no momento.</p>
+        <div class="card shadow-sm">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="bg-light">
+                            <tr>
+                                <th style="width: 50px;" class="text-center">
+                                    <input type="checkbox" id="selectAll" class="form-check-input">
+                                </th>
+                                <th>Data</th>
+                                <th>Aluno</th>
+                                <th>Fato</th>
+                                <th>Decisão</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if processos %}
+                                {% for p in processos %}
+                                <tr>
+                                    <td class="text-center">
+                                        <input type="checkbox" name="processo_ids" value="{{ p.id }}" class="form-check-input p-check">
+                                    </td>
+                                    <td>{{ p.data_ocorrencia.strftime('%d/%m/%Y') }}</td>
+                                    <td>
+                                        <strong>{{ p.aluno.user.posto_graduacao }} {{ p.aluno.user.nome_completo }}</strong><br>
+                                        <small class="text-muted">{{ p.aluno.turma.nome if p.aluno.turma else 'Sem turma' }}</small>
+                                    </td>
+                                    <td>{{ p.fato_constatado[:60] }}...</td>
+                                    <td>
+                                        <span class="badge bg-dark">{{ p.decisao_final or 'Finalizado' }}</span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="5" class="text-center py-4 text-muted">Nenhum processo finalizado disponível para exportação.</td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
                 </div>
-            {% endif %}
-        </div>
-
-        <div class="form-actions">
-            <a href="{{ url_for('justica.index') }}" class="btn btn-secondary">Cancelar</a>
-            {% if processos %}
-            <button type="submit" class="btn btn-primary">Exportar Selecionados (.doc)</button>
-            {% endif %}
+            </div>
+            <div class="card-footer bg-white text-end">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-print me-1"></i> Gerar Documento (.pdf/print)
+                </button>
+            </div>
         </div>
     </form>
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const selectAllCheckbox = document.getElementById('select-all');
-    const processCheckboxes = document.querySelectorAll('.process-checkbox');
-
-    if (selectAllCheckbox) {
-        selectAllCheckbox.addEventListener('change', function() {
-            processCheckboxes.forEach(checkbox => {
-                checkbox.checked = this.checked;
-            });
-        });
-    }
+document.getElementById('selectAll').addEventListener('change', function() {
+    document.querySelectorAll('.p-check').forEach(c => c.checked = this.checked);
 });
 </script>
 {% endblock %}

@@ -24,7 +24,9 @@ class Instrutor(db.Model):
     
     foto_perfil: Mapped[t.Optional[str]] = mapped_column(db.String(255), default='default.png')
 
-    # CORREÇÃO: Removido unique=True daqui. 
+    # NOVO CAMPO: Assinatura Padrão
+    assinatura_padrao_path: Mapped[t.Optional[str]] = mapped_column(db.String(255), nullable=True)
+
     # Um usuário pode ser instrutor em várias escolas (linhas diferentes), 
     # mas apenas uma vez por escola (garantido pelo UniqueConstraint abaixo).
     user_id: Mapped[int] = mapped_column(db.ForeignKey("users.id"), nullable=False)
@@ -44,7 +46,7 @@ class Instrutor(db.Model):
     user: Mapped["User"] = relationship("User", back_populates="instrutor_profile")
     school: Mapped["School"] = relationship("School")
 
-    # Esta é a restrição correta: Único par User+School
+    # Restrição: Único par User+School
     __table_args__ = (
         db.UniqueConstraint("user_id", "school_id", name="uq_instrutor_user_school"),
     )

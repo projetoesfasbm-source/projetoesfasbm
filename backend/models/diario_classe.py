@@ -1,48 +1,57 @@
 # backend/models/diario_classe.py
 from __future__ import annotations
 import typing as t
-from datetime import datetime
+from datetime import date, datetime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy import ForeignKey, Integer, String, Text, DateTime
 from .database import db
 
 if t.TYPE_CHECKING:
-    from .horario import Horario
+    from .turma import Turma
+    from .disciplina import Disciplina
     from .user import User
+    from .frequencia import FrequenciaAluno
 
 class DiarioClasse(db.Model):
     __tablename__ = 'diarios_classe'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    data_aula: Mapped[date] = mapped_column(db.Date, nullable=False)
     
-    # Vinculo com o Horário (Aula específica)
-    horario_id: Mapped[int] = mapped_column(ForeignKey('horarios.id'), nullable=False)
-    horario: Mapped["Horario"] = relationship("Horario", backref="diarios")
+    # Campo original mantido
+    periodo: Mapped[t.Optional[int]] = mapped_column(Integer, nullable=True)
 
-    # Data da aula (pois o horario é semanal, mas o diario é diario)
-    data_aula: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    # Vínculos Originais
+    turma_id: Mapped[int] = mapped_column(ForeignKey('turmas.id'), nullable=False)
+    disciplina_id: Mapped[int] = mapped_column(ForeignKey('disciplinas.id'), nullable=False)
+    responsavel_id: Mapped[int] = mapped_column(ForeignKey('users.id'), nullable=False)
     
-    # Conteúdo (preenchido pelo aluno/chefe)
-    conteudo_ministrado: Mapped[str] = mapped_column(Text, nullable=True)
-    observacoes: Mapped[str] = mapped_column(Text, nullable=True)
+    # Conteúdo
+    conteudo_ministrado: Mapped[t.Optional[str]] = mapped_column(Text)
+    observacoes: Mapped[t.Optional[str]] = mapped_column(Text)
     
     # --- NOVOS CAMPOS PARA ASSINATURA E VALIDAÇÃO ---
-    # Status: 'pendente' (padrão) ou 'assinado'
     status: Mapped[str] = mapped_column(String(20), default='pendente', nullable=False)
-    
-    # Caminho para a imagem da assinatura no disco (static/uploads/signatures/...)
-    assinatura_path: Mapped[str] = mapped_column(String(255), nullable=True)
-    
-    # Data e Hora exata da assinatura
-    data_assinatura: Mapped[datetime] = mapped_column(DateTime, nullable=True)
-    
-    # ID do usuário (Instrutor) que assinou
-    instrutor_assinante_id: Mapped[int] = mapped_column(ForeignKey('users.id'), nullable=True)
-    instrutor_assinante: Mapped["User"] = relationship("User", foreign_keys=[instrutor_assinante_id])
+    assinatura_path: Mapped[t.Optional[str]] = mapped_column(String(255), nullable=True)
+    data_assinatura: Mapped[t.Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    instrutor_assinante_id: Mapped[t.Optional[int]] = mapped_column(ForeignKey('users.id'), nullable=True)
 
-    # Metadados de criação (Aluno que lançou)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    # Metadados
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+    # Relacionamentos
+    turma: Mapped["Turma"] = relationship()
+    disciplina: Mapped["Disciplina"] = relationship()
+    
+    # Relacionamento com quem preencheu (Chefe)
+    responsavel: Mapped["User"] = relationship(foreign_keys=[responsavel_id])
+    
+    # Relacionamento CRÍTICO para FrequenciaAluno (Restaurado)
+    frequencias: Mapped[list["FrequenciaAluno"]] = relationship(back_populates="diario", cascade="all, delete-orphan")
+    
+    # Novo relacionamento para o Instrutor que assinou
+    instrutor_assinante: Mapped["User"] = relationship(foreign_keys=[instrutor_assinante_id])
 
     def __repr__(self):
         return f"<DiarioClasse id={self.id} data={self.data_aula} status={self.status}>"
