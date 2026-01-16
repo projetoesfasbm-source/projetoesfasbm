@@ -35,17 +35,24 @@ class AprovarHorarioForm(FlaskForm):
     submit = SubmitField('Enviar')
 
 def _get_horario_context_data():
+    """
+    Recupera os horários configurados (início/fim das aulas e intervalos).
+    AGORA RESPEITA A ESCOLA ATIVA.
+    """
+    school_id = UserService.get_current_school_id()
+    
     tempos = []
     for i in range(1, 16):
         key = f"horario_periodo_{i:02d}"
         periodo_str = f"{i}º"
-        time_str = SiteConfigService.get_config(key, 'N/D')
+        # Passa o school_id para pegar a config específica da escola
+        time_str = SiteConfigService.get_config(key, 'N/D', school_id=school_id)
         tempos.append((periodo_str, time_str))
     
     intervalos = {
-        'intervalo_1': SiteConfigService.get_config('horario_intervalo_manha', 'N/D'),
-        'almoco': SiteConfigService.get_config('horario_intervalo_almoco', 'N/D'),
-        'intervalo_2': SiteConfigService.get_config('horario_intervalo_tarde', 'N/D'),
+        'intervalo_1': SiteConfigService.get_config('horario_intervalo_manha', 'N/D', school_id=school_id),
+        'almoco': SiteConfigService.get_config('horario_intervalo_almoco', 'N/D', school_id=school_id),
+        'intervalo_2': SiteConfigService.get_config('horario_intervalo_tarde', 'N/D', school_id=school_id),
     }
     return tempos, intervalos
 
@@ -54,7 +61,6 @@ def _get_horario_context_data():
 @login_required
 def index():
     # 1. Identificar Turma e Escola
-    # Se for aluno E NÃO tiver cargo administrativo (como SENS/Admin), cai aqui
     if current_user.role == 'aluno' and not current_user.is_staff:
         if not current_user.aluno_profile or not current_user.aluno_profile.turma:
             flash("Você não está matriculado em nenhuma turma.", 'warning')
@@ -69,18 +75,14 @@ def index():
             flash("Nenhuma escola selecionada.", "warning")
             return redirect(url_for('main.dashboard'))
         
-        # Busca inicial padrão (para admins ou fallback)
         todas_as_turmas = TurmaService.get_turmas_by_school(school_id)
         
         # --- LÓGICA DE FILTRO PARA INSTRUTOR ---
-        # Filtra APENAS se for instrutor E NÃO for SENS/Admin/Staff.
-        # Se for SENS (current_user.is_sens), pula este bloco e mostra tudo.
         if current_user.role == 'instrutor' and current_user.instrutor_profile and not current_user.is_sens:
             try:
                 instrutor_id = current_user.instrutor_profile.id
                 
-                # CORREÇÃO: Busca as turmas diretamente via SQL Join para evitar limites implícitos ou erros de iteração em Python.
-                # Seleciona as Turmas onde o NOME corresponde ao pelotão no vínculo DisciplinaTurma deste instrutor.
+                # Busca Turmas vinculadas ao instrutor
                 turmas_vinculadas = db.session.scalars(
                     select(Turma)
                     .join(DisciplinaTurma, Turma.nome == DisciplinaTurma.pelotao)
@@ -95,29 +97,11 @@ def index():
                     .order_by(Turma.nome)
                 ).all()
 
-                # Se encontrou turmas vinculadas, usamos apenas elas.
-                # Se não encontrou (lista vazia), verificamos se o instrutor realmente não tem vínculos.
                 if turmas_vinculadas:
                     todas_as_turmas = turmas_vinculadas
                 else:
-                    # Verifica se existem vínculos "crus" (apenas nomes) para decidir o comportamento
-                    pelotao_names_check = db.session.scalars(
-                        select(DisciplinaTurma.pelotao)
-                        .where(or_(DisciplinaTurma.instrutor_id_1 == instrutor_id, 
-                                   DisciplinaTurma.instrutor_id_2 == instrutor_id))
-                        .limit(1)
-                    ).first()
-                    
-                    # Se tem vínculos no papel, mas não achou Turma correspondente (ex: erro de digitação no nome),
-                    # mantemos "todas_as_turmas" como fallback ou deixamos vazio?
-                    # O comportamento original era mostrar tudo se não conseguisse filtrar. Vamos manter o padrão seguro:
-                    # Se não achou turmas específicas, mas tem vínculos, pode ser bug de nome. Se não tem vínculos, mostra tudo (ou nada).
-                    # Por segurança e compatibilidade com o código anterior, se a busca filtrada falhar ou for vazia, 
-                    # mantemos a lista completa se não houver vínculos explícitos limitantes que falharam no match.
-                    if pelotao_names_check:
-                        # Tem vínculos mas não deu match com nenhuma turma -> Algo errado com os nomes.
-                        # Para não bloquear o uso, mostramos todas (comportamento fallback).
-                        pass 
+                    # Fallback
+                    pass 
             except Exception as e:
                 current_app.logger.error(f"Erro ao filtrar turmas do instrutor: {e}")
                 pass
@@ -125,7 +109,6 @@ def index():
 
         turma_selecionada_nome = request.args.get('pelotao', session.get('ultima_turma_visualizada'))
         
-        # Lógica de seleção automática
         if not turma_selecionada_nome and todas_as_turmas:
             turma_selecionada_nome = todas_as_turmas[0].nome
         elif turma_selecionada_nome and turma_selecionada_nome not in [t.nome for t in todas_as_turmas]:
@@ -134,12 +117,10 @@ def index():
     # 2. Identificar Ciclo e Semanas
     ciclo_selecionado_id = request.args.get('ciclo', session.get('ultimo_ciclo_horario'), type=int)
     
-    # Busca apenas ciclos da escola atual
     ciclos = db.session.scalars(
         select(Ciclo).where(Ciclo.school_id == school_id).order_by(Ciclo.nome)
     ).all()
     
-    # Valida se o ciclo selecionado pertence à escola
     if not ciclo_selecionado_id or ciclo_selecionado_id not in [c.id for c in ciclos]:
         ciclo_selecionado_id = ciclos[0].id if ciclos else None
 
@@ -147,7 +128,6 @@ def index():
     
     todas_as_semanas = []
     if ciclo_selecionado_id:
-        # Busca semanas apenas deste ciclo
         todas_as_semanas = db.session.scalars(
             select(Semana)
             .where(Semana.ciclo_id == ciclo_selecionado_id)
@@ -191,15 +171,12 @@ def index():
         except:
             priority_allowed_names = []
 
-        # CORREÇÃO: Usa is_sens (que inclui Admin e Programador)
         if current_user.is_sens or current_user.is_admin_escola or current_user.is_programador:
             can_schedule_in_this_turma = True
             
-        # --- CORREÇÃO AQUI: Permite Instrutor OU CAL, desde que tenha perfil de instrutor ---
         elif (current_user.role == 'instrutor' or current_user.is_cal) and current_user.instrutor_profile:
             instrutor_id = current_user.instrutor_profile.id
             
-            # Mesma lógica otimizada para verificação de permissão
             instrutor_turmas_vinculadas = db.session.scalars(
                 select(Turma)
                 .join(DisciplinaTurma, Turma.nome == DisciplinaTurma.pelotao)
@@ -213,7 +190,6 @@ def index():
                 .order_by(Turma.nome)
             ).all()
             
-            # Verifica se a turma selecionada está na lista vinculada
             if any(t.nome == turma_selecionada_nome for t in instrutor_turmas_vinculadas):
                 if not priority_active:
                     can_schedule_in_this_turma = True

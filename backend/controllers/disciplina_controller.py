@@ -44,62 +44,58 @@ class DeleteForm(FlaskForm):
 @login_required
 @can_view_management_pages_required
 def listar_disciplinas():
-    """
-    Lista padrão, leve e rápida. Foca na exibição de dados brutos e progresso individual.
-    """
     school_id = UserService.get_current_school_id()
     if not school_id:
         flash('Nenhuma escola associada ou selecionada.', 'warning')
         return redirect(url_for('main.dashboard'))
         
-    # Filtro de Ciclo
-    ciclo_id_arg = request.args.get('ciclo_id')
-    ciclos = db.session.scalars(select(Ciclo).where(Ciclo.school_id == school_id)).all()
+    turma_selecionada_id = request.args.get('turma_id', type=int)
     
-    ciclo_selecionado_id = None
-    if ciclo_id_arg:
-         ciclo_selecionado_id = int(ciclo_id_arg)
-    elif ciclos:
-         ciclo_selecionado_id = ciclos[-1].id
+    turmas_disponiveis = TurmaService.get_turmas_by_school(school_id)
+    todas_disciplinas = DisciplinaService.get_disciplinas_by_school(school_id)
 
-    turmas = TurmaService.get_turmas_by_school(school_id)
+    disciplinas_filtradas = []
+    if turma_selecionada_id:
+        disciplinas_filtradas = [d for d in todas_disciplinas if d.turma_id == turma_selecionada_id]
+    else:
+        # Se não selecionar turma, não mostra nada na lista principal para não sobrecarregar,
+        # ou mostra tudo se for comportamento desejado. O template pede seleção.
+        disciplinas_filtradas = [] 
 
-    # Busca Simples
-    disciplinas = DisciplinaService.get_disciplinas_by_school(school_id)
-    if ciclo_selecionado_id:
-        disciplinas = [d for d in disciplinas if d.ciclo_id == ciclo_selecionado_id]
-    
-    # Ordenação por Turma e Nome
-    disciplinas.sort(key=lambda x: (x.turma.nome if x.turma else '', x.materia))
+    # Ordenação
+    disciplinas_filtradas.sort(key=lambda d: d.materia)
+
+    # Preparar dados de progresso para o template original
+    disciplinas_com_progresso = []
+    for d in disciplinas_filtradas:
+        progresso = DisciplinaService.get_dados_progresso(d) 
+        disciplinas_com_progresso.append({'disciplina': d, 'progresso': progresso})
 
     delete_form = DeleteForm()
     
+    # Busca Ciclos para o filtro do dashboard (passado no contexto)
+    ciclos = db.session.scalars(select(Ciclo).where(Ciclo.school_id == school_id)).all()
+    
     return render_template('listar_disciplinas.html', 
-                           disciplinas=disciplinas,
+                           disciplinas_com_progresso=disciplinas_com_progresso, # Variável chave para o template
                            delete_form=delete_form,
-                           turmas=turmas,
-                           ciclos=ciclos,
-                           ciclo_selecionado_id=ciclo_selecionado_id)
+                           turmas=turmas_disponiveis,
+                           turma_selecionada_id=turma_selecionada_id,
+                           ciclos=ciclos)
 
 @disciplina_bp.route('/dashboard-intelligence')
 @login_required
 @can_view_management_pages_required
 def dashboard_disciplinas():
-    """
-    Rota dedicada à análise pesada e inteligência de dados.
-    Mostra APENAS o que está fora do padrão.
-    """
+    """Rota exclusiva para o novo Dashboard"""
     school_id = UserService.get_current_school_id()
     if not school_id:
         return redirect(url_for('disciplina.listar_disciplinas'))
 
     ciclo_id_arg = request.args.get('ciclo_id')
-    
-    # Busca Ciclos para o filtro do dashboard
     ciclos = db.session.scalars(select(Ciclo).where(Ciclo.school_id == school_id)).all()
     ciclo_selecionado_id = int(ciclo_id_arg) if ciclo_id_arg else (ciclos[-1].id if ciclos else None)
 
-    # Processamento pesado acontece SOMENTE aqui
     dashboard_data = DisciplinaService.get_dashboard_data(school_id, ciclo_selecionado_id)
 
     return render_template('disciplinas_dashboard.html',
@@ -118,9 +114,7 @@ def adicionar_disciplina():
         
     form = DisciplinaForm()
     
-    ciclos = db.session.scalars(
-        select(Ciclo).where(Ciclo.school_id == school_id).order_by(Ciclo.nome)
-    ).all()
+    ciclos = db.session.scalars(select(Ciclo).where(Ciclo.school_id == school_id).order_by(Ciclo.nome)).all()
     form.ciclo_id.choices = [(c.id, c.nome) for c in ciclos]
     
     turmas = TurmaService.get_turmas_by_school(school_id)
@@ -145,7 +139,7 @@ def adicionar_disciplina():
                 success_count += 1
             
             flash(f'{success_count} disciplinas criadas com sucesso!', 'success')
-            return redirect(url_for('disciplina.listar_disciplinas'))
+            return redirect(url_for('disciplina.listar_disciplinas', turma_id=form.turma_ids.data[0]))
         except Exception as e:
             flash(f'Erro ao criar disciplinas: {e}', 'danger')
 
@@ -184,7 +178,7 @@ def editar_disciplina(disciplina_id):
         }
         DisciplinaService.update_disciplina(disciplina_id, data)
         flash('Disciplina atualizada com sucesso!', 'success')
-        return redirect(url_for('disciplina.listar_disciplinas'))
+        return redirect(url_for('disciplina.listar_disciplinas', turma_id=disciplina.turma_id))
 
     return render_template('editar_disciplina.html', form=form, disciplina=disciplina)
 
@@ -192,19 +186,22 @@ def editar_disciplina(disciplina_id):
 @login_required
 @school_admin_or_programmer_required
 def excluir_disciplina(disciplina_id):
+    form = DeleteForm() # Validação CSRF
     disciplina = db.session.get(Disciplina, disciplina_id)
     school_id = UserService.get_current_school_id()
     
     if disciplina and school_id and disciplina.turma.school_id != school_id:
             flash('Permissão negada.', 'danger')
             return redirect(url_for('disciplina.listar_disciplinas'))
+            
+    turma_id = disciplina.turma_id if disciplina else None
 
     if DisciplinaService.delete_disciplina(disciplina_id):
         flash('Disciplina excluída com sucesso.', 'success')
     else:
         flash('Erro ao excluir disciplina.', 'danger')
         
-    return redirect(url_for('disciplina.listar_disciplinas'))
+    return redirect(url_for('disciplina.listar_disciplinas', turma_id=turma_id))
 
 @disciplina_bp.route('/api/por-turma/<int:turma_id>')
 @login_required

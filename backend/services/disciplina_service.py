@@ -13,36 +13,60 @@ from ..models.semana import Semana
 class DisciplinaService:
     
     @staticmethod
-    def get_dashboard_data(school_id, ciclo_id=None):
+    def get_dados_progresso(disciplina):
         """
-        Gera dados APENAS de anomalias e alertas.
-        Filtra tudo o que está 'normal' para não poluir a visão do gestor.
+        Calcula o progresso de uma disciplina específica.
+        Usado pela lista principal (Visualização Legada/Detalhada).
         """
         try:
-            # 1. Definir o escopo (Ciclo e Turmas da Escola)
+            previsto = disciplina.carga_horaria_prevista
+            realizado = disciplina.carga_horaria_cumprida
+            pct_realizado = int((realizado / previsto * 100)) if previsto > 0 else 0
+            
+            # Cálculo simples para visualização rápida
+            # Se precisar de "agendado futuro" preciso, seria necessário query pesada no Horario
+            # Por enquanto, mantemos 0 ou lógica simplificada para não travar a lista
+            agendado = 0 
+            pct_agendado = 0
+            restante = previsto - realizado
+            
+            return {
+                'previsto': previsto,
+                'realizado': realizado,
+                'pct_realizado': pct_realizado,
+                'agendado': agendado,
+                'pct_agendado': pct_agendado,
+                'restante_para_planejar': restante
+            }
+        except Exception:
+            return {
+                'previsto': 0, 'realizado': 0, 'pct_realizado': 0,
+                'agendado': 0, 'pct_agendado': 0, 'restante_para_planejar': 0
+            }
+
+    @staticmethod
+    def get_dashboard_data(school_id, ciclo_id=None):
+        """
+        Gera dados APENAS de anomalias e alertas para o Dashboard Inteligente.
+        """
+        try:
             query_turmas = select(Turma).where(Turma.school_id == school_id)
             turmas = db.session.scalars(query_turmas).all()
             turma_ids = [t.id for t in turmas]
             
-            if not turma_ids:
-                return None
+            if not turma_ids: return None
 
-            # Filtra disciplinas pelo ciclo se fornecido
             query_base = select(Disciplina).where(Disciplina.turma_id.in_(turma_ids))
             if ciclo_id:
                 query_base = query_base.where(Disciplina.ciclo_id == ciclo_id)
             
             disciplinas = db.session.scalars(query_base).all()
-            
-            if not disciplinas:
-                return None
+            if not disciplinas: return None
 
-            # 2. Cálculos Globais (Ainda úteis para contexto rápido no topo)
             total_horas_previstas = sum(d.carga_horaria_prevista for d in disciplinas)
             total_horas_cumpridas = sum(d.carga_horaria_cumprida for d in disciplinas)
             progresso_global = (total_horas_cumpridas / total_horas_previstas * 100) if total_horas_previstas > 0 else 0
 
-            # 3. Agrupamento por Matéria
             materias_analysis = {}
             for d in disciplinas:
                 if d.materia not in materias_analysis:
@@ -56,16 +80,11 @@ class DisciplinaService:
                     'cumprida': d.carga_horaria_cumprida
                 })
 
-            # 4. Gerar Apenas Riscos (Filtrar Normalidade)
             materias_risco = []
             
-            # Tolerância Dinâmica
-            if progresso_global < 30:
-                tolerancia_desvio = 25.0
-            elif progresso_global < 70:
-                tolerancia_desvio = 15.0
-            else:
-                tolerancia_desvio = 10.0
+            if progresso_global < 30: tolerance = 25.0
+            elif progresso_global < 70: tolerance = 15.0
+            else: tolerance = 10.0
 
             for materia, data in materias_analysis.items():
                 lista_pcts = [item['pct'] for item in data['disciplinas']]
@@ -73,47 +92,37 @@ class DisciplinaService:
                 
                 max_pct = max(lista_pcts)
                 min_pct = min(lista_pcts)
-                avg_pct = sum(lista_pcts) / len(lista_pcts)
                 amplitude = max_pct - min_pct
                 
-                # Regra de Ouro: Se a amplitude for menor que a tolerância, IGNORA. Está tudo bem.
-                if amplitude <= tolerancia_desvio:
-                    continue
+                if amplitude <= tolerance: continue
 
-                # Se a diferença absoluta em horas for irrelevante (< 4 horas), também ignora
                 horas_diff = max([i['cumprida'] for i in data['disciplinas']]) - min([i['cumprida'] for i in data['disciplinas']])
-                if horas_diff <= 4:
-                    continue
+                if horas_diff <= 4: continue
 
-                status = 'critical' if amplitude >= (tolerancia_desvio * 1.5) else 'warning'
-                
+                status = 'critical' if amplitude >= (tolerance * 1.5) else 'warning'
                 turma_adiantada = next((item['turma'] for item in data['disciplinas'] if item['pct'] == max_pct), '?')
                 turma_atrasada = next((item['turma'] for item in data['disciplinas'] if item['pct'] == min_pct), '?')
 
-                # Adiciona APENAS se for problema
                 materias_risco.append({
                     'materia': materia,
                     'status': status,
                     'amplitude': amplitude,
-                    'avg_pct': avg_pct,
                     'min_pct': min_pct,
                     'max_pct': max_pct,
                     'turma_min': turma_atrasada,
-                    'turma_max': turma_adiantada,
-                    'msg': f"Desnível de {int(amplitude)}% entre turmas."
+                    'turma_max': turma_adiantada
                 })
 
-            # Ordena: Críticos primeiro, depois por maior amplitude
             materias_risco.sort(key=lambda x: (0 if x['status'] == 'critical' else 1, -x['amplitude']))
 
             return {
                 'progresso_global': progresso_global,
-                'materias_risco': materias_risco, # Aqui só tem problema. Se estiver vazio, parabéns à coordenação.
+                'materias_risco': materias_risco,
                 'total_analisado': len(materias_analysis)
             }
 
         except Exception as e:
-            current_app.logger.error(f"Erro ao gerar dashboard de disciplinas: {e}")
+            current_app.logger.error(f"Erro ao gerar dashboard: {e}")
             return None
 
     @staticmethod
@@ -155,7 +164,6 @@ class DisciplinaService:
             return nova_disciplina, "Disciplina criada com sucesso."
         except Exception as e:
             db.session.rollback()
-            current_app.logger.error(f"Erro ao criar disciplina: {e}")
             raise e
 
     @staticmethod

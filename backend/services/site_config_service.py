@@ -8,6 +8,7 @@ import re
 class SiteConfigService:
     """
     Serviço para leitura/escrita de configurações do site.
+    Suporta contexto de escola via namespace de chaves.
     """
 
     _DEFAULT_CONFIGS = [
@@ -78,18 +79,39 @@ class SiteConfigService:
     _DEFAULTS_MAP = {d[0]: d[1] for d in _DEFAULT_CONFIGS}
 
     @staticmethod
-    def get_config(key: str, default_value: str = None):
+    def get_config(key: str, default_value: str = None, school_id=None):
+        """
+        Busca uma configuração.
+        Se school_id for fornecido, tenta buscar 'school_{id}_{key}'.
+        Se não encontrar (ou não houver school_id), busca a 'key' global.
+        """
+        # 1. Tenta buscar configuração específica da escola (Contexto)
+        if school_id:
+            school_key = f"school_{school_id}_{key}"
+            config = db.session.execute(
+                select(SiteConfig).where(SiteConfig.config_key == school_key)
+            ).scalar_one_or_none()
+            
+            if config is not None:
+                return config.config_value
+
+        # 2. Fallback: Busca configuração global (Padrão)
         config = db.session.execute(
             select(SiteConfig).where(SiteConfig.config_key == key)
         ).scalar_one_or_none()
+        
         if config is not None:
             return config.config_value
+            
+        # 3. Fallback: Valor hardcoded no código ou default fornecido
         if key in SiteConfigService._DEFAULTS_MAP:
             return SiteConfigService._DEFAULTS_MAP[key]
+            
         return default_value
 
     @staticmethod
     def get_all_configs():
+        """Retorna todas as configs do banco (globais) + defaults não salvos."""
         db_configs = db.session.execute(select(SiteConfig)).scalars().all()
         db_configs_map = {c.config_key: c for c in db_configs}
         final_configs = []
@@ -136,9 +158,17 @@ class SiteConfigService:
         except Exception: raise ValueError(f"Não foi possível interpretar '{value}' como número.")
         
     @staticmethod
-    def set_config(key: str, value: str, config_type: str = 'text', description: str = None, category: str = 'general', updated_by: int = None):
-        # --- CORREÇÃO PRINCIPAL: Permite chaves dinâmicas ---
-        # A verificação restritiva foi removida.
+    def set_config(key: str, value: str, config_type: str = 'text', description: str = None, category: str = 'general', updated_by: int = None, school_id=None):
+        """
+        Salva uma configuração.
+        Se school_id for fornecido, salva como 'school_{id}_{key}'.
+        Caso contrário, sobrescreve a global.
+        """
+        target_key = key
+        
+        # Se for contexto de escola, prefixa a chave
+        if school_id:
+            target_key = f"school_{school_id}_{key}"
         
         # Validações por tipo continuam úteis
         if config_type == 'image':
@@ -151,7 +181,8 @@ class SiteConfigService:
             num = SiteConfigService._parse_number_ptbr(value)
             value = f"{num:.2f}" if num is not None else ""
             
-        config = db.session.execute(select(SiteConfig).where(SiteConfig.config_key == key)).scalar_one_or_none()
+        config = db.session.execute(select(SiteConfig).where(SiteConfig.config_key == target_key)).scalar_one_or_none()
+        
         if config:
             config.config_value = value
             config.config_type = config_type
@@ -160,7 +191,7 @@ class SiteConfigService:
             config.updated_by = updated_by
         else:
             config = SiteConfig(
-                config_key=key, 
+                config_key=target_key, 
                 config_value=value, 
                 config_type=config_type, 
                 description=description or 'Configuração dinâmica', 
@@ -171,6 +202,19 @@ class SiteConfigService:
         
         db.session.commit() # Salva imediatamente
         return config
+
+    @staticmethod
+    def delete_config(key: str, school_id=None):
+        """
+        Remove uma configuração específica.
+        Se school_id for informado, remove a personalização da escola.
+        """
+        target_key = key
+        if school_id:
+            target_key = f"school_{school_id}_{key}"
+            
+        db.session.query(SiteConfig).filter(SiteConfig.config_key == target_key).delete()
+        db.session.commit()
 
     @staticmethod
     def delete_all_configs():
