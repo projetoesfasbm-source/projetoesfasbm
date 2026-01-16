@@ -58,8 +58,7 @@ def listar_disciplinas():
     if turma_selecionada_id:
         disciplinas_filtradas = [d for d in todas_disciplinas if d.turma_id == turma_selecionada_id]
     else:
-        # Se não selecionar turma, não mostra nada na lista principal para não sobrecarregar,
-        # ou mostra tudo se for comportamento desejado. O template pede seleção.
+        # Se não selecionar turma, não mostra nada na lista principal para não sobrecarregar
         disciplinas_filtradas = [] 
 
     # Ordenação
@@ -74,7 +73,8 @@ def listar_disciplinas():
     delete_form = DeleteForm()
     
     # Busca Ciclos para o filtro do dashboard (passado no contexto)
-    ciclos = db.session.scalars(select(Ciclo).where(Ciclo.school_id == school_id)).all()
+    # ADICIONADO: order_by(Ciclo.nome) para garantir consistência
+    ciclos = db.session.scalars(select(Ciclo).where(Ciclo.school_id == school_id).order_by(Ciclo.nome)).all()
     
     return render_template('listar_disciplinas.html', 
                            disciplinas_com_progresso=disciplinas_com_progresso, # Variável chave para o template
@@ -93,7 +93,11 @@ def dashboard_disciplinas():
         return redirect(url_for('disciplina.listar_disciplinas'))
 
     ciclo_id_arg = request.args.get('ciclo_id')
-    ciclos = db.session.scalars(select(Ciclo).where(Ciclo.school_id == school_id)).all()
+    
+    # ADICIONADO: order_by(Ciclo.nome)
+    ciclos = db.session.scalars(select(Ciclo).where(Ciclo.school_id == school_id).order_by(Ciclo.nome)).all()
+    
+    # Lógica de seleção padrão (último da lista) agora é determinística
     ciclo_selecionado_id = int(ciclo_id_arg) if ciclo_id_arg else (ciclos[-1].id if ciclos else None)
 
     dashboard_data = DisciplinaService.get_dashboard_data(school_id, ciclo_selecionado_id)

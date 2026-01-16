@@ -4,166 +4,71 @@
     <meta charset="UTF-8">
     <title>Termo de Justificação e Solução</title>
     <style>
-        @page {
-            size: A4;
-            margin: 2cm 1.5cm 1.5cm 1.5cm;
-        }
-        body {
-            font-family: 'Times New Roman', Times, serif;
-            font-size: 12pt;
-            line-height: 1.5;
-            margin: 0;
-            color: #000;
-        }
-        .processo-container {
-            page-break-after: always;
-            padding-top: 1cm;
-        }
-        .processo-container:last-child {
-            page-break-after: avoid;
-        }
-        .header {
-            text-align: center;
-            font-weight: bold;
-            margin-bottom: 1.5cm;
-            line-height: 1.2;
-        }
-        .title {
-            text-align: center;
-            font-weight: bold;
-            margin: 1cm 0;
-            text-decoration: underline;
-        }
-        p {
-            text-align: justify;
-            margin-bottom: 0.3cm;
-            margin-top: 0;
-        }
-        .section-title {
-            font-weight: bold;
-            margin-top: 0.8cm;
-            margin-bottom: 0.3cm;
-            text-transform: uppercase;
-        }
-        .signature-block {
-            text-align: center;
-            margin-top: 2cm;
-            page-break-inside: avoid;
-        }
-        .signature-line {
-            display: inline-block;
-            border-top: 1px solid #000;
-            width: 300px;
-            margin-bottom: 0.2cm;
-        }
-        .info-box {
-            border: 1px solid #ccc;
-            padding: 10px;
-            margin: 10px 0;
-            background-color: #fafafa;
-        }
-        .field-value {
-            font-weight: bold;
-        }
+        @page { size: A4; margin: 2cm 1.5cm 1.5cm 1.5cm; }
+        body { font-family: 'Times New Roman', Times, serif; font-size: 12pt; line-height: 1.5; color: #000; }
+        .processo-container { page-break-after: always; padding-top: 1cm; }
+        .processo-container:last-child { page-break-after: avoid; }
+        .header { text-align: center; font-weight: bold; margin-bottom: 1.5cm; line-height: 1.2; }
+        .title { text-align: center; font-weight: bold; margin: 1cm 0; text-decoration: underline; }
+        p { text-align: justify; margin-bottom: 0.3cm; margin-top: 0; }
+        .section-title { font-weight: bold; margin-top: 0.8cm; margin-bottom: 0.3cm; text-transform: uppercase; }
+        .signature-block { text-align: center; margin-top: 2cm; page-break-inside: avoid; }
+        .signature-line { display: inline-block; border-top: 1px solid #000; width: 300px; margin-bottom: 0.2cm; }
+        .sancao-box { border: 2px solid #333; padding: 10px; margin: 15px 0; background-color: #f9f9f9; }
     </style>
 </head>
 <body>
-
     {% for processo in processos %}
     <div class="processo-container">
-        
         <div class="header">
-            ESTADO DO RIO GRANDE DO SUL<br>
-            SECRETARIA DA SEGURANÇA PÚBLICA<br>
-            BRIGADA MILITAR<br>
-            DE – EsFAS
+            ESTADO DO RIO GRANDE DO SUL<br>SECRETARIA DA SEGURANÇA PÚBLICA<br>BRIGADA MILITAR<br>DE – EsFAS
         </div>
 
-        <div class="title">
-            TERMO DE JUSTIFICAÇÃO Nº {{ "%03d"|format(processo.id) }} / {{ processo.data_ocorrencia.year }}
-        </div>
+        <div class="title">TERMO DE JUSTIFICAÇÃO Nº {{ "%03d"|format(processo.id) }} / {{ processo.data_ocorrencia.year }}</div>
 
         <p><strong>1. DO FATO:</strong></p>
-        <p>
-            No dia {{ processo.data_ocorrencia.strftime('%d/%m/%Y') }}, o(a) 
-            <span class="field-value">{{ processo.aluno.user.posto_graduacao }} {{ processo.aluno.user.nome_completo }}</span>, 
-            Matrícula <span class="field-value">{{ processo.aluno.user.matricula }}</span>, 
-            teve a seguinte conduta observada:
-        </p>
-        <p style="padding-left: 1cm; font-style: italic;">
-            "{{ processo.fato_constatado }}"
-        </p>
-        {% if processo.codigo_infracao %}
-        <p>Enquadramento: Item {{ processo.codigo_infracao }}.</p>
-        {% endif %}
-
-        <p class="section-title">2. DA DEFESA:</p>
-        <p>
-            Oportunizado o direito à ampla defesa e ao contraditório, o discente apresentou as seguintes razões:
-        </p>
-        <div style="border: 1px solid #000; padding: 10px; min-height: 3cm;">
-            {% if processo.defesa %}
-                {{ processo.defesa }}
-            {% else %}
-                <p style="text-align: center; color: #666; margin-top: 1cm;">(Espaço reservado para defesa escrita ou "NADA A DECLARAR")</p>
-            {% endif %}
-        </div>
+        <p>No dia {{ processo.data_ocorrencia.strftime('%d/%m/%Y') }}, o(a) <strong>{{ processo.aluno.user.posto_graduacao }} {{ processo.aluno.user.nome_completo }}</strong>, Matrícula {{ processo.aluno.user.matricula }}, teve a seguinte conduta observada:</p>
+        <p style="padding-left: 1cm; font-style: italic;">"{{ processo.fato_constatado }}"</p>
         
-        {% if not processo.defesa %}
-        <div style="margin-top: 1cm; text-align: center;">
-            <div class="signature-line"></div>
-            <p>Assinatura do Aluno</p>
+        <p class="section-title">2. DA DEFESA:</p>
+        <div style="border: 1px solid #000; padding: 10px; min-height: 3cm;">
+            {{ processo.defesa if processo.defesa else "(Espaço reservado para defesa escrita)" }}
         </div>
+        {% if not processo.defesa %}
+        <div style="margin-top: 1cm; text-align: center;"><div class="signature-line"></div><p>Assinatura do Aluno</p></div>
         {% endif %}
 
         <p class="section-title">3. DA SOLUÇÃO:</p>
-        
         <p><strong>Diante do exposto, o Comandante/Chefe RESOLVE:</strong></p>
 
         {% if processo.status == 'Finalizado' %}
-            <p>a) <strong>FUNDAMENTAÇÃO:</strong> {{ processo.fundamentacao }}</p>
-            
-            <p>b) <strong>DECISÃO:</strong> 
-                {% if processo.decisao_final == 'Justificado' %}
-                    Considerar a conduta <strong>JUSTIFICADA</strong>.
-                {% else %}
-                    Punir o militar com <strong>{{ processo.decisao_final|upper }}</strong>.
+            <div class="sancao-box">
+                <p><strong>DECISÃO:</strong> {{ processo.decisao_final }}</p>
+                <p><strong>FUNDAMENTAÇÃO:</strong> {{ processo.fundamentacao }}</p>
+                
+                {% if processo.tipo_sancao %}
+                <p><strong>SANÇÃO APLICADA:</strong> {{ processo.tipo_sancao }} 
+                   {% if processo.dias_sancao %}({{ processo.dias_sancao }} dias){% endif %}
+                </p>
                 {% endif %}
-            </p>
-
-            {% if processo.detalhes_sancao and processo.decisao_final != 'Justificado' %}
-            <p>c) <strong>QUANTIDADE/DETALHES:</strong> {{ processo.detalhes_sancao }}</p>
-            {% endif %}
-            
-            <p>d) <strong>PUBLICAÇÃO:</strong> Publique-se em Boletim Interno e registre-se na ficha individual.</p>
-
+                
+                <p><strong>ENQUADRAMENTO:</strong> {{ processo.origem_punicao }}</p>
+                
+                {% if processo.is_crime %}
+                <p style="color: red; font-weight: bold; text-align: center;">*** CONFIGURA CRIME (Art. 13 CPM/Comum) ***</p>
+                {% endif %}
+            </div>
         {% else %}
-            <p>a) <strong>FUNDAMENTAÇÃO:</strong> __________________________________________________________________________<br>
-            __________________________________________________________________________________________________<br>
-            __________________________________________________________________________________________________</p>
-            
-            <p>b) <strong>DECISÃO:</strong> ( ) Justificar &nbsp;&nbsp; ( ) Advertência &nbsp;&nbsp; ( ) Repreensão &nbsp;&nbsp; ( ) Detenção &nbsp;&nbsp; ( ) ____________</p>
-
-            <p>c) <strong>QUANTIDADE:</strong> _________________ dias/turnos.</p>
-            
-            <p>d) <strong>PUBLICAÇÃO:</strong> Publique-se em Boletim Interno.</p>
+            <p>( ) Justificar &nbsp; ( ) Advertência &nbsp; ( ) Repreensão &nbsp; ( ) Detenção &nbsp; ( ) ____________</p>
+            <p>QUANTIDADE: _________________ dias/turnos.</p>
         {% endif %}
 
         <div class="signature-block">
-            <p>Quartel em Santa Maria, {{ hoje|default(processo.data_decisao.strftime('%d/%m/%Y') if processo.data_decisao else '_____/_____/_____') }}.</p>
-            <br><br>
+            <p>Quartel em Santa Maria, {{ hoje }}.</p><br><br>
             <div class="signature-line"></div>
             <p><strong>COMANDANTE / CHEFE DA DIVISÃO DE ENSINO</strong></p>
         </div>
-
     </div>
     {% endfor %}
-
-    <script>
-        window.onload = function() {
-            // Descomente a linha abaixo se quiser que a janela de impressão abra automaticamente
-            // window.print();
-        }
-    </script>
 </body>
 </html>

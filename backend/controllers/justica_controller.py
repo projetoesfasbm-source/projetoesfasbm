@@ -18,21 +18,14 @@ logger = logging.getLogger(__name__)
 justica_bp = Blueprint('justica', __name__, url_prefix='/justica-e-disciplina')
 
 def _get_current_school_id():
-    """Recupera ID da escola de forma robusta com múltiplos fallbacks."""
     try:
-        if g.get('active_school') and hasattr(g.active_school, 'id'):
-            return int(g.active_school.id)
-        sid = session.get('active_school_id')
-        if sid: return int(sid)
-        if hasattr(current_user, 'school_id') and current_user.school_id:
-            return int(current_user.school_id)
-        if hasattr(current_user, 'schools') and current_user.schools:
-            return int(current_user.schools[0].id)
-        if getattr(current_user, 'role', '') == 'aluno':
-            if getattr(current_user, 'aluno_profile', None) and current_user.aluno_profile.turma:
-                return int(current_user.aluno_profile.turma.school_id)
-    except Exception as e:
-        logger.error(f"Erro ao recuperar School ID: {e}")
+        if g.get('active_school') and hasattr(g.active_school, 'id'): return int(g.active_school.id)
+        if session.get('active_school_id'): return int(session.get('active_school_id'))
+        if hasattr(current_user, 'school_id') and current_user.school_id: return int(current_user.school_id)
+        if hasattr(current_user, 'schools') and current_user.schools: return int(current_user.schools[0].id)
+        if getattr(current_user, 'role', '') == 'aluno' and getattr(current_user, 'aluno_profile', None):
+            return int(current_user.aluno_profile.turma.school_id)
+    except: pass
     return None
 
 @justica_bp.route('/')
@@ -40,10 +33,8 @@ def _get_current_school_id():
 def index():
     try:
         school_id = _get_current_school_id()
-        # Busca processos via Service (que já filtra por permissão)
         processos = JusticaService.get_processos_para_usuario(current_user, school_id_override=school_id)
         
-        # Separa processos por status usando o .value do Enum para comparação segura
         em_andamento = [p for p in processos if str(p.status) != StatusProcesso.FINALIZADO.value]
         finalizados = [p for p in processos if str(p.status) == StatusProcesso.FINALIZADO.value]
         
@@ -55,38 +46,20 @@ def index():
             active_school = g.get('active_school')
             if active_school:
                 permite_pontuacao, _ = JusticaService.get_pontuacao_config(active_school)
-                # Busca regras específicas do tipo de escola (CTSP, CBFPM, etc)
-                regras = db.session.scalars(
-                    select(DisciplineRule)
-                    .where(DisciplineRule.npccal_type == active_school.npccal_type)
-                    .order_by(DisciplineRule.codigo)
-                ).all()
+                regras = db.session.scalars(select(DisciplineRule).where(DisciplineRule.npccal_type == active_school.npccal_type).order_by(DisciplineRule.codigo)).all()
             else:
                 regras = db.session.scalars(select(DisciplineRule).limit(100)).all()
-            
-            turmas = db.session.scalars(
-                select(Turma).where(Turma.school_id == school_id).order_by(Turma.nome)
-            ).all()
+            turmas = db.session.scalars(select(Turma).where(Turma.school_id == school_id).order_by(Turma.nome)).all()
 
-        atributos = [(i, n) for i, n in enumerate([
-            'Expressão', 'Planejamento', 'Perseverança', 'Apresentação', 'Lealdade', 'Tato', 
-            'Equilíbrio', 'Disciplina', 'Responsabilidade', 'Maturidade', 'Assiduidade', 
-            'Pontualidade', 'Dicção', 'Liderança', 'Relacionamento', 'Ética', 'Produtividade', 'Eficiência'
-        ], 1)]
+        atributos = [(i, n) for i, n in enumerate(['Expressão', 'Planejamento', 'Perseverança', 'Apresentação', 'Lealdade', 'Tato', 'Equilíbrio', 'Disciplina', 'Responsabilidade', 'Maturidade', 'Assiduidade', 'Pontualidade', 'Dicção', 'Liderança', 'Relacionamento', 'Ética', 'Produtividade', 'Eficiência'], 1)]
 
         return render_template('justica/index.html', 
-            em_andamento=em_andamento, 
-            finalizados=finalizados, 
-            fatos_predefinidos=regras, 
-            turmas=turmas, 
-            permite_pontuacao=permite_pontuacao, 
-            atributos_fada=atributos, 
+            em_andamento=em_andamento, finalizados=finalizados, fatos_predefinidos=regras, 
+            turmas=turmas, permite_pontuacao=permite_pontuacao, atributos_fada=atributos, 
             hoje=datetime.today().strftime('%Y-%m-%d'))
-            
     except Exception as e:
-        logger.exception("Erro crítico no index de justiça")
-        # Mensagem padrão restaurada para segurança em produção
-        flash("Erro ao carregar dados de Justiça e Disciplina.", "danger")
+        logger.exception("Erro index justica")
+        flash("Erro ao carregar dados.", "danger")
         return redirect(url_for('main.dashboard'))
 
 @justica_bp.route('/registrar-em-massa', methods=['POST'])
@@ -94,14 +67,9 @@ def index():
 @cal_required 
 def registrar_em_massa():
     try:
-        # Recupera IDs dos alunos (checkboxes)
         ids = request.form.getlist('alunos_selecionados')
-        if not ids and request.form.get('aluno_id'):
-            ids = [request.form.get('aluno_id')]
-            
-        if not ids:
-            flash('Selecione pelo menos um aluno para realizar o registro.', 'warning')
-            return redirect(url_for('justica.index'))
+        if not ids and request.form.get('aluno_id'): ids = [request.form.get('aluno_id')]
+        if not ids: return redirect(url_for('justica.index'))
 
         tipo = request.form.get('tipo_registro')
         dt_str = request.form.get('data_fato')
@@ -114,168 +82,81 @@ def registrar_em_massa():
             pts, cod = 0.0, None
             if regra_id:
                 r = db.session.get(DisciplineRule, int(regra_id))
-                if r: 
-                    pts = r.pontos
-                    cod = r.codigo
-            
+                if r: pts = r.pontos; cod = r.codigo
             for aid in ids:
                 ok, _ = JusticaService.criar_processo(desc, obs, int(aid), current_user.id, pts, cod, regra_id, dt_str)
                 if ok: count += 1
-            flash(f'{count} registros de infração realizados com sucesso.', 'success')
-        
+            flash(f'{count} infrações registradas.', 'success')
         elif tipo == 'elogio':
             for aid in ids:
-                # O Service trata a conversão da data
-                dt = JusticaService._ensure_datetime(dt_str)
-                novo_elogio = Elogio(
-                    aluno_id=int(aid), 
-                    registrado_por_id=current_user.id, 
-                    data_elogio=dt, 
-                    descricao=desc
-                )
-                db.session.add(novo_elogio)
+                db.session.add(Elogio(aluno_id=int(aid), registrado_por_id=current_user.id, data_elogio=JusticaService._ensure_datetime(dt_str), descricao=desc))
                 count += 1
             db.session.commit()
-            flash(f'{count} elogios registrados com sucesso.', 'success')
-            
+            flash(f'{count} elogios registrados.', 'success')
         return redirect(url_for('justica.index'))
-    except Exception as e:
-        db.session.rollback()
-        logger.exception("Erro ao registrar em massa")
-        flash(f"Erro técnico ao salvar: {e}", "danger")
-        return redirect(url_for('justica.index'))
+    except: db.session.rollback(); flash("Erro técnico.", "danger"); return redirect(url_for('justica.index'))
 
-@justica_bp.route('/api/alunos-por-turma/<int:turma_id>')
-@login_required
-def api_alunos_por_turma(turma_id):
-    """Retorna lista de alunos para preencher os checkboxes via AJAX."""
-    try:
-        alunos = db.session.scalars(
-            select(Aluno)
-            .where(Aluno.turma_id == turma_id)
-            .join(User)
-            .order_by(Aluno.num_aluno)
-        ).all()
-        # O 'or' vazio garante que não apareça 'null' no front
-        return jsonify([{'id': a.id, 'nome': a.user.nome_completo, 'numero': a.num_aluno or ''} for a in alunos])
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@justica_bp.route('/api/aluno-details/<int:aluno_id>')
-@login_required
-def api_get_aluno_details(aluno_id):
-    """Retorna detalhes para o Gerador de Termo Inteligente."""
-    try:
-        aluno = db.session.get(Aluno, aluno_id)
-        if not aluno: return jsonify({'error': 'Aluno não encontrado'}), 404
-        return jsonify({
-            'nome_completo': aluno.user.nome_completo,
-            'posto_graduacao': aluno.user.posto_graduacao or 'Al',
-            'matricula': aluno.user.matricula or 'S/M'
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-# --- ROTA CRON PARA AUTOMAÇÃO ---
 @justica_bp.route('/cron/verificar-revelia', methods=['GET'])
 def cron_verificar_revelia():
-    """
-    Rota para ser chamada periodicamente (ex: a cada 1h) por um CRON JOB.
-    Verifica processos sem ciência há mais de 24h.
-    """
+    """Rota para PythonAnywhere Task (A cada 1h)"""
     ok, msgs = JusticaService.verificar_prazos_revelia_automatica()
-    if ok:
-        return jsonify({'status': 'ok', 'processed': msgs}), 200
-    else:
-        return jsonify({'status': 'error', 'error': msgs}), 500
+    return jsonify({'status': 'ok' if ok else 'error', 'processed': msgs}), 200 if ok else 500
 
 @justica_bp.route('/finalizar/<int:pid>', methods=['POST'])
 @login_required
 @cal_required
 def finalizar_processo(pid):
-    """Rota para o CAl/Admin decidir o desfecho do processo."""
     decisao = request.form.get('decisao_final')
     fundamentacao = request.form.get('fundamentacao')
     detalhes = request.form.get('detalhes_sancao')
     
-    # Novos Campos (Inputs do Form)
-    is_crime = request.form.get('is_crime') == 'on' # Checkbox HTML
-    tipo_sancao = request.form.get('tipo_sancao')   # Select HTML
-    dias_sancao_str = request.form.get('dias_sancao')
+    # Novos inputs para Sanção e Crime
+    is_crime = request.form.get('is_crime') == 'on'
+    tipo_sancao = request.form.get('tipo_sancao')
     origem = request.form.get('origem_punicao', 'NPCCAL')
-    
-    dias_sancao = int(dias_sancao_str) if dias_sancao_str and dias_sancao_str.strip() else None
+    dias_str = request.form.get('dias_sancao')
+    dias = int(dias_str) if dias_str and dias_str.strip() else None
     
     ok, msg = JusticaService.finalizar_processo(
         pid, decisao, fundamentacao, detalhes, 
-        is_crime=is_crime, 
-        tipo_sancao=tipo_sancao, 
-        dias_sancao=dias_sancao, 
-        origem=origem
+        is_crime=is_crime, tipo_sancao=tipo_sancao, dias_sancao=dias, origem=origem
     )
     flash(msg, 'success' if ok else 'danger')
     return redirect(url_for('justica.index'))
+
+@justica_bp.route('/api/alunos-por-turma/<int:turma_id>')
+@login_required
+def api_alunos_por_turma(turma_id):
+    alunos = db.session.scalars(select(Aluno).where(Aluno.turma_id==turma_id).join(User).order_by(Aluno.num_aluno)).all()
+    return jsonify([{'id': a.id, 'nome': a.user.nome_completo, 'numero': a.num_aluno or ''} for a in alunos])
+
+@justica_bp.route('/api/aluno-details/<int:aluno_id>')
+@login_required
+def api_get_aluno_details(aluno_id):
+    a = db.session.get(Aluno, aluno_id)
+    return jsonify({'nome_completo': a.user.nome_completo, 'posto_graduacao': a.user.posto_graduacao or 'Al', 'matricula': a.user.matricula}) if a else ({}, 404)
 
 @justica_bp.route('/deletar/<int:pid>', methods=['POST'])
 @login_required
 @cal_required
 def deletar_processo(pid):
-    """Exclui um registro de infração/fato observado."""
-    ok, msg = JusticaService.deletar_processo(pid)
-    flash(msg, 'success' if ok else 'danger')
-    return redirect(url_for('justica.index'))
+    JusticaService.deletar_processo(pid); return redirect(url_for('justica.index'))
 
 @justica_bp.route('/ciente/<int:pid>', methods=['POST'])
 @login_required
 def registrar_ciente(pid):
-    """Rota usada pelo Aluno para assinar a ciência do processo."""
-    ok, msg = JusticaService.registrar_ciente(pid, current_user)
-    flash(msg, 'success' if ok else 'danger')
-    return redirect(url_for('justica.index'))
+    JusticaService.registrar_ciente(pid, current_user); return redirect(url_for('justica.index'))
 
 @justica_bp.route('/defesa/<int:pid>', methods=['POST'])
 @login_required
 def enviar_defesa(pid):
-    """Rota usada pelo Aluno para enviar sua justificativa escrita."""
-    texto = request.form.get('defesa_texto')
-    if not texto:
-        flash("O texto da defesa não pode estar vazio.", "warning")
-        return redirect(url_for('justica.index'))
-        
-    ok, msg = JusticaService.enviar_defesa(pid, texto, current_user)
-    flash(msg, 'success' if ok else 'danger')
-    return redirect(url_for('justica.index'))
+    JusticaService.enviar_defesa(pid, request.form.get('defesa_texto'), current_user); return redirect(url_for('justica.index'))
 
 @justica_bp.route('/imprimir-processos', methods=['POST'])
 @login_required
 def imprimir_processos():
-    """Gera o HTML para impressão dos processos selecionados no formato de BI."""
-    try:
-        # Pega lista de IDs (checkboxes) ou ID único (botão individual)
-        ids = request.form.getlist('processos_selecionados')
-        if not ids and request.form.get('processo_id'):
-            ids = [request.form.get('processo_id')]
-            
-        if not ids:
-            flash("Nenhum processo selecionado para impressão.", "warning")
-            return redirect(url_for('justica.index'))
-
-        # Converte para inteiros
-        ids = [int(x) for x in ids]
-
-        # Busca os processos no banco
-        processos = db.session.scalars(
-            select(ProcessoDisciplina)
-            .where(ProcessoDisciplina.id.in_(ids))
-            .order_by(ProcessoDisciplina.data_ocorrencia.desc())
-        ).all()
-
-        return render_template(
-            'justica/export_bi_template.html', 
-            processos=processos,
-            hoje=datetime.today().strftime('%d de %B de %Y')
-        )
-    except Exception as e:
-        logger.exception("Erro ao gerar impressão")
-        flash(f"Erro ao gerar documento: {e}", "danger")
-        return redirect(url_for('justica.index'))
+    ids = request.form.getlist('processos_selecionados') or [request.form.get('processo_id')]
+    ids = [int(x) for x in ids if x]
+    if not ids: return redirect(url_for('justica.index'))
+    processos = db.session.scalars(select(ProcessoDisciplina).where(ProcessoDisciplina.id.in_(ids)).order_by(ProcessoDisciplina.data_ocorrencia.desc())).all()
+    return render_template('justica/export_bi_template.html', processos=processos, hoje=datetime.today().strftime('%d de %B de %Y'))

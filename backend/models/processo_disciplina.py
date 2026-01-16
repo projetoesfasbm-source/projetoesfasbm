@@ -12,7 +12,7 @@ if t.TYPE_CHECKING:
     from .user import User
     from .discipline_rule import DisciplineRule
 
-# Enum herdando de str para facilitar serialização, mas o banco usará String puro
+# Enum herdando de str para facilitar serialização e evitar erros de banco
 class StatusProcesso(str, enum.Enum):
     AGUARDANDO_CIENCIA = 'Aguardando Ciência'
     ALUNO_NOTIFICADO = 'Aluno Notificado'
@@ -36,16 +36,13 @@ class ProcessoDisciplina(db.Model):
     
     pontos: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
 
-    # --- CORREÇÃO CRÍTICA DE TIPO ---
-    # Define como String(50) para aceitar qualquer texto, evitando erro de Enum no banco.
-    # Usa .value no default para inserir a string literal, não o objeto Python.
+    # Status definido como String(50) para compatibilidade total
     status: Mapped[str] = mapped_column(
         String(50), 
         default=StatusProcesso.AGUARDANDO_CIENCIA.value, 
         nullable=False,
         index=True
     )
-    # --------------------------------
 
     # Timestamps
     data_ocorrencia: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -59,12 +56,12 @@ class ProcessoDisciplina(db.Model):
     fundamentacao: Mapped[t.Optional[str]] = mapped_column(Text, nullable=True)
     detalhes_sancao: Mapped[t.Optional[str]] = mapped_column(Text, nullable=True)
     
-    # --- NOVOS CAMPOS (PORTARIA NOVA E REGRAS DE CÁLCULO) ---
+    # --- NOVOS CAMPOS (PORTARIA NOVA) ---
     is_crime: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     tipo_sancao: Mapped[t.Optional[str]] = mapped_column(String(50), nullable=True) # Ex: REPREENSAO, DETENCAO
     dias_sancao: Mapped[t.Optional[int]] = mapped_column(Integer, nullable=True)
     origem_punicao: Mapped[str] = mapped_column(String(20), default='NPCCAL', nullable=False) # 'NPCCAL', 'RDBM', 'CPM'
-    # ---------------------------------------------------------
+    # ------------------------------------
 
     # Controle
     ciente_aluno: Mapped[bool] = mapped_column(default=False)
@@ -74,7 +71,7 @@ class ProcessoDisciplina(db.Model):
     relator: Mapped['User'] = relationship(foreign_keys=[relator_id])
     regra: Mapped['DisciplineRule'] = relationship(foreign_keys=[regra_id])
 
-    # Índices compostos para performance
+    # Índices
     __table_args__ = (
         Index('idx_processo_status_data', 'status', 'data_ocorrencia'),
         Index('idx_processo_codigo', 'codigo_infracao'),
