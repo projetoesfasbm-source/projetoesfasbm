@@ -417,6 +417,35 @@ class HorarioService:
                     elif vinculo_dt.instrutor_id_2 == instrutor_id_1 and vinculo_dt.instrutor_id_1:
                         instrutor_id_2 = vinculo_dt.instrutor_id_1
 
+            # -------------------------------------------------------------------------
+            # VALIDAÇÃO DE CONFLITO DE INSTRUTOR (Cross-Turma)
+            # -------------------------------------------------------------------------
+            instructors_to_check = [i for i in [instrutor_id_1, instrutor_id_2] if i is not None]
+            
+            if instructors_to_check:
+                # Verifica se ALGUM dos instrutores selecionados já está em OUTRA turma no mesmo horário
+                conflict_query = select(Horario).where(
+                    Horario.semana_id == semana_id,
+                    Horario.dia_semana == dia,
+                    Horario.pelotao != pelotao, # Ignora a própria turma (pois conflitos locais já são tratados)
+                    # Verifica sobreposição de períodos:
+                    # (StartA <= EndB) and (EndA >= StartB)
+                    Horario.periodo <= periodo_fim,
+                    (Horario.periodo + Horario.duracao - 1) >= periodo_inicio,
+                    # Se qualquer um dos IDs bater (seja como principal ou secundário)
+                    or_(
+                        Horario.instrutor_id.in_(instructors_to_check),
+                        Horario.instrutor_id_2.in_(instructors_to_check)
+                    )
+                )
+                
+                conflict_aula = db.session.scalar(conflict_query)
+                if conflict_aula:
+                    # Busca nome do instrutor para mensagem mais clara (opcional, mas bom UX)
+                    # Aqui retornamos uma mensagem genérica de conflito
+                    return False, f"⚠️ CONFLITO DE AGENDA: O instrutor já está alocado na turma '{conflict_aula.pelotao}' neste horário (Período {conflict_aula.periodo}).", 409
+            # -------------------------------------------------------------------------
+
             if horario_id:
                 aula_original = db.session.get(Horario, horario_id)
                 if not aula_original or not HorarioService.can_edit_horario(aula_original, user):
@@ -453,7 +482,7 @@ class HorarioService:
                     (Horario.periodo + Horario.duracao - 1) >= periodo_bloco_inicio,
                 )
                 if db.session.execute(query_conflito).scalars().first():
-                    return False, f'Conflito de horário no período {periodo_bloco_inicio}.', 409
+                    return False, f'Conflito de horário interno na turma {pelotao} no período {periodo_bloco_inicio}.', 409
 
                 nova_aula_bloco = Horario(
                     pelotao=pelotao,
