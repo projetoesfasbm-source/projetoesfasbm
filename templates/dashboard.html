@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard - Sistema EsFAS{% endblock %}
+{% block title %}Dashboard - SisGEn{% endblock %}
 
 {% block content %}
 <div class="container-fluid dashboard-container">
@@ -21,7 +21,7 @@
                 {% if school_in_context %}
                     <p class="welcome-subtitle">Você está no painel da <strong>{{ school_in_context.nome }}</strong>.</p>
                 {% else %}
-                    <p class="welcome-subtitle">Bem-vindo de volta à visão geral do SiGA EsFAS.</p>
+                    <p class="welcome-subtitle">Bem-vindo de volta à visão geral do SisGEn.</p>
                 {% endif %}
             </div>
         </div>
@@ -50,7 +50,7 @@
                     <span class="stat-label">Disciplinas</span>
                 </div>
             </div>
-            
+
             {% if school_in_context and current_user.role in ['super_admin', 'programador', 'admin_escola'] and dashboard_data.aulas_pendentes > 0 %}
             <a href="{{ url_for('horario.aprovar_horarios') }}" class="stat-compact stat-warning">
                 <span class="stat-icon">⚠️</span>
