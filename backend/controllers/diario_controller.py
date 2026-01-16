@@ -14,70 +14,53 @@ def listar_pendentes():
         flash("Escola não selecionada.", "warning")
         return redirect(url_for('main.dashboard'))
 
-    # Filtros da URL
+    status = request.args.get('status', 'pendente')
     turma_id = request.args.get('turma_id', type=int)
     disciplina_id = request.args.get('disciplina_id', type=int)
     
-    # Determina o escopo: Admin vê tudo, Instrutor vê só o seu
-    user_context_id = current_user.id
-    is_admin = False
-    
-    # Se for Admin, SENS ou Programador, user_context_id vira None (para pegar tudo)
-    if current_user.is_sens_in_school(school_id) or current_user.is_admin_escola_in_school(school_id) or current_user.is_programador:
-        user_context_id = None
-        is_admin = True
-
-    # Busca Diários
-    diarios = DiarioService.get_diarios_pendentes(
-        school_id, 
-        user_context_id, 
-        turma_id, 
-        disciplina_id
+    # Busca e AGRUPA os diários
+    diarios_agrupados = DiarioService.get_diarios_agrupados(
+        school_id=school_id,
+        user_id=current_user.id, 
+        turma_id=turma_id,
+        disciplina_id=disciplina_id,
+        status=status
     )
     
-    # Busca Listas para os Dropdowns (Turmas e Disciplinas)
-    turmas_filtro, disciplinas_filtro = DiarioService.get_filtros_disponiveis(school_id, user_context_id)
+    turmas, disciplinas = DiarioService.get_filtros_disponiveis(school_id, current_user.id, turma_id)
     
     return render_template('diario/instrutor_listar.html', 
-                           diarios=diarios, 
-                           turmas=turmas_filtro,
-                           disciplinas=disciplinas_filtro,
+                           diarios=diarios_agrupados, 
+                           turmas=turmas,
+                           disciplinas=disciplinas,
+                           sel_status=status,
                            sel_turma=turma_id,
-                           sel_disciplina=disciplina_id,
-                           is_admin=is_admin)
+                           sel_disciplina=disciplina_id)
 
 @diario_bp.route('/instrutor/assinar/<int:diario_id>', methods=['GET', 'POST'])
 @login_required
 def assinar(diario_id):
+    # Nota: Ao receber o ID de um diário agrupado, a função 'assinar_diario'
+    # no service automaticamente busca e assina todos os irmãos do bloco.
     diario, instrutor = DiarioService.get_diario_para_assinatura(diario_id, current_user.id)
     
     if not diario:
-        flash("Diário não encontrado ou permissão negada.", "danger")
+        flash("Diário não encontrado.", "danger")
         return redirect(url_for('diario.listar_pendentes'))
 
     if request.method == 'POST':
         tipo = request.form.get('tipo_assinatura')
-        salvar_padrao = request.form.get('salvar_padrao') == 'on'
+        salvar = request.form.get('salvar_padrao') == 'on'
         dados = None
 
-        if tipo == 'canvas':
-            dados = request.form.get('assinatura_base64')
-        elif tipo == 'upload':
-            dados = request.files.get('assinatura_upload')
-        elif tipo == 'padrao':
-            dados = True
+        if tipo == 'canvas': dados = request.form.get('assinatura_base64')
+        elif tipo == 'upload': dados = request.files.get('assinatura_upload')
+        elif tipo == 'padrao': dados = True
 
-        sucesso, msg = DiarioService.assinar_diario(
-            diario.id, 
-            current_user.id, 
-            tipo, 
-            dados, 
-            salvar_padrao
-        )
-        
-        if sucesso:
+        ok, msg = DiarioService.assinar_diario(diario.id, current_user.id, tipo, dados, salvar)
+        if ok:
             flash(msg, "success")
-            return redirect(url_for('diario.listar_pendentes'))
+            return redirect(url_for('diario.listar_pendentes', status='assinado'))
         else:
             flash(msg, "danger")
 

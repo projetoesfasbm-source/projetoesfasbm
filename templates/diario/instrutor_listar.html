@@ -2,47 +2,49 @@
 
 {% block content %}
 <div class="container mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2><i class="fas fa-signature me-2"></i>Validação de Diários</h2>
-        {% if is_admin %}
-        <span class="badge bg-danger">Modo Administrador</span>
-        {% endif %}
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-bold"><i class="fas fa-file-signature me-2"></i>Gestão de Diários</h2>
+    </div>
+
+    <div class="mb-4">
+        <a href="{{ url_for('diario.listar_pendentes', status='pendente') }}"
+           class="btn {% if sel_status == 'pendente' %}btn-primary{% else %}btn-outline-primary bg-white{% endif %} btn-lg me-2 shadow-sm fw-bold">
+            <i class="fas fa-clock me-2"></i> Pendentes de Assinatura
+        </a>
+
+        <a href="{{ url_for('diario.listar_pendentes', status='assinado') }}"
+           class="btn {% if sel_status == 'assinado' %}btn-success{% else %}btn-outline-success bg-white{% endif %} btn-lg shadow-sm fw-bold">
+            <i class="fas fa-check-double me-2"></i> Histórico (Já Validados)
+        </a>
     </div>
     
-    <div class="card shadow-sm mb-4 bg-light">
+    <div class="card shadow-sm mb-4 bg-light border-0">
         <div class="card-body py-3">
             <form method="GET" action="{{ url_for('diario.listar_pendentes') }}" class="row g-3 align-items-end">
-                
+                <input type="hidden" name="status" value="{{ sel_status }}">
+
                 <div class="col-md-5">
-                    <label class="fw-bold small text-muted"><i class="fas fa-users me-1"></i> Turma</label>
+                    <label class="fw-bold small text-uppercase text-muted">Turma</label>
                     <select name="turma_id" class="form-select" onchange="this.form.submit()">
-                        <option value="">-- Todas as Turmas --</option>
+                        <option value="">-- Todas --</option>
                         {% for t in turmas %}
-                        <option value="{{ t.id }}" {% if sel_turma == t.id %}selected{% endif %}>
-                            {{ t.nome }}
-                        </option>
+                        <option value="{{ t.id }}" {% if sel_turma == t.id %}selected{% endif %}>{{ t.nome }}</option>
                         {% endfor %}
                     </select>
                 </div>
 
                 <div class="col-md-5">
-                    <label class="fw-bold small text-muted"><i class="fas fa-book me-1"></i> Disciplina</label>
+                    <label class="fw-bold small text-uppercase text-muted">Disciplina</label>
                     <select name="disciplina_id" class="form-select" onchange="this.form.submit()">
-                        <option value="">-- Todas as Disciplinas --</option>
+                        <option value="">-- Todas --</option>
                         {% for d in disciplinas %}
-                        <option value="{{ d.id }}" {% if sel_disciplina == d.id %}selected{% endif %}>
-                            {{ d.materia }}
-                        </option>
+                        <option value="{{ d.id }}" {% if sel_disciplina == d.id %}selected{% endif %}>{{ d.materia }}</option>
                         {% endfor %}
                     </select>
                 </div>
 
                 <div class="col-md-2">
-                    {% if sel_turma or sel_disciplina %}
-                    <a href="{{ url_for('diario.listar_pendentes') }}" class="btn btn-outline-secondary w-100">
-                        <i class="fas fa-times me-1"></i> Limpar
-                    </a>
-                    {% endif %}
+                    <a href="{{ url_for('diario.listar_pendentes', status=sel_status) }}" class="btn btn-outline-secondary w-100 fw-bold bg-white">Limpar</a>
                 </div>
             </form>
         </div>
@@ -54,36 +56,43 @@
             <table class="table table-hover mb-0 align-middle">
                 <thead class="table-light">
                     <tr>
-                        <th>Data</th>
+                        <th class="ps-4">Data</th>
                         <th>Turma</th>
                         <th>Disciplina</th>
-                        <th>Período</th>
-                        <th>Instrutor (Titular)</th>
+                        <th>Período(s)</th>
+                        <th>Qtd.</th>
                         <th>Status</th>
-                        <th class="text-end">Ação</th>
+                        <th class="text-end pe-4">Ação</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for diario in diarios %}
                     <tr>
-                        <td>{{ diario.data_aula.strftime('%d/%m/%Y') }}</td>
-                        <td><span class="fw-bold text-primary">{{ diario.turma.nome }}</span></td>
+                        <td class="ps-4 fw-bold">{{ diario.data_aula.strftime('%d/%m/%Y') }}</td>
+                        <td><span class="badge bg-light text-dark border">{{ diario.turma.nome }}</span></td>
                         <td>{{ diario.disciplina.materia }}</td>
-                        <td>{{ diario.periodo }}º</td>
+                        
+                        <td class="fw-bold text-primary">{{ diario.periodo_resumo }}</td>
+                        
+                        <td><span class="badge bg-secondary rounded-pill">{{ diario.total_aulas_bloco }} aulas</span></td>
+                        
                         <td>
-                            {# Busca dinâmica do instrutor titular no template para conferência do admin #}
-                            {% set aula = diario.horario_ref if diario.horario_ref else None %} 
-                            {# Nota: como não temos o obj horario direto no diario sem join,
-                               usamos uma lógica simplificada ou apenas exibimos o logado.
-                               Para o Admin, seria ideal ver quem deve assinar.
-                               Mas para simplificar visualmente agora: #}
-                            <span class="small text-muted">Ver no detalhe</span>
+                            {% if diario.status == 'assinado' %}
+                                <span class="badge bg-success">Validado</span>
+                            {% else %}
+                                <span class="badge bg-warning text-dark">Pendente</span>
+                            {% endif %}
                         </td>
-                        <td><span class="badge bg-warning text-dark">Pendente</span></td>
-                        <td class="text-end">
-                            <a href="{{ url_for('diario.assinar', diario_id=diario.id) }}" class="btn btn-primary btn-sm shadow-sm">
-                                <i class="fas fa-pen-nib me-1"></i> Analisar
-                            </a>
+                        <td class="text-end pe-4">
+                            {% if diario.status == 'pendente' %}
+                                <a href="{{ url_for('diario.assinar', diario_id=diario.id) }}" class="btn btn-primary btn-sm shadow-sm">
+                                    <i class="fas fa-pen-nib"></i> Validar Bloco
+                                </a>
+                            {% else %}
+                                <button class="btn btn-secondary btn-sm disabled" disabled>
+                                    <i class="fas fa-check"></i> Feito
+                                </button>
+                            {% endif %}
                         </td>
                     </tr>
                     {% endfor %}
@@ -91,14 +100,14 @@
             </table>
         </div>
     </div>
-    <div class="mt-2 text-end text-muted small">
-        Total de pendências encontradas: {{ diarios|length }}
+    <div class="mt-2 text-muted small text-end">
+        Mostrando {{ diarios|length }} blocos de aulas (agrupados).
     </div>
     {% else %}
-    <div class="alert alert-success mt-3 text-center p-4">
-        <i class="fas fa-check-circle fa-3x mb-3 text-success opacity-50"></i>
-        <h5>Tudo em dia!</h5>
-        <p class="text-muted mb-0">Nenhum diário pendente encontrado com os filtros selecionados.</p>
+    <div class="text-center py-5 text-muted">
+        <i class="fas fa-folder-open fa-3x mb-3 opacity-25"></i>
+        <h4>Nenhum registro encontrado.</h4>
+        <p>Ajuste os filtros ou verifique a outra aba.</p>
     </div>
     {% endif %}
 </div>

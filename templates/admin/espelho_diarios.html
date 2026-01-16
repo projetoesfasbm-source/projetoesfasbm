@@ -132,7 +132,7 @@
     <div class="card shadow-sm border-0 mb-4 bg-light">
         <div class="card-body">
             <form method="GET" action="{{ url_for('admin_escola.espelho_diarios') }}" class="row g-3 align-items-end">
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <label for="turma_id" class="form-label fw-bold">Filtrar por Turma</label>
                     <select class="form-select" name="turma_id" id="turma_id" onchange="this.form.submit()">
                         <option value="">Todas as Turmas</option>
@@ -143,6 +143,19 @@
                         {% endfor %}
                     </select>
                 </div>
+                
+                <div class="col-md-4">
+                    <label for="disciplina_id" class="form-label fw-bold">Filtrar por Disciplina</label>
+                    <select class="form-select" name="disciplina_id" id="disciplina_id" onchange="this.form.submit()">
+                        <option value="">Todas as Disciplinas</option>
+                        {% for d in disciplinas %}
+                        <option value="{{ d.id }}" {% if disciplina_id == d.id %}selected{% endif %}>
+                            {{ d.materia }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
                 <div class="col-md-3">
                     <label for="data_filtro" class="form-label fw-bold">Filtrar por Data</label>
                     <input type="date" class="form-control" name="data" value="{{ request.args.get('data') }}" onchange="this.form.submit()">
@@ -194,7 +207,7 @@
                             <td class="text-center">
                                 
                                 {# CORREÇÃO: Usa is_sens (que inclui Admin e Programador) #}
-                                {% if current_user.is_sens %}
+                                {% if current_user.is_sens or current_user.role in ['programador', 'admin_escola'] %}
                                     <a href="{{ url_for('admin_escola.editar_diario_bloco', diario_id=diario.id) }}" 
                                        class="btn btn-primary btn-sm rounded-pill" 
                                        title="Editar Diário e Faltas">
@@ -224,13 +237,13 @@
                     <ul class="pagination justify-content-center mb-0">
                         {% if pagination.has_prev %}
                         <li class="page-item">
-                            <a class="page-link" href="{{ url_for('admin_escola.espelho_diarios', page=pagination.prev_num, turma_id=request.args.get('turma_id'), data=request.args.get('data')) }}">Anterior</a>
+                            <a class="page-link" href="{{ url_for('admin_escola.espelho_diarios', page=pagination.prev_num, turma_id=request.args.get('turma_id'), disciplina_id=request.args.get('disciplina_id'), data=request.args.get('data')) }}">Anterior</a>
                         </li>
                         {% endif %}
                         <li class="page-item disabled"><span class="page-link">Página {{ pagination.page }} de {{ pagination.pages }}</span></li>
                         {% if pagination.has_next %}
                         <li class="page-item">
-                            <a class="page-link" href="{{ url_for('admin_escola.espelho_diarios', page=pagination.next_num, turma_id=request.args.get('turma_id'), data=request.args.get('data')) }}">Próxima</a>
+                            <a class="page-link" href="{{ url_for('admin_escola.espelho_diarios', page=pagination.next_num, turma_id=request.args.get('turma_id'), disciplina_id=request.args.get('disciplina_id'), data=request.args.get('data')) }}">Próxima</a>
                         </li>
                         {% endif %}
                     </ul>

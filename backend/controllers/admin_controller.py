@@ -166,6 +166,10 @@ def espelho_diarios():
     # =========================================================================
     page = request.args.get('page', 1, type=int)
     turma_id = request.args.get('turma_id', type=int)
+    
+    # --- NOVO FILTRO: DISCIPLINA ---
+    disciplina_id = request.args.get('disciplina_id', type=int)
+    
     data_str = request.args.get('data')
 
     # Query base para listar os diários
@@ -173,6 +177,10 @@ def espelho_diarios():
 
     if turma_id:
         query = query.where(DiarioClasse.turma_id == turma_id)
+    
+    # APLICA O FILTRO DE DISCIPLINA NA QUERY
+    if disciplina_id:
+        query = query.where(DiarioClasse.disciplina_id == disciplina_id)
     
     if data_str:
         try:
@@ -189,6 +197,11 @@ def espelho_diarios():
     
     # Carregar turmas para o filtro
     turmas = db.session.scalars(select(Turma).where(Turma.school_id == school_id)).all()
+
+    # --- CARREGAR DISCIPLINAS PARA O FILTRO ---
+    # Busca todas as disciplinas utilizadas pela escola (via Turmas)
+    disciplinas_query = select(Disciplina).join(Turma).where(Turma.school_id == school_id).distinct().order_by(Disciplina.materia)
+    disciplinas = db.session.scalars(disciplinas_query).all()
 
     # Dados para a tabela de "Todos os Alunos" do modal/collapse
     todos_alunos_query = db.session.execute(
@@ -222,7 +235,9 @@ def espelho_diarios():
         todos_alunos=todos_alunos_json,
         diarios=diarios_lista,
         pagination=pagination,
-        turmas=turmas
+        turmas=turmas,
+        disciplinas=disciplinas, # Passa para o template
+        disciplina_id=disciplina_id # Passa o valor selecionado
     )
 
 @admin_escola_bp.route('/detalhe-faltas/<int:aluno_id>')

@@ -10,9 +10,8 @@ from ..models.diario_classe import DiarioClasse
 from ..models.horario import Horario
 from ..models.instrutor import Instrutor
 from ..models.turma import Turma
-from ..models.semana import Semana
 from ..models.disciplina import Disciplina
-from sqlalchemy import select, and_, or_
+from sqlalchemy import select, and_, or_, distinct
 
 class DiarioService:
     
@@ -28,185 +27,199 @@ class DiarioService:
         return db.session.scalars(query).first()
 
     @staticmethod
-    def get_diarios_pendentes(school_id, user_id=None, turma_id=None, disciplina_id=None):
+    def get_diarios_agrupados(school_id, user_id=None, turma_id=None, disciplina_id=None, status='pendente'):
         """
-        Busca diários pendentes.
-        - Se user_id for fornecido: Filtra apenas aulas daquele instrutor.
-        - Se user_id for None: Traz TUDO da escola (Modo Admin).
-        - Filtra também por Turma e Disciplina se fornecidos.
+        Busca os diários e os AGRUPA por (Data, Turma, Disciplina).
         """
+        # 1. Busca todos os registros brutos
         stmt = (
             select(DiarioClasse)
             .join(Turma, DiarioClasse.turma_id == Turma.id)
-            .join(Horario, and_(
-                Horario.pelotao == Turma.nome,
-                Horario.disciplina_id == DiarioClasse.disciplina_id,
-                Horario.periodo == DiarioClasse.periodo
-            ))
-            .join(Semana, Horario.semana_id == Semana.id)
             .where(
-                # Garante que pertence à escola atual (via Turma)
                 Turma.school_id == school_id,
-                DiarioClasse.status == 'pendente',
                 DiarioClasse.conteudo_ministrado != None,
-                DiarioClasse.conteudo_ministrado != '',
-                Semana.data_inicio <= DiarioClasse.data_aula,
-                Semana.data_fim >= DiarioClasse.data_aula
+                DiarioClasse.conteudo_ministrado != ''
             )
-            .order_by(DiarioClasse.data_aula.desc())
         )
 
-        # Lógica de Permissão (Instrutor vs Admin)
+        if status:
+            stmt = stmt.where(DiarioClasse.status == status)
+
         if user_id:
             instrutor = DiarioService.get_current_instrutor(user_id)
             if instrutor:
-                stmt = stmt.where(or_(
-                    Horario.instrutor_id == instrutor.id,
-                    Horario.instrutor_id_2 == instrutor.id
-                ))
+                stmt = stmt.join(Horario, and_(
+                    Horario.pelotao == Turma.nome,
+                    Horario.disciplina_id == DiarioClasse.disciplina_id
+                )).where(
+                    or_(Horario.instrutor_id == instrutor.id, Horario.instrutor_id_2 == instrutor.id)
+                )
             else:
-                return [] # Se passou ID mas não achou perfil, não retorna nada
+                return []
 
-        # Filtros Opcionais
-        if turma_id:
-            stmt = stmt.where(DiarioClasse.turma_id == turma_id)
+        if turma_id: stmt = stmt.where(DiarioClasse.turma_id == turma_id)
+        if disciplina_id: stmt = stmt.where(DiarioClasse.disciplina_id == disciplina_id)
+
+        # 2. Ordenação Estratégica
+        stmt = stmt.distinct().order_by(
+            DiarioClasse.data_aula.desc(), 
+            DiarioClasse.turma_id, 
+            DiarioClasse.disciplina_id, 
+            DiarioClasse.periodo
+        )
         
-        if disciplina_id:
-            stmt = stmt.where(DiarioClasse.disciplina_id == disciplina_id)
+        raw_diarios = db.session.scalars(stmt).all()
+
+        # 3. Lógica de Agrupamento
+        grouped_diarios = []
+        if not raw_diarios: return []
+
+        current_group = [raw_diarios[0]]
+
+        for i in range(1, len(raw_diarios)):
+            curr = raw_diarios[i]
+            prev = current_group[-1]
+
+            if (curr.data_aula == prev.data_aula and 
+                curr.turma_id == prev.turma_id and 
+                curr.disciplina_id == prev.disciplina_id):
+                current_group.append(curr)
+            else:
+                grouped_diarios.append(DiarioService._criar_representante_grupo(current_group))
+                current_group = [curr]
         
-        return db.session.scalars(stmt.distinct()).all()
+        if current_group:
+            grouped_diarios.append(DiarioService._criar_representante_grupo(current_group))
+
+        return grouped_diarios
 
     @staticmethod
-    def get_filtros_disponiveis(school_id, user_id=None):
+    def _criar_representante_grupo(group_items):
         """
-        Retorna as Turmas e Disciplinas que possuem pendências,
-        para preencher os dropdowns de filtro de forma inteligente.
+        CORREÇÃO: Ordena considerando que periodo pode ser None.
         """
-        # Base Query
-        base_query = (
-            select(DiarioClasse)
-            .join(Turma, DiarioClasse.turma_id == Turma.id)
-            .join(Horario, and_(
-                Horario.pelotao == Turma.nome,
-                Horario.disciplina_id == DiarioClasse.disciplina_id,
-                Horario.periodo == DiarioClasse.periodo
-            ))
-            .join(Semana, Horario.semana_id == Semana.id)
-            .where(
-                Turma.school_id == school_id,
-                DiarioClasse.status == 'pendente',
-                DiarioClasse.conteudo_ministrado != None,
-                DiarioClasse.conteudo_ministrado != '',
-                Semana.data_inicio <= DiarioClasse.data_aula,
-                Semana.data_fim >= DiarioClasse.data_aula
-            )
-        )
+        # Ordena tratando None como 0 para evitar erro de comparação
+        group_items.sort(key=lambda x: x.periodo or 0)
+        
+        rep = group_items[0] 
+        
+        first_p = group_items[0].periodo
+        last_p = group_items[-1].periodo
+        
+        # Tratamento visual caso o período seja Nulo
+        if first_p is None:
+            rep.periodo_resumo = "Período N/D"
+        elif first_p == last_p:
+            rep.periodo_resumo = f"{first_p}º Período"
+        else:
+            rep.periodo_resumo = f"{first_p}º a {last_p}º Período"
+            
+        rep.total_aulas_bloco = len(group_items)
+        
+        return rep
 
+    @staticmethod
+    def get_filtros_disponiveis(school_id, user_id=None, turma_selected_id=None):
+        base_query = select(DiarioClasse).join(Turma).where(Turma.school_id == school_id)
+        
         if user_id:
             instrutor = DiarioService.get_current_instrutor(user_id)
             if instrutor:
-                base_query = base_query.where(or_(
-                    Horario.instrutor_id == instrutor.id,
-                    Horario.instrutor_id_2 == instrutor.id
-                ))
-            else:
-                return [], []
+                base_query = base_query.join(Horario, and_(
+                    Horario.pelotao == Turma.nome,
+                    Horario.disciplina_id == DiarioClasse.disciplina_id
+                )).where(
+                    or_(Horario.instrutor_id == instrutor.id, Horario.instrutor_id_2 == instrutor.id)
+                )
 
-        # Busca Turmas Distintas
         stmt_turmas = select(Turma).join(base_query.subquery()).distinct().order_by(Turma.nome)
         turmas = db.session.scalars(stmt_turmas).all()
 
-        # Busca Disciplinas Distintas
-        stmt_disc = select(Disciplina).join(base_query.subquery()).distinct().order_by(Disciplina.materia)
-        disciplinas = db.session.scalars(stmt_disc).all()
+        disciplina_query = base_query
+        if turma_selected_id:
+            disciplina_query = disciplina_query.where(DiarioClasse.turma_id == turma_selected_id)
 
-        return turmas, disciplinas
+        stmt_disc = select(Disciplina).join(disciplina_query.subquery()).distinct().order_by(Disciplina.materia)
+        disciplinas = db.session.scalars(stmt_disc).all()
+        
+        unique_disciplinas = {d.materia: d for d in disciplinas}.values()
+        disciplinas_sorted = sorted(unique_disciplinas, key=lambda x: x.materia)
+
+        return turmas, disciplinas_sorted
 
     @staticmethod
     def get_diario_para_assinatura(diario_id, user_id):
-        # Para assinar, precisamos validar se quem está assinando é o instrutor da aula,
-        # OU se é um Admin fazendo uma validação forçada (regra de negócio a decidir).
-        # Por segurança, mantemos que APENAS o instrutor responsável assina seu nome,
-        # ou o Admin se tiver permissão explícita (aqui assumimos fluxo normal).
-        
         instrutor = DiarioService.get_current_instrutor(user_id)
-        if not instrutor:
-            # Se for admin tentando assinar, precisaria de lógica extra aqui.
-            # Por enquanto, mantemos a exigência de ser o instrutor da aula.
-            return None, None
-
-        stmt = (
-            select(DiarioClasse)
-            .join(Turma, DiarioClasse.turma_id == Turma.id)
-            .join(Horario, and_(
+        if not instrutor: return None, None
+        
+        stmt = select(DiarioClasse).join(Turma).join(Horario, and_(
                 Horario.pelotao == Turma.nome,
-                Horario.disciplina_id == DiarioClasse.disciplina_id,
-                Horario.periodo == DiarioClasse.periodo
-            ))
-            .join(Semana, Horario.semana_id == Semana.id)
-            .where(
+                Horario.disciplina_id == DiarioClasse.disciplina_id
+            )).where(
                 DiarioClasse.id == diario_id,
-                or_(
-                    Horario.instrutor_id == instrutor.id,
-                    Horario.instrutor_id_2 == instrutor.id
-                ),
-                Semana.data_inicio <= DiarioClasse.data_aula,
-                Semana.data_fim >= DiarioClasse.data_aula
+                or_(Horario.instrutor_id == instrutor.id, Horario.instrutor_id_2 == instrutor.id)
             )
-        )
         return db.session.scalars(stmt).first(), instrutor
 
     @staticmethod
     def assinar_diario(diario_id, user_id, tipo_assinatura, dados_assinatura=None, salvar_padrao=False):
-        diario, instrutor = DiarioService.get_diario_para_assinatura(diario_id, user_id)
-        if not diario:
+        diario_pai, instrutor = DiarioService.get_diario_para_assinatura(diario_id, user_id)
+        if not diario_pai:
             return False, "Permissão negada ou diário não encontrado."
 
         base_path = os.path.join(current_app.root_path, '..', 'static')
         upload_folder = os.path.join(base_path, 'uploads', 'signatures')
         os.makedirs(upload_folder, exist_ok=True)
         
-        filename = f"sig_diario_{diario.id}_{uuid.uuid4().hex[:8]}.png"
+        filename = f"sig_diario_{diario_pai.id}_{uuid.uuid4().hex[:8]}.png"
         filepath = os.path.join(upload_folder, filename)
         db_path = f"uploads/signatures/{filename}"
 
         try:
             if tipo_assinatura == 'padrao':
-                if not instrutor.assinatura_padrao_path:
-                    return False, "Você não possui uma assinatura padrão salva."
-                source_path = os.path.join(base_path, instrutor.assinatura_padrao_path)
-                if not os.path.exists(source_path):
-                    return False, "Arquivo de assinatura padrão não encontrado."
-                shutil.copy2(source_path, filepath)
+                if not instrutor.assinatura_padrao_path: return False, "Assinatura padrão não encontrada."
+                src = os.path.join(base_path, instrutor.assinatura_padrao_path)
+                if not os.path.exists(src): return False, "Arquivo padrão inexistente."
+                shutil.copy2(src, filepath)
 
             elif tipo_assinatura == 'canvas':
                 if not dados_assinatura: return False, "Assinatura vazia."
-                if ',' in dados_assinatura: _, encoded = dados_assinatura.split(',', 1)
-                else: encoded = dados_assinatura
-                img_data = base64.b64decode(encoded)
-                with open(filepath, 'wb') as f: f.write(img_data)
+                header, encoded = dados_assinatura.split(',', 1) if ',' in dados_assinatura else (None, dados_assinatura)
+                with open(filepath, 'wb') as f: f.write(base64.b64decode(encoded))
 
             elif tipo_assinatura == 'upload':
-                if not dados_assinatura: return False, "Arquivo não fornecido."
+                if not dados_assinatura: return False, "Arquivo vazio."
                 dados_assinatura.save(filepath)
 
-            else: return False, "Método inválido."
+            siblings = db.session.scalars(
+                select(DiarioClasse).where(
+                    DiarioClasse.data_aula == diario_pai.data_aula,
+                    DiarioClasse.turma_id == diario_pai.turma_id,
+                    DiarioClasse.disciplina_id == diario_pai.disciplina_id,
+                    DiarioClasse.status == 'pendente'
+                )
+            ).all()
 
-            diario.assinatura_path = db_path
-            diario.status = 'assinado'
-            diario.data_assinatura = datetime.now()
-            diario.instrutor_assinante_id = user_id
+            count = 0
+            timestamp = datetime.now()
+            for d in siblings:
+                d.assinatura_path = db_path
+                d.status = 'assinado'
+                d.data_assinatura = timestamp
+                d.instrutor_assinante_id = user_id
+                count += 1
 
             if salvar_padrao and tipo_assinatura in ['canvas', 'upload']:
-                default_filename = f"default_sig_instrutor_{instrutor.id}.png"
-                default_filepath = os.path.join(upload_folder, default_filename)
-                shutil.copy2(filepath, default_filepath)
-                instrutor.assinatura_padrao_path = f"uploads/signatures/{default_filename}"
+                def_name = f"default_{instrutor.id}.png"
+                def_path = os.path.join(upload_folder, def_name)
+                shutil.copy2(filepath, def_path)
+                instrutor.assinatura_padrao_path = f"uploads/signatures/{def_name}"
 
             db.session.commit()
-            return True, "Diário assinado com sucesso."
+            msg_plural = "aulas validadas" if count > 1 else "aula validada"
+            return True, f"Sucesso! {count} {msg_plural} em bloco."
 
         except Exception as e:
             db.session.rollback()
-            current_app.logger.error(f"Erro ao assinar: {e}")
-            return False, f"Erro técnico: {str(e)}"
+            current_app.logger.error(f"Erro assinatura: {e}")
+            return False, f"Erro: {str(e)}"
