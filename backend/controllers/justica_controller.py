@@ -1,7 +1,7 @@
 import logging
 from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, g, session
 from flask_login import login_required, current_user
-from sqlalchemy import select, desc
+from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 from datetime import datetime
 
@@ -40,8 +40,7 @@ def index():
         em_andamento = []
         finalizados = []
         for p in processos:
-            s = str(p.status).lower()
-            if s == 'finalizado': finalizados.append(p)
+            if str(p.status).lower() == 'finalizado': finalizados.append(p)
             else: em_andamento.append(p)
         
         permite_pontuacao = False
@@ -83,12 +82,8 @@ def index():
 def exportar_selecao():
     try:
         school_id = _get_current_school_id()
-        
-        # Otimização: Carrega tudo que precisa num Select só
         query = select(ProcessoDisciplina).join(ProcessoDisciplina.aluno).outerjoin(Aluno.turma)
-        
-        # Filtro de Status Manual (Para garantir compatibilidade com versões antigas do banco)
-        processos_raw = db.session.scalars(query.order_by(ProcessoDisciplina.data_ocorrencia.desc())).all()
+        processos_raw = db.session.scalars(query.order_by(ProcessoDisciplina.data_decisao.desc())).all()
         processos = [p for p in processos_raw if str(p.status).lower() == 'finalizado']
         
         if school_id:
@@ -97,34 +92,6 @@ def exportar_selecao():
         return render_template('justica/exportar_selecao.html', processos=processos, datetime=datetime)
     except Exception:
         logger.exception("Erro tela exportacao")
-        return redirect(url_for('justica.index'))
-
-@justica_bp.route('/imprimir-processos', methods=['POST'])
-@login_required
-def imprimir_processos():
-    try:
-        ids = request.form.getlist('processo_ids')
-        ids = [int(x) for x in ids if x]
-        
-        if not ids:
-            flash("Nenhum processo selecionado.", "warning")
-            return redirect(url_for('justica.exportar_selecao'))
-            
-        processos = db.session.scalars(
-            select(ProcessoDisciplina)
-            .where(ProcessoDisciplina.id.in_(ids))
-            .options(joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.user), joinedload(ProcessoDisciplina.regra))
-            .order_by(ProcessoDisciplina.data_ocorrencia.desc())
-        ).unique().all()
-        
-        hoje_extenso = datetime.now().strftime('%d de %B de %Y')
-        meses = {'January': 'janeiro', 'February': 'fevereiro', 'March': 'março', 'April': 'abril', 'May': 'maio', 'June': 'junho', 'July': 'julho', 'August': 'agosto', 'September': 'setembro', 'October': 'outubro', 'November': 'novembro', 'December': 'dezembro'}
-        for eng, pt in meses.items(): hoje_extenso = hoje_extenso.replace(eng, pt).replace(eng.lower(), pt)
-
-        return render_template('justica/export_bi_template.html', processos=processos, hoje=hoje_extenso)
-    except Exception:
-        logger.exception("Erro ao gerar impressão")
-        flash("Erro técnico na impressão.", "danger")
         return redirect(url_for('justica.index'))
 
 @justica_bp.route('/fada/registrar', methods=['POST'])
@@ -183,15 +150,10 @@ def fada_boletim():
             turmas = db.session.scalars(select(Turma).where(Turma.school_id == school_id)).all()
         
         dados_boletim = []
-        
         for turma in turmas:
-            alunos = db.session.scalars(
-                select(Aluno).where(Aluno.turma_id == turma.id).join(User).order_by(Aluno.num_aluno)
-            ).all()
-            
+            alunos = db.session.scalars(select(Aluno).where(Aluno.turma_id == turma.id).join(User).order_by(Aluno.num_aluno)).all()
             for aluno in alunos:
                 aat, ndisc, fada = JusticaService.calcular_aat_final(aluno.id)
-                
                 dados_boletim.append({
                     'aluno': aluno,
                     'turma': turma.nome,
@@ -200,18 +162,13 @@ def fada_boletim():
                     'aat': aat
                 })
 
-        hoje_str = datetime.today().strftime('%d/%m/%Y')
-
         if request.args.get('print') == 'true':
-            return render_template('justica/fada_pdf_template.html', dados=dados_boletim, hoje=hoje_str)
+            return render_template('justica/fada_pdf_template.html', dados=dados_boletim, hoje=datetime.today().strftime('%d/%m/%Y'))
 
-        return render_template('justica/fada_lista_alunos.html', 
-                               dados=dados_boletim, 
-                               turmas=db.session.scalars(select(Turma).where(Turma.school_id == school_id)).all())
-                               
+        return render_template('justica/fada_lista_alunos.html', dados=dados_boletim, turmas=db.session.scalars(select(Turma).where(Turma.school_id == school_id)).all())
     except Exception as e:
         logger.exception("Erro ao gerar boletim FADA")
-        flash(f"Erro ao carregar boletim: {str(e)}", "danger")
+        flash(f"Erro ao carregar boletim.", "danger")
         return redirect(url_for('justica.index'))
 
 @justica_bp.route('/registrar-em-massa', methods=['POST'])
@@ -228,7 +185,6 @@ def registrar_em_massa():
         hr_str = request.form.get('hora_fato')
         desc = request.form.get('descricao')
         obs = request.form.get('observacao', '')
-
         if dt_str and hr_str: dt_completa = f"{dt_str} {hr_str}"
         else: dt_completa = dt_str
 
@@ -278,7 +234,6 @@ def finalizar_processo(pid):
 @login_required
 def api_alunos_por_turma(turma_id):
     alunos = db.session.scalars(select(Aluno).where(Aluno.turma_id==turma_id).join(User).order_by(Aluno.num_aluno)).all()
-    # Modificado para retornar dicionário compatível com Select e Checkbox
     return jsonify([{'id': a.id, 'nome': a.user.nome_completo, 'numero': a.num_aluno or '', 'graduacao': a.user.posto_graduacao or ''} for a in alunos])
 
 @justica_bp.route('/api/aluno-details/<int:aluno_id>')
@@ -302,3 +257,9 @@ def registrar_ciente(pid):
 @login_required
 def enviar_defesa(pid):
     JusticaService.enviar_defesa(pid, request.form.get('defesa_texto'), current_user); return redirect(url_for('justica.index'))
+
+@justica_bp.route('/imprimir-processos', methods=['POST'])
+@login_required
+def imprimir_processos():
+    # Rota legado para impressão antiga se for chamada por engano, redireciona para a nova
+    return redirect(url_for('justica.exportar_selecao'))

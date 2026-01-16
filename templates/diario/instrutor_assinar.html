@@ -69,7 +69,7 @@
                             <p class="text-muted small">Sua assinatura salva será utilizada neste documento.</p>
                             <img src="{{ url_for('static', filename=instrutor.assinatura_padrao_path) }}" 
                                  class="img-fluid border rounded p-2" 
-                                 style="max-height: 150px; background-color: #fff;">
+                                 style="max-height: 150px; background-color: #ffffff;">
                             <div class="mt-2 text-success">
                                 <i class="fas fa-check-circle"></i> Pronta para uso
                             </div>
@@ -78,7 +78,7 @@
                     {% endif %}
 
                     <div class="tab-pane fade {% if not instrutor.assinatura_padrao_path %}show active{% endif %}" id="draw" role="tabpanel">
-                        <div class="border rounded d-flex justify-content-center bg-light" style="cursor: crosshair;">
+                        <div class="border rounded d-flex justify-content-center bg-white" style="cursor: crosshair;">
                             <canvas id="signaturePad" width="600" height="200" style="touch-action: none;"></canvas>
                         </div>
                         <div class="d-flex justify-content-between mt-2">
@@ -117,9 +117,13 @@
 
 <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.0.0/dist/signature_pad.umd.min.js"></script>
 <script>
-    // Inicialização do Canvas
+    // Inicialização do Canvas com fundo BRANCO
     var canvas = document.getElementById('signaturePad');
-    var signaturePad = new SignaturePad(canvas, { backgroundColor: 'rgba(255, 255, 255, 0)' });
+    // ALTERADO AQUI: backgroundColor agora é branco sólido
+    var signaturePad = new SignaturePad(canvas, { 
+        backgroundColor: 'rgb(255, 255, 255)',
+        penColor: 'rgb(0, 0, 0)'
+    });
 
     // Ajuste responsivo (com debounce simples para não limpar ao girar tela sem querer)
     function resizeCanvas() {
@@ -127,11 +131,14 @@
         canvas.width = canvas.offsetWidth * ratio;
         canvas.height = canvas.offsetHeight * ratio;
         canvas.getContext("2d").scale(ratio, ratio);
-        signaturePad.clear();
+        // Se redimensionar, precisa limpar e pintar o fundo de branco novamente
+        signaturePad.clear(); 
     }
     // resizeCanvas(); // Opcional: ativar se o layout quebrar em mobile
 
-    function clearPad() { signaturePad.clear(); }
+    function clearPad() { 
+        signaturePad.clear(); 
+    }
 
     // Gerenciamento do Tipo de Assinatura
     // Define padrão inicial baseado na existência da assinatura salva
