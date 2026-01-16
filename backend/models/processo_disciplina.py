@@ -3,7 +3,7 @@ import typing as t
 import enum
 from datetime import datetime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy import ForeignKey, String, Text, DateTime, Float, Index
+from sqlalchemy import ForeignKey, String, Text, DateTime, Float, Index, Integer, Boolean
 from sqlalchemy.sql import func
 from .database import db
 
@@ -17,6 +17,7 @@ class StatusProcesso(str, enum.Enum):
     AGUARDANDO_CIENCIA = 'Aguardando Ciência'
     ALUNO_NOTIFICADO = 'Aluno Notificado'
     DEFESA_ENVIADA = 'Defesa Enviada'
+    JULGADO = 'Julgado'
     FINALIZADO = 'Finalizado'
 
 class ProcessoDisciplina(db.Model):
@@ -58,6 +59,13 @@ class ProcessoDisciplina(db.Model):
     fundamentacao: Mapped[t.Optional[str]] = mapped_column(Text, nullable=True)
     detalhes_sancao: Mapped[t.Optional[str]] = mapped_column(Text, nullable=True)
     
+    # --- NOVOS CAMPOS (PORTARIA NOVA E REGRAS DE CÁLCULO) ---
+    is_crime: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    tipo_sancao: Mapped[t.Optional[str]] = mapped_column(String(50), nullable=True) # Ex: REPREENSAO, DETENCAO
+    dias_sancao: Mapped[t.Optional[int]] = mapped_column(Integer, nullable=True)
+    origem_punicao: Mapped[str] = mapped_column(String(20), default='NPCCAL', nullable=False) # 'NPCCAL', 'RDBM', 'CPM'
+    # ---------------------------------------------------------
+
     # Controle
     ciente_aluno: Mapped[bool] = mapped_column(default=False)
 

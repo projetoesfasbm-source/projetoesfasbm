@@ -176,6 +176,19 @@ def api_get_aluno_details(aluno_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# --- ROTA CRON PARA AUTOMAÇÃO ---
+@justica_bp.route('/cron/verificar-revelia', methods=['GET'])
+def cron_verificar_revelia():
+    """
+    Rota para ser chamada periodicamente (ex: a cada 1h) por um CRON JOB.
+    Verifica processos sem ciência há mais de 24h.
+    """
+    ok, msgs = JusticaService.verificar_prazos_revelia_automatica()
+    if ok:
+        return jsonify({'status': 'ok', 'processed': msgs}), 200
+    else:
+        return jsonify({'status': 'error', 'error': msgs}), 500
+
 @justica_bp.route('/finalizar/<int:pid>', methods=['POST'])
 @login_required
 @cal_required
@@ -185,7 +198,21 @@ def finalizar_processo(pid):
     fundamentacao = request.form.get('fundamentacao')
     detalhes = request.form.get('detalhes_sancao')
     
-    ok, msg = JusticaService.finalizar_processo(pid, decisao, fundamentacao, detalhes)
+    # Novos Campos (Inputs do Form)
+    is_crime = request.form.get('is_crime') == 'on' # Checkbox HTML
+    tipo_sancao = request.form.get('tipo_sancao')   # Select HTML
+    dias_sancao_str = request.form.get('dias_sancao')
+    origem = request.form.get('origem_punicao', 'NPCCAL')
+    
+    dias_sancao = int(dias_sancao_str) if dias_sancao_str and dias_sancao_str.strip() else None
+    
+    ok, msg = JusticaService.finalizar_processo(
+        pid, decisao, fundamentacao, detalhes, 
+        is_crime=is_crime, 
+        tipo_sancao=tipo_sancao, 
+        dias_sancao=dias_sancao, 
+        origem=origem
+    )
     flash(msg, 'success' if ok else 'danger')
     return redirect(url_for('justica.index'))
 
@@ -219,7 +246,6 @@ def enviar_defesa(pid):
     flash(msg, 'success' if ok else 'danger')
     return redirect(url_for('justica.index'))
 
-# --- NOVA ROTA DE IMPRESSÃO ---
 @justica_bp.route('/imprimir-processos', methods=['POST'])
 @login_required
 def imprimir_processos():
