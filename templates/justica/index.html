@@ -26,6 +26,9 @@
                     <button class="btn btn-info text-white justice-option-btn" data-target="fadaContent">
                         <i class="fas fa-clipboard-list me-1"></i>FADA (Avaliação)
                     </button>
+                    <a href="{{ url_for('justica.fada_boletim') }}" class="btn btn-secondary justice-option-btn">
+                        <i class="fas fa-table me-1"></i>Ver Notas (Boletim)
+                    </a>
                 {% endif %}
             </div>
 
@@ -44,7 +47,7 @@
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h3 class="justice-content-title mb-0">Processos Finalizados</h3>
                     <a href="{{ url_for('justica.exportar_selecao') }}" class="btn btn-sm btn-outline-secondary">
-                        <i class="fas fa-print"></i> Exportar / Imprimir
+                        <i class="fas fa-print"></i> Exportar Termos
                     </a>
                 </div>
                 
@@ -89,7 +92,6 @@
                                             {% endfor %}
                                         </select>
                                     </div>
-                                    
                                     <div class="row mb-2">
                                         <div class="col-md-7">
                                             <label class="small">Data do Fato</label>
@@ -100,9 +102,8 @@
                                             <input type="time" name="hora_fato" class="form-control" value="{{ agora_hora or '12:00' }}">
                                         </div>
                                     </div>
-
                                     <div class="mb-2">
-                                        <label class="small">Fato Constatado (Resumo da Conduta)</label>
+                                        <label class="small">Fato Constatado</label>
                                         <textarea name="descricao" id="descricaoFatoInput" class="form-control" rows="2" placeholder="Ex: deixou a parte de cima do seu armário fora dos padrões exigidos." required oninput="atualizarTextoInteligente()"></textarea>
                                     </div>
                                     <div class="mb-2">
@@ -147,7 +148,6 @@
             </div>
 
             {% include 'justica/fada_formulario.html' %}
-
         </div>
     </div>
 </div>
@@ -162,62 +162,39 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    
-    // --- Lógica do Botão Analisar ---
-    document.body.addEventListener('click', function(e) {
-        const btn = e.target.closest('.js-toggle-analise-form');
-        
-        if (btn) {
-            e.preventDefault();
-            const targetSelector = btn.getAttribute('data-target-form');
-            const formContainer = document.querySelector(targetSelector);
-            
-            if (formContainer) {
-                if (formContainer.style.display === 'none') {
-                    formContainer.style.display = 'block';
-                    btn.classList.remove('btn-success');
-                    btn.classList.add('btn-secondary');
-                    btn.querySelector('.js-toggle-text').textContent = 'Cancelar';
-                } else {
-                    formContainer.style.display = 'none';
-                    btn.classList.add('btn-success');
-                    btn.classList.remove('btn-secondary');
-                    btn.querySelector('.js-toggle-text').textContent = 'Analisar';
-                }
-            }
-        }
-    });
-
-    // --- Tabs (Navegação entre botões) ---
+    // Abas
     document.querySelectorAll('.justice-option-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            // Remove ativo de todos os botões
+        btn.addEventListener('click', function(e) {
+            if(this.tagName.toLowerCase() === 'a') return;
             document.querySelectorAll('.justice-option-btn').forEach(b => b.classList.remove('active'));
-            // Remove ativo de todos os conteúdos
             document.querySelectorAll('.justice-content').forEach(c => c.classList.remove('active'));
-            
-            // Ativa o botão clicado e o conteúdo alvo
             this.classList.add('active');
             const targetId = this.dataset.target;
             const targetEl = document.getElementById(targetId);
-            if(targetEl) {
-                targetEl.classList.add('active');
-            } else {
-                console.error("Alvo não encontrado: " + targetId);
-            }
+            if(targetEl) targetEl.classList.add('active');
         });
     });
 
-    // --- Alunos ---
+    // Função de Carregar Alunos (Híbrida: Checkbox e Select)
     window.carregarAlunos = function(turmaId, containerId) {
         const container = document.getElementById(containerId);
         if(!turmaId) return;
+        
         container.innerHTML = 'Carregando...';
+        
         fetch(`/justica-e-disciplina/api/alunos-por-turma/${turmaId}`)
             .then(r => r.json())
             .then(data => {
-                // Se for a lista de checkbox (Infração/Elogio)
-                if (containerId === 'listaAlunosInfracao' || containerId === 'listaAlunosElogio') {
+                // Modo SELECT (Para FADA)
+                if (container.tagName === 'SELECT') {
+                    let html = '<option value="">-- Selecione o Aluno --</option>';
+                    data.forEach(a => {
+                        html += `<option value="${a.id}">${a.numero ? a.numero + ' - ' : ''}${a.graduacao} ${a.nome}</option>`;
+                    });
+                    container.innerHTML = html;
+                } 
+                // Modo LISTA CHECKBOX (Para Infrações)
+                else {
                     container.innerHTML = data.map(a => `
                         <div class="form-check border-bottom py-1">
                             <input class="form-check-input aluno-check-${containerId}" type="checkbox" name="alunos_selecionados" value="${a.id}" id="chk_${containerId}_${a.id}" onchange="if('${containerId}'=='listaAlunosInfracao') atualizarTextoInteligente()">
@@ -226,7 +203,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             </label>
                         </div>
                     `).join('');
-                } 
+                }
             });
     };
 
@@ -237,30 +214,22 @@ document.addEventListener('DOMContentLoaded', function() {
         if(cId === 'listaAlunosInfracao') atualizarTextoInteligente();
     };
 
-    // --- Função Auxiliar Data por Extenso ---
+    // Inteligência do Termo
     function getDataPorExtenso(dateString) {
         if (!dateString) return "data não informada";
         const parts = dateString.split('-');
         if (parts.length !== 3) return dateString;
-        
-        const meses = [
-            "janeiro", "fevereiro", "março", "abril", "maio", "junho", 
-            "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"
-        ];
-        
+        const meses = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
         const dia = parts[2];
         const mes = meses[parseInt(parts[1]) - 1];
         const ano = parts[0];
-        
         return `${dia} de ${mes} de ${ano}`;
     }
 
-    // --- Texto Inteligente (Termo de Justificação) ---
     window.atualizarTextoInteligente = function() {
         const checks = document.querySelectorAll('.aluno-check-listaAlunosInfracao:checked');
         const regSel = document.getElementById('regraSelect');
         const regraDesc = regSel.options[regSel.selectedIndex].getAttribute('data-desc') || "";
-        
         const box = document.getElementById('campoObservacao');
         
         let descFato = document.getElementById('descricaoFatoInput').value.trim();
@@ -271,18 +240,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const dataExtenso = getDataPorExtenso(dataInput);
         const anoAtual = new Date().getFullYear();
 
-        // Texto Padrão (Conforme solicitado)
-        const templateBase = (nomes, verbo, sujeito) => `Termo de Justificação:
-Tendo em vista as informações constantes na Parte Nº ___/___Pel/CAl/EsFAS/${anoAtual}, evidenciando a existência, em tese, de infração das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação:
-
-1. Justificante(s): ${nomes}.
-
-2. Descrição da conduta infracional: ${sujeito}, no dia ${dataExtenso}, ${descFato}. Com isso, ${verbo} ${regraDesc}.
-
-3. Cientifico-lhes que a contar do recebimento da presente, abre-se o prazo de 24 horas, para que, querendo, apresentem resposta escrita com as provas que entenderem cabíveis. Fica advertido o acusado que a não entrega da justificação dentro do prazo estipulado, implicará em reconhecimento como verdadeiros os fatos imputados.
-
-[NOME, POSTO/GRADUAÇÃO E FUNÇÃO DO RESPONSÁVEL]`;
-
         if(checks.length === 1) {
             box.value = "Carregando dados...";
             fetch(`/justica-e-disciplina/api/aluno-details/${checks[0].value}`)
@@ -290,9 +247,8 @@ Tendo em vista as informações constantes na Parte Nº ___/___Pel/CAl/EsFAS/${a
                 .then(d => {
                     const idFunc = `Id Func. ${d.matricula}`;
                     const nomeCompleto = `${d.posto_graduacao} ${d.nome_completo}, ${idFunc}`;
-                    
                     const termo = `Termo de Justificação:
-Tendo em vista as informações constantes na Parte Nº ___/___Pel/CAl/EsFAS/${anoAtual}, evidenciando a existência, em tese, de infração das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação:
+Tendo em vista as informações constantes na Parte Nº ___/CAl/EsFHEP-SM/${anoAtual}, evidenciando a existência, em tese, de infração das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação:
 
 1. Justificante: ${nomeCompleto}.
 
@@ -304,7 +260,17 @@ Tendo em vista as informações constantes na Parte Nº ___/___Pel/CAl/EsFAS/${a
                     box.value = termo;
                 });
         } else if(checks.length > 1) {
-            box.value = templateBase(`Conforme lista de ${checks.length} alunos selecionados`, "incorreram", "Os militares selecionados");
+             const templateBase = `Termo de Justificação:
+Tendo em vista as informações constantes na Parte Nº ___/CAl/EsFHEP-SM/${anoAtual}, evidenciando a existência, em tese, de infração das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação:
+
+1. Justificantes: Conforme lista de ${checks.length} alunos selecionados.
+
+2. Descrição da conduta infracional: Os militares selecionados, no dia ${dataExtenso}, ${descFato}. Com isso, incorreram ${regraDesc}.
+
+3. Cientifico-lhes que a contar do recebimento da presente, abre-se o prazo de 24 horas, para que, querendo, apresentem resposta escrita com as provas que entenderem cabíveis.
+
+[NOME, POSTO/GRADUAÇÃO E FUNÇÃO DO RESPONSÁVEL]`;
+            box.value = templateBase;
         }
     };
 });

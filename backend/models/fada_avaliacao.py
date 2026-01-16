@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import ForeignKey, Float, Integer, String, Text, DateTime
+from sqlalchemy import ForeignKey, Float, Text, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .database import db
 
@@ -11,12 +11,10 @@ class FadaAvaliacao(db.Model):
     aluno_id: Mapped[int] = mapped_column(ForeignKey('alunos.id'), nullable=False)
     avaliador_id: Mapped[int] = mapped_column(ForeignKey('users.id'), nullable=False)
     
-    # Vincula ao Ciclo (ex: 1º Ciclo, 2º Ciclo) se houver, ou Data
     data_avaliacao: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now)
     observacao: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    # Atributos (Notas de 0 a 10 ou Conceitos)
-    # Assumindo notas numéricas conforme padrão FADA
+    # Notas
     expressao: Mapped[float] = mapped_column(Float, default=0.0)
     planejamento: Mapped[float] = mapped_column(Float, default=0.0)
     perseveranca: Mapped[float] = mapped_column(Float, default=0.0)
@@ -36,11 +34,11 @@ class FadaAvaliacao(db.Model):
     produtividade: Mapped[float] = mapped_column(Float, default=0.0)
     eficiencia: Mapped[float] = mapped_column(Float, default=0.0)
 
-    # Média calculada
     media_final: Mapped[float] = mapped_column(Float, default=0.0)
 
-    aluno = relationship("Aluno", backref="fada_avaliacoes")
-    avaliador = relationship("User", foreign_keys=[avaliador_id])
+    # CORREÇÃO CIRÚRGICA: Backref removido para evitar conflito com 'Aluno'
+    aluno = relationship("Aluno")
+    avaliador = relationship("User")
 
     def calcular_media(self):
         atributos = [
@@ -50,7 +48,6 @@ class FadaAvaliacao(db.Model):
             self.diccao, self.lideranca, self.relacionamento, self.etica,
             self.produtividade, self.eficiencia
         ]
-        # Filtra None caso exista
         validos = [a for a in atributos if a is not None]
         if validos:
             self.media_final = sum(validos) / len(validos)

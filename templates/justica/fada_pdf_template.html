@@ -1,133 +1,77 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>FADA - {{ avaliacao.aluno.user.nome_completo }}</title>
+    <title>Relatório de Avaliação Atitudinal</title>
     <style>
-        @page {
-            size: A4;
-            margin: 1.5cm;
-            @frame footer {
-                -pdf-frame-content: footer-content;
-                bottom: 1cm;
-                left: 1.5cm;
-                right: 1.5cm;
-                height: 1cm;
-            }
-        }
-        body { font-family: sans-serif; font-size: 10pt; line-height: 1.4; }
-        .container { width: 100%; margin: 0 auto; }
-        .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; }
-        .header h4, .header h5 { margin: 0; }
-        h1, h2, h3 { text-align: center; }
-        .info-aluno { border: 1px solid #ccc; padding: 10px; margin-top: 20px; }
-        .info-aluno p { margin: 4px 0; }
-        .tabela-atributos { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        .tabela-atributos th, .tabela-atributos td { border: 1px solid #000; padding: 6px; }
-        .tabela-atributos th { background-color: #f0f0f0; text-align: left; }
-        .tabela-atributos td:nth-child(2) { text-align: center; }
-        .tabela-atributos td:last-child { text-align: center; font-weight: bold; }
-        .conceito { text-align: center; font-weight: bold; }
-        .conceito.aprovado { color: green; }
-        .conceito.reprovado { color: red; }
-        .justificativas { margin-top: 20px; border: 1px solid #ccc; padding: 10px; min-height: 60px; page-break-inside: avoid; }
-        .assinaturas { margin-top: 60px; text-align: center; page-break-inside: avoid; }
-        .assinatura-linha { display: inline-block; width: 300px; border-top: 1px solid #000; padding-top: 5px; }
-        .footer-media { text-align: right; font-size: 12pt; font-weight: bold; margin-top: 20px; }
+        @page { size: A4; margin: 1.5cm; }
+        body { font-family: Arial, sans-serif; font-size: 11pt; }
+        .header { text-align: center; font-weight: bold; margin-bottom: 20px; text-transform: uppercase; }
+        .title { text-align: center; font-size: 14pt; font-weight: bold; margin: 20px 0; border: 1px solid #000; padding: 5px; background: #eee; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 10pt; }
+        th, td { border: 1px solid #000; padding: 6px; text-align: center; }
+        th { background-color: #f0f0f0; }
+        .text-left { text-align: left; }
+        
+        .footer { margin-top: 30px; font-size: 10pt; text-align: center; }
+        .signature-line { border-top: 1px solid #000; width: 40%; margin: 40px auto 5px auto; }
+        
+        @media print { .no-print { display: none; } }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h5>ESTADO DO RIO GRANDE DO SUL</h5>
-            <h5>SECRETARIA DA SEGURANÇA PÚBLICA</h5>
-            <h4>BRIGADA MILITAR</h4>
-            <h5>DEPARTAMENTO DE ENSINO</h5>
-        </div>
-
-        <h2 style="margin-top: 30px;">FICHA DE AVALIAÇÃO DE DESEMPENHO ATITUDINAL (FADA)</h2>
-
-        <div class="info-aluno">
-            <p><strong>ALUNO:</strong> {{ avaliacao.aluno.user.nome_completo }}</p>
-            <p><strong>ID.FUNC:</strong> {{ avaliacao.aluno.user.matricula or 'N/A' }}</p>
-            <p><strong>OPM:</strong> {{ g.active_school.nome if g and g.active_school else 'N/A' }}</p>
-            
-            <p><strong>AVALIADOR:</strong> {{ avaliador_nome }}</p>
-            
-            <p><strong>DATA DA AVALIAÇÃO:</strong> {{ data_geracao | br_time('%d/%m/%Y') }}</p>
-        </div>
-
-        <table class="tabela-atributos">
-            <thead>
-                <tr>
-                    <th style="width: 70%;">ATRIBUTOS AVALIADOS</th>
-                    <th>GRAU</th>
-                    <th>CONCEITO</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% set atributos = [
-                    (1, 'Expressão oral e escrita', avaliacao.attr_1_expressao), (2, 'Planejamento e método', avaliacao.attr_2_planejamento),
-                    (3, 'Perseverança e Tenacidade', avaliacao.attr_3_perseveranca), (4, 'Apresentação pessoal', avaliacao.attr_4_apresentacao),
-                    (5, 'Lealdade', avaliacao.attr_5_lealdade), (6, 'Tato', avaliacao.attr_6_tato), (7, 'Equilíbrio emocional', avaliacao.attr_7_equilibrio),
-                    (8, 'Disciplina', avaliacao.attr_8_disciplina), (9, 'Responsabilidade', avaliacao.attr_9_responsabilidade),
-                    (10, 'Maturidade', avaliacao.attr_10_maturidade), (11, 'Assiduidade', avaliacao.attr_11_assiduidade),
-                    (12, 'Pontualidade', avaliacao.attr_12_pontualidade), (13, 'Dicção de voz e comando', avaliacao.attr_13_diccao),
-                    (14, 'Liderança', avaliacao.attr_14_lideranca), (15, 'Relacionamento interpessoal', avaliacao.attr_15_relacionamento),
-                    (16, 'Ética', avaliacao.attr_16_etica), (17, 'Produtividade', avaliacao.attr_17_produtividade),
-                    (18, 'Eficiência', avaliacao.attr_18_eficiencia)
-                ] %}
-
-                {% for id, nome, grau in atributos %}
-                <tr>
-                    <td><strong>{{ id }}.</strong> {{ nome }}</td>
-                    <td>{{ "%.1f" | format(grau) }}</td>
-                    {% if grau >= 7.0 %}
-                    <td class="conceito aprovado">APROVADO</td>
-                    {% else %}
-                    <td class="conceito reprovado">REPROVADO</td>
-                    {% endif %}
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-
-        <div class="footer-media">
-            MÉDIA FINAL: {{ "%.2f" | format(avaliacao.media_final) }}
-        </div>
-        <div class="justificativas">
-            <strong>Justificativa para Graus Abaixo de 7.0 ou Acima de 9.0:</strong>
-            <p style="white-space: pre-wrap;">{{ avaliacao.justificativa_notas or "N/A" }}</p>
-        </div>
-
-        <div class="justificativas">
-            <strong>Observações Gerais:</strong>
-            <p style="white-space: pre-wrap;">{{ avaliacao.observacoes or "N/A" }}</p>
-        </div>
-
-        <div class="justificativas" style="text-align: center;">
-            <strong>Parecer sobre Adaptação à Carreira Militar:</strong>
-            <p><strong>{{ avaliacao.adaptacao_carreira }}</strong></p>
-        </div>
-
-        <div class="assinaturas">
-            <div class="assinatura-linha">
-                {{ avaliador_nome }}<br>
-                Avaliador
-            </div>
-        </div>
-
-        <div class="assinaturas" style="margin-top: 40px;">
-            <div class="assinatura-linha">
-                {{ avaliacao.aluno.user.nome_completo }}<br>
-                Ciente do Aluno
-            </div>
-        </div>
-
+    <div class="no-print" style="text-align: right; margin-bottom: 10px;">
+        <button onclick="window.print()" style="padding: 10px;">Imprimir Relatório</button>
     </div>
-    
-    <div id="footer-content" style="text-align: right; font-size: 9pt;">
-        Página <pdf:pagenumber> de <pdf:pagecount>
+
+    <div class="header">
+        ESTADO DO RIO GRANDE DO SUL<br>
+        SECRETARIA DA SEGURANÇA PÚBLICA<br>
+        BRIGADA MILITAR - DE - EsFAS
+    </div>
+
+    <div class="title">ATA DE RESULTADOS FINAIS - AVALIAÇÃO ATITUDINAL</div>
+
+    <p><strong>Referência:</strong> Regulamento de Ensino - CBFPM/CSPM</p>
+    <p><strong>Data de Emissão:</strong> {{ hoje }}</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 5%;">Nº</th>
+                <th style="width: 45%;">Nome Completo</th>
+                <th style="width: 15%;">NDisc<br><small>(Base 20)</small></th>
+                <th style="width: 15%;">FADA<br><small>(Base 8)</small></th>
+                <th style="width: 15%;">AAt Final<br><small>(Média)</small></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in dados %}
+            <tr>
+                <td>{{ item.aluno.num_aluno or '-' }}</td>
+                <td class="text-left">
+                    {{ item.aluno.user.posto_graduacao }} {{ item.aluno.user.nome_completo }}
+                </td>
+                <td>{{ "{:.2f}".format(item.ndisc) }}</td>
+                <td>{{ "{:.2f}".format(item.fada) }}</td>
+                <td style="font-weight: bold; background-color: #f9f9f9;">{{ "{:.2f}".format(item.aat) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="footer">
+        <div style="display: flex; justify-content: space-between; margin-top: 50px;">
+            <div style="width: 45%;">
+                <div class="signature-line"></div>
+                Chefe da Divisão de Ensino
+            </div>
+            <div style="width: 45%;">
+                <div class="signature-line"></div>
+                Comandante da Escola
+            </div>
+        </div>
     </div>
 </body>
 </html>

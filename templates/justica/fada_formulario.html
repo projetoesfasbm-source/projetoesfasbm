@@ -8,22 +8,24 @@
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 
                 <div class="row mb-4">
-                    <div class="col-md-6">
-                        <label class="form-label fw-bold">1. Selecionar Aluno</label>
-                        <select name="aluno_id" class="form-select" required>
-                            <option value="">-- Escolha o Aluno --</option>
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold">1. Selecionar Turma</label>
+                        <select class="form-select" onchange="carregarAlunos(this.value, 'fadaAlunoSelect')">
+                            <option value="">-- Turma --</option>
                             {% for turma in turmas %}
-                                <optgroup label="{{ turma.nome }}">
-                                    </optgroup>
+                            <option value="{{ turma.id }}">{{ turma.nome }}</option>
                             {% endfor %}
                         </select>
-                        <div class="form-text text-muted">
-                            Dica: Para carregar a lista completa, selecione a turma no menu de infração primeiro ou implemente o carregamento automático aqui.
-                        </div>
                     </div>
-                    <div class="col-md-6">
-                        <label class="form-label fw-bold">2. Observações Gerais</label>
-                        <textarea name="observacao" class="form-control" rows="1" placeholder="Ex: Demonstrou evolução significativa neste ciclo."></textarea>
+                    <div class="col-md-5">
+                        <label class="form-label fw-bold">2. Selecionar Aluno</label>
+                        <select name="aluno_id" id="fadaAlunoSelect" class="form-select" required>
+                            <option value="">-- Aguardando Turma --</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Observações Gerais</label>
+                        <textarea name="observacao" class="form-control" rows="1" placeholder="Ex: Evolução positiva..."></textarea>
                     </div>
                 </div>
 
@@ -44,8 +46,8 @@
                         </div>
                         {% endfor %}
                     {% else %}
-                        <div class="col-12 text-danger">
-                            Erro: Atributos FADA não carregados. Verifique o Controller.
+                        <div class="col-12 text-muted">
+                            <i class="fas fa-info-circle"></i> Curso técnico (CTSP) ou atributos não carregados.
                         </div>
                     {% endif %}
                 </div>
