@@ -3,20 +3,17 @@
 {% block title %}Lista de Disciplinas{% endblock %}
 
 {% block content %}
-{# --- ALTERAÇÃO: Cabeçalho Flex para alinhar Título à esquerda e Botão à direita --- #}
 <div class="content-header d-flex justify-content-between align-items-center">
     <div>
         <h1>Disciplinas</h1>
         <p>Gerencie as matérias e acompanhe o andamento pelo Quadro de Horários.</p>
     </div>
 
-    {# --- ÁREA DE BOTÕES: Dashboard + Adicionar --- #}
     <div class="d-flex gap-2">
         <a href="{{ url_for('disciplina.dashboard_disciplinas', ciclo_id=request.args.get('ciclo_id')|int if request.args.get('ciclo_id') else None) }}" class="btn btn-warning shadow-sm btn-lg text-dark">
             <i class="fas fa-chart-line me-1"></i> Dashboard Inteligente
         </a>
 
-        {# --- O BOTÃO ORIGINAL --- #}
         {% if current_user.is_sens or current_user.role in ['programador', 'admin_escola'] %}
         <a href="{{ url_for('disciplina.adicionar_disciplina') }}" class="btn btn-primary shadow-sm btn-lg">
             <i class="fas fa-plus me-1"></i> Adicionar Disciplina
@@ -46,7 +43,6 @@
             {% set turma_atual = turmas|selectattr('id', 'equalto', turma_selecionada_id)|first %}
             <i class="fas fa-chalkboard-teacher me-2"></i>{{ turma_atual.nome if turma_atual else '' }}
         </h3>
-        {# Removi o botão daqui pois ele já está no topo #}
     </div>
 
     <div class="card shadow-sm">
@@ -75,6 +71,7 @@
                                         </a>
                                     </div>
                                     <div class="text-muted small">
+                                        {# Exibe apenas o nome do ciclo, pois data não existe mais no modelo #}
                                         <i class="far fa-calendar me-1"></i>Ciclo: {{ item.disciplina.ciclo.nome if item.disciplina.ciclo else '-' }}
                                     </div>
                                 </td>
