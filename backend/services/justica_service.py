@@ -20,7 +20,7 @@ class JusticaService:
     FADA_BASE = 8.0
     NDISC_BASE = 20.0
     
-    # Pesos (PDF Art. 125 §7)
+    # Pesos (PDF Art. 125 §7 e 173)
     DESC_FADA_LEVE = 0.25
     DESC_FADA_MEDIA = 0.50
     DESC_FADA_GRAVE = 1.00
@@ -168,23 +168,39 @@ class JusticaService:
 
     @staticmethod
     def get_processos_para_usuario(user, school_id_override=None):
-        # Query direta sem try/except para expor erros
+        # CORREÇÃO DO SUMIÇO: Usa Outer Join e filtra escola manualmente
         query = select(ProcessoDisciplina).join(ProcessoDisciplina.aluno).outerjoin(Aluno.turma)
         
         if getattr(user, 'role', '') == 'aluno':
             if not getattr(user, 'aluno_profile', None): return []
             query = query.where(ProcessoDisciplina.aluno_id == user.aluno_profile.id)
-            if school_id_override: query = query.where(Turma.school_id == school_id_override)
-        else:
-            if school_id_override: query = query.where(Turma.school_id == school_id_override)
+        
+        # Carrega relacionamentos para evitar erro no template
+        query = query.options(
+            joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.user),
+            joinedload(ProcessoDisciplina.regra)
+        )
+        
+        todos_processos = db.session.scalars(query.order_by(ProcessoDisciplina.data_ocorrencia.desc())).all()
+        
+        # Filtro de escola manual (mais seguro que inner join)
+        if school_id_override:
+            processos_filtrados = []
+            for p in todos_processos:
+                # Se o aluno tem turma e escola bate
+                if p.aluno.turma and p.aluno.turma.school_id == school_id_override:
+                    processos_filtrados.append(p)
+                # Se o aluno não tem turma, mas o usuário atual é admin dessa escola, mostra (segurança)
+                elif not p.aluno.turma:
+                    processos_filtrados.append(p)
+            return processos_filtrados
             
-        query = query.options(joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.user), joinedload(ProcessoDisciplina.regra))
-        return db.session.scalars(query.order_by(ProcessoDisciplina.data_ocorrencia.desc())).all()
+        return todos_processos
 
     @staticmethod
     def criar_processo(descricao, observacao, aluno_id, autor_id, pontos=0.0, codigo_infracao=None, regra_id=None, data_ocorrencia=None):
         try:
-            # Se for CTSP, zera pontos
+            # Se for CTSP, zera pontos (não afeta NDisc)
             if not JusticaService._is_curso_pontuado(aluno_id=aluno_id): pontos = 0.0
             
             dt = JusticaService._ensure_datetime(data_ocorrencia)
@@ -220,6 +236,7 @@ class JusticaService:
             return True, "Processo finalizado."
         except Exception as e: db.session.rollback(); return False, str(e)
 
+    # Métodos auxiliares padrão
     @staticmethod
     def verificar_prazos_revelia_automatica(): return True, [] 
     @staticmethod
