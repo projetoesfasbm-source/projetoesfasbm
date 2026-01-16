@@ -1,6 +1,6 @@
 # backend/controllers/horario_controller.py
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session, Response
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session, Response, current_app
 from flask_login import login_required, current_user
 from sqlalchemy import select, or_
 from sqlalchemy.orm import joinedload
@@ -69,29 +69,57 @@ def index():
             flash("Nenhuma escola selecionada.", "warning")
             return redirect(url_for('main.dashboard'))
         
-        # Busca inicial de todas as turmas da escola
+        # Busca inicial padrão (para admins ou fallback)
         todas_as_turmas = TurmaService.get_turmas_by_school(school_id)
         
         # --- LÓGICA DE FILTRO PARA INSTRUTOR ---
-        # Filtra APENAS se for instrutor E NÃO for SENS/Admin.
+        # Filtra APENAS se for instrutor E NÃO for SENS/Admin/Staff.
         # Se for SENS (current_user.is_sens), pula este bloco e mostra tudo.
         if current_user.role == 'instrutor' and current_user.instrutor_profile and not current_user.is_sens:
             try:
                 instrutor_id = current_user.instrutor_profile.id
-                # Busca nomes dos pelotões onde o instrutor está vinculado
-                pelotao_names = db.session.scalars(
-                    select(DisciplinaTurma.pelotao)
-                    .where(or_(DisciplinaTurma.instrutor_id_1 == instrutor_id, 
-                               DisciplinaTurma.instrutor_id_2 == instrutor_id))
-                    .distinct()
-                ).all()
                 
-                # Se tiver vínculos, substitui a lista completa pela lista filtrada
-                if pelotao_names:
-                    turmas_vinculadas = [t for t in todas_as_turmas if t.nome in pelotao_names]
-                    if turmas_vinculadas:
-                        todas_as_turmas = turmas_vinculadas
-            except Exception:
+                # CORREÇÃO: Busca as turmas diretamente via SQL Join para evitar limites implícitos ou erros de iteração em Python.
+                # Seleciona as Turmas onde o NOME corresponde ao pelotão no vínculo DisciplinaTurma deste instrutor.
+                turmas_vinculadas = db.session.scalars(
+                    select(Turma)
+                    .join(DisciplinaTurma, Turma.nome == DisciplinaTurma.pelotao)
+                    .where(
+                        Turma.school_id == school_id,
+                        or_(
+                            DisciplinaTurma.instrutor_id_1 == instrutor_id,
+                            DisciplinaTurma.instrutor_id_2 == instrutor_id
+                        )
+                    )
+                    .distinct()
+                    .order_by(Turma.nome)
+                ).all()
+
+                # Se encontrou turmas vinculadas, usamos apenas elas.
+                # Se não encontrou (lista vazia), verificamos se o instrutor realmente não tem vínculos.
+                if turmas_vinculadas:
+                    todas_as_turmas = turmas_vinculadas
+                else:
+                    # Verifica se existem vínculos "crus" (apenas nomes) para decidir o comportamento
+                    pelotao_names_check = db.session.scalars(
+                        select(DisciplinaTurma.pelotao)
+                        .where(or_(DisciplinaTurma.instrutor_id_1 == instrutor_id, 
+                                   DisciplinaTurma.instrutor_id_2 == instrutor_id))
+                        .limit(1)
+                    ).first()
+                    
+                    # Se tem vínculos no papel, mas não achou Turma correspondente (ex: erro de digitação no nome),
+                    # mantemos "todas_as_turmas" como fallback ou deixamos vazio?
+                    # O comportamento original era mostrar tudo se não conseguisse filtrar. Vamos manter o padrão seguro:
+                    # Se não achou turmas específicas, mas tem vínculos, pode ser bug de nome. Se não tem vínculos, mostra tudo (ou nada).
+                    # Por segurança e compatibilidade com o código anterior, se a busca filtrada falhar ou for vazia, 
+                    # mantemos a lista completa se não houver vínculos explícitos limitantes que falharam no match.
+                    if pelotao_names_check:
+                        # Tem vínculos mas não deu match com nenhuma turma -> Algo errado com os nomes.
+                        # Para não bloquear o uso, mostramos todas (comportamento fallback).
+                        pass 
+            except Exception as e:
+                current_app.logger.error(f"Erro ao filtrar turmas do instrutor: {e}")
                 pass
         # -------------------------------------------------------------
 
@@ -171,11 +199,22 @@ def index():
         elif (current_user.role == 'instrutor' or current_user.is_cal) and current_user.instrutor_profile:
             instrutor_id = current_user.instrutor_profile.id
             
-            pelotao_names = db.session.scalars(select(DisciplinaTurma.pelotao).where(or_(DisciplinaTurma.instrutor_id_1 == instrutor_id, DisciplinaTurma.instrutor_id_2 == instrutor_id)).distinct()).all()
-            if pelotao_names:
-                instrutor_turmas_vinculadas = db.session.scalars(select(Turma).where(Turma.nome.in_(pelotao_names)).order_by(Turma.nome)).all()
+            # Mesma lógica otimizada para verificação de permissão
+            instrutor_turmas_vinculadas = db.session.scalars(
+                select(Turma)
+                .join(DisciplinaTurma, Turma.nome == DisciplinaTurma.pelotao)
+                .where(
+                    or_(
+                        DisciplinaTurma.instrutor_id_1 == instrutor_id, 
+                        DisciplinaTurma.instrutor_id_2 == instrutor_id
+                    )
+                )
+                .distinct()
+                .order_by(Turma.nome)
+            ).all()
             
-            if turma_selecionada_nome in pelotao_names:
+            # Verifica se a turma selecionada está na lista vinculada
+            if any(t.nome == turma_selecionada_nome for t in instrutor_turmas_vinculadas):
                 if not priority_active:
                     can_schedule_in_this_turma = True
                 else:
@@ -209,7 +248,6 @@ def index():
                            priority_allowed_names=priority_allowed_names,
                            all_materias_names=all_materias_names)
 
-# ... (restante das rotas permanece igual) ...
 @horario_bp.route('/save-priority-config', methods=['POST'])
 @login_required
 @admin_or_programmer_required
