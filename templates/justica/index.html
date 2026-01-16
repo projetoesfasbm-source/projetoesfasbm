@@ -72,25 +72,33 @@
                                 <div class="col-md-7 mb-3">
                                     <label class="form-label fw-bold">2. Detalhes</label>
                                     <div class="mb-2">
-                                        <label class="small">Enquadramento</label>
+                                        <label class="small">Enquadramento (Regra)</label>
                                         <select id="regraSelect" name="regra_id" class="form-select" required onchange="atualizarTextoInteligente()">
                                             <option value="">-- Selecione --</option>
                                             {% for regra in fatos_predefinidos %}
-                                            <option value="{{ regra.id }}" data-desc="no item {{ regra.codigo }} - '{{ regra.descricao }}'">{{ regra.codigo }} - {{ regra.descricao[:60] }}...</option>
+                                            <option value="{{ regra.id }}" data-desc="no item {{ regra.codigo }} '{{ regra.descricao }}'">{{ regra.codigo }} - {{ regra.descricao[:60] }}...</option>
                                             {% endfor %}
                                         </select>
                                     </div>
+                                    
+                                    <div class="row mb-2">
+                                        <div class="col-md-7">
+                                            <label class="small">Data do Fato</label>
+                                            <input type="date" name="data_fato" id="dataFatoInput" class="form-control" value="{{ hoje }}" onchange="atualizarTextoInteligente()">
+                                        </div>
+                                        <div class="col-md-5">
+                                            <label class="small">Hora</label>
+                                            <input type="time" name="hora_fato" class="form-control" value="{{ agora_hora or '12:00' }}">
+                                        </div>
+                                    </div>
+
                                     <div class="mb-2">
-                                        <label class="small">Data</label>
-                                        <input type="date" name="data_fato" class="form-control" value="{{ hoje }}">
+                                        <label class="small">Fato Constatado (Resumo da Conduta)</label>
+                                        <textarea name="descricao" id="descricaoFatoInput" class="form-control" rows="2" placeholder="Ex: deixou a parte de cima do seu armário fora dos padrões exigidos." required oninput="atualizarTextoInteligente()"></textarea>
                                     </div>
                                     <div class="mb-2">
-                                        <label class="small">Fato Constatado (Resumo)</label>
-                                        <textarea name="descricao" class="form-control" rows="2" required></textarea>
-                                    </div>
-                                    <div class="mb-2">
-                                        <label class="small">Termo de Justificação</label>
-                                        <textarea id="campoObservacao" name="observacao" class="form-control" rows="6"></textarea>
+                                        <label class="small">Termo de Justificação (Automático)</label>
+                                        <textarea id="campoObservacao" name="observacao" class="form-control" rows="15"></textarea>
                                     </div>
                                     <div class="text-end"><button type="submit" class="btn btn-danger">Registrar</button></div>
                                 </div>
@@ -144,29 +152,23 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     
-    // --- CORREÇÃO: Lógica do Botão Analisar ---
+    // --- Lógica do Botão Analisar ---
     document.body.addEventListener('click', function(e) {
-        // Verifica se clicou no botão ou no ícone dentro dele
         const btn = e.target.closest('.js-toggle-analise-form');
         
         if (btn) {
             e.preventDefault();
-            
-            // Pega o ID do formulário (ex: #analise-form-123)
             const targetSelector = btn.getAttribute('data-target-form');
             const formContainer = document.querySelector(targetSelector);
             
             if (formContainer) {
-                // Alterna visualização
                 if (formContainer.style.display === 'none') {
                     formContainer.style.display = 'block';
-                    // Muda estilo para "Cancelar"
                     btn.classList.remove('btn-success');
                     btn.classList.add('btn-secondary');
                     btn.querySelector('.js-toggle-text').textContent = 'Cancelar';
                 } else {
                     formContainer.style.display = 'none';
-                    // Restaura estilo para "Analisar"
                     btn.classList.add('btn-success');
                     btn.classList.remove('btn-secondary');
                     btn.querySelector('.js-toggle-text').textContent = 'Analisar';
@@ -211,22 +213,70 @@ document.addEventListener('DOMContentLoaded', function() {
         if(cId === 'listaAlunosInfracao') atualizarTextoInteligente();
     };
 
-    // --- Texto Inteligente ---
+    // --- Função Auxiliar Data por Extenso ---
+    function getDataPorExtenso(dateString) {
+        if (!dateString) return "data não informada";
+        // Espera formato YYYY-MM-DD
+        const parts = dateString.split('-');
+        if (parts.length !== 3) return dateString;
+        
+        const meses = [
+            "janeiro", "fevereiro", "março", "abril", "maio", "junho", 
+            "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"
+        ];
+        
+        const dia = parts[2];
+        const mes = meses[parseInt(parts[1]) - 1];
+        const ano = parts[0];
+        
+        return `${dia} de ${mes} de ${ano}`;
+    }
+
+    // --- Texto Inteligente (Termo de Justificação Completo) ---
     window.atualizarTextoInteligente = function() {
         const checks = document.querySelectorAll('.aluno-check-listaAlunosInfracao:checked');
         const regSel = document.getElementById('regraSelect');
         const regraDesc = regSel.options[regSel.selectedIndex].getAttribute('data-desc') || "";
+        
         const box = document.getElementById('campoObservacao');
         
+        let descFato = document.getElementById('descricaoFatoInput').value.trim();
+        if (!descFato) descFato = "[DESCREVER A CONDUTA AQUI]";
+        if (descFato.endsWith('.')) descFato = descFato.slice(0, -1);
+
+        const dataInput = document.getElementById('dataFatoInput').value;
+        const dataExtenso = getDataPorExtenso(dataInput);
+        const anoAtual = new Date().getFullYear();
+
         if(checks.length === 1) {
             box.value = "Carregando dados do aluno...";
             fetch(`/justica-e-disciplina/api/aluno-details/${checks[0].value}`)
                 .then(r => r.json())
                 .then(d => {
-                    box.value = `Termo de Justificação:\n1. Justificante: ${d.posto_graduacao} ${d.nome_completo}, Id ${d.matricula}.\n2. Conduta: O militar acima, na data de hoje, incorreu ${regraDesc}.\n3. Prazo: 24h para defesa.`;
+                    const termo = `Termo de Justificação:
+Tendo em vista as informações constantes na Parte Nº ___/___/CAl/EsFHEP-SM/${anoAtual}, evidenciando a existência, em tese, de infração das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação:
+
+1. Justificante: ${d.posto_graduacao} ${d.nome_completo}, Id Func. ${d.matricula}.
+
+2. Descrição da conduta infracional: O ${d.posto_graduacao} ${d.nome_completo}, Id Func. ${d.matricula}, no dia ${dataExtenso}, ${descFato}. Com isso, incorreu ${regraDesc}.
+
+3. Cientifico-lhe que a contar do recebimento da presente, abre-se o prazo de 24 horas, para que, querendo, apresente resposta escrita com as provas que entender cabíveis. Fica advertido o acusado que a não entrega da justificação dentro do prazo estipulado, implicará em reconhecimento como verdadeiros os fatos imputados.
+
+[NOME, POSTO/GRADUAÇÃO E FUNÇÃO DO RESPONSÁVEL]`;
+
+                    box.value = termo;
                 });
         } else if(checks.length > 1) {
-            box.value = `Termo de Justificação Coletivo:\n1. Justificantes: Conforme lista anexa (${checks.length} alunos).\n2. Conduta: Os militares incorreram ${regraDesc}.\n3. Prazo: 24h para defesa.`;
+            box.value = `Termo de Justificação:
+Tendo em vista as informações constantes na Parte Nº ___/___/CAl/EsFHEP-SM/${anoAtual}, evidenciando a existência, em tese, de infração das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação:
+
+1. Justificantes: Conforme lista de ${checks.length} alunos selecionados.
+
+2. Descrição da conduta infracional: Os militares selecionados, no dia ${dataExtenso}, ${descFato}. Com isso, incorreram ${regraDesc}.
+
+3. Cientifico-lhes que a contar do recebimento da presente, abre-se o prazo de 24 horas, para que, querendo, apresentem resposta escrita com as provas que entenderem cabíveis.
+
+[NOME, POSTO/GRADUAÇÃO E FUNÇÃO DO RESPONSÁVEL]`;
         }
     };
 });

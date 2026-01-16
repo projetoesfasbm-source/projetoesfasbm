@@ -18,11 +18,10 @@ logger = logging.getLogger(__name__)
 
 class JusticaService:
     
-    # --- CONSTANTES ---
     FADA_NOTA_INICIAL = 8.0
     FADA_PONTO_ELOGIO = 0.5
     FADA_MAX_NOTA = 10.0
-    CODIGO_REVELIA = "REVELIA-AUTO" # Código para infração automática
+    CODIGO_REVELIA = "REVELIA-AUTO"
 
     @staticmethod
     def _ensure_datetime(dt_input):
@@ -35,10 +34,20 @@ class JusticaService:
             return datetime.combine(dt_input, datetime.min.time()).astimezone()
         if isinstance(dt_input, str):
             dt_input = dt_input.strip()
+            
+            # Formato Completo (Data + Hora) - NOVO
+            try:
+                return datetime.strptime(dt_input, '%Y-%m-%d %H:%M').astimezone()
+            except ValueError:
+                pass
+
+            # Formato apenas Data (Padrão HTML)
             try: 
                 return datetime.strptime(dt_input, '%Y-%m-%d').astimezone()
             except ValueError:
                 pass
+            
+            # Formato BR
             try:
                 return datetime.strptime(dt_input, '%d/%m/%Y').astimezone()
             except ValueError:
@@ -46,53 +55,35 @@ class JusticaService:
                 return datetime.now().astimezone()
         return datetime.now().astimezone()
 
+    # ... (Manter o restante dos métodos inalterados: get_pontuacao_config, verificar_prazos, calcular_ndisc_aluno, etc.) ...
+    
     @staticmethod
     def get_pontuacao_config(school):
         if not school: return False, 0.0
-        # Configuração: apenas CBFPM e CSPM pontuam FADA diretamente via elogios/regras nesse modelo
         if school.npccal_type == 'ctsp': return False, 0.0
         if school.npccal_type in ['cbfpm', 'cspm']: return True, JusticaService.FADA_PONTO_ELOGIO
         return False, 0.0
 
     @staticmethod
     def verificar_prazos_revelia_automatica():
-        """
-        [CRON] Verifica processos > 24h sem ciência.
-        1. Dá ciência automática (Revelia).
-        2. Gera nova punição automática.
-        """
         try:
             limite = datetime.now().astimezone() - timedelta(hours=24)
-            
-            # Busca processos vencidos (Status = Aguardando Ciência e Data Ocorrencia antiga)
-            processos = db.session.scalars(
-                select(ProcessoDisciplina)
-                .where(ProcessoDisciplina.status == StatusProcesso.AGUARDANDO_CIENCIA.value)
-                .where(ProcessoDisciplina.data_ocorrencia <= limite)
-            ).all()
-            
+            processos = db.session.scalars(select(ProcessoDisciplina).where(ProcessoDisciplina.status == StatusProcesso.AGUARDANDO_CIENCIA.value).where(ProcessoDisciplina.data_ocorrencia <= limite)).all()
             log_msgs = []
             for p in processos:
-                # 1. Revelia no processo original
                 p.status = StatusProcesso.ALUNO_NOTIFICADO.value
                 p.ciente_aluno = True
                 p.data_ciente = datetime.now().astimezone()
-                p.observacao = (p.observacao or "") + "\n[SISTEMA] Ciência dada por REVELIA (Prazo de 24h expirado)."
+                p.observacao = (p.observacao or "") + "\n[SISTEMA] Ciência dada por REVELIA (24h expiradas)."
                 
-                # 2. Nova Infração Automática
                 nova_infracao = ProcessoDisciplina(
-                    aluno_id=p.aluno_id,
-                    relator_id=p.relator_id, # Mantém o mesmo relator ou pode ser o admin
-                    fato_constatado=f"Deixou de dar ciência no processo disciplinar ID {p.id} no prazo regulamentar de 24 horas.",
-                    codigo_infracao=JusticaService.CODIGO_REVELIA,
-                    pontos=0.5, # Pontuação padrão por descumprimento de ordem/prazo
-                    origem_punicao='NPCCAL',
-                    status=StatusProcesso.AGUARDANDO_CIENCIA.value,
-                    data_ocorrencia=datetime.now().astimezone()
+                    aluno_id=p.aluno_id, relator_id=p.relator_id,
+                    fato_constatado=f"Deixou de dar ciência no processo disciplinar ID {p.id} no prazo de 24h.",
+                    codigo_infracao=JusticaService.CODIGO_REVELIA, pontos=0.5, origem_punicao='NPCCAL',
+                    status=StatusProcesso.AGUARDANDO_CIENCIA.value, data_ocorrencia=datetime.now().astimezone()
                 )
                 db.session.add(nova_infracao)
-                log_msgs.append(f"Proc {p.id} -> Revelia aplicada + Nova Infração gerada.")
-            
+                log_msgs.append(f"Proc {p.id} -> Revelia + Nova Infração.")
             db.session.commit()
             return True, log_msgs
         except Exception as e:
@@ -102,59 +93,29 @@ class JusticaService:
 
     @staticmethod
     def calcular_ndisc_aluno(aluno_id):
-        """
-        Calcula NDisc = (20 - Pontos) / 2
-        Aplica regra de corte por ciclo (2/3 módulos):
-        - CBFPM/CTSP: Conta a partir do 2º Ciclo (Index 1).
-        - CSPM: Conta a partir do 3º Ciclo (Index 2).
-        """
         aluno = db.session.get(Aluno, aluno_id)
         if not aluno: return 0.0
-        
         turma = aluno.turma
-        if not turma: return 10.0 # Nota cheia se não tiver turma
+        if not turma: return 10.0
         
-        # Identifica tipo de escola
-        tipo_escola = 'cbfpm' # Default
-        if turma.school and turma.school.npccal_type:
-            tipo_escola = turma.school.npccal_type
-            
-        # Define índice de corte baseado na regra
+        tipo_escola = 'cbfpm'
+        if turma.school and turma.school.npccal_type: tipo_escola = turma.school.npccal_type
         idx_corte = 0
-        if tipo_escola in ['cbfpm', 'ctsp']: 
-            idx_corte = 1 # 2º Ciclo
-        elif tipo_escola == 'cspm': 
-            idx_corte = 2 # 3º Ciclo
+        if tipo_escola in ['cbfpm', 'ctsp']: idx_corte = 1
+        elif tipo_escola == 'cspm': idx_corte = 2
         
-        # Busca Data de Corte nos Ciclos
         data_corte = None
-        ciclos = db.session.scalars(
-            select(Ciclo)
-            .where(Ciclo.school_id == turma.school_id)
-            .order_by(Ciclo.data_inicio) # Importante: Ciclo precisa ter data_inicio
-        ).all()
-        
+        ciclos = db.session.scalars(select(Ciclo).where(Ciclo.school_id == turma.school_id).order_by(Ciclo.data_inicio)).all()
         if ciclos and idx_corte < len(ciclos):
-            if ciclos[idx_corte].data_inicio:
-                data_corte = ciclos[idx_corte].data_inicio
+            if ciclos[idx_corte].data_inicio: data_corte = ciclos[idx_corte].data_inicio
 
-        # Busca Processos Válidos (Finalizados e com Pontos)
-        query = select(ProcessoDisciplina).where(
-            ProcessoDisciplina.aluno_id == aluno_id,
-            ProcessoDisciplina.status == StatusProcesso.FINALIZADO.value,
-            ProcessoDisciplina.pontos > 0
-        )
-        
-        # Aplica filtro de data se houver ciclo definido
+        query = select(ProcessoDisciplina).where(ProcessoDisciplina.aluno_id == aluno_id, ProcessoDisciplina.status == StatusProcesso.FINALIZADO.value, ProcessoDisciplina.pontos > 0)
         if data_corte:
             dt_corte = datetime.combine(data_corte, datetime.min.time()).astimezone()
             query = query.where(ProcessoDisciplina.data_ocorrencia >= dt_corte)
             
         processos = db.session.scalars(query).all()
-        pontos_perdidos = sum(p.pontos for p in processos)
-        
-        # Fórmula Base 20 -> Base 10
-        nota = (20.0 - pontos_perdidos) / 2
+        nota = (20.0 - sum(p.pontos for p in processos)) / 2
         return max(0.0, min(10.0, nota))
 
     @staticmethod
@@ -162,30 +123,13 @@ class JusticaService:
         try:
             p = db.session.get(ProcessoDisciplina, pid)
             if not p: return False, "Processo não encontrado."
-            
-            p.status = StatusProcesso.FINALIZADO.value
-            p.decisao_final = decisao
-            p.fundamentacao = fundamentacao
-            p.detalhes_sancao = detalhes
-            
-            # Novos campos
-            p.is_crime = is_crime
-            p.tipo_sancao = tipo_sancao
-            p.dias_sancao = dias_sancao if dias_sancao else 0
-            p.origem_punicao = origem
-            
-            # Se for improcedente/anulado, zera os pontos
-            if decisao in ['IMPROCEDENTE', 'ANULADO', 'ARQUIVADO']:
-                p.pontos = 0.0
-
+            p.status = StatusProcesso.FINALIZADO.value; p.decisao_final = decisao; p.fundamentacao = fundamentacao; p.detalhes_sancao = detalhes
+            p.is_crime = is_crime; p.tipo_sancao = tipo_sancao; p.dias_sancao = dias_sancao if dias_sancao else 0; p.origem_punicao = origem
+            if decisao in ['IMPROCEDENTE', 'ANULADO', 'ARQUIVADO']: p.pontos = 0.0
             p.data_decisao = datetime.now().astimezone()
-            db.session.commit()
-            return True, "Processo finalizado."
-        except Exception as e: 
-            db.session.rollback()
-            return False, str(e)
+            db.session.commit(); return True, "Processo finalizado."
+        except Exception as e: db.session.rollback(); return False, str(e)
 
-    # --- Métodos padrão mantidos ---
     @staticmethod
     def get_processos_para_usuario(user, school_id_override=None):
         try:
@@ -196,7 +140,6 @@ class JusticaService:
                 if school_id_override: query = query.where(Turma.school_id == school_id_override)
             else:
                 if school_id_override: query = query.where(Turma.school_id == school_id_override)
-
             query = query.options(joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.user), joinedload(ProcessoDisciplina.regra))
             return db.session.scalars(query.order_by(ProcessoDisciplina.data_ocorrencia.desc())).all()
         except: return []
@@ -207,19 +150,12 @@ class JusticaService:
             dt = JusticaService._ensure_datetime(data_ocorrencia)
             regra = db.session.get(DisciplineRule, regra_id) if regra_id else None
             cod = regra.codigo if regra else codigo_infracao
-            
             novo = ProcessoDisciplina(
-                aluno_id=aluno_id, relator_id=autor_id, fato_constatado=descricao, 
-                observacao=observacao, pontos=pontos, codigo_infracao=cod, regra_id=regra_id,
-                status=StatusProcesso.AGUARDANDO_CIENCIA.value, data_ocorrencia=dt,
-                origem_punicao='NPCCAL'
+                aluno_id=aluno_id, relator_id=autor_id, fato_constatado=descricao, observacao=observacao, pontos=pontos, 
+                codigo_infracao=cod, regra_id=regra_id, status=StatusProcesso.AGUARDANDO_CIENCIA.value, data_ocorrencia=dt, origem_punicao='NPCCAL'
             )
-            db.session.add(novo)
-            db.session.commit()
-            return True, "Sucesso"
-        except Exception as e:
-            db.session.rollback()
-            return False, str(e)
+            db.session.add(novo); db.session.commit(); return True, "Sucesso"
+        except Exception as e: db.session.rollback(); return False, str(e)
 
     @staticmethod
     def deletar_processo(pid):

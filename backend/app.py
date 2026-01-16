@@ -178,6 +178,7 @@ def register_blueprints(app):
     # ### NOVOS CONTROLLERS ###
     from backend.controllers.elogio_controller import elogio_bp
     from backend.controllers.regras_controller import regras_bp
+    from backend.controllers.diario_controller import diario_bp
 
     app.register_blueprint(admin_escola_bp)
     app.register_blueprint(tools_bp)
@@ -206,6 +207,7 @@ def register_blueprints(app):
     # ### REGISTRO DE NOVOS BLUEPRINTS ###
     app.register_blueprint(elogio_bp)
     app.register_blueprint(regras_bp)
+    app.register_blueprint(diario_bp)
 
 def register_handlers_and_processors(app):
 

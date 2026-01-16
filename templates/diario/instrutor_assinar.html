@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-10">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0"><i class="fas fa-file-contract me-2"></i>Validar Diário de Classe</h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-secondary">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <strong>Data:</strong> {{ diario.data_aula.strftime('%d/%m/%Y') }}<br>
+                                <strong>Turma:</strong> {{ diario.horario.turma.nome }}<br>
+                                <strong>Disciplina:</strong> {{ diario.horario.disciplina.materia }}
+                            </div>
+                            <div class="col-md-6 text-md-end">
+                                <strong>Instrutor:</strong> {{ current_user.posto_graduacao }} {{ current_user.nome_de_guerra }}<br>
+                                <strong>Matrícula:</strong> {{ current_user.id_func }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label text-muted">Conteúdo Ministrado (Preenchido pelo Aluno):</label>
+                        <div class="p-3 bg-light border rounded">
+                            {{ diario.conteudo_ministrado|nl2br }}
+                        </div>
+                    </div>
+
+                    {% if diario.observacoes %}
+                    <div class="mb-4">
+                        <label class="form-label text-muted">Observações:</label>
+                        <div class="p-3 bg-light border rounded">
+                            {{ diario.observacoes|nl2br }}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <hr>
+
+                    <h5 class="mb-3">Assinatura do Instrutor</h5>
+                    <p class="small text-muted">Ao assinar, você valida que o conteúdo acima corresponde à aula ministrada.</p>
+
+                    <ul class="nav nav-tabs mb-3" id="signTab" role="tablist">
+                        <li class="nav-item">
+                            <button class="nav-link active" id="draw-tab" data-bs-toggle="tab" data-bs-target="#draw" type="button">
+                                <i class="fas fa-pen me-2"></i>Desenhar na Tela
+                            </button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link" id="upload-tab" data-bs-toggle="tab" data-bs-target="#upload" type="button">
+                                <i class="fas fa-upload me-2"></i>Carregar Imagem
+                            </button>
+                        </li>
+                    </ul>
+
+                    <form method="POST" enctype="multipart/form-data" id="formAssinatura">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="tipo_assinatura" id="tipo_assinatura" value="canvas">
+                        <input type="hidden" name="assinatura_base64" id="assinatura_base64">
+
+                        <div class="tab-content" id="signTabContent">
+                            <div class="tab-pane fade show active" id="draw" role="tabpanel">
+                                <div class="border rounded d-flex justify-content-center bg-white" style="cursor: crosshair;">
+                                    <canvas id="signaturePad" width="600" height="200" style="touch-action: none;"></canvas>
+                                </div>
+                                <div class="mt-2 text-end">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearPad()">
+                                        <i class="fas fa-eraser"></i> Limpar
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="tab-pane fade" id="upload" role="tabpanel">
+                                <div class="mb-3">
+                                    <label for="assinatura_upload" class="form-label">Selecione uma imagem da sua assinatura (PNG ou JPG)</label>
+                                    <input class="form-control" type="file" id="assinatura_upload" name="assinatura_upload" accept="image/*">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-4 text-center">
+                            <p class="mb-1 fw-bold">{{ current_user.posto_graduacao }} {{ current_user.nome_completo }}</p>
+                            <p class="text-muted small">Matrícula: {{ current_user.id_func }}</p>
+                        </div>
+
+                        <div class="d-grid gap-2 mt-4">
+                            <button type="submit" class="btn btn-success btn-lg" onclick="prepareSubmit()">
+                                <i class="fas fa-check-double me-2"></i> Validar e Assinar Diário
+                            </button>
+                            <a href="{{ url_for('diario.listar_pendentes') }}" class="btn btn-outline-secondary">Cancelar</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/signature_pad@4.0.0/dist/signature_pad.umd.min.js"></script>
+<script>
+    var canvas = document.getElementById('signaturePad');
+    var signaturePad = new SignaturePad(canvas, {
+        backgroundColor: 'rgba(255, 255, 255, 0)',
+        penColor: 'rgb(0, 0, 0)'
+    });
+
+    // Ajuste responsivo do canvas
+    function resizeCanvas() {
+        var ratio =  Math.max(window.devicePixelRatio || 1, 1);
+        canvas.width = canvas.offsetWidth * ratio;
+        canvas.height = canvas.offsetHeight * ratio;
+        canvas.getContext("2d").scale(ratio, ratio);
+        signaturePad.clear();
+    }
+    // window.addEventListener("resize", resizeCanvas); // Desativado para evitar limpar ao girar tela, descomentar se necessário
+    // resizeCanvas();
+
+    function clearPad() {
+        signaturePad.clear();
+    }
+
+    // Controle das Abas
+    document.getElementById('upload-tab').addEventListener('click', function() {
+        document.getElementById('tipo_assinatura').value = 'upload';
+    });
+    document.getElementById('draw-tab').addEventListener('click', function() {
+        document.getElementById('tipo_assinatura').value = 'canvas';
+    });
+
+    function prepareSubmit() {
+        if (document.getElementById('tipo_assinatura').value === 'canvas') {
+            if (signaturePad.isEmpty()) {
+                // Não bloqueia aqui, deixa o backend validar ou permitir vazio se for lógica opcional (mas backend bloqueia)
+            } else {
+                var dataURL = signaturePad.toDataURL();
+                document.getElementById('assinatura_base64').value = dataURL;
+            }
+        }
+    }
+</script>
+{% endblock %}

@@ -53,10 +53,15 @@ def index():
 
         atributos = [(i, n) for i, n in enumerate(['Expressão', 'Planejamento', 'Perseverança', 'Apresentação', 'Lealdade', 'Tato', 'Equilíbrio', 'Disciplina', 'Responsabilidade', 'Maturidade', 'Assiduidade', 'Pontualidade', 'Dicção', 'Liderança', 'Relacionamento', 'Ética', 'Produtividade', 'Eficiência'], 1)]
 
+        # Passamos a hora atual para o input de Time
+        agora_hora = datetime.now().strftime('%H:%M')
+
         return render_template('justica/index.html', 
             em_andamento=em_andamento, finalizados=finalizados, fatos_predefinidos=regras, 
             turmas=turmas, permite_pontuacao=permite_pontuacao, atributos_fada=atributos, 
-            hoje=datetime.today().strftime('%Y-%m-%d'))
+            hoje=datetime.today().strftime('%Y-%m-%d'),
+            agora_hora=agora_hora) # Nova variável
+            
     except Exception as e:
         logger.exception("Erro index justica")
         flash("Erro ao carregar dados.", "danger")
@@ -73,8 +78,15 @@ def registrar_em_massa():
 
         tipo = request.form.get('tipo_registro')
         dt_str = request.form.get('data_fato')
+        hr_str = request.form.get('hora_fato') # Captura a hora
         desc = request.form.get('descricao')
         obs = request.form.get('observacao', '')
+
+        # Combina Data e Hora se ambos existirem
+        if dt_str and hr_str:
+            dt_completa = f"{dt_str} {hr_str}"
+        else:
+            dt_completa = dt_str
 
         count = 0
         if tipo == 'infracao':
@@ -84,7 +96,7 @@ def registrar_em_massa():
                 r = db.session.get(DisciplineRule, int(regra_id))
                 if r: pts = r.pontos; cod = r.codigo
             for aid in ids:
-                ok, _ = JusticaService.criar_processo(desc, obs, int(aid), current_user.id, pts, cod, regra_id, dt_str)
+                ok, _ = JusticaService.criar_processo(desc, obs, int(aid), current_user.id, pts, cod, regra_id, dt_completa)
                 if ok: count += 1
             flash(f'{count} infrações registradas.', 'success')
         elif tipo == 'elogio':
@@ -96,9 +108,9 @@ def registrar_em_massa():
         return redirect(url_for('justica.index'))
     except: db.session.rollback(); flash("Erro técnico.", "danger"); return redirect(url_for('justica.index'))
 
+# ... (Manter demais rotas: cron, finalizar, apis, deletar, ciente, defesa, imprimir IGUAIS ao anterior) ...
 @justica_bp.route('/cron/verificar-revelia', methods=['GET'])
 def cron_verificar_revelia():
-    """Rota para PythonAnywhere Task (A cada 1h)"""
     ok, msgs = JusticaService.verificar_prazos_revelia_automatica()
     return jsonify({'status': 'ok' if ok else 'error', 'processed': msgs}), 200 if ok else 500
 
@@ -109,18 +121,13 @@ def finalizar_processo(pid):
     decisao = request.form.get('decisao_final')
     fundamentacao = request.form.get('fundamentacao')
     detalhes = request.form.get('detalhes_sancao')
-    
-    # Novos inputs para Sanção e Crime
     is_crime = request.form.get('is_crime') == 'on'
     tipo_sancao = request.form.get('tipo_sancao')
     origem = request.form.get('origem_punicao', 'NPCCAL')
     dias_str = request.form.get('dias_sancao')
     dias = int(dias_str) if dias_str and dias_str.strip() else None
     
-    ok, msg = JusticaService.finalizar_processo(
-        pid, decisao, fundamentacao, detalhes, 
-        is_crime=is_crime, tipo_sancao=tipo_sancao, dias_sancao=dias, origem=origem
-    )
+    ok, msg = JusticaService.finalizar_processo(pid, decisao, fundamentacao, detalhes, is_crime=is_crime, tipo_sancao=tipo_sancao, dias_sancao=dias, origem=origem)
     flash(msg, 'success' if ok else 'danger')
     return redirect(url_for('justica.index'))
 
