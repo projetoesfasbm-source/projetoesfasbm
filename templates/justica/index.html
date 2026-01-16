@@ -3,6 +3,12 @@
 {% block title %}Justiça e Disciplina{% endblock %}
 
 {% block content %}
+{% set school_type = 'ctsp' %}
+{% if g.active_school and g.active_school.npccal_type %}
+    {% set school_type = g.active_school.npccal_type|lower %}
+{% endif %}
+{% set show_fada = (school_type in ['cbfpm', 'cspm']) %}
+
 <div class="content-header">
     <h1>Justiça e Disciplina</h1>
     <p>Gestão de processos disciplinares e avaliação atitudinal.</p>
@@ -23,23 +29,15 @@
                     <button class="btn btn-success justice-option-btn" data-target="newElogioContent">
                         <i class="fas fa-star me-1"></i>Novo Elogio
                     </button>
+                    
+                    {% if show_fada %}
                     <button class="btn btn-info text-white justice-option-btn" data-target="fadaContent">
                         <i class="fas fa-clipboard-list me-1"></i>FADA (Avaliação)
                     </button>
                     <a href="{{ url_for('justica.fada_boletim') }}" class="btn btn-secondary justice-option-btn">
                         <i class="fas fa-table me-1"></i>Ver Notas (Boletim)
                     </a>
-                {% endif %}
-            </div>
-
-            <div class="justice-content active" id="inProgressContent">
-                <h3 class="justice-content-title">Processos em Andamento</h3>
-                {% if em_andamento %}
-                    {% for processo in em_andamento %}
-                        {% include 'partials/_processo_card_admin.html' if current_user.role != 'aluno' else 'partials/_processo_card_aluno.html' %}
-                    {% endfor %}
-                {% else %}
-                    <div class="alert alert-info">Nenhum processo em andamento.</div>
+                    {% endif %}
                 {% endif %}
             </div>
 
@@ -64,7 +62,7 @@
                 <div class="card border-danger shadow-sm">
                     <div class="card-header bg-danger text-white"><h4 class="mb-0">Registrar Infração</h4></div>
                     <div class="card-body">
-                        <form method="POST" action="{{ url_for('justica.registrar_em_massa') }}">
+                         <form method="POST" action="{{ url_for('justica.registrar_em_massa') }}">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <input type="hidden" name="tipo_registro" value="infracao">
                             <div class="row">
@@ -122,7 +120,7 @@
                 <div class="card border-success shadow-sm">
                     <div class="card-header bg-success text-white"><h4 class="mb-0">Registrar Elogio</h4></div>
                     <div class="card-body">
-                        <form method="POST" action="{{ url_for('justica.registrar_em_massa') }}">
+                         <form method="POST" action="{{ url_for('justica.registrar_em_massa') }}">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <input type="hidden" name="tipo_registro" value="elogio">
                             <div class="row">
@@ -147,7 +145,10 @@
                 </div>
             </div>
 
-            {% include 'justica/fada_formulario.html' %}
+            {% if show_fada %}
+                {% include 'justica/fada_formulario.html' %}
+            {% endif %}
+            
         </div>
     </div>
 </div>
@@ -161,6 +162,7 @@
 </style>
 
 <script>
+// ... (MANTENHA O SCRIPT JS IGUAL AO ANTERIOR: carregarAlunos, toggleTodos, atualizarTextoInteligente) ...
 document.addEventListener('DOMContentLoaded', function() {
     // Abas
     document.querySelectorAll('.justice-option-btn').forEach(btn => {
@@ -175,26 +177,20 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Função de Carregar Alunos (Híbrida: Checkbox e Select)
     window.carregarAlunos = function(turmaId, containerId) {
         const container = document.getElementById(containerId);
         if(!turmaId) return;
-        
         container.innerHTML = 'Carregando...';
-        
         fetch(`/justica-e-disciplina/api/alunos-por-turma/${turmaId}`)
             .then(r => r.json())
             .then(data => {
-                // Modo SELECT (Para FADA)
                 if (container.tagName === 'SELECT') {
                     let html = '<option value="">-- Selecione o Aluno --</option>';
                     data.forEach(a => {
                         html += `<option value="${a.id}">${a.numero ? a.numero + ' - ' : ''}${a.graduacao} ${a.nome}</option>`;
                     });
                     container.innerHTML = html;
-                } 
-                // Modo LISTA CHECKBOX (Para Infrações)
-                else {
+                } else {
                     container.innerHTML = data.map(a => `
                         <div class="form-check border-bottom py-1">
                             <input class="form-check-input aluno-check-${containerId}" type="checkbox" name="alunos_selecionados" value="${a.id}" id="chk_${containerId}_${a.id}" onchange="if('${containerId}'=='listaAlunosInfracao') atualizarTextoInteligente()">
@@ -214,7 +210,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if(cId === 'listaAlunosInfracao') atualizarTextoInteligente();
     };
 
-    // Inteligência do Termo
     function getDataPorExtenso(dateString) {
         if (!dateString) return "data não informada";
         const parts = dateString.split('-');
@@ -248,7 +243,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     const idFunc = `Id Func. ${d.matricula}`;
                     const nomeCompleto = `${d.posto_graduacao} ${d.nome_completo}, ${idFunc}`;
                     const termo = `Termo de Justificação:
-Tendo em vista as informações constantes na Parte Nº ___/CAl/EsFHEP-SM/${anoAtual}, evidenciando a existência, em tese, de infração das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação:
+Tendo em vista as informações constantes na Parte Nº Nº ___/CAl/EsFHEP-SM ${anoAtual}, evidenciando a existência, em tese, de infração das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação:
 
 1. Justificante: ${nomeCompleto}.
 
@@ -261,7 +256,7 @@ Tendo em vista as informações constantes na Parte Nº ___/CAl/EsFHEP-SM/${anoA
                 });
         } else if(checks.length > 1) {
              const templateBase = `Termo de Justificação:
-Tendo em vista as informações constantes na Parte Nº ___/CAl/EsFHEP-SM/${anoAtual}, evidenciando a existência, em tese, de infração das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação:
+Tendo em vista as informações constantes na Parte Nº Nº ___/CAl/EsFHEP-SM ${anoAtual}, evidenciando a existência, em tese, de infração das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação:
 
 1. Justificantes: Conforme lista de ${checks.length} alunos selecionados.
 

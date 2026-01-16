@@ -83,14 +83,18 @@ def index():
 def exportar_selecao():
     try:
         school_id = _get_current_school_id()
+        
+        # Otimização: Carrega tudo que precisa num Select só
         query = select(ProcessoDisciplina).join(ProcessoDisciplina.aluno).outerjoin(Aluno.turma)
-        processos_raw = db.session.scalars(query.order_by(ProcessoDisciplina.data_decisao.desc())).all()
+        
+        # Filtro de Status Manual (Para garantir compatibilidade com versões antigas do banco)
+        processos_raw = db.session.scalars(query.order_by(ProcessoDisciplina.data_ocorrencia.desc())).all()
         processos = [p for p in processos_raw if str(p.status).lower() == 'finalizado']
         
         if school_id:
             processos = [p for p in processos if p.aluno.turma.school_id == school_id]
             
-        return render_template('justica/exportar_selecao.html', processos=processos)
+        return render_template('justica/exportar_selecao.html', processos=processos, datetime=datetime)
     except Exception:
         logger.exception("Erro tela exportacao")
         return redirect(url_for('justica.index'))

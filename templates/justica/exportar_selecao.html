@@ -1,71 +1,247 @@
 {% extends "base.html" %}
 
-{% block title %}Exportar Processos{% endblock %}
+{% block title %}Exportar e Editar - Termos de Justificação{% endblock %}
 
 {% block content %}
-<div class="container mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2>Exportar Processos Finalizados</h2>
-        <a href="{{ url_for('justica.index') }}" class="btn btn-outline-secondary">Voltar</a>
-    </div>
+<style>
+    /* Layout Split Screen */
+    .split-container {
+        display: flex; height: calc(100vh - 120px); gap: 20px; overflow: hidden;
+    }
+    .left-panel {
+        width: 350px; flex-shrink: 0; background: #fff; border: 1px solid #ddd;
+        border-radius: 5px; display: flex; flex-direction: column;
+    }
+    .right-panel {
+        flex-grow: 1; background: #e9ebee; border: 1px solid #ddd;
+        border-radius: 5px; overflow-y: auto; padding: 20px;
+        display: flex; justify-content: center;
+    }
+    
+    /* Lista de Processos */
+    .process-list { overflow-y: auto; flex-grow: 1; }
+    .process-item {
+        padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; display: flex; align-items: flex-start; gap: 10px;
+    }
+    .process-item:hover { background: #f8f9fa; }
+    .process-item.active { background: #e3f2fd; border-left: 4px solid #0d6efd; }
+    
+    /* Folha A4 na tela */
+    .a4-page {
+        background: white; width: 21cm; min-height: 29.7cm;
+        padding: 2cm; margin-bottom: 30px; box-shadow: 0 0 15px rgba(0,0,0,0.1);
+        font-family: 'Times New Roman', Times, serif; color: black; line-height: 1.5; font-size: 12pt;
+    }
+    
+    /* Editáveis */
+    .editable { border: 1px dashed transparent; }
+    .editable:hover { border-color: #999; background: #ffffd0; cursor: text; }
+    
+    /* Estilos do Documento */
+    .doc-header { text-align: center; font-weight: bold; margin-bottom: 1.5cm; text-transform: uppercase; font-size: 11pt; }
+    .doc-title { text-align: center; font-weight: bold; margin: 0.5cm 0; text-decoration: underline; text-transform: uppercase; }
+    p { margin-bottom: 6pt; text-align: justify; }
+    .sancao-box { border: 1px solid #000; padding: 10px; margin: 10px 0; background: #fdfdfd; }
+    
+    /* Botões Flutuantes */
+    .actions-bar {
+        padding: 10px; background: #fff; border-bottom: 1px solid #ddd;
+        display: flex; justify-content: space-between; align-items: center;
+    }
 
-    <form method="POST" action="{{ url_for('justica.imprimir_processos') }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        
-        <div class="card shadow-sm">
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0">
-                        <thead class="bg-light">
-                            <tr>
-                                <th style="width: 50px;" class="text-center">
-                                    <input type="checkbox" id="selectAll" class="form-check-input">
-                                </th>
-                                <th>Data</th>
-                                <th>Aluno</th>
-                                <th>Fato</th>
-                                <th>Decisão</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% if processos %}
-                                {% for p in processos %}
-                                <tr>
-                                    <td class="text-center">
-                                        <input type="checkbox" name="processo_ids" value="{{ p.id }}" class="form-check-input p-check">
-                                    </td>
-                                    <td>{{ p.data_ocorrencia.strftime('%d/%m/%Y') }}</td>
-                                    <td>
-                                        <strong>{{ p.aluno.user.posto_graduacao }} {{ p.aluno.user.nome_completo }}</strong><br>
-                                        <small class="text-muted">{{ p.aluno.turma.nome if p.aluno.turma else 'Sem turma' }}</small>
-                                    </td>
-                                    <td>{{ p.fato_constatado[:60] }}...</td>
-                                    <td>
-                                        <span class="badge bg-dark">{{ p.decisao_final or 'Finalizado' }}</span>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            {% else %}
-                                <tr>
-                                    <td colspan="5" class="text-center py-4 text-muted">Nenhum processo finalizado disponível para exportação.</td>
-                                </tr>
-                            {% endif %}
-                        </tbody>
-                    </table>
+    @media print {
+        body * { visibility: hidden; }
+        .right-panel, .right-panel * { visibility: visible; }
+        .right-panel { position: absolute; left: 0; top: 0; width: 100%; height: auto; background: white; border: none; overflow: visible; }
+        .a4-page { box-shadow: none; margin: 0; width: 100%; page-break-after: always; padding: 2cm 1.5cm; }
+        .editable { border: none !important; background: none !important; }
+    }
+</style>
+
+<div class="actions-bar">
+    <div class="d-flex align-items-center gap-2">
+        <h5 class="mb-0">Gerador de Documentos</h5>
+        <span class="badge bg-secondary" id="count-badge">0 selecionados</span>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('justica.index') }}" class="btn btn-sm btn-outline-secondary">Voltar</a>
+        <button class="btn btn-sm btn-success" onclick="exportWord()"><i class="fas fa-file-word"></i> Baixar Word</button>
+        <button class="btn btn-sm btn-dark" onclick="window.print()"><i class="fas fa-print"></i> Imprimir</button>
+    </div>
+</div>
+
+<div class="split-container">
+    <div class="left-panel">
+        <div class="p-2 border-bottom bg-light">
+            <input type="text" class="form-control form-control-sm" placeholder="Buscar aluno..." onkeyup="filtrarLista(this.value)">
+        </div>
+        <div class="process-list" id="processList">
+            {% for p in processos %}
+            <div class="process-item" onclick="toggleProcess({{ p.id }}, this)">
+                <input type="checkbox" id="chk_{{ p.id }}" class="form-check-input mt-1 pe-none">
+                <div>
+                    <div class="fw-bold text-dark">{{ p.aluno.user.posto_graduacao }} {{ p.aluno.user.nome_completo }}</div>
+                    <div class="small text-muted">{{ p.data_ocorrencia.strftime('%d/%m/%Y') }} - {{ p.fato_constatado[:30] }}...</div>
+                    {% if p.decisao_final %}
+                        <span class="badge bg-success" style="font-size: 0.7em;">{{ p.decisao_final }}</span>
+                    {% endif %}
                 </div>
             </div>
-            <div class="card-footer bg-white text-end">
-                <button type="submit" class="btn btn-primary">
-                    <i class="fas fa-print me-1"></i> Gerar Documento (.pdf/print)
-                </button>
+            
+            <script type="application/json" id="data_{{ p.id }}">
+                {
+                    "id": {{ p.id }},
+                    "ano": "{{ p.data_ocorrencia.year }}",
+                    "data_fato": "{{ p.data_ocorrencia.strftime('%d/%m/%Y') }}",
+                    "aluno": "{{ p.aluno.user.posto_graduacao }} {{ p.aluno.user.nome_completo }}",
+                    "matricula": "{{ p.aluno.user.matricula }}",
+                    "fato": "{{ p.fato_constatado | replace('\n', ' ') | replace('"', '\\"') }}",
+                    "defesa": "{{ p.defesa | replace('\n', '<br>') | replace('"', '\\"') if p.defesa else '(Espaço reservado para defesa escrita)' }}",
+                    "decisao": "{{ p.decisao_final or '' }}",
+                    "fundamentacao": "{{ p.fundamentacao | replace('\n', ' ') | replace('"', '\\"') or '' }}",
+                    "tipo_sancao": "{{ p.tipo_sancao or '' }}",
+                    "dias": "{{ p.dias_sancao or '' }}",
+                    "origem": "{{ p.origem_punicao or 'NPCCAL' }}"
+                }
+            </script>
+            {% endfor %}
+        </div>
+        <div class="p-2 border-top text-center small text-muted">
+            Clique para adicionar ao documento
+        </div>
+    </div>
+
+    <div class="right-panel" id="docPreview">
+        <div class="a4-page" id="docContent">
+            <div class="doc-header editable" contenteditable="true">
+                ESTADO DO RIO GRANDE DO SUL<br>
+                SECRETARIA DA SEGURANÇA PÚBLICA<br>
+                BRIGADA MILITAR<br>
+                DEC – {{ g.active_school.nome if g.active_school else 'EsFAS' }} </div>
+            
+            <div id="dynamic-content">
+                <div class="text-center text-muted py-5 my-5">
+                    <h3><i class="fas fa-arrow-left"></i> Selecione processos à esquerda</h3>
+                    <p>Eles aparecerão aqui prontos para editar e imprimir.</p>
+                </div>
+            </div>
+            
+            <div class="editable mt-5 pt-5 text-center" contenteditable="true">
+                <p>Quartel em Santa Maria, {{ datetime.now().strftime('%d de %B de %Y') }}.</p>
+                <br><br>
+                <div style="border-top: 1px solid #000; width: 300px; display: inline-block;"></div>
+                <p><strong>COMANDANTE / CHEFE DA DIVISÃO DE ENSINO</strong></p>
             </div>
         </div>
-    </form>
+    </div>
 </div>
 
 <script>
-document.getElementById('selectAll').addEventListener('change', function() {
-    document.querySelectorAll('.p-check').forEach(c => c.checked = this.checked);
-});
+    // Armazena IDs selecionados
+    let selectedIds = new Set();
+    // Mapeamento de meses para JS
+    const meses = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+    const hoje = new Date();
+    const dataExtenso = `${hoje.getDate()} de ${meses[hoje.getMonth()]} de ${hoje.getFullYear()}`;
+
+    function toggleProcess(id, element) {
+        const checkbox = document.getElementById('chk_' + id);
+        
+        if (selectedIds.has(id)) {
+            selectedIds.delete(id);
+            checkbox.checked = false;
+            element.classList.remove('active');
+            document.getElementById('term_' + id).remove();
+        } else {
+            selectedIds.add(id);
+            checkbox.checked = true;
+            element.classList.add('active');
+            addTermToDoc(id);
+        }
+        
+        // Remove placeholder se tiver itens
+        const placeholder = document.querySelector('#dynamic-content .text-muted');
+        if (selectedIds.size > 0 && placeholder) placeholder.style.display = 'none';
+        if (selectedIds.size === 0 && placeholder) placeholder.style.display = 'block';
+        
+        document.getElementById('count-badge').innerText = selectedIds.size + ' selecionados';
+    }
+
+    function addTermToDoc(id) {
+        const data = JSON.parse(document.getElementById('data_' + id).textContent);
+        
+        // Lógica de Sanção Automática
+        let sancaoBlock = '';
+        if (data.decisao && data.decisao !== 'None') {
+            // Se já tem decisão salva
+            sancaoBlock = `
+                <div class="sancao-box editable" contenteditable="true">
+                    <p><strong>DECISÃO:</strong> ${data.decisao}</p>
+                    <p><strong>FUNDAMENTAÇÃO:</strong> ${data.fundamentacao}</p>
+                    ${ (data.decisao.toUpperCase().includes('PUNI') || data.tipo_sancao) ? 
+                        `<p><strong>TIPO DE SANÇÃO:</strong> ${data.tipo_sancao || '________________'}</p>
+                         <p><strong>QUANTIDADE:</strong> ${data.dias || '____'} dias.</p>
+                         <p><strong>ENQUADRAMENTO:</strong> ${data.origem}</p>` 
+                        : '' }
+                </div>
+            `;
+        } else {
+            // Se está em branco (template vazio)
+            sancaoBlock = `
+                <div class="sancao-box editable" contenteditable="true">
+                    <p><strong>DECISÃO:</strong> ( ) Justificar ( ) Punição</p>
+                    <p><strong>FUNDAMENTAÇÃO:</strong> _________________________________________________________________________</p>
+                    <p><strong>TIPO DE SANÇÃO:</strong> ________________</p>
+                    <p><strong>QUANTIDADE:</strong> ____ dias.</p>
+                </div>
+            `;
+        }
+
+        const html = `
+            <div id="term_${id}" class="mb-5 pb-4 border-bottom page-break">
+                <div class="doc-title editable" contenteditable="true">TERMO DE JUSTIFICAÇÃO Nº ${String(id).padStart(3, '0')} / ${data.ano}</div>
+                
+                <p><strong>1. DO FATO:</strong></p>
+                <div class="editable" contenteditable="true">
+                    <p>No dia ${data.data_fato}, o(a) <strong>${data.aluno}</strong>, Matrícula ${data.matricula}, teve a seguinte conduta observada:</p>
+                    <p style="padding-left: 1cm; font-style: italic;">"${data.fato}"</p>
+                </div>
+
+                <p><strong>2. DA DEFESA:</strong></p>
+                <div class="editable" contenteditable="true" style="border: 1px solid #ccc; padding: 10px; min-height: 2cm; font-family: 'Courier New', monospace; font-size: 11pt;">
+                    ${data.defesa}
+                </div>
+
+                <p><strong>3. DA SOLUÇÃO:</strong></p>
+                <p>Diante do exposto, o Comandante/Chefe RESOLVE:</p>
+                ${sancaoBlock}
+            </div>
+        `;
+        
+        document.getElementById('dynamic-content').insertAdjacentHTML('beforeend', html);
+    }
+
+    function filtrarLista(texto) {
+        texto = texto.toLowerCase();
+        document.querySelectorAll('.process-item').forEach(item => {
+            const nome = item.innerText.toLowerCase();
+            item.style.display = nome.includes(texto) ? 'flex' : 'none';
+        });
+    }
+
+    function exportWord() {
+        var header = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Termos</title><style>body{font-family:'Times New Roman'; font-size:12pt;} .page-break{page-break-after:always;}</style></head><body>";
+        var footer = "</body></html>";
+        var content = document.getElementById("docContent").innerHTML;
+        
+        var sourceHTML = header + content + footer;
+        var source = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(sourceHTML);
+        var fileDownload = document.createElement("a");
+        document.body.appendChild(fileDownload);
+        fileDownload.href = source;
+        fileDownload.download = 'Termos_Justificacao.doc';
+        fileDownload.click();
+        document.body.removeChild(fileDownload);
+    }
 </script>
 {% endblock %}
