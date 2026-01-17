@@ -26,12 +26,13 @@ class DiarioService:
                 pass
         return db.session.scalars(query).first()
 
+    # --- MÉTODO RESTAURADO PARA O ADMIN (RESOLVE O ERRO 500) ---
     @staticmethod
-    def get_diarios_agrupados(school_id, user_id=None, turma_id=None, disciplina_id=None, status='pendente'):
+    def get_diarios_pendentes(school_id, user_id=None, turma_id=None, disciplina_id=None, status=None):
         """
-        Busca os diários e os AGRUPA por (Data, Turma, Disciplina).
+        Retorna uma lista SIMPLES (não agrupada) de diários.
+        Essencial para a visão do Administrador e auditoria.
         """
-        # 1. Busca todos os registros brutos
         stmt = (
             select(DiarioClasse)
             .join(Turma, DiarioClasse.turma_id == Turma.id)
@@ -42,8 +43,53 @@ class DiarioService:
             )
         )
 
+        # Filtro de Status (Se None, traz todos - Pendentes e Assinados)
         if status:
             stmt = stmt.where(DiarioClasse.status == status)
+
+        # Filtro de Instrutor (Se user_id for passado, filtra. Se None, é Admin vendo tudo)
+        if user_id:
+            instrutor = DiarioService.get_current_instrutor(user_id)
+            if instrutor:
+                stmt = stmt.join(Horario, and_(
+                    Horario.pelotao == Turma.nome,
+                    Horario.disciplina_id == DiarioClasse.disciplina_id
+                )).where(
+                    or_(Horario.instrutor_id == instrutor.id, Horario.instrutor_id_2 == instrutor.id)
+                )
+            else:
+                return []
+
+        # Filtros de Tela
+        if turma_id:
+            stmt = stmt.where(DiarioClasse.turma_id == turma_id)
+        
+        if disciplina_id:
+            stmt = stmt.where(DiarioClasse.disciplina_id == disciplina_id)
+
+        # Ordenação
+        stmt = stmt.order_by(DiarioClasse.data_aula.desc(), DiarioClasse.periodo)
+        
+        return db.session.scalars(stmt.distinct()).all()
+
+    # --- MÉTODO AGRUPADO PARA O INSTRUTOR (MANTIDO) ---
+    @staticmethod
+    def get_diarios_agrupados(school_id, user_id=None, turma_id=None, disciplina_id=None, status='pendente'):
+        """
+        Busca os diários e os AGRUPA por blocos.
+        """
+        # 1. Busca dados brutos usando a mesma lógica base
+        stmt = (
+            select(DiarioClasse)
+            .join(Turma, DiarioClasse.turma_id == Turma.id)
+            .where(
+                Turma.school_id == school_id,
+                DiarioClasse.conteudo_ministrado != None,
+                DiarioClasse.conteudo_ministrado != ''
+            )
+        )
+
+        if status: stmt = stmt.where(DiarioClasse.status == status)
 
         if user_id:
             instrutor = DiarioService.get_current_instrutor(user_id)
@@ -60,7 +106,7 @@ class DiarioService:
         if turma_id: stmt = stmt.where(DiarioClasse.turma_id == turma_id)
         if disciplina_id: stmt = stmt.where(DiarioClasse.disciplina_id == disciplina_id)
 
-        # 2. Ordenação Estratégica
+        # Ordenação Específica para Agrupamento
         stmt = stmt.distinct().order_by(
             DiarioClasse.data_aula.desc(), 
             DiarioClasse.turma_id, 
@@ -70,7 +116,7 @@ class DiarioService:
         
         raw_diarios = db.session.scalars(stmt).all()
 
-        # 3. Lógica de Agrupamento
+        # Lógica de Agrupamento
         grouped_diarios = []
         if not raw_diarios: return []
 
@@ -95,27 +141,18 @@ class DiarioService:
 
     @staticmethod
     def _criar_representante_grupo(group_items):
-        """
-        CORREÇÃO: Ordena considerando que periodo pode ser None.
-        """
-        # Ordena tratando None como 0 para evitar erro de comparação
+        # Proteção contra período nulo
         group_items.sort(key=lambda x: x.periodo or 0)
         
         rep = group_items[0] 
-        
         first_p = group_items[0].periodo
         last_p = group_items[-1].periodo
         
-        # Tratamento visual caso o período seja Nulo
-        if first_p is None:
-            rep.periodo_resumo = "Período N/D"
-        elif first_p == last_p:
-            rep.periodo_resumo = f"{first_p}º Período"
-        else:
-            rep.periodo_resumo = f"{first_p}º a {last_p}º Período"
+        if first_p is None: rep.periodo_resumo = "Período N/D"
+        elif first_p == last_p: rep.periodo_resumo = f"{first_p}º Período"
+        else: rep.periodo_resumo = f"{first_p}º a {last_p}º Período"
             
         rep.total_aulas_bloco = len(group_items)
-        
         return rep
 
     @staticmethod
@@ -216,8 +253,7 @@ class DiarioService:
                 instrutor.assinatura_padrao_path = f"uploads/signatures/{def_name}"
 
             db.session.commit()
-            msg_plural = "aulas validadas" if count > 1 else "aula validada"
-            return True, f"Sucesso! {count} {msg_plural} em bloco."
+            return True, f"Sucesso! {count} aulas validadas."
 
         except Exception as e:
             db.session.rollback()

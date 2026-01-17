@@ -2,33 +2,53 @@
 
 {% block content %}
 <style>
-    /* FORÇAR VISIBILIDADE DAS ABAS */
+    /* ESTILO DOS BOTÕES (ABAS SÓLIDAS) */
     .nav-pills .nav-link {
-        background-color: #6c757d; /* Cinza Sólido (Inativo) */
-        color: white !important;   /* Texto Branco Sempre */
+        background-color: #6c757d; /* Cinza (Inativo) */
+        color: white !important;
         font-weight: bold;
-        margin-right: 10px;        /* Espaço entre botões */
-        border-radius: 8px;        /* Bordas arredondadas */
+        margin-right: 10px;
+        border-radius: 8px;
         border: 1px solid #5a6268;
     }
     
     .nav-pills .nav-link:hover {
-        background-color: #5a6268; /* Escurece ao passar o mouse */
-        color: white !important;
+        background-color: #5a6268;
     }
 
     .nav-pills .nav-link.active {
-        background-color: #0d6efd !important; /* Azul Sólido (Ativo) */
-        color: white !important;
+        background-color: #0d6efd !important; /* Azul (Ativo) */
         border-color: #0a58ca;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1); /* Sombra para destaque */
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
 
-    /* Ajuste do Canvas */
-    canvas {
-        background-color: #ffffff; /* Fundo branco OBRIGATÓRIO para o desenho */
-        border: 2px solid #dee2e6;
-        cursor: crosshair;
+    /* CONTAINER DA ASSINATURA RESPONSIVO */
+    .signature-wrapper {
+        position: relative;
+        width: 100%;
+        height: 0;
+        padding-bottom: 50%; /* Proporção 2:1 (Retângulo agradável) */
+        border: 2px solid #0d6efd; /* Borda azul para destacar a área */
+        background-color: #ffffff;
+        border-radius: 8px;
+        touch-action: none; /* IMPEDE O SCROLL DA TELA AO DESENHAR */
+    }
+
+    /* CANVAS PREENCHENDO O CONTAINER */
+    #signaturePad {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        border-radius: 6px;
+    }
+
+    /* AJUSTE PARA TELAS MUITO PEQUENAS */
+    @media (max-width: 576px) {
+        .signature-wrapper {
+            padding-bottom: 65%; /* Um pouco mais alto no celular para facilitar o dedo */
+        }
     }
 </style>
 
@@ -38,6 +58,7 @@
             <h4 class="mb-0"><i class="fas fa-file-contract me-2"></i>Validar Diário de Classe</h4>
         </div>
         <div class="card-body">
+            
             <div class="alert alert-secondary border-0 shadow-sm text-dark">
                 <div class="row">
                     <div class="col-md-6">
@@ -45,11 +66,9 @@
                         <strong><i class="fas fa-users me-1"></i> Turma:</strong> {{ diario.turma.nome }}<br>
                         <strong><i class="fas fa-book me-1"></i> Disciplina:</strong> {{ diario.disciplina.materia }}
                     </div>
-                    <div class="col-md-6 text-md-end">
-                        <div class="mt-2 mt-md-0">
-                            <strong><i class="fas fa-user-tie me-1"></i> Instrutor:</strong><br>
-                            {{ current_user.posto_graduacao }} {{ current_user.nome_de_guerra }}
-                        </div>
+                    <div class="col-md-6 text-md-end mt-2 mt-md-0">
+                        <strong><i class="fas fa-user-tie me-1"></i> Instrutor:</strong><br>
+                        {{ current_user.posto_graduacao }} {{ current_user.nome_de_guerra }}
                     </div>
                 </div>
             </div>
@@ -87,20 +106,20 @@
 
                 <ul class="nav nav-pills mb-3" id="signTab" role="tablist">
                     {% if instrutor.assinatura_padrao_path %}
-                    <li class="nav-item" role="presentation">
+                    <li class="nav-item">
                         <button class="nav-link active" id="saved-tab" data-bs-toggle="pill" data-bs-target="#saved" type="button" onclick="setTipo('padrao')">
                             <i class="fas fa-save me-2"></i> Usar Salva
                         </button>
                     </li>
                     {% endif %}
                     
-                    <li class="nav-item" role="presentation">
+                    <li class="nav-item">
                         <button class="nav-link {% if not instrutor.assinatura_padrao_path %}active{% endif %}" id="draw-tab" data-bs-toggle="pill" data-bs-target="#draw" type="button" onclick="setTipo('canvas')">
                             <i class="fas fa-pen me-2"></i> Desenhar
                         </button>
                     </li>
                     
-                    <li class="nav-item" role="presentation">
+                    <li class="nav-item">
                         <button class="nav-link" id="upload-tab" data-bs-toggle="pill" data-bs-target="#upload" type="button" onclick="setTipo('upload')">
                             <i class="fas fa-upload me-2"></i> Upload
                         </button>
@@ -114,9 +133,7 @@
                         <div class="text-center py-3">
                             <p class="text-muted fw-bold">Sua assinatura salva será utilizada:</p>
                             <div class="d-inline-block border p-2 bg-white rounded">
-                                <img src="{{ url_for('static', filename=instrutor.assinatura_padrao_path) }}" 
-                                     class="img-fluid" 
-                                     style="max-height: 120px;">
+                                <img src="{{ url_for('static', filename=instrutor.assinatura_padrao_path) }}" class="img-fluid" style="max-height: 120px;">
                             </div>
                             <div class="mt-3 text-success fw-bold">
                                 <i class="fas fa-check-circle fa-lg"></i> Pronta para uso
@@ -127,7 +144,12 @@
 
                     <div class="tab-pane fade {% if not instrutor.assinatura_padrao_path %}show active{% endif %}" id="draw" role="tabpanel">
                         <div class="text-center">
-                            <canvas id="signaturePad" width="600" height="200" class="mb-2 rounded"></canvas>
+                            <p class="small text-muted mb-2"><i class="fas fa-hand-pointer"></i> Assine na caixa abaixo:</p>
+                            
+                            <div class="signature-wrapper mb-2">
+                                <canvas id="signaturePad"></canvas>
+                            </div>
+
                             <div class="d-flex justify-content-between align-items-center mt-2">
                                 <button type="button" class="btn btn-secondary btn-sm" onclick="clearPad()">
                                     <i class="fas fa-eraser"></i> Limpar Tela
@@ -144,7 +166,6 @@
                         <div class="py-3">
                             <label class="form-label fw-bold">Selecione uma imagem (PNG/JPG):</label>
                             <input class="form-control mb-3" type="file" name="assinatura_upload" accept="image/png, image/jpeg, image/jpg">
-                            
                             <div class="form-check form-switch">
                                 <input class="form-check-input" type="checkbox" id="saveUpload" name="salvar_padrao">
                                 <label class="form-check-label fw-bold" for="saveUpload">Salvar como Padrão</label>
@@ -168,26 +189,58 @@
 
 <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.0.0/dist/signature_pad.umd.min.js"></script>
 <script>
-    // Inicialização do Canvas com fundo BRANCO EXPLÍCITO
     var canvas = document.getElementById('signaturePad');
-    var signaturePad = new SignaturePad(canvas, { 
+    // Inicialização básica
+    var signaturePad = new SignaturePad(canvas, {
         backgroundColor: 'rgb(255, 255, 255)',
-        penColor: 'rgb(0, 0, 0)'
+        penColor: 'rgb(0, 0, 0)',
+        minWidth: 1.5, // Linha um pouco mais grossa para visibilidade mobile
+        maxWidth: 3.5
     });
+
+    // FUNÇÃO CRÍTICA PARA MOBILE: Ajusta a resolução interna do canvas
+    function resizeCanvas() {
+        // Pega o elemento pai para saber a largura real disponível na tela
+        var parentWidth = canvas.parentElement.offsetWidth;
+        var parentHeight = canvas.parentElement.offsetHeight;
+
+        // Ratio corrige a densidade de pixels (Retina display, etc)
+        var ratio = Math.max(window.devicePixelRatio || 1, 1);
+
+        // Define o tamanho visual (CSS)
+        canvas.width = parentWidth * ratio;
+        canvas.height = parentHeight * ratio;
+        
+        // Escala o contexto do canvas para desenhar corretamente
+        canvas.getContext("2d").scale(ratio, ratio);
+
+        // Limpa (necessário após redimensionar) e mantém dados se houver (opcional, aqui limpamos)
+        signaturePad.clear(); 
+    }
+
+    // Chama no carregamento
+    window.addEventListener("load", resizeCanvas);
+    // Chama se o usuário girar o celular
+    window.addEventListener("resize", resizeCanvas);
+    // Chama quando a aba "Desenhar" for clicada (para garantir renderização correta se estava oculta)
+    document.getElementById('draw-tab').addEventListener('shown.bs.tab', resizeCanvas);
 
     function clearPad() { 
         signaturePad.clear(); 
     }
 
-    // Define tipo inicial
+    // Lógica de Tabs e Submit (Mantida)
     var hasSaved = {{ 'true' if instrutor.assinatura_padrao_path else 'false' }};
     document.getElementById('tipo_assinatura').value = hasSaved ? 'padrao' : 'canvas';
 
     function setTipo(tipo) {
         document.getElementById('tipo_assinatura').value = tipo;
-        // Limpa checkboxes visuais para evitar confusão
         if(tipo === 'padrao') {
             document.querySelectorAll('input[name="salvar_padrao"]').forEach(el => el.checked = false);
+        }
+        // Se clicar em desenhar, força um resize rápido para garantir coordenadas
+        if(tipo === 'canvas') {
+            setTimeout(resizeCanvas, 100);
         }
     }
 
@@ -197,7 +250,7 @@
         if (tipo === 'canvas') {
             if (signaturePad.isEmpty()) {
                 e.preventDefault();
-                alert('Por favor, desenhe sua assinatura antes de confirmar.');
+                alert('Por favor, faça sua assinatura.');
                 return;
             }
             document.getElementById('assinatura_base64').value = signaturePad.toDataURL();
@@ -206,19 +259,10 @@
             var fileInput = document.querySelector('input[name="assinatura_upload"]');
             if (!fileInput.files.length) {
                 e.preventDefault();
-                alert('Por favor, selecione um arquivo de imagem.');
+                alert('Selecione um arquivo.');
                 return;
             }
         }
     }
-    
-    // Resize fix simples para mobile
-    window.addEventListener("resize", function() {
-        var ratio = Math.max(window.devicePixelRatio || 1, 1);
-        canvas.width = canvas.offsetWidth * ratio;
-        canvas.height = canvas.offsetHeight * ratio;
-        canvas.getContext("2d").scale(ratio, ratio);
-        signaturePad.clear(); // Limpa ao redimensionar para evitar borrões
-    });
 </script>
 {% endblock %}

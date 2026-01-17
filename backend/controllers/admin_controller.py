@@ -18,24 +18,22 @@ from backend.models.frequencia import FrequenciaAluno
 from backend.models.user import User
 from backend.models.instrutor import Instrutor
 from backend.services.user_service import UserService
+# ADICIONADO: Importação para corrigir o erro 500
+from backend.services.diario_service import DiarioService 
 
 admin_escola_bp = Blueprint('admin_escola', __name__, url_prefix='/admin-escola')
 
 def sens_permission_required(f):
     """
     Decorator para permitir acesso ao SENS e Administradores no contexto da escola atual.
-    Substitui a verificação global 'current_user.is_sens' para evitar vazamento de permissão entre escolas.
     """
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not current_user.is_authenticated:
             return redirect(url_for('auth.login'))
         
-        # 1. Identifica a escola atual
         school_id = UserService.get_current_school_id()
         
-        # 2. Verifica permissão ESPECÍFICA para esta escola
-        # Aceita: SENS da escola, Admin da escola, Programador ou Super Admin
         if not (current_user.is_sens_in_school(school_id) or 
                 current_user.is_admin_escola_in_school(school_id) or
                 current_user.is_programador or 
@@ -165,43 +163,55 @@ def espelho_diarios():
     # PARTE 2: LÓGICA DA LISTA DE DIÁRIOS
     # =========================================================================
     page = request.args.get('page', 1, type=int)
+    
+    # Filtros
     turma_id = request.args.get('turma_id', type=int)
-    
-    # --- NOVO FILTRO: DISCIPLINA ---
     disciplina_id = request.args.get('disciplina_id', type=int)
-    
     data_str = request.args.get('data')
 
-    # Query base para listar os diários
-    query = select(DiarioClasse).join(Turma).where(Turma.school_id == school_id)
+    # CORREÇÃO PRINCIPAL: Usa o Service restaurado para buscar os dados
+    # user_id=None -> Modo Admin (vê tudo)
+    # status=None -> Vê pendentes E assinados
+    diarios_todos = DiarioService.get_diarios_pendentes(
+        school_id=school_id,
+        user_id=None, 
+        turma_id=turma_id,
+        disciplina_id=disciplina_id,
+        status=None 
+    )
 
-    if turma_id:
-        query = query.where(DiarioClasse.turma_id == turma_id)
-    
-    # APLICA O FILTRO DE DISCIPLINA NA QUERY
-    if disciplina_id:
-        query = query.where(DiarioClasse.disciplina_id == disciplina_id)
-    
+    # Filtragem manual de data (já que o service foca em status/turma/disc)
     if data_str:
         try:
             data_filtro = datetime.strptime(data_str, '%Y-%m-%d').date()
-            query = query.where(DiarioClasse.data_aula == data_filtro)
+            diarios_todos = [d for d in diarios_todos if d.data_aula == data_filtro]
         except ValueError:
             pass
 
-    # Ordenação por Data e ID
-    query = query.order_by(DiarioClasse.data_aula.desc(), DiarioClasse.id.desc())
+    # Paginação Manual
+    total_items = len(diarios_todos)
+    per_page = 20
+    start = (page - 1) * per_page
+    end = start + per_page
+    diarios_paginados = diarios_todos[start:end]
     
-    pagination = db.paginate(query, page=page, per_page=20)
-    diarios_lista = pagination.items
-    
-    # Carregar turmas para o filtro
-    turmas = db.session.scalars(select(Turma).where(Turma.school_id == school_id)).all()
+    # Objeto de paginação fake para manter compatibilidade com o template
+    class FakePagination:
+        def __init__(self, items, page, per_page, total):
+            self.items = items
+            self.page = page
+            self.per_page = per_page
+            self.total = total
+            self.pages = (total + per_page - 1) // per_page
+            self.has_prev = page > 1
+            self.has_next = page < self.pages
+            self.prev_num = page - 1
+            self.next_num = page + 1
 
-    # --- CARREGAR DISCIPLINAS PARA O FILTRO ---
-    # Busca todas as disciplinas utilizadas pela escola (via Turmas)
-    disciplinas_query = select(Disciplina).join(Turma).where(Turma.school_id == school_id).distinct().order_by(Disciplina.materia)
-    disciplinas = db.session.scalars(disciplinas_query).all()
+    pagination = FakePagination(diarios_paginados, page, per_page, total_items)
+    
+    # Filtros Inteligentes (Service)
+    turmas, disciplinas = DiarioService.get_filtros_disponiveis(school_id, user_id=None, turma_selected_id=turma_id)
 
     # Dados para a tabela de "Todos os Alunos" do modal/collapse
     todos_alunos_query = db.session.execute(
@@ -233,11 +243,13 @@ def espelho_diarios():
         'admin/espelho_diarios.html', 
         alunos_alertas=alunos_alertas,
         todos_alunos=todos_alunos_json,
-        diarios=diarios_lista,
+        diarios=diarios_paginados, # Usa a lista paginada
         pagination=pagination,
         turmas=turmas,
-        disciplinas=disciplinas, # Passa para o template
-        disciplina_id=disciplina_id # Passa o valor selecionado
+        disciplinas=disciplinas, # Lista correta filtrada
+        turma_id=turma_id,
+        disciplina_id=disciplina_id,
+        data_selecionada=data_str
     )
 
 @admin_escola_bp.route('/detalhe-faltas/<int:aluno_id>')
