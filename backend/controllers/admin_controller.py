@@ -18,7 +18,7 @@ from backend.models.frequencia import FrequenciaAluno
 from backend.models.user import User
 from backend.models.instrutor import Instrutor
 from backend.services.user_service import UserService
-# ADICIONADO: Importação para corrigir o erro 500
+# IMPORTAÇÃO NECESSÁRIA: Para conectar com a lógica de assinatura/validação do Instrutor
 from backend.services.diario_service import DiarioService 
 
 admin_escola_bp = Blueprint('admin_escola', __name__, url_prefix='/admin-escola')
@@ -26,14 +26,18 @@ admin_escola_bp = Blueprint('admin_escola', __name__, url_prefix='/admin-escola'
 def sens_permission_required(f):
     """
     Decorator para permitir acesso ao SENS e Administradores no contexto da escola atual.
+    Substitui a verificação global 'current_user.is_sens' para evitar vazamento de permissão entre escolas.
     """
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not current_user.is_authenticated:
             return redirect(url_for('auth.login'))
         
+        # 1. Identifica a escola atual
         school_id = UserService.get_current_school_id()
         
+        # 2. Verifica permissão ESPECÍFICA para esta escola
+        # Aceita: SENS da escola, Admin da escola, Programador ou Super Admin
         if not (current_user.is_sens_in_school(school_id) or 
                 current_user.is_admin_escola_in_school(school_id) or
                 current_user.is_programador or 
@@ -63,7 +67,7 @@ def espelho_diarios():
         return redirect(url_for('main.dashboard'))
 
     # =========================================================================
-    # PARTE 1: LÓGICA DO PAINEL DE RISCO
+    # PARTE 1: LÓGICA DO PAINEL DE RISCO (MANTIDA ORIGINAL E INTEGRAL)
     # =========================================================================
     stats_query = db.session.execute(
         select(
@@ -160,18 +164,21 @@ def espelho_diarios():
     ))
 
     # =========================================================================
-    # PARTE 2: LÓGICA DA LISTA DE DIÁRIOS
+    # PARTE 2: LÓGICA DA LISTA DE DIÁRIOS (ALTERADA PARA USAR SERVICE)
     # =========================================================================
     page = request.args.get('page', 1, type=int)
     
     # Filtros
     turma_id = request.args.get('turma_id', type=int)
-    disciplina_id = request.args.get('disciplina_id', type=int)
+    disciplina_id = request.args.get('disciplina_id', type=int) # Novo filtro
     data_str = request.args.get('data')
 
-    # CORREÇÃO PRINCIPAL: Usa o Service restaurado para buscar os dados
+    # --- INÍCIO DA ALTERAÇÃO ---
+    # Substituímos a query manual pelo Service para ter acesso ao Status de Assinatura e Filtros Corretos
     # user_id=None -> Modo Admin (vê tudo)
     # status=None -> Vê pendentes E assinados
+    # Importante: Certifique-se que o DiarioService tem o método get_diarios_pendentes (que restaurei no passo anterior)
+    
     diarios_todos = DiarioService.get_diarios_pendentes(
         school_id=school_id,
         user_id=None, 
@@ -180,7 +187,7 @@ def espelho_diarios():
         status=None 
     )
 
-    # Filtragem manual de data (já que o service foca em status/turma/disc)
+    # Filtragem manual de data (se selecionada)
     if data_str:
         try:
             data_filtro = datetime.strptime(data_str, '%Y-%m-%d').date()
@@ -188,14 +195,14 @@ def espelho_diarios():
         except ValueError:
             pass
 
-    # Paginação Manual
+    # Paginação Manual (pois agora temos uma lista Python, não query SQL)
     total_items = len(diarios_todos)
     per_page = 20
     start = (page - 1) * per_page
     end = start + per_page
     diarios_paginados = diarios_todos[start:end]
     
-    # Objeto de paginação fake para manter compatibilidade com o template
+    # Classe Fake para manter compatibilidade com o template (pagination.items, pagination.has_prev, etc)
     class FakePagination:
         def __init__(self, items, page, per_page, total):
             self.items = items
@@ -210,10 +217,11 @@ def espelho_diarios():
 
     pagination = FakePagination(diarios_paginados, page, per_page, total_items)
     
-    # Filtros Inteligentes (Service)
+    # Busca Turmas e Disciplinas (Inteligente: Disciplinas filtram pela Turma selecionada)
     turmas, disciplinas = DiarioService.get_filtros_disponiveis(school_id, user_id=None, turma_selected_id=turma_id)
+    # --- FIM DA ALTERAÇÃO ---
 
-    # Dados para a tabela de "Todos os Alunos" do modal/collapse
+    # Dados para a tabela de "Todos os Alunos" do modal/collapse (MANTIDO ORIGINAL)
     todos_alunos_query = db.session.execute(
         select(Aluno, Turma.nome)
         .join(Turma)
@@ -243,10 +251,11 @@ def espelho_diarios():
         'admin/espelho_diarios.html', 
         alunos_alertas=alunos_alertas,
         todos_alunos=todos_alunos_json,
-        diarios=diarios_paginados, # Usa a lista paginada
+        diarios=diarios_paginados, # Usa a lista paginada do service
         pagination=pagination,
         turmas=turmas,
-        disciplinas=disciplinas, # Lista correta filtrada
+        disciplinas=disciplinas, # Lista correta para o dropdown
+        # Passa os valores selecionados
         turma_id=turma_id,
         disciplina_id=disciplina_id,
         data_selecionada=data_str

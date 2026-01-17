@@ -7,13 +7,8 @@
     
     <div class="row mb-4 align-items-center">
         <div class="col-md-7">
-            <h2 class="mb-0 text-danger fw-bold">
-                <i class="fas fa-radiation me-2"></i>Painel de Risco Acadêmico
-            </h2>
-            <p class="text-muted mb-0">
-                Monitoramento automático de frequência. 
-                <span class="badge bg-danger">30% Faltas = Reprovação</span>
-            </p>
+            <h2 class="mb-0 text-danger fw-bold"><i class="fas fa-radiation me-2"></i>Painel de Risco Acadêmico</h2>
+            <p class="text-muted mb-0">Monitoramento automático de frequência. <span class="badge bg-danger">30% Faltas = Reprovação</span></p>
         </div>
         <div class="col-md-5">
             <div class="input-group shadow-sm">
@@ -35,9 +30,7 @@
         {% else %}
             <div class="row g-3" id="cardsContainer">
                 {% for aluno in alunos_alertas %}
-                <div class="col-12 col-md-6 col-lg-4 col-xl-3 aluno-card-item" 
-                     data-search="{{ aluno.nome }} {{ aluno.matricula }} {{ aluno.turma }}">
-                    
+                <div class="col-12 col-md-6 col-lg-4 col-xl-3 aluno-card-item" data-search="{{ aluno.nome }} {{ aluno.matricula }} {{ aluno.turma }}">
                     <div class="card h-100 shadow-sm border-0 position-relative alert-card-{{ aluno.gravidade }}">
                         <div class="card-body pb-0">
                             <div class="d-flex align-items-center mb-3">
@@ -45,20 +38,15 @@
                                     {% if aluno.foto %}
                                         <img src="{{ url_for('static', filename='uploads/profile_pics/' + aluno.foto) }}" class="rounded-circle border border-2 border-white shadow-sm" style="width: 55px; height: 55px; object-fit: cover;">
                                     {% else %}
-                                        <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center fw-bold shadow-sm" style="width: 55px; height: 55px;">
-                                            {{ aluno.nome[:2].upper() }}
-                                        </div>
+                                        <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center fw-bold shadow-sm" style="width: 55px; height: 55px;">{{ aluno.nome[:2].upper() }}</div>
                                     {% endif %}
-                                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-dark border border-white">
-                                        {{ aluno.total_faltas }}
-                                    </span>
+                                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-dark border border-white">{{ aluno.total_faltas }}</span>
                                 </div>
                                 <div class="ms-3 overflow-hidden">
                                     <h6 class="card-title mb-0 text-truncate fw-bold">{{ aluno.nome }}</h6>
                                     <small class="text-muted d-block">{{ aluno.turma }}</small>
                                 </div>
                             </div>
-                            
                             {% if aluno.riscos %}
                                 <div class="alert-section mt-2 bg-white rounded p-2 border">
                                     <small class="text-uppercase fw-bold text-muted" style="font-size: 0.7rem;">Disciplinas Críticas:</small>
@@ -66,15 +54,10 @@
                                         <div class="mt-2 mb-1">
                                             <div class="d-flex justify-content-between align-items-end" style="font-size: 0.8rem;">
                                                 <span class="fw-bold text-truncate" style="max-width: 65%;">{{ risco.materia }}</span>
-                                                <span class="{% if risco.status == 'reprovado' %}text-danger fw-bold{% else %}text-warning{% endif %}">
-                                                    {{ risco.porcentagem }}%
-                                                </span>
+                                                <span class="{% if risco.status == 'reprovado' %}text-danger fw-bold{% else %}text-warning{% endif %}">{{ risco.porcentagem }}%</span>
                                             </div>
                                             <div class="progress" style="height: 6px;">
-                                                <div class="progress-bar {% if risco.status == 'reprovado' %}bg-danger{% else %}bg-warning{% endif %}" 
-                                                     role="progressbar" 
-                                                     style="width: {{ risco.porcentagem }}%;" 
-                                                     aria-valuenow="{{ risco.porcentagem }}" aria-valuemin="0" aria-valuemax="100"></div>
+                                                <div class="progress-bar {% if risco.status == 'reprovado' %}bg-danger{% else %}bg-warning{% endif %}" role="progressbar" style="width: {{ risco.porcentagem }}%;"></div>
                                             </div>
                                         </div>
                                     {% endfor %}
@@ -82,9 +65,7 @@
                             {% endif %}
                         </div>
                         <div class="card-footer bg-transparent border-0 pt-2 pb-3">
-                            <button class="btn btn-outline-dark btn-sm w-100 rounded-pill" onclick="verDetalhesFaltas({{ aluno.id }})">
-                                <i class="fas fa-list-alt me-1"></i> Ver Histórico
-                            </button>
+                            <button class="btn btn-outline-dark btn-sm w-100 rounded-pill" onclick="verDetalhesFaltas({{ aluno.id }})"><i class="fas fa-list-alt me-1"></i> Ver Histórico</button>
                         </div>
                     </div>
                 </div>
@@ -102,14 +83,7 @@
                 <div class="card-body p-0">
                     <div class="table-responsive">
                         <table class="table table-hover align-middle mb-0">
-                            <thead class="table-light">
-                                <tr>
-                                    <th class="ps-3">Aluno</th>
-                                    <th>Turma</th>
-                                    <th class="text-center">Total Faltas</th>
-                                    <th>Ação</th>
-                                </tr>
-                            </thead>
+                            <thead class="table-light"><tr><th class="ps-3">Aluno</th><th>Turma</th><th class="text-center">Total Faltas</th><th>Ação</th></tr></thead>
                             <tbody id="tabelaTodosAlunos"></tbody>
                         </table>
                     </div>
@@ -122,10 +96,8 @@
 
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h3 class="mb-0 text-primary fw-bold">
-                <i class="fas fa-book-reader me-2"></i>Gerenciamento de Diários
-            </h3>
-            <p class="text-muted mb-0">Visualize e edite os lançamentos feitos pelos chefes de turma.</p>
+            <h3 class="mb-0 text-primary fw-bold"><i class="fas fa-book-reader me-2"></i>Gerenciamento de Diários</h3>
+            <p class="text-muted mb-0">Auditoria, Edição e Impressão dos lançamentos de aula.</p>
         </div>
     </div>
 
@@ -133,37 +105,31 @@
         <div class="card-body">
             <form method="GET" action="{{ url_for('admin_escola.espelho_diarios') }}" class="row g-3 align-items-end">
                 <div class="col-md-3">
-                    <label for="turma_id" class="form-label fw-bold">Filtrar por Turma</label>
-                    <select class="form-select" name="turma_id" id="turma_id" onchange="this.form.submit()">
+                    <label class="form-label fw-bold small text-uppercase">Filtrar por Turma</label>
+                    <select class="form-select" name="turma_id" onchange="this.form.submit()">
                         <option value="">Todas as Turmas</option>
                         {% for t in turmas %}
-                        <option value="{{ t.id }}" {% if turma_id == t.id %}selected{% endif %}>
-                            {{ t.nome }}
-                        </option>
+                        <option value="{{ t.id }}" {% if turma_id == t.id %}selected{% endif %}>{{ t.nome }}</option>
                         {% endfor %}
                     </select>
                 </div>
                 
                 <div class="col-md-4">
-                    <label for="disciplina_id" class="form-label fw-bold">Filtrar por Disciplina</label>
-                    <select class="form-select" name="disciplina_id" id="disciplina_id" onchange="this.form.submit()">
+                    <label class="form-label fw-bold small text-uppercase">Filtrar por Disciplina</label>
+                    <select class="form-select" name="disciplina_id" onchange="this.form.submit()">
                         <option value="">Todas as Disciplinas</option>
                         {% for d in disciplinas %}
-                        <option value="{{ d.id }}" {% if disciplina_id == d.id %}selected{% endif %}>
-                            {{ d.materia }}
-                        </option>
+                        <option value="{{ d.id }}" {% if disciplina_id == d.id %}selected{% endif %}>{{ d.materia }}</option>
                         {% endfor %}
                     </select>
                 </div>
 
                 <div class="col-md-3">
-                    <label for="data_filtro" class="form-label fw-bold">Filtrar por Data</label>
+                    <label class="form-label fw-bold small text-uppercase">Filtrar por Data</label>
                     <input type="date" class="form-control" name="data" value="{{ data_selecionada }}" onchange="this.form.submit()">
                 </div>
                 <div class="col-md-2">
-                    <a href="{{ url_for('admin_escola.espelho_diarios') }}" class="btn btn-outline-secondary w-100">
-                        Limpar
-                    </a>
+                    <a href="{{ url_for('admin_escola.espelho_diarios') }}" class="btn btn-outline-secondary w-100"><i class="fas fa-eraser me-1"></i> Limpar</a>
                 </div>
             </form>
         </div>
@@ -171,7 +137,7 @@
 
     <div class="card shadow mb-4">
         <div class="card-header py-3 bg-white border-bottom">
-            <h6 class="m-0 font-weight-bold text-primary">Diários Lançados (Pendentes e Validados)</h6>
+            <h6 class="m-0 font-weight-bold text-primary">Diários Lançados</h6>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
@@ -202,13 +168,13 @@
                             
                             <td>
                                 {% if diario.status == 'assinado' %}
-                                    <div class="text-success fw-bold small">
+                                    <div class="text-success small fw-bold">
                                         <i class="fas fa-check-circle me-1"></i> Validado
                                     </div>
                                     {% if diario.instrutor_assinante_ref %}
-                                    <div class="text-muted small" style="font-size: 0.75rem;">
-                                        Por: {{ diario.instrutor_assinante_ref.nome_de_guerra or diario.instrutor_assinante_ref.nome_completo or 'Instrutor' }}
-                                    </div>
+                                        <div class="text-muted" style="font-size: 0.7rem;">
+                                            Por: {{ diario.instrutor_assinante_ref.nome_de_guerra or 'Instrutor' }}
+                                        </div>
                                     {% endif %}
                                 {% else %}
                                     <span class="badge bg-warning text-dark">Pendente</span>
