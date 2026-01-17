@@ -242,16 +242,18 @@
     </div>
 </div>
 
-<div class="modal fade" id="modalDetalhesFaltas" tabindex="-1" aria-hidden="true">
+<div class="modal fade" id="modalDetalhesFaltas" tabindex="-1" aria-hidden="true" style="z-index: 1060;">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content" id="modalConteudo"></div>
     </div>
 </div>
 
-<div class="modal fade" id="modalDevolucao" tabindex="-1" aria-hidden="true">
+<div class="modal fade" id="modalDevolucao" tabindex="-1" aria-hidden="true" style="z-index: 1060;">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow-lg">
             <form action="{{ url_for('admin_escola.retornar_diario') }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                
                 <input type="hidden" name="diario_id" id="inputDiarioId">
                 <div class="modal-header bg-danger text-white">
                     <h5 class="modal-title"><i class="fas fa-undo me-2"></i>Devolver Diário</h5>
@@ -267,6 +269,7 @@
                     <ul class="small text-muted mb-3">
                         <li>A assinatura do instrutor será <strong>removida</strong>.</li>
                         <li>O status voltará para <strong>Pendente</strong>.</li>
+                        <li>O instrutor verá o motivo abaixo.</li>
                     </ul>
                     <div class="mb-3">
                         <label class="form-label fw-bold">Motivo da Devolução (Obrigatório):</label>
@@ -289,8 +292,8 @@
     let modalInstance = null;
     let modalDevolucao = null;
 
-    // --- CORREÇÃO CRÍTICA PARA O MODAL: Mover para o body para garantir z-index correto ---
     document.addEventListener('DOMContentLoaded', function() {
+        // Move o modal para o body para garantir z-index
         const modalEl = document.getElementById('modalDevolucao');
         if (modalEl) {
             document.body.appendChild(modalEl);
@@ -317,7 +320,6 @@
     }
 
     function verDetalhesFaltas(alunoId) {
-        // Move o modal de detalhes também para evitar problemas
         const modalEl = document.getElementById('modalDetalhesFaltas');
         if (modalEl.parentElement !== document.body) {
             document.body.appendChild(modalEl);
@@ -338,7 +340,7 @@
 </script>
 
 <style>
-    /* Força os modais a ficarem acima do backdrop padrão do Bootstrap */
+    /* Força os modais a ficarem acima do backdrop */
     .modal { z-index: 1055 !important; }
     .modal-backdrop { z-index: 1050 !important; }
 
