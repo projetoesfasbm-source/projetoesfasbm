@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Relatório de Diário de Classe - {{ turma.nome }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        /* Configurações de Impressão A4 */
+        @page {
+            size: A4;
+            margin: 1.5cm;
+        }
+        body {
+            font-family: "Times New Roman", serif; /* Fonte mais formal/jurídica */
+            background: white;
+            color: black;
+            font-size: 12pt;
+        }
+        .header-doc {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 2px solid black;
+            padding-bottom: 10px;
+        }
+        .header-doc img {
+            height: 80px;
+            margin-bottom: 10px;
+        }
+        .info-table {
+            width: 100%;
+            margin-bottom: 20px;
+        }
+        .info-table td {
+            padding: 5px;
+            border: 1px solid #000;
+        }
+        .label-doc {
+            font-weight: bold;
+            background-color: #f0f0f0;
+            width: 150px;
+        }
+        
+        /* Tabela Principal */
+        .main-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        .main-table th, .main-table td {
+            border: 1px solid black;
+            padding: 8px;
+            vertical-align: top;
+        }
+        .main-table th {
+            background-color: #e9ecef;
+            text-align: center;
+            font-weight: bold;
+        }
+        
+        /* Assinatura Imagem */
+        .sig-img {
+            max-height: 40px;
+            max-width: 120px;
+            display: block;
+            margin: 0 auto;
+        }
+        
+        /* Rodapé de documento */
+        .footer-doc {
+            margin-top: 50px;
+            text-align: center;
+            font-size: 10pt;
+        }
+        
+        /* Apenas aparece na tela, some na impressão */
+        @media print {
+            .no-print { display: none !important; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container mt-3 mb-4 no-print">
+        <div class="alert alert-info d-flex justify-content-between align-items-center">
+            <span><i class="fas fa-info-circle"></i> Visualização de Impressão (A4)</span>
+            <div>
+                <button onclick="window.print()" class="btn btn-primary fw-bold">
+                    <i class="fas fa-print"></i> Imprimir / Salvar PDF
+                </button>
+                <button onclick="window.close()" class="btn btn-secondary">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="header-doc">
+        <h4 class="mb-0 text-uppercase fw-bold">Brigada Militar - Estado do Rio Grande do Sul</h4>
+        <h5 class="mb-0">{{ school.name }}</h5>
+        <p class="mb-0 small">Relatório Oficial de Ministração de Aulas</p>
+    </div>
+
+    <table class="info-table">
+        <tr>
+            <td class="label-doc">Turma/Pelotão:</td>
+            <td>{{ turma.nome }}</td>
+            <td class="label-doc">Curso:</td>
+            <td>CTSP 2025/2026</td> </tr>
+        <tr>
+            <td class="label-doc">Disciplina:</td>
+            <td colspan="3"><strong>{{ disciplina.materia }}</strong></td>
+        </tr>
+        <tr>
+            <td class="label-doc">Carga Horária:</td>
+            <td>{{ disciplina.carga_horaria_prevista or 'N/D' }} h/a</td>
+            <td class="label-doc">Aulas Ministradas:</td>
+            <td>{{ total_aulas }} h/a (neste relatório)</td>
+        </tr>
+    </table>
+
+    <table class="main-table">
+        <thead>
+            <tr>
+                <th style="width: 10%;">Data</th>
+                <th style="width: 15%;">Períodos</th>
+                <th style="width: 8%;">Qtd.</th>
+                <th style="width: 45%;">Conteúdo Ministrado</th>
+                <th style="width: 22%;">Instrutor / Assinatura</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for diario in diarios %}
+            <tr>
+                <td class="text-center">{{ diario.data_aula.strftime('%d/%m/%Y') }}</td>
+                <td class="text-center small">{{ diario.periodo_resumo }}</td>
+                <td class="text-center">{{ diario.total_aulas_bloco }}</td>
+                <td style="font-size: 10pt; text-align: justify;">
+                    {{ diario.conteudo_ministrado }}
+                    {% if diario.observacoes %}
+                        <br><em class="small text-muted">Obs: {{ diario.observacoes }}</em>
+                    {% endif %}
+                </td>
+                <td class="text-center">
+                    {% if diario.status == 'assinado' %}
+                        {% if diario.assinatura_path %}
+                            <img src="{{ url_for('static', filename=diario.assinatura_path) }}" class="sig-img">
+                        {% else %}
+                            <div class="small fw-bold mt-2">[Assinado Digitalmente]</div>
+                        {% endif %}
+                        <div class="small mt-1" style="font-size: 8pt;">
+                            {% if diario.instrutor_assinante_ref %}
+                                {{ diario.instrutor_assinante_ref.posto_graduacao }} {{ diario.instrutor_assinante_ref.nome_de_guerra }}
+                            {% else %}
+                                Instrutor Responsável
+                            {% endif %}
+                        </div>
+                        <div style="font-size: 7pt; color: #666;">
+                            {{ diario.data_assinatura.strftime('%d/%m/%Y %H:%M') if diario.data_assinatura else '' }}
+                        </div>
+                    {% else %}
+                        <div class="text-danger fw-bold mt-3">[PENDENTE]</div>
+                    {% endif %}
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="5" class="text-center py-4">Nenhum registro de aula encontrado para os filtros selecionados.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="footer-doc">
+        <p>Documento gerado eletronicamente pelo Sistema SisGEN em {{ data_emissao.strftime('%d/%m/%Y às %H:%M') }}.</p>
+        <p>_______________________________________________________<br>
+        Visto da Seção de Ensino</p>
+    </div>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</body>
+</html>
