@@ -28,10 +28,6 @@ class DiarioService:
 
     @staticmethod
     def get_diarios_pendentes(school_id, user_id=None, turma_id=None, disciplina_id=None, status=None):
-        """
-        Retorna lista simples de diários.
-        Usado pelo Admin para listagem geral e auditoria linha-a-linha.
-        """
         stmt = (
             select(DiarioClasse)
             .join(Turma, DiarioClasse.turma_id == Turma.id)
@@ -58,11 +54,8 @@ class DiarioService:
             else:
                 return []
 
-        if turma_id:
-            stmt = stmt.where(DiarioClasse.turma_id == turma_id)
-        
-        if disciplina_id:
-            stmt = stmt.where(DiarioClasse.disciplina_id == disciplina_id)
+        if turma_id: stmt = stmt.where(DiarioClasse.turma_id == turma_id)
+        if disciplina_id: stmt = stmt.where(DiarioClasse.disciplina_id == disciplina_id)
 
         stmt = stmt.order_by(DiarioClasse.data_aula.desc(), DiarioClasse.periodo)
         
@@ -70,10 +63,6 @@ class DiarioService:
 
     @staticmethod
     def get_diarios_agrupados(school_id, user_id=None, turma_id=None, disciplina_id=None, status=None):
-        """
-        Retorna lista AGRUPADA de diários (blocos de aulas).
-        Usado pelo Instrutor e pelo Relatório de Impressão Oficial.
-        """
         stmt = (
             select(DiarioClasse)
             .join(Turma, DiarioClasse.turma_id == Turma.id)
@@ -140,12 +129,9 @@ class DiarioService:
         first_p = group_items[0].periodo
         last_p = group_items[-1].periodo
         
-        if first_p is None: 
-            rep.periodo_resumo = "Período N/D"
-        elif first_p == last_p: 
-            rep.periodo_resumo = f"{first_p}º Período"
-        else: 
-            rep.periodo_resumo = f"{first_p}º a {last_p}º Período"
+        if first_p is None: rep.periodo_resumo = "Período N/D"
+        elif first_p == last_p: rep.periodo_resumo = f"{first_p}º Período"
+        else: rep.periodo_resumo = f"{first_p}º a {last_p}º Período"
             
         rep.total_aulas_bloco = len(group_items)
         return rep
@@ -254,3 +240,62 @@ class DiarioService:
             db.session.rollback()
             current_app.logger.error(f"Erro assinatura: {e}")
             return False, f"Erro: {str(e)}"
+
+    # --- FUNÇÕES PARA O ADMIN (NOVAS) ---
+    @staticmethod
+    def retornar_diario_admin(diario_id, admin_user, motivo_devolucao):
+        diario = db.session.get(DiarioClasse, diario_id)
+        if not diario: return False, "Diário não encontrado."
+
+        try:
+            siblings = db.session.scalars(
+                select(DiarioClasse).where(
+                    DiarioClasse.data_aula == diario.data_aula,
+                    DiarioClasse.turma_id == diario.turma_id,
+                    DiarioClasse.disciplina_id == diario.disciplina_id
+                )
+            ).all()
+
+            timestamp_str = datetime.now().strftime('%d/%m/%Y às %H:%M')
+            nota_devolucao = f"\n[DEVOLVIDO PELA SENS em {timestamp_str}]: {motivo_devolucao}"
+
+            for d in siblings:
+                d.status = 'pendente'
+                d.assinatura_path = None
+                d.instrutor_assinante_id = None
+                d.data_assinatura = None
+                
+                if d.observacoes:
+                    d.observacoes += nota_devolucao
+                else:
+                    d.observacoes = nota_devolucao
+
+            db.session.commit()
+            return True, f"Aula devolvida com sucesso ({len(siblings)} tempos)."
+        except Exception as e:
+            db.session.rollback()
+            return False, f"Erro ao devolver: {str(e)}"
+
+    @staticmethod
+    def atualizar_conteudo_admin(diario_id, novo_conteudo, novas_obs):
+        diario = db.session.get(DiarioClasse, diario_id)
+        if not diario: return False, "Diário não encontrado."
+
+        try:
+            siblings = db.session.scalars(
+                select(DiarioClasse).where(
+                    DiarioClasse.data_aula == diario.data_aula,
+                    DiarioClasse.turma_id == diario.turma_id,
+                    DiarioClasse.disciplina_id == diario.disciplina_id
+                )
+            ).all()
+
+            for d in siblings:
+                d.conteudo_ministrado = novo_conteudo
+                d.observacoes = novas_obs
+            
+            db.session.commit()
+            return True, "Conteúdo atualizado com sucesso."
+        except Exception as e:
+            db.session.rollback()
+            return False, str(e)

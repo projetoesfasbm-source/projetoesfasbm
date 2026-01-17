@@ -18,6 +18,7 @@ from backend.models.frequencia import FrequenciaAluno
 from backend.models.user import User
 from backend.models.instrutor import Instrutor
 from backend.services.user_service import UserService
+# ADIÇÃO: Importação do Service para conectar com a validação do Instrutor
 from backend.services.diario_service import DiarioService
 
 admin_escola_bp = Blueprint('admin_escola', __name__, url_prefix='/admin-escola')
@@ -156,22 +157,27 @@ def espelho_diarios():
     ))
 
     # =========================================================================
-    # PARTE 2: LÓGICA DA LISTA DE DIÁRIOS (ATUALIZADA)
+    # PARTE 2: LÓGICA DA LISTA DE DIÁRIOS (ALTERADA)
     # =========================================================================
+    # Alteração: Usar DiarioService para garantir que vemos o status da assinatura
+    
     page = request.args.get('page', 1, type=int)
     turma_id = request.args.get('turma_id', type=int)
     disciplina_id = request.args.get('disciplina_id', type=int)
     data_str = request.args.get('data')
 
-    # Busca usando o Service (Corrigido para usar get_diarios_pendentes)
+    # Busca a lista completa (ou filtrada) através do Service
+    # user_id=None -> Modo Admin (vê tudo)
+    # status=None -> Vê pendentes E assinados
     diarios_todos = DiarioService.get_diarios_pendentes(
         school_id=school_id,
-        user_id=None, # Admin vê tudo
+        user_id=None, 
         turma_id=turma_id,
         disciplina_id=disciplina_id,
-        status=None # Vê tudo (pendente e assinado)
+        status=None 
     )
 
+    # Filtragem manual de data
     if data_str:
         try:
             data_filtro = datetime.strptime(data_str, '%Y-%m-%d').date()
@@ -179,13 +185,14 @@ def espelho_diarios():
         except ValueError:
             pass
 
-    # Paginação Manual
+    # Lógica de Paginação Manual (necessária pois DiarioService retorna lista, não Query)
     total_items = len(diarios_todos)
     per_page = 20
     start = (page - 1) * per_page
     end = start + per_page
     diarios_paginados = diarios_todos[start:end]
     
+    # Classe auxiliar para simular o objeto Pagination do SQLAlchemy no template
     class FakePagination:
         def __init__(self, items, page, per_page, total):
             self.items = items
@@ -200,6 +207,7 @@ def espelho_diarios():
 
     pagination = FakePagination(diarios_paginados, page, per_page, total_items)
     
+    # Filtros Inteligentes (Service)
     turmas, disciplinas = DiarioService.get_filtros_disponiveis(school_id, user_id=None, turma_selected_id=turma_id)
 
     # Dados para a tabela de "Todos os Alunos" do modal/collapse
@@ -253,6 +261,7 @@ def detalhe_faltas_aluno(aluno_id):
     if not aluno:
         return "Aluno não encontrado", 404
 
+    # Busca todas as faltas (ordenadas por disciplina e data)
     faltas_query = db.session.scalars(
         select(FrequenciaAluno)
         .join(DiarioClasse)
@@ -302,11 +311,15 @@ def detalhe_faltas_aluno(aluno_id):
 @login_required
 @sens_permission_required
 def editar_diario_bloco(diario_id):
+    """
+    Permite editar um bloco de aulas (mesma turma, data e disciplina).
+    """
     ref_diario = db.session.get(DiarioClasse, diario_id)
     if not ref_diario:
         flash('Diário não encontrado', 'danger')
         return redirect(url_for('admin_escola.espelho_diarios'))
 
+    # Busca todos os tempos da mesma aula no mesmo dia
     diarios_bloco = db.session.scalars(
         select(DiarioClasse)
         .where(
@@ -317,6 +330,7 @@ def editar_diario_bloco(diario_id):
         .order_by(DiarioClasse.periodo, DiarioClasse.id) 
     ).all()
 
+    # Busca alunos da turma ordenados
     alunos = db.session.scalars(
         select(Aluno)
         .join(User)
@@ -333,6 +347,7 @@ def editar_diario_bloco(diario_id):
                 diario.conteudo_ministrado = conteudo
                 diario.observacoes = observacoes
                 
+                # Atualiza Presenças
                 for aluno in alunos:
                     campo_name = f"presenca_{aluno.id}_{diario.id}"
                     esta_presente = (request.form.get(campo_name) == 'on')
@@ -367,7 +382,30 @@ def editar_diario_bloco(diario_id):
         alunos=alunos
     )
 
-# --- ROTA NOVA ADICIONADA ---
+# ==============================================================================
+# NOVAS ROTAS ADICIONADAS (NECESSÁRIAS PARA O SISTEMA DE DEVOLUÇÃO E IMPRESSÃO)
+# ==============================================================================
+
+@admin_escola_bp.route('/retornar-diario', methods=['POST'])
+@login_required
+@sens_permission_required
+def retornar_diario():
+    diario_id = request.form.get('diario_id')
+    motivo = request.form.get('motivo_devolucao')
+    
+    if not diario_id or not motivo:
+        flash("Dados inválidos para retorno.", "danger")
+        return redirect(url_for('admin_escola.espelho_diarios'))
+    
+    # Chama o serviço para remover assinatura e voltar para pendente
+    sucesso, msg = DiarioService.retornar_diario_admin(diario_id, current_user, motivo)
+    if sucesso:
+        flash(msg, "success")
+    else:
+        flash(msg, "danger")
+        
+    return redirect(url_for('admin_escola.espelho_diarios'))
+
 @admin_escola_bp.route('/imprimir-relatorio')
 @login_required
 @sens_permission_required
@@ -377,16 +415,16 @@ def imprimir_relatorio():
     disciplina_id = request.args.get('disciplina_id', type=int)
     
     if not turma_id or not disciplina_id:
-        flash("Selecione Turma e Disciplina.", "warning")
+        flash("Para gerar o Relatório Oficial, selecione Turma e Disciplina nos filtros.", "warning")
         return redirect(url_for('admin_escola.espelho_diarios'))
 
     turma = db.session.get(Turma, turma_id)
     disciplina = db.session.get(Disciplina, disciplina_id)
     
-    # Busca dados AGRUPADOS para impressão limpa
+    # Busca dados agrupados para a impressão
     diarios = DiarioService.get_diarios_agrupados(
         school_id=school_id,
-        user_id=None,
+        user_id=None, 
         turma_id=turma_id,
         disciplina_id=disciplina_id,
         status=None 

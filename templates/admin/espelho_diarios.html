@@ -97,7 +97,7 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h3 class="mb-0 text-primary fw-bold"><i class="fas fa-book-reader me-2"></i>Gerenciamento de Diários</h3>
-            <p class="text-muted mb-0">Auditoria, Edição e Impressão dos lançamentos de aula.</p>
+            <p class="text-muted mb-0">Auditoria, Edição, Devolução e Impressão.</p>
         </div>
     </div>
 
@@ -107,7 +107,7 @@
                 <div class="col-md-3">
                     <label class="form-label fw-bold small text-uppercase">Turma</label>
                     <select class="form-select" name="turma_id" onchange="this.form.submit()">
-                        <option value="">-- Todas --</option>
+                        <option value="">-- Todas as Turmas --</option>
                         {% for t in turmas %}
                         <option value="{{ t.id }}" {% if turma_id == t.id %}selected{% endif %}>{{ t.nome }}</option>
                         {% endfor %}
@@ -117,7 +117,7 @@
                 <div class="col-md-3">
                     <label class="form-label fw-bold small text-uppercase">Disciplina</label>
                     <select class="form-select" name="disciplina_id" onchange="this.form.submit()">
-                        <option value="">-- Todas --</option>
+                        <option value="">-- Todas as Disciplinas --</option>
                         {% for d in disciplinas %}
                         <option value="{{ d.id }}" {% if disciplina_id == d.id %}selected{% endif %}>{{ d.materia }}</option>
                         {% endfor %}
@@ -132,18 +132,20 @@
                 <div class="col-md-2">
                     {% if turma_id and disciplina_id %}
                         <a href="{{ url_for('admin_escola.imprimir_relatorio', turma_id=turma_id, disciplina_id=disciplina_id) }}" 
-                           target="_blank" class="btn btn-dark w-100 shadow-sm" title="Gerar Relatório Oficial">
+                           target="_blank" class="btn btn-dark w-100 shadow-sm" title="Gerar Relatório Oficial (PDF)">
                             <i class="fas fa-print me-1"></i> Imprimir
                         </a>
                     {% else %}
-                        <button type="button" class="btn btn-secondary w-100 disabled" disabled title="Selecione Turma e Disciplina">
+                        <button type="button" class="btn btn-secondary w-100 disabled" disabled title="Selecione Turma e Disciplina para Imprimir">
                             <i class="fas fa-print me-1"></i> Imprimir
                         </button>
                     {% endif %}
                 </div>
 
                 <div class="col-md-2">
-                    <a href="{{ url_for('admin_escola.espelho_diarios') }}" class="btn btn-outline-secondary w-100"><i class="fas fa-eraser me-1"></i> Limpar</a>
+                    <a href="{{ url_for('admin_escola.espelho_diarios') }}" class="btn btn-outline-secondary w-100">
+                        <i class="fas fa-eraser me-1"></i> Limpar
+                    </a>
                 </div>
             </form>
         </div>
@@ -162,8 +164,8 @@
                             <th>Turma</th>
                             <th>Disciplina</th>
                             <th>Conteúdo</th>
-                            <th>Status Validação</th>
-                            <th class="text-center" style="width: 120px;">Ações</th>
+                            <th>Validação</th>
+                            <th class="text-center" style="width: 220px;">Ações</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -173,7 +175,7 @@
                                 <div class="fw-bold">{{ diario.data_aula.strftime('%d/%m/%Y') }}</div>
                                 <span class="badge bg-light text-dark border">{{ diario.periodo }}º Período</span>
                             </td>
-                            <td>{{ diario.turma.nome }}</td>
+                            <td><span class="badge bg-light text-dark border">{{ diario.turma.nome }}</span></td>
                             <td class="fw-bold text-primary">{{ diario.disciplina.materia }}</td>
                             <td>
                                 <div class="text-truncate" style="max-width: 250px;" title="{{ diario.conteudo_ministrado }}">
@@ -182,7 +184,9 @@
                             </td>
                             <td>
                                 {% if diario.status == 'assinado' %}
-                                    <div class="text-success small fw-bold"><i class="fas fa-check-circle me-1"></i> Validado</div>
+                                    <div class="text-success small fw-bold">
+                                        <i class="fas fa-check-circle me-1"></i> Validado
+                                    </div>
                                     {% if diario.instrutor_assinante_ref %}
                                     <div class="text-muted small" style="font-size: 0.7rem;">
                                         Por: {{ diario.instrutor_assinante_ref.nome_de_guerra }}
@@ -193,13 +197,25 @@
                                 {% endif %}
                             </td>
                             <td class="text-center">
-                                <a href="{{ url_for('admin_escola.editar_diario_bloco', diario_id=diario.id) }}" class="btn btn-primary btn-sm rounded-pill"><i class="fas fa-edit"></i></a>
+                                <div class="d-flex justify-content-center gap-2">
+                                    <a href="{{ url_for('admin_escola.editar_diario_bloco', diario_id=diario.id) }}" 
+                                       class="btn btn-primary btn-sm px-3 fw-bold shadow-sm">
+                                        <i class="fas fa-edit me-1"></i> Editar
+                                    </a>
+                                    
+                                    <button type="button" 
+                                            class="btn btn-danger btn-sm px-3 fw-bold shadow-sm"
+                                            onclick="abrirModalDevolucao({{ diario.id }})">
+                                        <i class="fas fa-undo me-1"></i> Devolver
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                         {% else %}
                         <tr>
                             <td colspan="6" class="text-center py-5 text-muted">
-                                <i class="fas fa-inbox fa-3x mb-3 d-block"></i> Nenhum diário encontrado.
+                                <i class="fas fa-inbox fa-3x mb-3 d-block"></i>
+                                Nenhum diário encontrado com os filtros selecionados.
                             </td>
                         </tr>
                         {% endfor %}
@@ -226,15 +242,61 @@
     </div>
 </div>
 
-<div class="modal fade" id="modalDetalhesFaltas" tabindex="-1" aria-labelledby="modalLabel" aria-hidden="true">
+<div class="modal fade" id="modalDetalhesFaltas" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content" id="modalConteudo"></div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalDevolucao" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <form action="{{ url_for('admin_escola.retornar_diario') }}" method="POST">
+                <input type="hidden" name="diario_id" id="inputDiarioId">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title"><i class="fas fa-undo me-2"></i>Devolver Diário</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body bg-white text-dark">
+                    <div class="alert alert-warning border-0 d-flex align-items-center">
+                        <i class="fas fa-exclamation-triangle fa-2x me-3 text-warning"></i>
+                        <div>
+                            <strong>Atenção!</strong> Você está devolvendo esta aula.
+                        </div>
+                    </div>
+                    <ul class="small text-muted mb-3">
+                        <li>A assinatura do instrutor será <strong>removida</strong>.</li>
+                        <li>O status voltará para <strong>Pendente</strong>.</li>
+                    </ul>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Motivo da Devolução (Obrigatório):</label>
+                        <textarea class="form-control" name="motivo_devolucao" rows="3" required placeholder="Ex: Conteúdo incompleto, falta lançada incorretamente..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-danger fw-bold">
+                        <i class="fas fa-check me-1"></i> Confirmar
+                    </button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
 
 <script>
     const todosAlunosData = {{ todos_alunos|tojson }};
     let modalInstance = null;
+    let modalDevolucao = null;
+
+    // --- CORREÇÃO CRÍTICA PARA O MODAL: Mover para o body para garantir z-index correto ---
+    document.addEventListener('DOMContentLoaded', function() {
+        const modalEl = document.getElementById('modalDevolucao');
+        if (modalEl) {
+            document.body.appendChild(modalEl);
+        }
+        renderizarTabelaCompleta();
+    });
 
     function renderizarTabelaCompleta() {
         const tbody = document.getElementById('tabelaTodosAlunos');
@@ -255,16 +317,31 @@
     }
 
     function verDetalhesFaltas(alunoId) {
+        // Move o modal de detalhes também para evitar problemas
         const modalEl = document.getElementById('modalDetalhesFaltas');
+        if (modalEl.parentElement !== document.body) {
+            document.body.appendChild(modalEl);
+        }
+        
         if (!modalInstance) modalInstance = new bootstrap.Modal(modalEl);
         document.getElementById('modalConteudo').innerHTML = '<div class="text-center py-5"><div class="spinner-border text-danger"></div></div>';
         modalInstance.show();
         fetch(`/admin-escola/detalhe-faltas/${alunoId}`).then(r => r.text()).then(html => document.getElementById('modalConteudo').innerHTML = html);
     }
-    document.addEventListener('DOMContentLoaded', renderizarTabelaCompleta);
+
+    function abrirModalDevolucao(diarioId) {
+        document.getElementById('inputDiarioId').value = diarioId;
+        const modalEl = document.getElementById('modalDevolucao');
+        if (!modalDevolucao) modalDevolucao = new bootstrap.Modal(modalEl);
+        modalDevolucao.show();
+    }
 </script>
 
 <style>
+    /* Força os modais a ficarem acima do backdrop padrão do Bootstrap */
+    .modal { z-index: 1055 !important; }
+    .modal-backdrop { z-index: 1050 !important; }
+
     .alert-card-critico { border-left: 5px solid #dc3545 !important; background: linear-gradient(to right, #fff5f5, #fff); }
     .alert-card-atencao { border-left: 5px solid #ffc107 !important; background: linear-gradient(to right, #fff9f2, #fff); }
     .alert-card-moderado { border-left: 5px solid #6c757d !important; }
