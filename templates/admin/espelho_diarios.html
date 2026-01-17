@@ -105,29 +105,43 @@
         <div class="card-body">
             <form method="GET" action="{{ url_for('admin_escola.espelho_diarios') }}" class="row g-3 align-items-end">
                 <div class="col-md-3">
-                    <label class="form-label fw-bold small text-uppercase">Filtrar por Turma</label>
+                    <label class="form-label fw-bold small text-uppercase">Turma</label>
                     <select class="form-select" name="turma_id" onchange="this.form.submit()">
-                        <option value="">Todas as Turmas</option>
+                        <option value="">-- Todas --</option>
                         {% for t in turmas %}
                         <option value="{{ t.id }}" {% if turma_id == t.id %}selected{% endif %}>{{ t.nome }}</option>
                         {% endfor %}
                     </select>
                 </div>
                 
-                <div class="col-md-4">
-                    <label class="form-label fw-bold small text-uppercase">Filtrar por Disciplina</label>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold small text-uppercase">Disciplina</label>
                     <select class="form-select" name="disciplina_id" onchange="this.form.submit()">
-                        <option value="">Todas as Disciplinas</option>
+                        <option value="">-- Todas --</option>
                         {% for d in disciplinas %}
                         <option value="{{ d.id }}" {% if disciplina_id == d.id %}selected{% endif %}>{{ d.materia }}</option>
                         {% endfor %}
                     </select>
                 </div>
 
-                <div class="col-md-3">
-                    <label class="form-label fw-bold small text-uppercase">Filtrar por Data</label>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold small text-uppercase">Data</label>
                     <input type="date" class="form-control" name="data" value="{{ data_selecionada }}" onchange="this.form.submit()">
                 </div>
+
+                <div class="col-md-2">
+                    {% if turma_id and disciplina_id %}
+                        <a href="{{ url_for('admin_escola.imprimir_relatorio', turma_id=turma_id, disciplina_id=disciplina_id) }}" 
+                           target="_blank" class="btn btn-dark w-100 shadow-sm" title="Gerar Relatório Oficial">
+                            <i class="fas fa-print me-1"></i> Imprimir
+                        </a>
+                    {% else %}
+                        <button type="button" class="btn btn-secondary w-100 disabled" disabled title="Selecione Turma e Disciplina">
+                            <i class="fas fa-print me-1"></i> Imprimir
+                        </button>
+                    {% endif %}
+                </div>
+
                 <div class="col-md-2">
                     <a href="{{ url_for('admin_escola.espelho_diarios') }}" class="btn btn-outline-secondary w-100"><i class="fas fa-eraser me-1"></i> Limpar</a>
                 </div>
@@ -148,7 +162,8 @@
                             <th>Turma</th>
                             <th>Disciplina</th>
                             <th>Conteúdo</th>
-                            <th>Validação</th> <th class="text-center" style="width: 120px;">Ações</th>
+                            <th>Status Validação</th>
+                            <th class="text-center" style="width: 120px;">Ações</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -158,42 +173,33 @@
                                 <div class="fw-bold">{{ diario.data_aula.strftime('%d/%m/%Y') }}</div>
                                 <span class="badge bg-light text-dark border">{{ diario.periodo }}º Período</span>
                             </td>
-                            <td><span class="badge bg-light text-dark border">{{ diario.turma.nome }}</span></td>
+                            <td>{{ diario.turma.nome }}</td>
                             <td class="fw-bold text-primary">{{ diario.disciplina.materia }}</td>
                             <td>
                                 <div class="text-truncate" style="max-width: 250px;" title="{{ diario.conteudo_ministrado }}">
                                     {{ diario.conteudo_ministrado or 'Não informado' }}
                                 </div>
                             </td>
-                            
                             <td>
                                 {% if diario.status == 'assinado' %}
-                                    <div class="text-success small fw-bold">
-                                        <i class="fas fa-check-circle me-1"></i> Validado
-                                    </div>
+                                    <div class="text-success small fw-bold"><i class="fas fa-check-circle me-1"></i> Validado</div>
                                     {% if diario.instrutor_assinante_ref %}
-                                        <div class="text-muted" style="font-size: 0.7rem;">
-                                            Por: {{ diario.instrutor_assinante_ref.nome_de_guerra or 'Instrutor' }}
-                                        </div>
+                                    <div class="text-muted small" style="font-size: 0.7rem;">
+                                        Por: {{ diario.instrutor_assinante_ref.nome_de_guerra }}
+                                    </div>
                                     {% endif %}
                                 {% else %}
                                     <span class="badge bg-warning text-dark">Pendente</span>
                                 {% endif %}
                             </td>
-
                             <td class="text-center">
-                                <a href="{{ url_for('admin_escola.editar_diario_bloco', diario_id=diario.id) }}" 
-                                   class="btn btn-primary btn-sm rounded-pill" 
-                                   title="Editar Diário e Faltas">
-                                    <i class="fas fa-edit"></i> Editar
-                                </a>
+                                <a href="{{ url_for('admin_escola.editar_diario_bloco', diario_id=diario.id) }}" class="btn btn-primary btn-sm rounded-pill"><i class="fas fa-edit"></i></a>
                             </td>
                         </tr>
                         {% else %}
                         <tr>
                             <td colspan="6" class="text-center py-5 text-muted">
-                                <i class="fas fa-inbox fa-3x mb-3 d-block"></i>
-                                Nenhum diário encontrado com os filtros selecionados.
+                                <i class="fas fa-inbox fa-3x mb-3 d-block"></i> Nenhum diário encontrado.
                             </td>
                         </tr>
                         {% endfor %}
@@ -206,15 +212,11 @@
                 <nav aria-label="Navegação de página">
                     <ul class="pagination justify-content-center mb-0">
                         {% if pagination.has_prev %}
-                        <li class="page-item">
-                            <a class="page-link" href="{{ url_for('admin_escola.espelho_diarios', page=pagination.prev_num, turma_id=turma_id, disciplina_id=disciplina_id, data=data_selecionada) }}">Anterior</a>
-                        </li>
+                        <li class="page-item"><a class="page-link" href="{{ url_for('admin_escola.espelho_diarios', page=pagination.prev_num, turma_id=turma_id, disciplina_id=disciplina_id, data=data_selecionada) }}">Anterior</a></li>
                         {% endif %}
                         <li class="page-item disabled"><span class="page-link">Página {{ pagination.page }} de {{ pagination.pages }}</span></li>
                         {% if pagination.has_next %}
-                        <li class="page-item">
-                            <a class="page-link" href="{{ url_for('admin_escola.espelho_diarios', page=pagination.next_num, turma_id=turma_id, disciplina_id=disciplina_id, data=data_selecionada) }}">Próxima</a>
-                        </li>
+                        <li class="page-item"><a class="page-link" href="{{ url_for('admin_escola.espelho_diarios', page=pagination.next_num, turma_id=turma_id, disciplina_id=disciplina_id, data=data_selecionada) }}">Próxima</a></li>
                         {% endif %}
                     </ul>
                 </nav>
@@ -226,8 +228,7 @@
 
 <div class="modal fade" id="modalDetalhesFaltas" tabindex="-1" aria-labelledby="modalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
-        <div class="modal-content" id="modalConteudo">
-        </div>
+        <div class="modal-content" id="modalConteudo"></div>
     </div>
 </div>
 
@@ -238,74 +239,28 @@
     function renderizarTabelaCompleta() {
         const tbody = document.getElementById('tabelaTodosAlunos');
         if(!tbody) return;
-        
         let html = '';
         todosAlunosData.forEach(aluno => {
-            let badgeInfo = aluno.faltas > 0 
-                ? `<span class="badge bg-secondary">${aluno.faltas}</span>` 
-                : `<span class="badge bg-success"><i class="fas fa-check"></i> 100%</span>`;
-            
-            html += `
-                <tr class="aluno-row-item" data-search="${aluno.nome.toLowerCase()} ${aluno.matricula} ${aluno.turma.toLowerCase()}">
-                    <td class="ps-3">
-                        <div class="fw-bold text-dark">${aluno.nome}</div>
-                        <small class="text-muted">${aluno.matricula}</small>
-                    </td>
-                    <td>${aluno.turma}</td>
-                    <td class="text-center">${badgeInfo}</td>
-                    <td>
-                        <button class="btn btn-sm btn-link text-decoration-none" onclick="verDetalhesFaltas(${aluno.id})">
-                            Detalhes
-                        </button>
-                    </td>
-                </tr>
-            `;
+            let badgeInfo = aluno.faltas > 0 ? `<span class="badge bg-secondary">${aluno.faltas}</span>` : `<span class="badge bg-success">100%</span>`;
+            html += `<tr class="aluno-row-item" data-search="${aluno.nome.toLowerCase()} ${aluno.matricula} ${aluno.turma.toLowerCase()}"><td class="ps-3"><div class="fw-bold text-dark">${aluno.nome}</div><small class="text-muted">${aluno.matricula}</small></td><td>${aluno.turma}</td><td class="text-center">${badgeInfo}</td><td><button class="btn btn-sm btn-link" onclick="verDetalhesFaltas(${aluno.id})">Detalhes</button></td></tr>`;
         });
         tbody.innerHTML = html;
     }
 
     function filtrarAlunos() {
         const termo = document.getElementById('searchAluno').value.toLowerCase();
-        
         document.querySelectorAll('.aluno-card-item').forEach(card => {
-            const texto = card.getAttribute('data-search').toLowerCase();
-            card.style.display = texto.includes(termo) ? 'block' : 'none';
+            card.style.display = card.getAttribute('data-search').toLowerCase().includes(termo) ? 'block' : 'none';
         });
     }
 
     function verDetalhesFaltas(alunoId) {
         const modalEl = document.getElementById('modalDetalhesFaltas');
-        const content = document.getElementById('modalConteudo');
-        
-        if (modalEl.parentNode !== document.body) {
-            document.body.appendChild(modalEl);
-        }
-
-        if (!modalInstance) {
-            modalInstance = new bootstrap.Modal(modalEl, {
-                backdrop: true,
-                keyboard: true
-            });
-        }
-        
-        content.innerHTML = `
-            <div class="modal-body text-center py-5">
-                <div class="spinner-border text-danger" role="status"></div>
-                <p class="mt-2 text-muted">Carregando dossiê do aluno...</p>
-            </div>
-        `;
-        
+        if (!modalInstance) modalInstance = new bootstrap.Modal(modalEl);
+        document.getElementById('modalConteudo').innerHTML = '<div class="text-center py-5"><div class="spinner-border text-danger"></div></div>';
         modalInstance.show();
-
-        fetch(`/admin-escola/detalhe-faltas/${alunoId}`)
-            .then(r => {
-                if (!r.ok) throw new Error('Erro na requisição');
-                return r.text();
-            })
-            .then(html => content.innerHTML = html)
-            .catch(err => content.innerHTML = '<div class="p-3 text-danger text-center">Erro ao carregar dados. Tente novamente.</div>');
+        fetch(`/admin-escola/detalhe-faltas/${alunoId}`).then(r => r.text()).then(html => document.getElementById('modalConteudo').innerHTML = html);
     }
-
     document.addEventListener('DOMContentLoaded', renderizarTabelaCompleta);
 </script>
 
@@ -313,8 +268,6 @@
     .alert-card-critico { border-left: 5px solid #dc3545 !important; background: linear-gradient(to right, #fff5f5, #fff); }
     .alert-card-atencao { border-left: 5px solid #ffc107 !important; background: linear-gradient(to right, #fff9f2, #fff); }
     .alert-card-moderado { border-left: 5px solid #6c757d !important; }
-
-    .aluno-card-item .card { transition: all 0.3s ease; }
     .aluno-card-item .card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important; }
 </style>
 {% endblock %}
