@@ -1,12 +1,14 @@
+# backend/services/justica_service.py
 import logging
-from sqlalchemy import select
-from sqlalchemy.orm import joinedload
 from datetime import datetime, date, timedelta
+from sqlalchemy import select, and_, or_, func
+from sqlalchemy.orm import joinedload
 
 from ..models.database import db
 from ..models.aluno import Aluno
 from ..models.turma import Turma
 from ..models.ciclo import Ciclo
+from ..models.school import School
 from ..models.processo_disciplina import ProcessoDisciplina, StatusProcesso
 from ..models.fada_avaliacao import FadaAvaliacao
 from ..models.discipline_rule import DisciplineRule
@@ -41,6 +43,11 @@ class JusticaService:
         return datetime.now().astimezone()
 
     @staticmethod
+    def _get_safe_far_future():
+        """Retorna uma data segura no futuro (Ano 3000) para evitar erro de overflow do datetime.max"""
+        return datetime(3000, 1, 1).astimezone()
+
+    @staticmethod
     def _is_curso_pontuado(aluno_id=None, school=None, turma=None):
         """Verifica se é CBFPM ou CSPM (Pontuados). CTSP retorna False."""
         try:
@@ -61,62 +68,113 @@ class JusticaService:
 
     @staticmethod
     def get_data_inicio_2_ciclo(turma_id):
+        """Busca a data de início do 2º Ciclo para fins de NPCCAL."""
         try:
             turma = db.session.get(Turma, turma_id)
             if not turma or not turma.school_id: return None
             # Busca ciclos ordenados
             ciclos = db.session.scalars(select(Ciclo).where(Ciclo.school_id == turma.school_id).order_by(Ciclo.data_inicio)).all()
             # Retorna data do 2º ciclo se existir (índice 1)
-            if len(ciclos) >= 2 and ciclos[1].data_inicio:
+            if len(ciclos) >= 2:
                 return JusticaService._ensure_datetime(ciclos[1].data_inicio)
+            
+            # Fallback: Tenta achar pelo nome se a ordem falhar
+            ciclo2 = next((c for c in ciclos if '2' in c.nome or 'II' in c.nome), None)
+            if ciclo2: return JusticaService._ensure_datetime(ciclo2.data_inicio)
+            
             return None 
         except: return None
+
+    @staticmethod
+    def get_datas_limites(turma_id):
+        """
+        Retorna as datas críticas para o cálculo (Art. 125):
+        - data_inicio_2_ciclo: Quando começa a contar NPCCAL.
+        - data_limite_atitudinal: 40 dias antes da formatura (fim de tudo).
+        """
+        turma = db.session.get(Turma, turma_id)
+        if not turma: return None, None
+
+        dt_inicio_2_ciclo = JusticaService.get_data_inicio_2_ciclo(turma_id)
+
+        # Data Limite (Formatura - 40 dias)
+        # CORREÇÃO: Usar data segura (3000) em vez de datetime.max para evitar erro de fuso horário
+        dt_limite = JusticaService._get_safe_far_future() 
+        
+        if turma.data_formatura:
+            dt_form = JusticaService._ensure_datetime(turma.data_formatura)
+            dt_limite = dt_form - timedelta(days=40)
+            
+        return dt_inicio_2_ciclo, dt_limite
+
+    @staticmethod
+    def verificar_elegibilidade_punicao(processo, dt_inicio_2_ciclo, dt_limite_atitudinal):
+        """
+        Aplica a lógica cirúrgica do Art. 125 para saber se um processo desconta nota.
+        Retorna True (Desconta) ou False (Ignora).
+        """
+        data_fato = JusticaService._ensure_datetime(processo.data_ocorrencia)
+        if not data_fato: return False
+
+        # 1. Regra Global: Nada conta nos 40 dias finais (Art 125 Caput)
+        if data_fato > dt_limite_atitudinal:
+            return False
+
+        # 2. Regra de Crimes e RDBM: Contam desde o início do curso (Art 125 §6)
+        if processo.is_crime or processo.origem_punicao == 'RDBM':
+            return True
+
+        # 3. Regra NPCCAL: Só conta a partir do 2º Ciclo (Art 125 §5)
+        if dt_inicio_2_ciclo:
+            if data_fato < dt_inicio_2_ciclo:
+                return False 
+        else:
+            # Se não há ciclos cadastrados, NPCCAL não conta
+            return False
+        
+        return True
 
     @staticmethod
     def calcular_ndisc_aluno(aluno_id):
         """
         Nota Disciplinar (Base 20).
-        Regra PDF Art 121: Inicia a contagem no SEGUNDO ciclo.
+        Fórmula: (20 - Pontos Elegíveis) / 2
         """
-        if not JusticaService._is_curso_pontuado(aluno_id=aluno_id): return None
+        if not JusticaService._is_curso_pontuado(aluno_id=aluno_id): return 10.0
 
         aluno = db.session.get(Aluno, aluno_id)
-        if not aluno: return None
+        if not aluno: return 0.0
 
-        dt_corte = JusticaService.get_data_inicio_2_ciclo(aluno.turma_id)
+        dt_inicio, dt_limite = JusticaService.get_datas_limites(aluno.turma_id)
         
-        # Se não começou o 2º ciclo, nota é máxima (20/2 = 10)
-        if not dt_corte: return 10.0 
-
-        # Busca infrações finalizadas A PARTIR do 2º Ciclo
+        # Busca infrações finalizadas
         query = select(ProcessoDisciplina).where(
             ProcessoDisciplina.aluno_id == aluno_id,
-            ProcessoDisciplina.status == StatusProcesso.FINALIZADO,
-            ProcessoDisciplina.data_ocorrencia >= dt_corte
+            ProcessoDisciplina.status == StatusProcesso.FINALIZADO
         )
         processos = db.session.scalars(query).all()
         
-        pd = sum(p.pontos for p in processos if p.pontos)
+        pontos_perdidos = 0.0
+        for p in processos:
+            if JusticaService.verificar_elegibilidade_punicao(p, dt_inicio, dt_limite):
+                if p.pontos:
+                    pontos_perdidos += p.pontos
         
-        ndisc = (JusticaService.NDISC_BASE - pd) / 2
+        ndisc = (JusticaService.NDISC_BASE - pontos_perdidos) / 2.0
         return max(0.0, min(10.0, ndisc))
 
     @staticmethod
     def calcular_fada_estimada(aluno_id):
         """
         FADA (Base 8.0).
-        Regra PDF Art 125:
-        - §5: NPCCAL conta a partir do 2º Ciclo.
-        - §6: RDBM/Crime conta desde o início.
+        Regra PDF Art 125.
         """
-        if not JusticaService._is_curso_pontuado(aluno_id=aluno_id): return None
+        if not JusticaService._is_curso_pontuado(aluno_id=aluno_id): return 10.0
 
         aluno = db.session.get(Aluno, aluno_id)
-        if not aluno: return None
+        if not aluno: return 0.0
 
-        dt_2_ciclo = JusticaService.get_data_inicio_2_ciclo(aluno.turma_id)
-        # Se não definido 2º ciclo, NPCCAL não desconta ainda (usa data futura)
-        if not dt_2_ciclo: dt_2_ciclo = datetime.max.astimezone()
+        dt_inicio, dt_limite = JusticaService.get_datas_limites(aluno.turma_id)
 
         # Busca todos os processos finalizados
         query_proc = select(ProcessoDisciplina).where(
@@ -127,19 +185,20 @@ class JusticaService:
 
         descontos = 0.0
         for p in processos:
-            # RDBM e CRIME contam sempre (Art 125 §6)
+            if not JusticaService.verificar_elegibilidade_punicao(p, dt_inicio, dt_limite):
+                continue
+
+            # Hierarquia de Descontos da FADA
             if p.is_crime: 
                 descontos += JusticaService.DESC_FADA_CRIME
             elif p.origem_punicao == 'RDBM': 
                 descontos += JusticaService.DESC_FADA_RDBM
-            else:
-                # NPCCAL só conta se for APÓS o início do 2º ciclo (Art 125 §5)
-                if p.data_ocorrencia >= dt_2_ciclo:
-                    if p.pontos >= 1.0: descontos += JusticaService.DESC_FADA_GRAVE
-                    elif p.pontos >= 0.5: descontos += JusticaService.DESC_FADA_MEDIA
-                    elif p.pontos > 0: descontos += JusticaService.DESC_FADA_LEVE
+            elif p.pontos:
+                if p.pontos >= 1.0: descontos += JusticaService.DESC_FADA_GRAVE
+                elif p.pontos >= 0.5: descontos += JusticaService.DESC_FADA_MEDIA
+                else: descontos += JusticaService.DESC_FADA_LEVE
 
-        # Elogios (Art 125 §4 - Contam sempre)
+        # Elogios (Contam sempre)
         query_elogios = select(Elogio).where(Elogio.aluno_id == aluno_id)
         elogios = db.session.scalars(query_elogios).all()
         bonus = len(elogios) * JusticaService.BONUS_ELOGIO
@@ -153,7 +212,7 @@ class JusticaService:
         
         ndisc = JusticaService.calcular_ndisc_aluno(aluno_id)
         
-        # Pega FADA manual se existir, senão calcula a estimada
+        # Pega FADA manual se existir (Prioridade), senão usa a estimada
         fada_oficial = db.session.scalar(
             select(FadaAvaliacao)
             .where(FadaAvaliacao.aluno_id == aluno_id)
@@ -168,14 +227,12 @@ class JusticaService:
 
     @staticmethod
     def get_processos_para_usuario(user, school_id_override=None):
-        # CORREÇÃO DO SUMIÇO: Usa Outer Join e filtra escola manualmente
         query = select(ProcessoDisciplina).join(ProcessoDisciplina.aluno).outerjoin(Aluno.turma)
         
         if getattr(user, 'role', '') == 'aluno':
             if not getattr(user, 'aluno_profile', None): return []
             query = query.where(ProcessoDisciplina.aluno_id == user.aluno_profile.id)
         
-        # Carrega relacionamentos para evitar erro no template
         query = query.options(
             joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.user),
             joinedload(ProcessoDisciplina.regra)
@@ -183,14 +240,11 @@ class JusticaService:
         
         todos_processos = db.session.scalars(query.order_by(ProcessoDisciplina.data_ocorrencia.desc())).all()
         
-        # Filtro de escola manual (mais seguro que inner join)
         if school_id_override:
             processos_filtrados = []
             for p in todos_processos:
-                # Se o aluno tem turma e escola bate
                 if p.aluno.turma and p.aluno.turma.school_id == school_id_override:
                     processos_filtrados.append(p)
-                # Se o aluno não tem turma, mas o usuário atual é admin dessa escola, mostra (segurança)
                 elif not p.aluno.turma:
                     processos_filtrados.append(p)
             return processos_filtrados
@@ -200,7 +254,6 @@ class JusticaService:
     @staticmethod
     def criar_processo(descricao, observacao, aluno_id, autor_id, pontos=0.0, codigo_infracao=None, regra_id=None, data_ocorrencia=None):
         try:
-            # Se for CTSP, zera pontos (não afeta NDisc)
             if not JusticaService._is_curso_pontuado(aluno_id=aluno_id): pontos = 0.0
             
             dt = JusticaService._ensure_datetime(data_ocorrencia)
@@ -227,7 +280,11 @@ class JusticaService:
             if not p: return False, "Processo não encontrado."
             p.status = StatusProcesso.FINALIZADO 
             p.decisao_final = decisao; p.fundamentacao = fundamentacao; p.detalhes_sancao = detalhes
-            p.is_crime = is_crime; p.tipo_sancao = tipo_sancao; p.dias_sancao = dias_sancao if dias_sancao else 0; p.origem_punicao = origem
+            
+            p.is_crime = is_crime
+            p.tipo_sancao = tipo_sancao
+            p.dias_sancao = dias_sancao if dias_sancao else 0
+            p.origem_punicao = origem
             
             if decisao in ['IMPROCEDENTE', 'ANULADO', 'ARQUIVADO']: p.pontos = 0.0
             
@@ -236,9 +293,9 @@ class JusticaService:
             return True, "Processo finalizado."
         except Exception as e: db.session.rollback(); return False, str(e)
 
-    # Métodos auxiliares padrão
     @staticmethod
     def verificar_prazos_revelia_automatica(): return True, [] 
+    
     @staticmethod
     def registrar_ciente(pid, user):
         try:
@@ -246,6 +303,7 @@ class JusticaService:
             p.status = StatusProcesso.ALUNO_NOTIFICADO; p.ciente_aluno = True; p.data_ciente = datetime.now().astimezone()
             db.session.commit(); return True, "Ciente"
         except: db.session.rollback(); return False, "Erro"
+        
     @staticmethod
     def enviar_defesa(pid, texto, user):
         try:
@@ -253,6 +311,7 @@ class JusticaService:
             p.status = StatusProcesso.DEFESA_ENVIADA; p.defesa = texto; p.data_defesa = datetime.now().astimezone()
             db.session.commit(); return True, "Enviado"
         except: db.session.rollback(); return False, "Erro"
+        
     @staticmethod
     def deletar_processo(pid):
         try:
