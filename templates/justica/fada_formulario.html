@@ -1,63 +1,237 @@
-<div class="justice-content" id="fadaContent">
-    <div class="card border-primary shadow-sm">
-        <div class="card-header bg-primary text-white">
-            <h4 class="mb-0"><i class="fas fa-clipboard-list me-2"></i>Avaliação Atitudinal (FADA)</h4>
-        </div>
-        <div class="card-body">
-            <form method="POST" action="{{ url_for('justica.registrar_fada') }}">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                
-                <div class="row mb-4">
-                    <div class="col-md-3">
-                        <label class="form-label fw-bold">1. Selecionar Turma</label>
-                        <select class="form-select" onchange="carregarAlunos(this.value, 'fadaAlunoSelect')">
-                            <option value="">-- Turma --</option>
-                            {% for turma in turmas %}
-                            <option value="{{ turma.id }}">{{ turma.nome }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-5">
-                        <label class="form-label fw-bold">2. Selecionar Aluno</label>
-                        <select name="aluno_id" id="fadaAlunoSelect" class="form-select" required>
-                            <option value="">-- Aguardando Turma --</option>
-                        </select>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label fw-bold">Observações Gerais</label>
-                        <textarea name="observacao" class="form-control" rows="1" placeholder="Ex: Evolução positiva..."></textarea>
-                    </div>
-                </div>
+<div class="card shadow mb-4">
+    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Ficha de Avaliação de Desempenho Atitudinal (FADA)</h5>
+        <span class="badge bg-light text-dark">Base Referencial: 10.0 pts por atributo</span>
+    </div>
+    <div class="card-body">
+        
+        <div id="area-vinculacao" class="mb-4 p-3 border rounded bg-warning-subtle">
+            <h6 class="fw-bold text-dark"><i class="fas fa-link"></i> Vincular Fatos aos Atributos</h6>
+            <p class="small text-muted mb-2">
+                Conforme Art. 125, selecione o atributo afetado para aplicar o desconto (infrações) ou o bônus (elogios).
+            </p>
 
-                <h5 class="mb-3 border-bottom pb-2">3. Atributos Avaliados</h5>
-                <div class="row">
-                    {% if atributos_fada %}
-                        {% for attr_db, attr_nome in atributos_fada %}
-                        <div class="col-md-3 mb-3">
-                            <label class="form-label small fw-bold mb-1">{{ attr_nome }}</label>
-                            <select name="{{ attr_db }}" class="form-select form-select-sm">
-                                <option value="10" selected>10 (Excelente)</option>
-                                <option value="9">9 (Muito Bom)</option>
-                                <option value="8">8 (Bom)</option>
-                                <option value="7">7 (Regular)</option>
-                                <option value="6">6 (Insuficiente)</option>
-                                <option value="5">5 (Crítico)</option>
-                            </select>
-                        </div>
-                        {% endfor %}
-                    {% else %}
-                        <div class="col-12 text-muted">
-                            <i class="fas fa-info-circle"></i> Curso técnico (CTSP) ou atributos não carregados.
-                        </div>
-                    {% endif %}
-                </div>
-
-                <div class="text-end mt-3 pt-3 border-top">
-                    <button type="submit" class="btn btn-primary btn-lg">
-                        <i class="fas fa-save me-1"></i> Salvar Avaliação
-                    </button>
-                </div>
-            </form>
+            <div id="lista-infracoes-pendentes">
+                <div class="text-center text-muted small"><i class="fas fa-spinner fa-spin"></i> Carregando dados do aluno...</div>
+            </div>
         </div>
+
+        <form id="formFada" method="POST" action="{{ url_for('justica.salvar_fada') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="aluno_id" id="fada_aluno_id" value="">
+            
+            <div class="row g-3">
+                {% set atributos = [
+                    'Apresentação Pessoal', 'Pontualidade', 'Assiduidade', 'Compostura', 
+                    'Disciplina', 'Respeito', 'Lealdade', 'Verdade', 
+                    'Responsabilidade', 'Cooperação', 'Camaradagem', 'Liderança', 
+                    'Decisão', 'Criatividade', 'Iniciativa', 'Tenacidade', 
+                    'Equilíbrio Emocional', 'Dedicação'
+                ] %}
+
+                {% for i in range(18) %}
+                <div class="col-md-4 col-sm-6">
+                    <div class="card h-100 border-secondary">
+                        <div class="card-body p-2">
+                            <label class="form-label small fw-bold mb-1">{{ i + 1 }}. {{ atributos[i] }}</label>
+                            <div class="input-group input-group-sm">
+                                <input type="number" step="0.01" min="0" max="10" 
+                                       class="form-control fada-input fw-bold text-center" 
+                                       id="attr_{{ i }}" name="notas[]" value="10.00"
+                                       onchange="calcularMediaFada()">
+                                <span class="input-group-text bg-light text-muted">/10</span>
+                            </div>
+                            <div class="mt-1" id="badge_desc_{{ i }}"></div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="row mt-4">
+                <div class="col-md-8">
+                    <label class="form-label fw-bold">Observações / Justificativa da Avaliação</label>
+                    <textarea class="form-control" name="observacao" rows="3" placeholder="Justifique as notas atribuídas, especialmente se houver descontos graves ou bônus."></textarea>
+                </div>
+                <div class="col-md-4">
+                    <div class="card bg-light border-primary">
+                        <div class="card-body text-center">
+                            <h6 class="text-muted mb-1">Média Final FADA</h6>
+                            <h2 class="display-4 fw-bold text-primary" id="displayMediaFada">10.00</h2>
+                            <small class="text-muted">Média aritmética simples</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="text-end mt-3">
+                <button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-primary fw-bold"><i class="fas fa-save"></i> Salvar Avaliação</button>
+            </div>
+        </form>
     </div>
 </div>
+
+<script>
+let dadosCarregados = [];
+
+// Função chamada ao abrir o modal (deve ser acionada pelo botão 'Avaliar' na lista)
+function abrirFadaModal(alunoId, nomeAluno) {
+    document.getElementById('fada_aluno_id').value = alunoId;
+    
+    // Resetar formulário visualmente
+    document.querySelectorAll('.fada-input').forEach(inp => {
+        inp.value = "10.00";
+        inp.classList.remove('bg-danger-subtle', 'bg-success-subtle');
+    });
+    
+    // Limpar badges antigos
+    for (let i = 0; i < 18; i++) {
+        const badgeDiv = document.getElementById(`badge_desc_${i}`);
+        if (badgeDiv) badgeDiv.innerHTML = '';
+    }
+    
+    calcularMediaFada();
+
+    // Carregar infrações e elogios via API
+    carregarPendenciasFada(alunoId);
+}
+
+function carregarPendenciasFada(alunoId) {
+    const container = document.getElementById('lista-infracoes-pendentes');
+    container.innerHTML = '<div class="text-center small py-3"><i class="fas fa-sync fa-spin"></i> Buscando histórico do aluno...</div>';
+
+    fetch(`/justica-e-disciplina/api/infracoes-pendentes/${alunoId}`)
+        .then(r => r.json())
+        .then(data => {
+            dadosCarregados = data;
+            renderizarPendencias();
+        })
+        .catch(err => {
+            console.error(err);
+            container.innerHTML = '<div class="alert alert-warning py-1 small">Erro ao carregar dados. Tente novamente.</div>';
+        });
+}
+
+function renderizarPendencias() {
+    const container = document.getElementById('lista-infracoes-pendentes');
+    
+    if (!dadosCarregados || dadosCarregados.length === 0) {
+        container.innerHTML = '<div class="alert alert-secondary py-2 small mb-0 text-center"><i class="fas fa-check-circle"></i> Nenhuma infração ou elogio pendente para este período.</div>';
+        return;
+    }
+
+    let html = '<div class="table-responsive" style="max-height: 200px; overflow-y: auto;"><table class="table table-sm table-hover mb-0 align-middle bg-white small border">';
+    html += '<thead class="table-light sticky-top"><tr><th>Tipo</th><th>Descrição</th><th>Data</th><th class="text-center">Pts</th><th>Ação (Vincular a:)</th></tr></thead><tbody>';
+
+    dadosCarregados.forEach((item, idx) => {
+        // Define cores e ícones baseados no tipo
+        let corTexto = item.tipo === 'elogio' ? 'text-success' : 'text-danger';
+        let icone = item.tipo === 'elogio' ? '<i class="fas fa-star"></i>' : '<i class="fas fa-exclamation-triangle"></i>';
+        let sinal = item.tipo === 'elogio' ? '+' : '-';
+        
+        html += `
+            <tr id="row_pend_${idx}">
+                <td class="${corTexto} fw-bold">${icone} ${item.tipo.toUpperCase()}</td>
+                <td>${item.descricao}</td>
+                <td class="text-muted">${item.data}</td>
+                <td class="fw-bold text-center ${corTexto}">${sinal}${item.pontos}</td>
+                <td>
+                    <select class="form-select form-select-sm" 
+                            style="border-color: ${item.tipo === 'elogio' ? '#198754' : '#dc3545'}"
+                            onchange="aplicarAlteracaoNota(${idx}, this.value, ${item.pontos}, '${item.tipo}')">
+                        <option value="">-- Selecione o Atributo --</option>
+                        <option value="0">1. Apresentação Pessoal</option>
+                        <option value="1">2. Pontualidade</option>
+                        <option value="2">3. Assiduidade</option>
+                        <option value="3">4. Compostura</option>
+                        <option value="4">5. Disciplina</option>
+                        <option value="5">6. Respeito</option>
+                        <option value="6">7. Lealdade</option>
+                        <option value="7">8. Verdade</option>
+                        <option value="8">9. Responsabilidade</option>
+                        <option value="9">10. Cooperação</option>
+                        <option value="10">11. Camaradagem</option>
+                        <option value="11">12. Liderança</option>
+                        <option value="12">13. Decisão</option>
+                        <option value="13">14. Criatividade</option>
+                        <option value="14">15. Iniciativa</option>
+                        <option value="15">16. Tenacidade</option>
+                        <option value="16">17. Equilíbrio Emocional</option>
+                        <option value="17">18. Dedicação</option>
+                    </select>
+                </td>
+            </tr>
+        `;
+    });
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+}
+
+function aplicarAlteracaoNota(idx, attrIdx, pontos, tipo) {
+    if (attrIdx === "") return;
+
+    const input = document.getElementById(`attr_${attrIdx}`);
+    const badgeContainer = document.getElementById(`badge_desc_${attrIdx}`);
+    
+    // Cálculo Matemático
+    let valorAtual = parseFloat(input.value);
+    let novoValor = valorAtual;
+    let badgeHtml = "";
+
+    if (tipo === 'elogio') {
+        // Soma pontos
+        novoValor = valorAtual + parseFloat(pontos);
+        if (novoValor > 10) novoValor = 10.00; // Teto máximo 10
+        
+        input.classList.add('bg-success-subtle');
+        input.classList.remove('bg-danger-subtle'); // Remove vermelho se houver
+        badgeHtml = `<span class="badge bg-success d-block mb-1" title="Bônus aplicado">+${pontos} (Elogio)</span>`;
+        
+    } else {
+        // Subtrai pontos
+        novoValor = valorAtual - parseFloat(pontos);
+        if (novoValor < 0) novoValor = 0.00; // Piso mínimo 0
+        
+        input.classList.add('bg-danger-subtle');
+        input.classList.remove('bg-success-subtle');
+        badgeHtml = `<span class="badge bg-danger d-block mb-1" title="Desconto aplicado">-${pontos} (Infração)</span>`;
+    }
+    
+    // Atualiza Input
+    input.value = novoValor.toFixed(2);
+    
+    // Adiciona Badge Visual
+    badgeContainer.innerHTML += badgeHtml;
+    
+    // Oculta a linha da tabela (item consumido)
+    const row = document.getElementById(`row_pend_${idx}`);
+    if(row) {
+        row.style.opacity = '0.5';
+        row.style.pointerEvents = 'none';
+        row.querySelector('select').disabled = true;
+        row.querySelector('td:last-child').innerHTML += ' <i class="fas fa-check text-success"></i>';
+    }
+    
+    // Recalcula média final
+    calcularMediaFada();
+}
+
+function calcularMediaFada() {
+    let soma = 0;
+    const inputs = document.querySelectorAll('.fada-input');
+    
+    inputs.forEach(inp => {
+        let val = parseFloat(inp.value);
+        if(isNaN(val)) val = 0;
+        // Garante limites visuais
+        if(val > 10) val = 10;
+        if(val < 0) val = 0;
+        soma += val;
+    });
+    
+    // Média Simples dos 18 atributos
+    const media = soma / 18.0;
+    document.getElementById('displayMediaFada').innerText = media.toFixed(2);
+}
+</script>

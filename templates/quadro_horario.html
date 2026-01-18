@@ -40,14 +40,26 @@
         
         <div class="controls-group d-flex gap-2 flex-wrap justify-content-end align-items-center">
             
-            {# 1. BOTÃO DE GERENCIAR SEMANAS #}
+            {# 1. BOTÃO DATA DE FORMATURA (NOVO) #}
+            {% if turma_atual and current_user.is_sens %}
+                <button type="button" class="btn btn-info text-white shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#modalDataFormatura">
+                    <i class="fas fa-graduation-cap me-1"></i> 
+                    {% if turma_atual.data_formatura %}
+                        Formatura: {{ turma_atual.data_formatura.strftime('%d/%m/%Y') }}
+                    {% else %}
+                        Definir Data Formatura
+                    {% endif %}
+                </button>
+            {% endif %}
+
+            {# 2. BOTÃO DE GERENCIAR SEMANAS #}
             {% if current_user.is_sens %}
                 <a href="{{ url_for('semana.gerenciar_semanas') }}" class="btn btn-dark shadow-sm fw-bold">
                     <i class="fas fa-calendar-plus me-1"></i> Gerenciar Semanas / Ciclos
                 </a>
             {% endif %}
 
-            {# 2. BOTÕES QUE DEPENDEM DE UMA SEMANA JÁ EXISTIR #}
+            {# 3. BOTÕES QUE DEPENDEM DE UMA SEMANA JÁ EXISTIR #}
             {% if semana_selecionada %}
                 
                 {# BOTÕES ADMINISTRATIVOS #}
@@ -233,6 +245,45 @@
 {% endblock %}
 
 {% block modals %}
+    
+    {# MODAL DATA FORMATURA (NOVO) #}
+    {% if turma_atual %}
+    <div class="modal fade" id="modalDataFormatura" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title fw-bold"><i class="fas fa-graduation-cap"></i> Data de Formatura - {{ turma_atual.nome }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form action="{{ url_for('horario.salvar_data_formatura') }}" method="POST">
+                    <div class="modal-body">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="turma_id" value="{{ turma_atual.id }}">
+                        
+                        <div class="alert alert-light border">
+                            <p class="small mb-0">
+                                <i class="fas fa-info-circle text-primary"></i> 
+                                Definir a data de formatura encerra o computo da Avaliação Atitudinal 
+                                <strong>40 dias antes</strong> desta data (Art. 125).
+                            </p>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="data_formatura" class="form-label fw-bold">Selecione a Data:</label>
+                            <input type="date" class="form-control" id="data_formatura" name="data_formatura" 
+                                   value="{{ turma_atual.data_formatura.strftime('%Y-%m-%d') if turma_atual.data_formatura else '' }}">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-info text-white fw-bold">Salvar Data</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     {% if pelotao_selecionado and semana_selecionada %}
     <div class="modal-overlay" id="confirmation-modal-overlay">
         <div class="modal-content" style="max-width: 600px;">

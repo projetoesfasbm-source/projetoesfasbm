@@ -4,7 +4,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_required, current_user
 from sqlalchemy import select, or_
 from sqlalchemy.orm import joinedload
-from datetime import date
+from datetime import date, datetime
 from flask_wtf import FlaskForm
 from wtforms import HiddenField, SubmitField
 from wtforms.validators import DataRequired
@@ -35,17 +35,12 @@ class AprovarHorarioForm(FlaskForm):
     submit = SubmitField('Enviar')
 
 def _get_horario_context_data():
-    """
-    Recupera os horários configurados (início/fim das aulas e intervalos).
-    AGORA RESPEITA A ESCOLA ATIVA.
-    """
     school_id = UserService.get_current_school_id()
     
     tempos = []
     for i in range(1, 16):
         key = f"horario_periodo_{i:02d}"
         periodo_str = f"{i}º"
-        # Passa o school_id para pegar a config específica da escola
         time_str = SiteConfigService.get_config(key, 'N/D', school_id=school_id)
         tempos.append((periodo_str, time_str))
     
@@ -81,8 +76,6 @@ def index():
         if current_user.role == 'instrutor' and current_user.instrutor_profile and not current_user.is_sens:
             try:
                 instrutor_id = current_user.instrutor_profile.id
-                
-                # Busca Turmas vinculadas ao instrutor
                 turmas_vinculadas = db.session.scalars(
                     select(Turma)
                     .join(DisciplinaTurma, Turma.nome == DisciplinaTurma.pelotao)
@@ -99,9 +92,6 @@ def index():
 
                 if turmas_vinculadas:
                     todas_as_turmas = turmas_vinculadas
-                else:
-                    # Fallback
-                    pass 
             except Exception as e:
                 current_app.logger.error(f"Erro ao filtrar turmas do instrutor: {e}")
                 pass
@@ -113,6 +103,11 @@ def index():
             turma_selecionada_nome = todas_as_turmas[0].nome
         elif turma_selecionada_nome and turma_selecionada_nome not in [t.nome for t in todas_as_turmas]:
              turma_selecionada_nome = todas_as_turmas[0].nome if todas_as_turmas else None
+
+    # RECUPERAR OBJETO TURMA (Para pegar a data de formatura)
+    turma_atual_obj = None
+    if turma_selecionada_nome:
+        turma_atual_obj = db.session.scalar(select(Turma).where(Turma.nome == turma_selecionada_nome, Turma.school_id == school_id))
 
     # 2. Identificar Ciclo e Semanas
     ciclo_selecionado_id = request.args.get('ciclo', session.get('ultimo_ciclo_horario'), type=int)
@@ -209,6 +204,7 @@ def index():
     return render_template('quadro_horario.html',
                            horario_matrix=horario_matrix,
                            pelotao_selecionado=turma_selecionada_nome,
+                           turma_atual=turma_atual_obj, # <--- PASSANDO O OBJETO TURMA
                            semana_selecionada=semana_selecionada,
                            todas_as_turmas=todas_as_turmas,
                            todas_as_semanas=todas_as_semanas,
@@ -229,6 +225,39 @@ def index():
 @admin_or_programmer_required
 def save_priority_config():
     return jsonify({'success': False, 'message': 'Use a rota /semana/<id>/salvar-prioridade'}), 404
+
+# --- NOVA ROTA: SALVAR DATA DE FORMATURA ---
+@horario_bp.route('/salvar-data-formatura', methods=['POST'])
+@login_required
+@admin_or_programmer_required
+def salvar_data_formatura():
+    turma_id = request.form.get('turma_id')
+    nova_data = request.form.get('data_formatura')
+    
+    if not turma_id:
+        flash("Turma não identificada.", "danger")
+        return redirect(url_for('horario.index'))
+
+    turma = db.session.get(Turma, turma_id)
+    if not turma:
+        flash("Turma não encontrada.", "danger")
+        return redirect(url_for('horario.index'))
+    
+    try:
+        if nova_data:
+            turma.data_formatura = datetime.strptime(nova_data, '%Y-%m-%d').date()
+        else:
+            turma.data_formatura = None
+        db.session.commit()
+        flash("Data de formatura atualizada com sucesso. A avaliação atitudinal respeitará o prazo de 40 dias.", "success")
+    except ValueError:
+        flash("Formato de data inválido.", "danger")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Erro ao salvar data: {e}", "danger")
+        
+    return redirect(url_for('horario.index', pelotao=turma.nome))
+# ------------------------------------------
 
 @horario_bp.route('/exportar-pdf')
 @login_required

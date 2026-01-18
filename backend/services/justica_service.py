@@ -32,14 +32,30 @@ class JusticaService:
 
     @staticmethod
     def _ensure_datetime(dt_input):
-        if not dt_input: return datetime.now().astimezone()
-        if isinstance(dt_input, datetime): return dt_input
-        if isinstance(dt_input, date): return datetime.combine(dt_input, datetime.min.time()).astimezone()
+        """
+        Converte input para datetime com timezone (aware).
+        Resolve o erro de comparação entre naive e aware.
+        """
+        if dt_input is None:
+            return datetime.now().astimezone()
+            
+        # Se já for datetime
+        if isinstance(dt_input, datetime):
+            if dt_input.tzinfo is None:
+                return dt_input.astimezone() # Torna aware se for naive
+            return dt_input
+            
+        # Se for date (sem hora)
+        if isinstance(dt_input, date):
+            return datetime.combine(dt_input, datetime.min.time()).astimezone()
+            
+        # Se for string
         if isinstance(dt_input, str):
             try: return datetime.strptime(dt_input, '%Y-%m-%d %H:%M').astimezone()
             except: pass
             try: return datetime.strptime(dt_input, '%Y-%m-%d').astimezone()
             except: pass
+            
         return datetime.now().astimezone()
 
     @staticmethod
@@ -72,8 +88,10 @@ class JusticaService:
         try:
             turma = db.session.get(Turma, turma_id)
             if not turma or not turma.school_id: return None
+            
             # Busca ciclos ordenados
             ciclos = db.session.scalars(select(Ciclo).where(Ciclo.school_id == turma.school_id).order_by(Ciclo.data_inicio)).all()
+            
             # Retorna data do 2º ciclo se existir (índice 1)
             if len(ciclos) >= 2:
                 return JusticaService._ensure_datetime(ciclos[1].data_inicio)
@@ -98,7 +116,6 @@ class JusticaService:
         dt_inicio_2_ciclo = JusticaService.get_data_inicio_2_ciclo(turma_id)
 
         # Data Limite (Formatura - 40 dias)
-        # CORREÇÃO: Usar data segura (3000) em vez de datetime.max para evitar erro de fuso horário
         dt_limite = JusticaService._get_safe_far_future() 
         
         if turma.data_formatura:
@@ -113,11 +130,14 @@ class JusticaService:
         Aplica a lógica cirúrgica do Art. 125 para saber se um processo desconta nota.
         Retorna True (Desconta) ou False (Ignora).
         """
+        # Garante timezone para comparação segura
         data_fato = JusticaService._ensure_datetime(processo.data_ocorrencia)
+        dt_limite = JusticaService._ensure_datetime(dt_limite_atitudinal)
+        
         if not data_fato: return False
 
         # 1. Regra Global: Nada conta nos 40 dias finais (Art 125 Caput)
-        if data_fato > dt_limite_atitudinal:
+        if data_fato > dt_limite:
             return False
 
         # 2. Regra de Crimes e RDBM: Contam desde o início do curso (Art 125 §6)
@@ -126,7 +146,9 @@ class JusticaService:
 
         # 3. Regra NPCCAL: Só conta a partir do 2º Ciclo (Art 125 §5)
         if dt_inicio_2_ciclo:
-            if data_fato < dt_inicio_2_ciclo:
+            # Garante timezone também para o inicio do ciclo
+            dt_inicio_safe = JusticaService._ensure_datetime(dt_inicio_2_ciclo)
+            if data_fato < dt_inicio_safe:
                 return False 
         else:
             # Se não há ciclos cadastrados, NPCCAL não conta

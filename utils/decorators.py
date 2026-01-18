@@ -1,3 +1,5 @@
+# utils/decorators.py
+
 from functools import wraps
 from flask import abort, flash, redirect, url_for
 from flask_login import current_user
@@ -169,4 +171,35 @@ def aluno_profile_required(f):
         if current_user.role == 'aluno' and not (hasattr(current_user, 'aluno_profile') and current_user.aluno_profile):
             return redirect(url_for('aluno.completar_cadastro'))
         return f(*args, **kwargs)
+    return decorated_function
+
+# --- NOVO DECORATOR ESSENCIAL PARA JUSTIÇA ---
+def can_manage_justice_required(f):
+    """
+    Permite acesso aos gestores de justiça:
+    - Admin da Escola
+    - Programador
+    - SENS (Chefia de Ensino)
+    - CAL (Corpo de Alunos)
+    """
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated:
+            abort(403)
+            
+        school_id = UserService.get_current_school_id()
+        
+        # Admin Global e Programador
+        if current_user.is_programador or (getattr(current_user, 'role', '') == 'super_admin'):
+            return f(*args, **kwargs)
+            
+        # Admin da Escola, SENS ou CAL
+        if school_id:
+            if (current_user.is_admin_escola_in_school(school_id) or 
+                current_user.is_sens_in_school(school_id) or
+                current_user.is_cal_in_school(school_id)):
+                return f(*args, **kwargs)
+                
+        flash("Acesso restrito ao Corpo de Alunos ou SENS.", "danger")
+        return redirect(url_for('main.dashboard'))
     return decorated_function
