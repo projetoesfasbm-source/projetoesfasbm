@@ -1,3 +1,4 @@
+# backend/models/fada_avaliacao.py
 from datetime import datetime
 from typing import Optional
 from sqlalchemy import ForeignKey, Float, Text, DateTime, String, Integer
@@ -10,10 +11,10 @@ class FadaAvaliacao(db.Model):
     id: Mapped[int] = mapped_column(primary_key=True)
     aluno_id: Mapped[int] = mapped_column(ForeignKey('alunos.id'), nullable=False)
     
-    # Quem está lançando no sistema (CAL/SENS)
+    # Responsável pelo lançamento (Chefe CAL/SENS)
     lancador_id: Mapped[int] = mapped_column(ForeignKey('users.id'), nullable=False)
     
-    # --- COMISSÃO DE AVALIAÇÃO (Obrigatório) ---
+    # --- COMISSÃO DE AVALIAÇÃO (IDs dos Usuários) ---
     presidente_id: Mapped[Optional[int]] = mapped_column(ForeignKey('users.id'), nullable=True)
     membro1_id: Mapped[Optional[int]] = mapped_column(ForeignKey('users.id'), nullable=True)
     membro2_id: Mapped[Optional[int]] = mapped_column(ForeignKey('users.id'), nullable=True)
@@ -21,7 +22,7 @@ class FadaAvaliacao(db.Model):
     data_avaliacao: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now)
     observacao: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    # Notas
+    # --- NOTAS DOS 18 ATRIBUTOS ---
     expressao: Mapped[float] = mapped_column(Float, default=0.0)
     planejamento: Mapped[float] = mapped_column(Float, default=0.0)
     perseveranca: Mapped[float] = mapped_column(Float, default=0.0)
@@ -44,15 +45,36 @@ class FadaAvaliacao(db.Model):
     media_final: Mapped[float] = mapped_column(Float, default=0.0)
 
     # --- FLUXO E AUDITORIA ---
-    status: Mapped[str] = mapped_column(String(20), default='RASCUNHO') # RASCUNHO, ENVIADO, ASSINADO, RECURSO
+    status: Mapped[str] = mapped_column(String(20), default='RASCUNHO') 
+    # Etapas: RASCUNHO -> COMISSAO -> ALUNO -> FINALIZADO
+    etapa_atual: Mapped[str] = mapped_column(String(50), default='RASCUNHO')
+    
+    # Snapshots para Integridade Jurídica (Congela nota no envio)
     ndisc_snapshot: Mapped[float] = mapped_column(Float, default=0.0)
     aat_snapshot: Mapped[float] = mapped_column(Float, default=0.0)
-    
     data_envio: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    
+    # --- ASSINATURAS DIGITAIS DA COMISSÃO ---
+    # Presidente
+    data_ass_pres: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    hash_pres: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    ip_pres: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
+
+    # Membro 1
+    data_ass_m1: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    hash_m1: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    ip_m1: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
+
+    # Membro 2
+    data_ass_m2: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    hash_m2: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    ip_m2: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
+
+    # --- ASSINATURA DO ALUNO ---
     data_assinatura: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    hash_integridade: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     ip_assinatura: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
     user_agent_aluno: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    hash_integridade: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     texto_recurso: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Relacionamentos

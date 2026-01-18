@@ -38,7 +38,7 @@
                         <th rowspan="2" class="align-middle">Nº</th>
                         <th rowspan="2" class="align-middle text-start">Aluno</th>
                         <th colspan="3">Notas (Conforme Regulamento)</th>
-                        <th rowspan="2" class="align-middle" style="width: 150px;">Ações</th>
+                        <th rowspan="2" class="align-middle" style="width: 180px;">Ações / Status</th>
                     </tr>
                     <tr>
                         <th class="text-primary">NDisc (Base 20)</th>
@@ -48,6 +48,20 @@
                 </thead>
                 <tbody>
                     {% for item in dados %}
+                    {% set status = item.fada_obj.etapa_atual if item.fada_obj else 'RASCUNHO' %}
+                    {% set fada_id = item.fada_obj.id if item.fada_obj else 'null' %}
+                    
+                    {% set fada_data = {
+                        'presidente_id': item.fada_obj.presidente_id if item.fada_obj else '',
+                        'membro1_id': item.fada_obj.membro1_id if item.fada_obj else '',
+                        'membro2_id': item.fada_obj.membro2_id if item.fada_obj else '',
+                        'hash_pres': item.fada_obj.hash_pres if item.fada_obj else '',
+                        'hash_m1': item.fada_obj.hash_m1 if item.fada_obj else '',
+                        'hash_m2': item.fada_obj.hash_m2 if item.fada_obj else '',
+                        'data_ass_pres': item.fada_obj.data_ass_pres.strftime('%d/%m') if (item.fada_obj and item.fada_obj.data_ass_pres) else '',
+                        'etapa_atual': status
+                    } %}
+                    
                     <tr class="text-center">
                         <td>{{ item.aluno.numero or '-' }}</td>
                         <td class="text-start">
@@ -58,10 +72,20 @@
                         <td class="fw-bold text-success">{{ "{:.2f}".format(item.fada) }}</td>
                         <td class="bg-light fw-bold fs-5">{{ "{:.2f}".format(item.aat) }}</td>
                         <td>
-                            <button type="button" class="btn btn-sm btn-outline-primary" 
-                                    onclick="abrirFadaModal({{ item.id }}, '{{ item.aluno.user.nome_completo }}')">
-                                <i class="fas fa-edit"></i> Avaliar
-                            </button>
+                            <div class="d-flex align-items-center justify-content-center gap-2">
+                                <button type="button" class="btn btn-sm btn-outline-primary" 
+                                        onclick='abrirFadaModal({{ item.id }}, "{{ item.aluno.user.nome_completo }}", {{ fada_id }}, "{{ status }}", {{ fada_data|tojson|safe }})'>
+                                    <i class="fas fa-edit"></i> Abrir
+                                </button>
+                                
+                                {% if status == 'COMISSAO' %}
+                                    <span class="badge bg-info text-dark" title="Aguardando Comissão"><i class="fas fa-users"></i></span>
+                                {% elif status == 'ALUNO' %}
+                                    <span class="badge bg-warning text-dark" title="Aguardando Aluno"><i class="fas fa-user-edit"></i></span>
+                                {% elif status == 'FINALIZADO' %}
+                                    <span class="badge bg-success" title="Concluído"><i class="fas fa-check-double"></i></span>
+                                {% endif %}
+                            </div>
                         </td>
                     </tr>
                     {% else %}
@@ -77,13 +101,11 @@
 
 <div id="overlayFada" class="custom-overlay" style="display: none;">
     <div class="overlay-backdrop" onclick="fecharFadaModal()"></div>
-    
     <div class="overlay-content">
         <div class="overlay-header">
             <h5 class="m-0 fw-bold" id="overlayTitle">FADA - Avaliação</h5>
             <button type="button" class="btn-close-custom" onclick="fecharFadaModal()">×</button>
         </div>
-        
         <div class="overlay-body">
             <div class="fada-paper-wrapper">
                 {% include 'justica/fada_formulario.html' %}
@@ -93,94 +115,39 @@
 </div>
 
 <style>
-    /* CSS DO OVERLAY - IGNORA O TEMA */
-    .custom-overlay {
-        position: fixed;
-        top: 0; left: 0; width: 100vw; height: 100vh;
-        z-index: 99999 !important; /* Acima de tudo */
-        display: flex;
-        justify-content: center;
-        align-items: flex-start; /* Alinha no topo para rolar */
-        overflow-y: auto; /* Permite rolar a tela inteira se precisar */
-        padding: 20px;
-    }
-
-    .overlay-backdrop {
-        position: fixed;
-        top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0, 0, 0, 0.7); /* Fundo escuro */
-        cursor: pointer;
-    }
-
-    .overlay-content {
-        position: relative;
-        background: #e0e0e0; /* Fundo cinza ao redor da folha */
-        width: auto;
-        min-width: 230mm; /* Garante largura A4 com folga */
-        max-width: 95%;
-        border-radius: 8px;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-        margin-top: 30px;
-        margin-bottom: 30px;
-        display: flex;
-        flex-direction: column;
-        z-index: 100000;
-    }
-
-    .overlay-header {
-        background: #0d6efd;
-        color: white;
-        padding: 10px 20px;
-        border-top-left-radius: 8px;
-        border-top-right-radius: 8px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-
-    .btn-close-custom {
-        background: none; border: none; color: white;
-        font-size: 24px; font-weight: bold; cursor: pointer;
-        line-height: 1;
-    }
-
-    .overlay-body {
-        padding: 20px;
-        display: flex;
-        justify-content: center;
-        background: #525659; /* Cor de fundo de leitor de PDF */
-    }
-
-    .fada-paper-wrapper {
-        background: white;
-        padding: 0; /* O include já tem padding */
-        box-shadow: 0 0 15px rgba(0,0,0,0.3);
-    }
+    .custom-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 99999 !important; display: flex; justify-content: center; align-items: flex-start; overflow-y: auto; padding: 20px; }
+    .overlay-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); cursor: pointer; }
+    .overlay-content { position: relative; background: #e0e0e0; width: auto; min-width: 230mm; max-width: 95%; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); margin-top: 30px; margin-bottom: 30px; display: flex; flex-direction: column; z-index: 100000; }
+    .overlay-header { background: #0d6efd; color: white; padding: 10px 20px; border-top-left-radius: 8px; border-top-right-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
+    .btn-close-custom { background: none; border: none; color: white; font-size: 24px; font-weight: bold; cursor: pointer; line-height: 1; }
+    .overlay-body { padding: 20px; display: flex; justify-content: center; background: #525659; }
+    .fada-paper-wrapper { background: white; padding: 0; box-shadow: 0 0 15px rgba(0,0,0,0.3); }
 </style>
 
 <script>
-// Move o overlay para o body ao carregar para garantir z-index
+window.listaAvaliadores = [
+    {% for u in avaliadores %}
+    { id: {{ u.id }}, nome: "{{ u.nome_completo }}", posto: "{{ u.posto_graduacao }}" },
+    {% endfor %}
+];
+
 document.addEventListener("DOMContentLoaded", function(){
     const overlay = document.getElementById('overlayFada');
     if (overlay) document.body.appendChild(overlay);
 });
 
-function abrirFadaModal(alunoId, nomeAluno) {
+function abrirFadaModal(alunoId, nomeAluno, fadaId, status, fadaData) {
     document.getElementById('overlayTitle').innerText = 'FADA - ' + nomeAluno;
-    
-    // Chama função interna do formulário
     if(typeof window.abrirFadaModalInterno === 'function') {
-        window.abrirFadaModalInterno(alunoId, nomeAluno);
+        window.abrirFadaModalInterno(alunoId, nomeAluno, fadaId, status, fadaData);
     }
-    
-    // Mostra o overlay
     document.getElementById('overlayFada').style.display = 'flex';
-    document.body.style.overflow = 'hidden'; // Trava rolagem do fundo
+    document.body.style.overflow = 'hidden';
 }
 
 function fecharFadaModal() {
     document.getElementById('overlayFada').style.display = 'none';
-    document.body.style.overflow = ''; // Destrava rolagem
+    document.body.style.overflow = '';
 }
 </script>
 {% endblock %}
