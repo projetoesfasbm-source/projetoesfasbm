@@ -1,14 +1,14 @@
 # backend/services/user_service.py
 
-from flask import current_app, session
+from flask import current_app, session, has_request_context # <--- Adicionado has_request_context
 from flask_login import current_user
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from sqlalchemy.exc import IntegrityError
 
 from ..models.database import db
 from ..models.user import User
 from ..models.user_school import UserSchool
-from ..models.instrutor import Instrutor  # <--- IMPORTANTE: Importar o modelo
+from ..models.instrutor import Instrutor 
 from utils.normalizer import normalize_matricula
 
 class UserService:
@@ -182,10 +182,19 @@ class UserService:
 
     @staticmethod
     def get_current_school_id():
-        """Recupera o ID da escola ativa da sessão."""
-        if not current_user.is_authenticated:
+        """
+        Recupera o ID da escola ativa da sessão.
+        VERSÃO SEGURA: Protege contra contexto vazio (CLI/Scripts) e usuário anônimo.
+        """
+        # 1. Proteção de Contexto (Corrige erro em scripts de manutenção)
+        if not has_request_context():
+            return None
+            
+        # 2. Proteção de Autenticação (Corrige erro de 'AnonymousUserMixin')
+        if not current_user or not current_user.is_authenticated:
             return None
 
+        # 3. Lógica Original Preservada
         if getattr(current_user, 'role', '') in ['super_admin', 'programador']:
             view_as = session.get('view_as_school_id')
             if view_as: return int(view_as)
@@ -194,6 +203,7 @@ class UserService:
         if active_id:
             try:
                 active_id_int = int(active_id)
+                # Verifica se o vínculo ainda existe (Segurança extra)
                 has_link = db.session.scalar(
                     select(UserSchool.school_id).where(
                         UserSchool.user_id == current_user.id,
@@ -204,6 +214,7 @@ class UserService:
                 else: session.pop('active_school_id', None)
             except Exception: pass
 
+        # 4. Fallback: Se tiver apenas 1 escola, seleciona automático
         all_links = db.session.execute(
             select(UserSchool).where(UserSchool.user_id == current_user.id)
         ).scalars().all()
@@ -225,10 +236,6 @@ class UserService:
         if not assignment:
             return False, "Vínculo não encontrado."
 
-        # Opcional: Se remover o papel, devemos remover o perfil de instrutor?
-        # Geralmente sim, para limpar o banco, mas cuidado com históricos.
-        # Por segurança, mantemos o perfil (histórico de aulas), deletamos apenas o acesso.
-        
         db.session.delete(assignment)
         db.session.commit()
         return True, "Vínculo removido."
@@ -246,3 +253,44 @@ class UserService:
         except Exception:
             db.session.rollback()
             return False, "Erro ao excluir."
+    
+    # Métodos CRUD adicionais necessários para o user_controller.py
+    @staticmethod
+    def get_by_id(user_id):
+        return db.session.get(User, user_id)
+
+    @staticmethod
+    def create_user(data):
+        try:
+            existing = db.session.scalar(
+                select(User).where(or_(User.email == data['email'], User.matricula == data['matricula']))
+            )
+            if existing: return False, "E-mail ou matrícula já cadastrados."
+
+            user = User(
+                email=data['email'], matricula=data['matricula'], nome_completo=data['nome_completo'],
+                nome_de_guerra=data.get('nome_de_guerra'), role=data.get('role', 'aluno'),
+                posto_graduacao=data.get('posto_graduacao')
+            )
+            user.set_password(data['password'])
+            db.session.add(user)
+            db.session.commit()
+            return True, user
+        except Exception as e:
+            db.session.rollback()
+            return False, str(e)
+
+    @staticmethod
+    def update_user(user_id, data):
+        user = UserService.get_by_id(user_id)
+        if not user: return False, "Usuário não encontrado."
+        try:
+            if 'nome_completo' in data: user.nome_completo = data['nome_completo']
+            if 'nome_de_guerra' in data: user.nome_de_guerra = data['nome_de_guerra']
+            if 'email' in data: user.email = data['email']
+            if 'posto_graduacao' in data: user.posto_graduacao = data['posto_graduacao']
+            db.session.commit()
+            return True, "Atualizado."
+        except Exception as e:
+            db.session.rollback()
+            return False, str(e)

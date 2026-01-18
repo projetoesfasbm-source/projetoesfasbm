@@ -76,6 +76,10 @@
                          <form method="POST" action="{{ url_for('justica.registrar_em_massa') }}">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <input type="hidden" name="tipo_registro" value="infracao">
+                            
+                            <input type="hidden" name="origem_punicao" id="hidden_origem_punicao" value="NPCCAL">
+                            <input type="hidden" name="is_crime" id="hidden_is_crime" value="false">
+
                              <div class="row">
                                 <div class="col-md-5 mb-3 border-end">
                                     <label class="form-label fw-bold">1. Turma</label>
@@ -94,29 +98,37 @@
                                     <label class="form-label fw-bold">2. Detalhes</label>
                                     
                                     <div class="mb-3 p-2 border rounded bg-white">
-                                        <label class="small fw-bold d-block mb-1">Classificação da Infração</label>
+                                        <label class="small fw-bold d-block mb-1">Tipo de Enquadramento</label>
+                                        
                                         <div class="form-check form-check-inline">
-                                            <input class="form-check-input" type="radio" name="origem_punicao" id="origem_npccal" value="NPCCAL" checked onchange="toggleTiposInfracao()">
-                                            <label class="form-check-label small" for="origem_npccal">Falta NPCCAL</label>
+                                            <input class="form-check-input" type="radio" name="tipo_visual" id="rad_npccal" value="NPCCAL" checked onchange="toggleTiposInfracao()">
+                                            <label class="form-check-label small" for="rad_npccal">Falta NPCCAL</label>
                                         </div>
+                                        
                                         <div class="form-check form-check-inline">
-                                            <input class="form-check-input" type="radio" name="origem_punicao" id="origem_rdbm" value="RDBM" onchange="toggleTiposInfracao()">
-                                            <label class="form-check-label small text-warning fw-bold" for="origem_rdbm">RDBM (-2.0)</label>
+                                            <input class="form-check-input" type="radio" name="tipo_visual" id="rad_rdbm" value="RDBM" onchange="toggleTiposInfracao()">
+                                            <label class="form-check-label small text-warning fw-bold" for="rad_rdbm">Transgressão RDBM</label>
                                         </div>
+                                        
                                         <div class="form-check form-check-inline">
-                                            <input class="form-check-input" type="checkbox" name="is_crime" id="check_crime" value="true" onchange="toggleTiposInfracao()">
-                                            <label class="form-check-label small text-danger fw-bold" for="check_crime">Crime (-3.0)</label>
+                                            <input class="form-check-input" type="radio" name="tipo_visual" id="rad_crime" value="CRIME" onchange="toggleTiposInfracao()">
+                                            <label class="form-check-label small text-danger fw-bold" for="rad_crime">Crime Militar/Comum</label>
                                         </div>
                                     </div>
 
                                     <div class="mb-2" id="box_regras_npccal">
-                                        <label class="small">Enquadramento (Regra NPCCAL)</label>
-                                        <select id="regraSelect" name="regra_id" class="form-select" required onchange="atualizarTextoInteligente()">
-                                            <option value="">-- Selecione --</option>
+                                        <label class="small">Selecione a Regra</label>
+                                        <select id="regraSelect" name="regra_id" class="form-select" onchange="atualizarTextoInteligente()">
+                                            <option value="">-- Selecione a Falta --</option>
                                             {% for regra in fatos_predefinidos %}
                                             <option value="{{ regra.id }}" data-desc="no item {{ regra.codigo }} '{{ regra.descricao }}'">{{ regra.codigo }} - {{ regra.descricao[:60] }}...</option>
                                             {% endfor %}
                                         </select>
+                                    </div>
+
+                                    <div class="mb-2" id="box_regras_manual" style="display: none;">
+                                        <label class="small">Descrição da Transgressão / Crime</label>
+                                        <input type="text" id="inputManualDesc" name="codigo_infracao" class="form-control" placeholder="Ex: Art. 15 do RDBM ou Art. 290 do CPM..." oninput="atualizarTextoInteligente()">
                                     </div>
                                     <div class="row mb-2">
                                         <div class="col-md-7">
@@ -129,11 +141,11 @@
                                         </div>
                                     </div>
                                     <div class="mb-2">
-                                        <label class="small">Fato Constatado</label>
+                                        <label class="small">Fato Constatado (Descrição detalhada da conduta)</label>
                                         <textarea name="descricao" id="descricaoFatoInput" class="form-control" rows="2" placeholder="Ex: deixou a parte de cima do seu armário fora dos padrões exigidos." required oninput="atualizarTextoInteligente()"></textarea>
                                     </div>
                                     <div class="mb-2">
-                                        <label class="small">Termo de Justificação (Automático)</label>
+                                        <label class="small">Termo de Justificação (Gerado Automaticamente)</label>
                                         <textarea id="campoObservacao" name="observacao" class="form-control" rows="15"></textarea>
                                     </div>
                                     <div class="text-end"><button type="submit" class="btn btn-danger">Registrar</button></div>
@@ -201,22 +213,49 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // --- NOVA FUNÇÃO PARA CONTROLE VISUAL (CRIME/RDBM) ---
+    // --- LÓGICA ATUALIZADA PARA SELEÇÃO EXCLUSIVA E CAMPO MANUAL ---
     window.toggleTiposInfracao = function() {
-        const isRDBM = document.getElementById('origem_rdbm').checked;
-        const isCrime = document.getElementById('check_crime').checked;
-        const boxRegras = document.getElementById('box_regras_npccal');
-        const selectRegra = document.getElementById('regraSelect');
+        const isNPCCAL = document.getElementById('rad_npccal').checked;
+        const isRDBM = document.getElementById('rad_rdbm').checked;
+        const isCrime = document.getElementById('rad_crime').checked;
 
-        if (isRDBM || isCrime) {
-            // Se for Crime ou RDBM, a regra NPCCAL é opcional visualmente
-            // (Ainda mantemos required pois o backend pode tratar, mas para crimes geralmente é um texto livre)
-            boxRegras.style.opacity = '0.5';
-            selectRegra.removeAttribute('required'); // Remove obrigatoriedade se for crime
-        } else {
-            // NPCCAL Padrão
-            boxRegras.style.opacity = '1';
+        const boxRegras = document.getElementById('box_regras_npccal');
+        const boxManual = document.getElementById('box_regras_manual');
+        const selectRegra = document.getElementById('regraSelect');
+        const inputManual = document.getElementById('inputManualDesc');
+
+        // Campos ocultos que o Backend lê
+        const hiddenOrigem = document.getElementById('hidden_origem_punicao');
+        const hiddenCrime = document.getElementById('hidden_is_crime');
+
+        if (isNPCCAL) {
+            // Configuração NPCCAL
+            boxRegras.style.display = 'block';
+            boxManual.style.display = 'none';
+            
             selectRegra.setAttribute('required', 'required');
+            inputManual.removeAttribute('required');
+            inputManual.value = ''; // Limpa manual
+
+            hiddenOrigem.value = 'NPCCAL';
+            hiddenCrime.value = 'false';
+
+        } else {
+            // Configuração RDBM ou CRIME
+            boxRegras.style.display = 'none';
+            boxManual.style.display = 'block';
+            
+            selectRegra.removeAttribute('required');
+            selectRegra.value = ""; // Limpa seleção
+            inputManual.setAttribute('required', 'required');
+
+            if (isRDBM) {
+                hiddenOrigem.value = 'RDBM';
+                hiddenCrime.value = 'false';
+            } else {
+                hiddenOrigem.value = 'NPCCAL'; // Crime geralmente cai no fluxo genérico ou específico do backend
+                hiddenCrime.value = 'true';
+            }
         }
         
         atualizarTextoInteligente();
@@ -270,19 +309,26 @@ document.addEventListener('DOMContentLoaded', function() {
     window.atualizarTextoInteligente = function() {
         const checks = document.querySelectorAll('.aluno-check-listaAlunosInfracao:checked');
         const regSel = document.getElementById('regraSelect');
+        const isNPCCAL = document.getElementById('rad_npccal').checked;
+        const isRDBM = document.getElementById('rad_rdbm').checked;
+        const isCrime = document.getElementById('rad_crime').checked;
         
-        // Verifica se há regra selecionada, se não houver (ex: Crime), usa texto genérico
         let regraDesc = "";
-        if (regSel.selectedIndex >= 0) {
-             regraDesc = regSel.options[regSel.selectedIndex].getAttribute('data-desc') || "";
+
+        if (isNPCCAL) {
+            if (regSel.selectedIndex >= 0) {
+                 regraDesc = regSel.options[regSel.selectedIndex].getAttribute('data-desc') || "";
+            }
+        } else {
+            // Pega do campo manual
+            const manualText = document.getElementById('inputManualDesc').value.trim();
+            if (manualText) {
+                if (isRDBM) regraDesc = "em transgressão disciplinar: " + manualText;
+                if (isCrime) regraDesc = "em fato tipificado como crime: " + manualText;
+            } else {
+                regraDesc = isRDBM ? "em transgressão disciplinar (descrever)" : "em crime (descrever)";
+            }
         }
-        
-        // Ajuste para Crime/RDBM
-        const isCrime = document.getElementById('check_crime') && document.getElementById('check_crime').checked;
-        const isRDBM = document.getElementById('origem_rdbm') && document.getElementById('origem_rdbm').checked;
-        
-        if (isCrime) regraDesc = "em conduta tipificada como Crime Militar/Comum";
-        else if (isRDBM) regraDesc = "em Transgressão Disciplinar (RDBM)";
 
         const box = document.getElementById('campoObservacao');
         
