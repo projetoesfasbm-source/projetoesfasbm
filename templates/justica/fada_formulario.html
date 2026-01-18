@@ -1,236 +1,415 @@
-<div class="card shadow mb-4">
-    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-        <h5 class="mb-0">Ficha de Avaliação de Desempenho Atitudinal (FADA)</h5>
-        <span class="badge bg-light text-dark">Base Referencial: 10.0 pts por atributo</span>
+<div class="fada-document-container">
+    <div class="text-center mb-4 font-serif">
+        <h6 class="fw-bold mb-0">ESTADO DO RIO GRANDE DO SUL</h6>
+        <h6 class="fw-bold mb-0">SECRETARIA DA SEGURANÇA PÚBLICA</h6>
+        <h6 class="fw-bold mb-0">BRIGADA MILITAR</h6>
+        <h6 class="fw-bold mb-0 mt-2">DEPARTAMENTO DE EDUCAÇÃO E CULTURA</h6>
+        <h5 class="fw-bold mt-2 text-decoration-underline">FICHA DE AVALIAÇÃO DE DESEMPENHO ATITUDINAL (FADA)</h5>
     </div>
-    <div class="card-body">
-        
-        <div id="area-vinculacao" class="mb-4 p-3 border rounded bg-warning-subtle">
-            <h6 class="fw-bold text-dark"><i class="fas fa-link"></i> Vincular Fatos aos Atributos</h6>
-            <p class="small text-muted mb-2">
-                Conforme Art. 125, selecione o atributo afetado para aplicar o desconto (infrações) ou o bônus (elogios).
-            </p>
 
-            <div id="lista-infracoes-pendentes">
-                <div class="text-center text-muted small"><i class="fas fa-spinner fa-spin"></i> Carregando dados do aluno...</div>
-            </div>
+    <div class="row mb-3 border p-2 mx-0">
+        <div class="col-md-8">
+            <strong>ALUNO:</strong> <span id="fada_nome_aluno_display">...</span>
+        </div>
+        <div class="col-md-4 text-end">
+            <strong>DATA:</strong> <span id="fada_data_display"></span>
+        </div>
+    </div>
+
+    <div id="area-vinculacao" class="alert alert-warning border-warning shadow-sm mb-3 d-print-none">
+        <div class="d-flex align-items-center justify-content-between">
+            <h6 class="fw-bold text-dark mb-0"><i class="fas fa-exclamation-triangle"></i> Pendências Disciplinares</h6>
+            <span class="badge bg-dark">Sistema SisGEn</span>
+        </div>
+        <p class="small text-muted mb-2">Vincule as infrações/elogios abaixo aos atributos correspondentes na tabela.</p>
+        <div id="lista-infracoes-pendentes" class="bg-white rounded border p-2 small">
+            <div class="text-center text-muted"><i class="fas fa-spinner fa-spin"></i> Carregando...</div>
+        </div>
+    </div>
+
+    <form id="formFada" method="POST" action="{{ url_for('justica.salvar_fada') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="aluno_id" id="fada_aluno_id" value="">
+
+        <div class="table-responsive">
+            <table class="table table-bordered align-middle fada-table">
+                <thead class="bg-light text-center">
+                    <tr>
+                        <th style="width: 5%;">ITEM</th>
+                        <th style="width: 65%;">ATRIBUTOS AVALIADOS</th>
+                        <th style="width: 15%;">GRAU (0-10)</th>
+                        <th style="width: 15%;">CONCEITO</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="text-center fw-bold">1</td>
+                        <td>
+                            <strong>Expressão oral e escrita:</strong> Verbalizar com clareza, precisão e correção de ideias ou fatos. Expressar o pensamento, coerentemente, através da escrita ou de forma verbal.
+                            <div id="badge_desc_0" class="mt-1"></div>
+                        </td>
+                        <td><input type="number" step="0.01" min="0" max="10" class="form-control text-center fw-bold fada-input" id="attr_0" name="notas[]" value="8.00" onchange="atualizarConceito(0)"></td>
+                        <td class="text-center bg-light" id="conc_0">APROVADO</td>
+                    </tr>
+
+                    <tr>
+                        <td class="text-center fw-bold">2</td>
+                        <td>
+                            <strong>Planejamento e método:</strong> Prever e propor soluções para situações futuras com objetivo. Proceder de forma ordenada, lógica e sistemática, sem desviar da proposta inicial.
+                            <div id="badge_desc_1" class="mt-1"></div>
+                        </td>
+                        <td><input type="number" step="0.01" min="0" max="10" class="form-control text-center fw-bold fada-input" id="attr_1" name="notas[]" value="8.00" onchange="atualizarConceito(1)"></td>
+                        <td class="text-center bg-light" id="conc_1">APROVADO</td>
+                    </tr>
+
+                    <tr>
+                        <td class="text-center fw-bold">3</td>
+                        <td>
+                            <strong>Perseverança e Tenacidade:</strong> Manter a continuidade na execução de uma tarefa, mesmo que implique em esforço físico e mental prolongados.
+                            <div id="badge_desc_2" class="mt-1"></div>
+                        </td>
+                        <td><input type="number" step="0.01" min="0" max="10" class="form-control text-center fw-bold fada-input" id="attr_2" name="notas[]" value="8.00" onchange="atualizarConceito(2)"></td>
+                        <td class="text-center bg-light" id="conc_2">APROVADO</td>
+                    </tr>
+
+                    <tr>
+                        <td class="text-center fw-bold">4</td>
+                        <td>
+                            <strong>Apresentação pessoal:</strong> Manter, em todos os momentos, aparência condizente com os padrões militares.
+                            <div id="badge_desc_3" class="mt-1"></div>
+                        </td>
+                        <td><input type="number" step="0.01" min="0" max="10" class="form-control text-center fw-bold fada-input" id="attr_3" name="notas[]" value="8.00" onchange="atualizarConceito(3)"></td>
+                        <td class="text-center bg-light" id="conc_3">APROVADO</td>
+                    </tr>
+
+                    <tr>
+                        <td class="text-center fw-bold">5</td>
+                        <td>
+                            <strong>Lealdade:</strong> Capacidade revelada pelo indivíduo no tocante à sinceridade e franqueza de atitudes e opiniões.
+                            <div id="badge_desc_4" class="mt-1"></div>
+                        </td>
+                        <td><input type="number" step="0.01" min="0" max="10" class="form-control text-center fw-bold fada-input" id="attr_4" name="notas[]" value="8.00" onchange="atualizarConceito(4)"></td>
+                        <td class="text-center bg-light" id="conc_4">APROVADO</td>
+                    </tr>
+
+                    <tr>
+                        <td class="text-center fw-bold">6</td>
+                        <td>
+                            <strong>Tato:</strong> Agir com prudência e habilidade, com relação a pessoas e/ou assuntos evitando situações embaraçosas.
+                            <div id="badge_desc_5" class="mt-1"></div>
+                        </td>
+                        <td><input type="number" step="0.01" min="0" max="10" class="form-control text-center fw-bold fada-input" id="attr_5" name="notas[]" value="8.00" onchange="atualizarConceito(5)"></td>
+                        <td class="text-center bg-light" id="conc_5">APROVADO</td>
+                    </tr>
+
+                    <tr>
+                        <td class="text-center fw-bold">7</td>
+                        <td>
+                            <strong>Equilíbrio emocional:</strong> Controle da impulsividade e precipitação, enfrentando quaisquer situações com serenidade e firmeza.
+                            <div id="badge_desc_6" class="mt-1"></div>
+                        </td>
+                        <td><input type="number" step="0.01" min="0" max="10" class="form-control text-center fw-bold fada-input" id="attr_6" name="notas[]" value="8.00" onchange="atualizarConceito(6)"></td>
+                        <td class="text-center bg-light" id="conc_6">APROVADO</td>
+                    </tr>
+
+                    <tr>
+                        <td class="text-center fw-bold">8</td>
+                        <td>
+                            <strong>Disciplina:</strong> Submeter-se de forma consciente às leis, normas e regulamentos vigentes na instituição a que pertence.
+                            <div id="badge_desc_7" class="mt-1"></div>
+                        </td>
+                        <td><input type="number" step="0.01" min="0" max="10" class="form-control text-center fw-bold fada-input" id="attr_7" name="notas[]" value="8.00" onchange="atualizarConceito(7)"></td>
+                        <td class="text-center bg-light" id="conc_7">APROVADO</td>
+                    </tr>
+
+                    <tr>
+                        <td class="text-center fw-bold">9</td>
+                        <td>
+                            <strong>Responsabilidade:</strong> Responder pelas próprias ações e atos, bem como de outrem. Assumir compromissos e obrigações funcionais.
+                            <div id="badge_desc_8" class="mt-1"></div>
+                        </td>
+                        <td><input type="number" step="0.01" min="0" max="10" class="form-control text-center fw-bold fada-input" id="attr_8" name="notas[]" value="8.00" onchange="atualizarConceito(8)"></td>
+                        <td class="text-center bg-light" id="conc_8">APROVADO</td>
+                    </tr>
+
+                    <tr>
+                        <td class="text-center fw-bold">10</td>
+                        <td>
+                            <strong>Maturidade:</strong> Adaptabilidade diante de situações, respeitando e acreditando no cumprimento das normas vigentes.
+                            <div id="badge_desc_9" class="mt-1"></div>
+                        </td>
+                        <td><input type="number" step="0.01" min="0" max="10" class="form-control text-center fw-bold fada-input" id="attr_9" name="notas[]" value="8.00" onchange="atualizarConceito(9)"></td>
+                        <td class="text-center bg-light" id="conc_9">APROVADO</td>
+                    </tr>
+
+                    <tr>
+                        <td class="text-center fw-bold">11</td>
+                        <td>
+                            <strong>Assiduidade:</strong> Capacidade de, mediante ação da vontade, estar presente em todos os trabalhos e eventos programados, nas datas e horários previstos.
+                            <div id="badge_desc_10" class="mt-1"></div>
+                        </td>
+                        <td><input type="number" step="0.01" min="0" max="10" class="form-control text-center fw-bold fada-input" id="attr_10" name="notas[]" value="8.00" onchange="atualizarConceito(10)"></td>
+                        <td class="text-center bg-light" id="conc_10">APROVADO</td>
+                    </tr>
+
+                    <tr>
+                        <td class="text-center fw-bold">12</td>
+                        <td>
+                            <strong>Pontualidade:</strong> Capacidade de estar presente aos trabalhos e eventos programados nos horários previstos.
+                            <div id="badge_desc_11" class="mt-1"></div>
+                        </td>
+                        <td><input type="number" step="0.01" min="0" max="10" class="form-control text-center fw-bold fada-input" id="attr_11" name="notas[]" value="8.00" onchange="atualizarConceito(11)"></td>
+                        <td class="text-center bg-light" id="conc_11">APROVADO</td>
+                    </tr>
+
+                    <tr>
+                        <td class="text-center fw-bold">13</td>
+                        <td>
+                            <strong>Dicção de voz e comando:</strong> Capacidade de emprego da voz impondo-se perante um grupo ou uma situação, demonstrando energia e firmeza.
+                            <div id="badge_desc_12" class="mt-1"></div>
+                        </td>
+                        <td><input type="number" step="0.01" min="0" max="10" class="form-control text-center fw-bold fada-input" id="attr_12" name="notas[]" value="8.00" onchange="atualizarConceito(12)"></td>
+                        <td class="text-center bg-light" id="conc_12">APROVADO</td>
+                    </tr>
+
+                    <tr>
+                        <td class="text-center fw-bold">14</td>
+                        <td>
+                            <strong>Liderança:</strong> Capacidade de coordenar, direcionar, orientar as atitudes dos membros de um grupo.
+                            <div id="badge_desc_13" class="mt-1"></div>
+                        </td>
+                        <td><input type="number" step="0.01" min="0" max="10" class="form-control text-center fw-bold fada-input" id="attr_13" name="notas[]" value="8.00" onchange="atualizarConceito(13)"></td>
+                        <td class="text-center bg-light" id="conc_13">APROVADO</td>
+                    </tr>
+
+                    <tr>
+                        <td class="text-center fw-bold">15</td>
+                        <td>
+                            <strong>Relacionamento interpessoal:</strong> Relaciona-se com todos, sem distinção, de forma amistosa no trato, demonstrando estima e respeito com os outros.
+                            <div id="badge_desc_14" class="mt-1"></div>
+                        </td>
+                        <td><input type="number" step="0.01" min="0" max="10" class="form-control text-center fw-bold fada-input" id="attr_14" name="notas[]" value="8.00" onchange="atualizarConceito(14)"></td>
+                        <td class="text-center bg-light" id="conc_14">APROVADO</td>
+                    </tr>
+
+                    <tr>
+                        <td class="text-center fw-bold">16</td>
+                        <td>
+                            <strong>Ética:</strong> Apresenta os valores policiais, nos termos do Estatuto dos Militares Estaduais, destacando o sentimento do dever, da dignidade, o brio e o decoro da classe.
+                            <div id="badge_desc_15" class="mt-1"></div>
+                        </td>
+                        <td><input type="number" step="0.01" min="0" max="10" class="form-control text-center fw-bold fada-input" id="attr_15" name="notas[]" value="8.00" onchange="atualizarConceito(15)"></td>
+                        <td class="text-center bg-light" id="conc_15">APROVADO</td>
+                    </tr>
+
+                    <tr>
+                        <td class="text-center fw-bold">17</td>
+                        <td>
+                            <strong>Produtividade:</strong> Grau de qualidade na apresentação do trabalho do servidor. Capacidade para desempenhar suas funções.
+                            <div id="badge_desc_16" class="mt-1"></div>
+                        </td>
+                        <td><input type="number" step="0.01" min="0" max="10" class="form-control text-center fw-bold fada-input" id="attr_16" name="notas[]" value="8.00" onchange="atualizarConceito(16)"></td>
+                        <td class="text-center bg-light" id="conc_16">APROVADO</td>
+                    </tr>
+
+                    <tr>
+                        <td class="text-center fw-bold">18</td>
+                        <td>
+                            <strong>Eficiência:</strong> Grau de conhecimento que o servidor demonstra no exercício das atribuições de seu cargo e conservação do material disponível.
+                            <div id="badge_desc_17" class="mt-1"></div>
+                        </td>
+                        <td><input type="number" step="0.01" min="0" max="10" class="form-control text-center fw-bold fada-input" id="attr_17" name="notas[]" value="8.00" onchange="atualizarConceito(17)"></td>
+                        <td class="text-center bg-light" id="conc_17">APROVADO</td>
+                    </tr>
+                </tbody>
+                <tfoot class="bg-light">
+                    <tr>
+                        <td colspan="2" class="text-end fw-bold">MÉDIA FINAL FADA:</td>
+                        <td class="text-center fw-bold text-primary fs-5" id="displayMediaFada">8.00</td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
         </div>
 
-        <form id="formFada" method="POST" action="{{ url_for('justica.salvar_fada') }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="aluno_id" id="fada_aluno_id" value="">
-            
-            <div class="row g-3">
-                {% set atributos = [
-                    'Apresentação Pessoal', 'Pontualidade', 'Assiduidade', 'Compostura', 
-                    'Disciplina', 'Respeito', 'Lealdade', 'Verdade', 
-                    'Responsabilidade', 'Cooperação', 'Camaradagem', 'Liderança', 
-                    'Decisão', 'Criatividade', 'Iniciativa', 'Tenacidade', 
-                    'Equilíbrio Emocional', 'Dedicação'
-                ] %}
+        <div class="mt-4">
+            <label class="form-label fw-bold">JUSTIFICATIVA PARA GRAUS ABAIXO DE 7 E ACIMA DE 9:</label>
+            <textarea class="form-control border-dark" name="observacao" rows="6" placeholder="Descreva aqui os motivos das notas excepcionais ou insuficientes..."></textarea>
+        </div>
 
-                {% for i in range(18) %}
-                <div class="col-md-4 col-sm-6">
-                    <div class="card h-100 border-secondary">
-                        <div class="card-body p-2">
-                            <label class="form-label small fw-bold mb-1">{{ i + 1 }}. {{ atributos[i] }}</label>
-                            <div class="input-group input-group-sm">
-                                <input type="number" step="0.01" min="0" max="10" 
-                                       class="form-control fada-input fw-bold text-center" 
-                                       id="attr_{{ i }}" name="notas[]" value="10.00"
-                                       onchange="calcularMediaFada()">
-                                <span class="input-group-text bg-light text-muted">/10</span>
-                            </div>
-                            <div class="mt-1" id="badge_desc_{{ i }}"></div>
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-
-            <div class="row mt-4">
-                <div class="col-md-8">
-                    <label class="form-label fw-bold">Observações / Justificativa da Avaliação</label>
-                    <textarea class="form-control" name="observacao" rows="3" placeholder="Justifique as notas atribuídas, especialmente se houver descontos graves ou bônus."></textarea>
-                </div>
-                <div class="col-md-4">
-                    <div class="card bg-light border-primary">
-                        <div class="card-body text-center">
-                            <h6 class="text-muted mb-1">Média Final FADA</h6>
-                            <h2 class="display-4 fw-bold text-primary" id="displayMediaFada">10.00</h2>
-                            <small class="text-muted">Média aritmética simples</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="text-end mt-3">
-                <button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">Cancelar</button>
-                <button type="submit" class="btn btn-primary fw-bold"><i class="fas fa-save"></i> Salvar Avaliação</button>
-            </div>
-        </form>
-    </div>
+        <div class="d-flex justify-content-end gap-2 mt-4 d-print-none">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-primary fw-bold px-4">
+                <i class="fas fa-save me-1"></i> Salvar Avaliação
+            </button>
+        </div>
+    </form>
 </div>
 
-<script>
-let dadosCarregados = [];
+<style>
+    /* Estilos para parecer documento oficial */
+    .fada-document-container {
+        font-family: "Times New Roman", Times, serif;
+        background-color: white;
+        padding: 20px;
+    }
+    .fada-table th, .fada-table td {
+        border: 1px solid #000 !important;
+        padding: 4px 8px;
+        vertical-align: middle;
+    }
+    .fada-input {
+        border: 1px solid #ccc;
+        box-shadow: none;
+    }
+    .fada-input:focus {
+        border-color: #000;
+        box-shadow: none;
+        background-color: #f0f0f0;
+    }
+    /* Estilo para impressão correta do CONCEITO */
+    .bg-light { background-color: #f8f9fa !important; }
+</style>
 
-// Função chamada ao abrir o modal (deve ser acionada pelo botão 'Avaliar' na lista)
+<script>
+let dadosPendentes = [];
+
 function abrirFadaModal(alunoId, nomeAluno) {
     document.getElementById('fada_aluno_id').value = alunoId;
+    document.getElementById('fada_nome_aluno_display').innerText = nomeAluno;
     
-    // Resetar formulário visualmente
+    // Data Atual
+    const hoje = new Date();
+    document.getElementById('fada_data_display').innerText = hoje.toLocaleDateString('pt-BR');
+
+    // Resetar campos para 8.00
     document.querySelectorAll('.fada-input').forEach(inp => {
-        inp.value = "10.00";
-        inp.classList.remove('bg-danger-subtle', 'bg-success-subtle');
+        inp.value = "8.00";
+        inp.classList.remove('text-danger', 'text-success');
     });
     
-    // Limpar badges antigos
-    for (let i = 0; i < 18; i++) {
-        const badgeDiv = document.getElementById(`badge_desc_${i}`);
-        if (badgeDiv) badgeDiv.innerHTML = '';
+    // Resetar Conceitos
+    for(let i=0; i<18; i++) {
+        document.getElementById(`conc_${i}`).innerText = "APROVADO";
+        document.getElementById(`badge_desc_${i}`).innerHTML = "";
     }
-    
-    calcularMediaFada();
 
-    // Carregar infrações e elogios via API
+    calcularMediaFada();
     carregarPendenciasFada(alunoId);
 }
 
 function carregarPendenciasFada(alunoId) {
     const container = document.getElementById('lista-infracoes-pendentes');
-    container.innerHTML = '<div class="text-center small py-3"><i class="fas fa-sync fa-spin"></i> Buscando histórico do aluno...</div>';
+    container.innerHTML = '<div class="text-center small"><i class="fas fa-spinner fa-spin"></i> Verificando histórico...</div>';
 
     fetch(`/justica-e-disciplina/api/infracoes-pendentes/${alunoId}`)
         .then(r => r.json())
         .then(data => {
-            dadosCarregados = data;
+            dadosPendentes = data;
             renderizarPendencias();
         })
         .catch(err => {
             console.error(err);
-            container.innerHTML = '<div class="alert alert-warning py-1 small">Erro ao carregar dados. Tente novamente.</div>';
+            container.innerHTML = '<div class="text-danger small">Erro ao carregar dados.</div>';
         });
 }
 
 function renderizarPendencias() {
     const container = document.getElementById('lista-infracoes-pendentes');
     
-    if (!dadosCarregados || dadosCarregados.length === 0) {
-        container.innerHTML = '<div class="alert alert-secondary py-2 small mb-0 text-center"><i class="fas fa-check-circle"></i> Nenhuma infração ou elogio pendente para este período.</div>';
+    if (!dadosPendentes || dadosPendentes.length === 0) {
+        container.innerHTML = '<div class="text-center text-success small"><i class="fas fa-check"></i> Nada consta.</div>';
         return;
     }
 
-    let html = '<div class="table-responsive" style="max-height: 200px; overflow-y: auto;"><table class="table table-sm table-hover mb-0 align-middle bg-white small border">';
-    html += '<thead class="table-light sticky-top"><tr><th>Tipo</th><th>Descrição</th><th>Data</th><th class="text-center">Pts</th><th>Ação (Vincular a:)</th></tr></thead><tbody>';
-
-    dadosCarregados.forEach((item, idx) => {
-        // Define cores e ícones baseados no tipo
-        let corTexto = item.tipo === 'elogio' ? 'text-success' : 'text-danger';
-        let icone = item.tipo === 'elogio' ? '<i class="fas fa-star"></i>' : '<i class="fas fa-exclamation-triangle"></i>';
+    let html = '<table class="table table-sm table-borderless mb-0 small">';
+    dadosPendentes.forEach((item, idx) => {
+        let cor = item.tipo === 'elogio' ? 'text-success' : 'text-danger';
         let sinal = item.tipo === 'elogio' ? '+' : '-';
-        
         html += `
-            <tr id="row_pend_${idx}">
-                <td class="${corTexto} fw-bold">${icone} ${item.tipo.toUpperCase()}</td>
-                <td>${item.descricao}</td>
-                <td class="text-muted">${item.data}</td>
-                <td class="fw-bold text-center ${corTexto}">${sinal}${item.pontos}</td>
+            <tr id="pend_row_${idx}">
+                <td class="fw-bold ${cor}" style="width: 100px;">${item.tipo.toUpperCase()}</td>
+                <td>${item.descricao} <span class="text-muted">(${item.data})</span></td>
+                <td class="fw-bold ${cor}">${sinal}${item.pontos}</td>
                 <td>
-                    <select class="form-select form-select-sm" 
-                            style="border-color: ${item.tipo === 'elogio' ? '#198754' : '#dc3545'}"
-                            onchange="aplicarAlteracaoNota(${idx}, this.value, ${item.pontos}, '${item.tipo}')">
-                        <option value="">-- Selecione o Atributo --</option>
-                        <option value="0">1. Apresentação Pessoal</option>
-                        <option value="1">2. Pontualidade</option>
-                        <option value="2">3. Assiduidade</option>
-                        <option value="3">4. Compostura</option>
-                        <option value="4">5. Disciplina</option>
-                        <option value="5">6. Respeito</option>
-                        <option value="6">7. Lealdade</option>
-                        <option value="7">8. Verdade</option>
-                        <option value="8">9. Responsabilidade</option>
-                        <option value="9">10. Cooperação</option>
-                        <option value="10">11. Camaradagem</option>
-                        <option value="11">12. Liderança</option>
-                        <option value="12">13. Decisão</option>
-                        <option value="13">14. Criatividade</option>
-                        <option value="14">15. Iniciativa</option>
-                        <option value="15">16. Tenacidade</option>
-                        <option value="16">17. Equilíbrio Emocional</option>
-                        <option value="17">18. Dedicação</option>
+                    <select class="form-select form-select-sm py-0" style="height: 24px; font-size: 0.8rem;" 
+                            onchange="aplicarVinculo(${idx}, this.value, ${item.pontos}, '${item.tipo}')">
+                        <option value="">Vincular...</option>
+                        ${gerarOpcoesAtributos()}
                     </select>
                 </td>
-            </tr>
-        `;
+            </tr>`;
     });
-    html += '</tbody></table></div>';
+    html += '</table>';
     container.innerHTML = html;
 }
 
-function aplicarAlteracaoNota(idx, attrIdx, pontos, tipo) {
+function gerarOpcoesAtributos() {
+    // Retorna string com options de 1 a 18
+    let opts = "";
+    const nomes = [
+        "1. Expressão oral e escrita", "2. Planejamento e método", "3. Perseverança e Tenacidade",
+        "4. Apresentação pessoal", "5. Lealdade", "6. Tato", "7. Equilíbrio emocional", "8. Disciplina",
+        "9. Responsabilidade", "10. Maturidade", "11. Assiduidade", "12. Pontualidade",
+        "13. Dicção de voz e comando", "14. Liderança", "15. Relacionamento interpessoal",
+        "16. Ética", "17. Produtividade", "18. Eficiência"
+    ];
+    nomes.forEach((nome, idx) => {
+        opts += `<option value="${idx}">${nome}</option>`;
+    });
+    return opts;
+}
+
+function aplicarVinculo(idx, attrIdx, pontos, tipo) {
     if (attrIdx === "") return;
 
     const input = document.getElementById(`attr_${attrIdx}`);
-    const badgeContainer = document.getElementById(`badge_desc_${attrIdx}`);
-    
-    // Cálculo Matemático
     let valorAtual = parseFloat(input.value);
     let novoValor = valorAtual;
-    let badgeHtml = "";
 
+    let badgeHtml = "";
     if (tipo === 'elogio') {
-        // Soma pontos
-        novoValor = valorAtual + parseFloat(pontos);
-        if (novoValor > 10) novoValor = 10.00; // Teto máximo 10
-        
-        input.classList.add('bg-success-subtle');
-        input.classList.remove('bg-danger-subtle'); // Remove vermelho se houver
-        badgeHtml = `<span class="badge bg-success d-block mb-1" title="Bônus aplicado">+${pontos} (Elogio)</span>`;
-        
+        novoValor = Math.min(10, valorAtual + parseFloat(pontos));
+        badgeHtml = `<span class="badge bg-success text-white" style="font-size: 0.65rem;">+${pontos} (Elogio)</span>`;
     } else {
-        // Subtrai pontos
-        novoValor = valorAtual - parseFloat(pontos);
-        if (novoValor < 0) novoValor = 0.00; // Piso mínimo 0
-        
-        input.classList.add('bg-danger-subtle');
-        input.classList.remove('bg-success-subtle');
-        badgeHtml = `<span class="badge bg-danger d-block mb-1" title="Desconto aplicado">-${pontos} (Infração)</span>`;
+        novoValor = Math.max(0, valorAtual - parseFloat(pontos));
+        badgeHtml = `<span class="badge bg-danger text-white" style="font-size: 0.65rem;">-${pontos} (Infração)</span>`;
     }
-    
-    // Atualiza Input
+
     input.value = novoValor.toFixed(2);
     
-    // Adiciona Badge Visual
-    badgeContainer.innerHTML += badgeHtml;
+    // Adiciona badge visual na célula da descrição
+    document.getElementById(`badge_desc_${attrIdx}`).innerHTML += badgeHtml + ' ';
     
-    // Oculta a linha da tabela (item consumido)
-    const row = document.getElementById(`row_pend_${idx}`);
-    if(row) {
-        row.style.opacity = '0.5';
-        row.style.pointerEvents = 'none';
-        row.querySelector('select').disabled = true;
-        row.querySelector('td:last-child').innerHTML += ' <i class="fas fa-check text-success"></i>';
+    // Marca linha como usada
+    const row = document.getElementById(`pend_row_${idx}`);
+    row.style.opacity = '0.5';
+    row.querySelector('select').disabled = true;
+    
+    atualizarConceito(attrIdx);
+    calcularMediaFada();
+}
+
+function atualizarConceito(idx) {
+    const input = document.getElementById(`attr_${idx}`);
+    const cellConc = document.getElementById(`conc_${idx}`);
+    const val = parseFloat(input.value);
+
+    // Lógica simples de conceito baseada no PDF (>=7 Aprovado?)
+    // O PDF mostra "APROVADO" para 10. Assumindo regra padrão:
+    if (val >= 7) {
+        cellConc.innerText = "APROVADO";
+        cellConc.className = "text-center fw-bold text-success bg-light";
+    } else {
+        cellConc.innerText = "REPROVADO";
+        cellConc.className = "text-center fw-bold text-danger bg-light";
     }
-    
-    // Recalcula média final
     calcularMediaFada();
 }
 
 function calcularMediaFada() {
     let soma = 0;
-    const inputs = document.querySelectorAll('.fada-input');
-    
-    inputs.forEach(inp => {
-        let val = parseFloat(inp.value);
-        if(isNaN(val)) val = 0;
-        // Garante limites visuais
-        if(val > 10) val = 10;
-        if(val < 0) val = 0;
-        soma += val;
-    });
-    
-    // Média Simples dos 18 atributos
+    document.querySelectorAll('.fada-input').forEach(i => soma += parseFloat(i.value || 0));
     const media = soma / 18.0;
     document.getElementById('displayMediaFada').innerText = media.toFixed(2);
 }
