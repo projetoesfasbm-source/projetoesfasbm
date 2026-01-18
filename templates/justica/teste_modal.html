@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1>Teste de Diagnóstico de Modal</h1>
+    <p>Clique nos botões abaixo para testar diferentes métodos de forçar a largura.</p>
+
+    <button type="button" class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#modalPadrao">
+        1. Modal Padrão (XL)
+    </button>
+
+    <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#modalInline">
+        2. Inline Style (max-width: none)
+    </button>
+
+    <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalFluid">
+        3. Classe w-100 (Bootstrap Utility)
+    </button>
+</div>
+
+<div class="modal fade" id="modalPadrao" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">1. Padrão XL</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">Este deve ter 1140px. Se estiver pequeno, o tema está bloqueando.</div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalInline" tabindex="-1">
+    <div class="modal-dialog" style="max-width: 95% !important; width: 240mm !important;">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">2. Inline Style</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <div style="width: 210mm; background: #eee; height: 500px; margin: 0 auto;">Folha A4 Simulada</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalFluid" tabindex="-1">
+    <div class="modal-dialog modal-fullscreen-md-down" style="max-width: unset; width: auto; margin: 20px;">
+        <div class="modal-content" style="width: fit-content; margin: 0 auto;">
+            <div class="modal-header"><h5 class="modal-title">3. Fit Content</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body p-4">
+                <div style="width: 220mm; background: lightblue; height: 300px;">
+                    Conteúdo de 220mm de largura.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

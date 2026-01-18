@@ -320,3 +320,7 @@ def get_aluno_details(aluno_id):
 @login_required
 def exportar_selecao():
     return render_template('justica/exportar_selecao.html')
+    
+@justica_bp.route('/teste-modal')
+def teste_modal():
+    return render_template('justica/teste_modal.html')

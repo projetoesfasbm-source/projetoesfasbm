@@ -66,67 +66,121 @@
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="6" class="text-center py-4">Nenhum aluno encontrado para os critérios selecionados.</td>
+                        <td colspan="6" class="text-center py-4">Nenhum aluno encontrado.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
     </div>
-    
-    <div class="alert alert-light mt-3 border">
-        <strong>Legenda:</strong><br>
-        <small><strong>NDisc:</strong> Nota Disciplinar (Base 20 - Pontos Perdidos) / 2. (Considera infrações a partir do 2º Ciclo).</small><br>
-        <small><strong>FADA:</strong> Ficha de Avaliação (Base 8.0 - Punições + Elogios). (Pode ser editada individualmente ou calculada automaticamente).</small><br>
-        <small><strong>AAt:</strong> Avaliação Atitudinal Final = (NDisc + FADA) / 2.</small>
-    </div>
 </div>
-{% endblock %}
 
-{% block modals %}
-<div class="modal fade" id="modalFada" tabindex="-1" aria-hidden="true" style="z-index: 10000;">
-    <div class="modal-dialog modal-xl modal-dialog-scrollable">
-        <div class="modal-content">
-            <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title fw-bold" id="modalFadaTitle">FADA - Avaliação Atitudinal</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body p-0">
+<div id="overlayFada" class="custom-overlay" style="display: none;">
+    <div class="overlay-backdrop" onclick="fecharFadaModal()"></div>
+    
+    <div class="overlay-content">
+        <div class="overlay-header">
+            <h5 class="m-0 fw-bold" id="overlayTitle">FADA - Avaliação</h5>
+            <button type="button" class="btn-close-custom" onclick="fecharFadaModal()">×</button>
+        </div>
+        
+        <div class="overlay-body">
+            <div class="fada-paper-wrapper">
                 {% include 'justica/fada_formulario.html' %}
             </div>
         </div>
     </div>
 </div>
 
+<style>
+    /* CSS DO OVERLAY - IGNORA O TEMA */
+    .custom-overlay {
+        position: fixed;
+        top: 0; left: 0; width: 100vw; height: 100vh;
+        z-index: 99999 !important; /* Acima de tudo */
+        display: flex;
+        justify-content: center;
+        align-items: flex-start; /* Alinha no topo para rolar */
+        overflow-y: auto; /* Permite rolar a tela inteira se precisar */
+        padding: 20px;
+    }
+
+    .overlay-backdrop {
+        position: fixed;
+        top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0, 0, 0, 0.7); /* Fundo escuro */
+        cursor: pointer;
+    }
+
+    .overlay-content {
+        position: relative;
+        background: #e0e0e0; /* Fundo cinza ao redor da folha */
+        width: auto;
+        min-width: 230mm; /* Garante largura A4 com folga */
+        max-width: 95%;
+        border-radius: 8px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        margin-top: 30px;
+        margin-bottom: 30px;
+        display: flex;
+        flex-direction: column;
+        z-index: 100000;
+    }
+
+    .overlay-header {
+        background: #0d6efd;
+        color: white;
+        padding: 10px 20px;
+        border-top-left-radius: 8px;
+        border-top-right-radius: 8px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .btn-close-custom {
+        background: none; border: none; color: white;
+        font-size: 24px; font-weight: bold; cursor: pointer;
+        line-height: 1;
+    }
+
+    .overlay-body {
+        padding: 20px;
+        display: flex;
+        justify-content: center;
+        background: #525659; /* Cor de fundo de leitor de PDF */
+    }
+
+    .fada-paper-wrapper {
+        background: white;
+        padding: 0; /* O include já tem padding */
+        box-shadow: 0 0 15px rgba(0,0,0,0.3);
+    }
+</style>
+
 <script>
+// Move o overlay para o body ao carregar para garantir z-index
+document.addEventListener("DOMContentLoaded", function(){
+    const overlay = document.getElementById('overlayFada');
+    if (overlay) document.body.appendChild(overlay);
+});
+
 function abrirFadaModal(alunoId, nomeAluno) {
-    document.getElementById('modalFadaTitle').innerText = 'FADA - ' + nomeAluno;
+    document.getElementById('overlayTitle').innerText = 'FADA - ' + nomeAluno;
     
-    if(typeof window.carregarPendenciasFada === 'function') {
-        // Seta o ID no input hidden
-        const hiddenId = document.getElementById('fada_aluno_id');
-        if(hiddenId) hiddenId.value = alunoId;
-        
-        // Reseta visual
-        document.querySelectorAll('.fada-input').forEach(inp => {
-            inp.value = "10.00";
-            inp.classList.remove('bg-danger-subtle', 'bg-success-subtle');
-        });
-        
-        // Limpa badges
-        for(let i=0; i<18; i++) {
-            const b = document.getElementById(`badge_desc_${i}`);
-            if(b) b.innerHTML = '';
-        }
-        
-        // Carrega dados
-        carregarPendenciasFada(alunoId);
-        calcularMediaFada();
+    // Chama função interna do formulário
+    if(typeof window.abrirFadaModalInterno === 'function') {
+        window.abrirFadaModalInterno(alunoId, nomeAluno);
     }
     
-    const modalEl = document.getElementById('modalFada');
-    const modal = new bootstrap.Modal(modalEl);
-    modal.show();
+    // Mostra o overlay
+    document.getElementById('overlayFada').style.display = 'flex';
+    document.body.style.overflow = 'hidden'; // Trava rolagem do fundo
+}
+
+function fecharFadaModal() {
+    document.getElementById('overlayFada').style.display = 'none';
+    document.body.style.overflow = ''; // Destrava rolagem
 }
 </script>
 {% endblock %}
