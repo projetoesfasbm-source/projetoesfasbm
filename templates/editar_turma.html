@@ -42,6 +42,16 @@
                             </div>
 
                             <div class="col-md-6 mb-3">
+                                {{ form.data_formatura.label(class="form-label fw-bold") }}
+                                {{ form.data_formatura(class="form-control", type="date") }}
+                                <div class="form-text text-muted">
+                                    <i class="fas fa-info-circle"></i> Encerra a Av. Atitudinal (40 dias antes).
+                                </div>
+                                {% if form.data_formatura.errors %}
+                                    <div class="text-danger small mt-1">{{ form.data_formatura.errors[0] }}</div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-12 mb-3">
                                 {{ form.status.label(class="form-label fw-bold") }}
                                 {{ form.status(class="form-select") }}
                                 {% if form.status.errors %}

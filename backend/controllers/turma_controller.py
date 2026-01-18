@@ -4,9 +4,10 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_required, current_user
 from sqlalchemy import select, or_
 from flask_wtf import FlaskForm
-from wtforms import StringField, SubmitField, SelectMultipleField, SelectField
+from wtforms import StringField, SubmitField, SelectMultipleField, SelectField, DateField # <--- DateField Adicionado
 from wtforms.validators import DataRequired, Length, Optional
 from wtforms.widgets import CheckboxInput, ListWidget
+from datetime import datetime # Import necessário para manipulação se preciso
 
 from ..models.database import db
 from ..models.turma import Turma, TurmaStatus
@@ -26,6 +27,11 @@ CARGOS_LISTA = TurmaCargo.get_all_roles()
 class TurmaForm(FlaskForm):
     nome = StringField('Nome da Turma', validators=[DataRequired(), Length(max=100)])
     ano = StringField('Ano / Edição', validators=[DataRequired(), Length(max=20)])
+    
+    # --- NOVO CAMPO ---
+    data_formatura = DateField('Data de Formatura', format='%Y-%m-%d', validators=[Optional()])
+    # ------------------
+
     status = SelectField(
         'Status da Turma',
         choices=[(s.value, s.name.replace('_', ' ').title()) for s in TurmaStatus],
@@ -123,11 +129,14 @@ def editar_turma(turma_id):
     turma = db.session.get(Turma, turma_id)
     if not turma or turma.school_id != school_id: return redirect(url_for('turma.listar_turmas'))
     
+    # Preenche o formulário com os dados existentes, incluindo a data
     form = TurmaForm(obj=turma)
+    
     alunos = db.session.scalars(select(Aluno).join(User).join(UserSchool).where(UserSchool.school_id == school_id, or_(Aluno.turma_id.is_(None), Aluno.turma_id == turma_id))).all()
     form.alunos_ids.choices = [(a.id, f"{a.user.nome_completo}") for a in alunos]
     
     if form.validate_on_submit():
+        # form.data já inclui data_formatura se estiver no form
         success, message = TurmaService.update_turma(turma_id, form.data)
         if success:
             flash(message, 'success')
@@ -136,6 +145,10 @@ def editar_turma(turma_id):
             flash(message, 'danger')
     if request.method == 'GET':
         form.alunos_ids.data = [a.id for a in turma.alunos]
+        # Força o carregamento da data no formato correto se não vier automático
+        if turma.data_formatura:
+            form.data_formatura.data = turma.data_formatura
+
     return render_template('editar_turma.html', form=form, turma=turma)
 
 @turma_bp.route('/excluir/<int:turma_id>', methods=['POST'])

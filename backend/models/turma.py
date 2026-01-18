@@ -3,6 +3,7 @@ from __future__ import annotations
 import typing as t
 from .database import db
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import Date # <--- Adicionado para suportar datas
 from enum import Enum
 
 if t.TYPE_CHECKING:
@@ -31,6 +32,11 @@ class Turma(db.Model):
     ano: Mapped[str] = mapped_column(db.String(20), nullable=False)
     
     school_id: Mapped[int] = mapped_column(db.ForeignKey('schools.id'), nullable=False)
+
+    # --- NOVO CAMPO: DATA DE FORMATURA ---
+    # Essencial para a regra dos 40 dias (Art. 125)
+    data_formatura: Mapped[t.Optional[Date]] = mapped_column(Date, nullable=True)
+    # -------------------------------------
 
     status: Mapped[TurmaStatus] = mapped_column(
         db.String(30), 
