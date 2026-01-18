@@ -38,7 +38,7 @@
                         <th rowspan="2" class="align-middle">Nº</th>
                         <th rowspan="2" class="align-middle text-start">Aluno</th>
                         <th colspan="3">Notas (Conforme Regulamento)</th>
-                        <th rowspan="2" class="align-middle" style="width: 100px;">Status</th>
+                        <th rowspan="2" class="align-middle" style="width: 150px;">Ações</th>
                     </tr>
                     <tr>
                         <th class="text-primary">NDisc (Base 20)</th>
@@ -49,25 +49,19 @@
                 <tbody>
                     {% for item in dados %}
                     <tr class="text-center">
-                        <td>{{ item.aluno.num_aluno or '-' }}</td>
+                        <td>{{ item.aluno.numero or '-' }}</td>
                         <td class="text-start">
                             <strong>{{ item.aluno.user.posto_graduacao }} {{ item.aluno.user.nome_completo }}</strong><br>
                             <small class="text-muted">{{ item.turma }}</small>
                         </td>
                         <td class="fw-bold text-primary">{{ "{:.2f}".format(item.ndisc) }}</td>
-                        
                         <td class="fw-bold text-success">{{ "{:.2f}".format(item.fada) }}</td>
-                        
                         <td class="bg-light fw-bold fs-5">{{ "{:.2f}".format(item.aat) }}</td>
-                        
                         <td>
-                            {% if item.aat >= 7.0 %}
-                                <span class="badge bg-success">Apto</span>
-                            {% elif item.aat >= 5.0 %}
-                                <span class="badge bg-warning text-dark">Recuperação</span>
-                            {% else %}
-                                <span class="badge bg-danger">Inapto</span>
-                            {% endif %}
+                            <button type="button" class="btn btn-sm btn-outline-primary" 
+                                    onclick="abrirFadaModal({{ item.id }}, '{{ item.aluno.user.nome_completo }}')">
+                                <i class="fas fa-edit"></i> Avaliar
+                            </button>
                         </td>
                     </tr>
                     {% else %}
@@ -87,4 +81,52 @@
         <small><strong>AAt:</strong> Avaliação Atitudinal Final = (NDisc + FADA) / 2.</small>
     </div>
 </div>
+{% endblock %}
+
+{% block modals %}
+<div class="modal fade" id="modalFada" tabindex="-1" aria-hidden="true" style="z-index: 10000;">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title fw-bold" id="modalFadaTitle">FADA - Avaliação Atitudinal</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-0">
+                {% include 'justica/fada_formulario.html' %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function abrirFadaModal(alunoId, nomeAluno) {
+    document.getElementById('modalFadaTitle').innerText = 'FADA - ' + nomeAluno;
+    
+    if(typeof window.carregarPendenciasFada === 'function') {
+        // Seta o ID no input hidden
+        const hiddenId = document.getElementById('fada_aluno_id');
+        if(hiddenId) hiddenId.value = alunoId;
+        
+        // Reseta visual
+        document.querySelectorAll('.fada-input').forEach(inp => {
+            inp.value = "10.00";
+            inp.classList.remove('bg-danger-subtle', 'bg-success-subtle');
+        });
+        
+        // Limpa badges
+        for(let i=0; i<18; i++) {
+            const b = document.getElementById(`badge_desc_${i}`);
+            if(b) b.innerHTML = '';
+        }
+        
+        // Carrega dados
+        carregarPendenciasFada(alunoId);
+        calcularMediaFada();
+    }
+    
+    const modalEl = document.getElementById('modalFada');
+    const modal = new bootstrap.Modal(modalEl);
+    modal.show();
+}
+</script>
 {% endblock %}

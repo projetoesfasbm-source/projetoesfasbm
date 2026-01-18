@@ -31,11 +31,8 @@
                     </button>
                     
                     {% if show_fada %}
-                    <button class="btn btn-info text-white justice-option-btn" data-target="fadaContent">
-                        <i class="fas fa-clipboard-list me-1"></i>FADA (Avaliação)
-                    </button>
-                    <a href="{{ url_for('justica.fada_boletim') }}" class="btn btn-secondary justice-option-btn">
-                        <i class="fas fa-table me-1"></i>Ver Notas (Boletim)
+                    <a href="{{ url_for('justica.fada_boletim') }}" class="btn btn-info text-white justice-option-btn">
+                        <i class="fas fa-clipboard-list me-1"></i> Boletim / Avaliar (FADA)
                     </a>
                     {% endif %}
                 {% endif %}
@@ -99,17 +96,14 @@
                                     
                                     <div class="mb-3 p-2 border rounded bg-white">
                                         <label class="small fw-bold d-block mb-1">Tipo de Enquadramento</label>
-                                        
                                         <div class="form-check form-check-inline">
                                             <input class="form-check-input" type="radio" name="tipo_visual" id="rad_npccal" value="NPCCAL" checked onchange="toggleTiposInfracao()">
                                             <label class="form-check-label small" for="rad_npccal">Falta NPCCAL</label>
                                         </div>
-                                        
                                         <div class="form-check form-check-inline">
                                             <input class="form-check-input" type="radio" name="tipo_visual" id="rad_rdbm" value="RDBM" onchange="toggleTiposInfracao()">
                                             <label class="form-check-label small text-warning fw-bold" for="rad_rdbm">Transgressão RDBM</label>
                                         </div>
-                                        
                                         <div class="form-check form-check-inline">
                                             <input class="form-check-input" type="radio" name="tipo_visual" id="rad_crime" value="CRIME" onchange="toggleTiposInfracao()">
                                             <label class="form-check-label small text-danger fw-bold" for="rad_crime">Crime Militar/Comum</label>
@@ -130,6 +124,7 @@
                                         <label class="small">Descrição da Transgressão / Crime</label>
                                         <input type="text" id="inputManualDesc" name="codigo_infracao" class="form-control" placeholder="Ex: Art. 15 do RDBM ou Art. 290 do CPM..." oninput="atualizarTextoInteligente()">
                                     </div>
+
                                     <div class="row mb-2">
                                         <div class="col-md-7">
                                             <label class="small">Data do Fato</label>
@@ -184,10 +179,6 @@
                     </div>
                 </div>
             </div>
-
-            {% if show_fada %}
-                {% include 'justica/fada_formulario.html' %}
-            {% endif %}
             
         </div>
     </div>
@@ -202,6 +193,7 @@
 </style>
 
 <script>
+// Mantive o mesmo JS que você já tem, apenas garantindo que as funções globais estejam disponíveis
 document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.justice-option-btn').forEach(btn => {
         btn.addEventListener('click', function(e) {
@@ -213,54 +205,36 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // --- LÓGICA ATUALIZADA PARA SELEÇÃO EXCLUSIVA E CAMPO MANUAL ---
     window.toggleTiposInfracao = function() {
         const isNPCCAL = document.getElementById('rad_npccal').checked;
         const isRDBM = document.getElementById('rad_rdbm').checked;
         const isCrime = document.getElementById('rad_crime').checked;
-
         const boxRegras = document.getElementById('box_regras_npccal');
         const boxManual = document.getElementById('box_regras_manual');
         const selectRegra = document.getElementById('regraSelect');
         const inputManual = document.getElementById('inputManualDesc');
-
-        // Campos ocultos que o Backend lê
         const hiddenOrigem = document.getElementById('hidden_origem_punicao');
         const hiddenCrime = document.getElementById('hidden_is_crime');
 
         if (isNPCCAL) {
-            // Configuração NPCCAL
             boxRegras.style.display = 'block';
             boxManual.style.display = 'none';
-            
             selectRegra.setAttribute('required', 'required');
             inputManual.removeAttribute('required');
-            inputManual.value = ''; // Limpa manual
-
+            inputManual.value = '';
             hiddenOrigem.value = 'NPCCAL';
             hiddenCrime.value = 'false';
-
         } else {
-            // Configuração RDBM ou CRIME
             boxRegras.style.display = 'none';
             boxManual.style.display = 'block';
-            
             selectRegra.removeAttribute('required');
-            selectRegra.value = ""; // Limpa seleção
+            selectRegra.value = "";
             inputManual.setAttribute('required', 'required');
-
-            if (isRDBM) {
-                hiddenOrigem.value = 'RDBM';
-                hiddenCrime.value = 'false';
-            } else {
-                hiddenOrigem.value = 'NPCCAL'; // Crime geralmente cai no fluxo genérico ou específico do backend
-                hiddenCrime.value = 'true';
-            }
+            if (isRDBM) { hiddenOrigem.value = 'RDBM'; hiddenCrime.value = 'false'; } 
+            else { hiddenOrigem.value = 'NPCCAL'; hiddenCrime.value = 'true'; }
         }
-        
         atualizarTextoInteligente();
     };
-    // ----------------------------------------------------
 
     window.carregarAlunos = function(turmaId, containerId) {
         const container = document.getElementById(containerId);
@@ -314,13 +288,11 @@ document.addEventListener('DOMContentLoaded', function() {
         const isCrime = document.getElementById('rad_crime').checked;
         
         let regraDesc = "";
-
         if (isNPCCAL) {
             if (regSel.selectedIndex >= 0) {
                  regraDesc = regSel.options[regSel.selectedIndex].getAttribute('data-desc') || "";
             }
         } else {
-            // Pega do campo manual
             const manualText = document.getElementById('inputManualDesc').value.trim();
             if (manualText) {
                 if (isRDBM) regraDesc = "em transgressão disciplinar: " + manualText;
@@ -331,7 +303,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         const box = document.getElementById('campoObservacao');
-        
         let descFato = document.getElementById('descricaoFatoInput').value.trim();
         if (!descFato) descFato = "[DESCREVER A CONDUTA AQUI]";
         if (descFato.endsWith('.')) descFato = descFato.slice(0, -1);
@@ -347,29 +318,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 .then(d => {
                     const idFunc = `Id Func. ${d.matricula}`;
                     const nomeCompleto = `${d.posto_graduacao} ${d.nome_completo}, ${idFunc}`;
-                    const termo = `Termo de Justificação:
-Tendo em vista as informações constantes na Parte Nº ___/___Pel/CAl/EsFAS/${anoAtual}, evidenciando a existência, em tese, de infração das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação:
-
-1. Justificante: ${nomeCompleto}.
-
-2. Descrição da conduta infracional: O ${nomeCompleto}, no dia ${dataExtenso}, ${descFato}. Com isso, incorreu ${regraDesc}.
-
-3. Cientifico-lhe que a contar do recebimento da presente, abre-se o prazo de 24 horas, para que, querendo, apresente resposta escrita com as provas que entender cabíveis. Fica advertido o acusado que a não entrega da justificação dentro do prazo estipulado, implicará em reconhecimento como verdadeiros os fatos imputados.
-
-[NOME, POSTO/GRADUAÇÃO E FUNÇÃO DO RESPONSÁVEL]`;
+                    const termo = `Termo de Justificação:\nTendo em vista as informações constantes na Parte Nº ___/___Pel/CAl/EsFAS/${anoAtual}, evidenciando a existência, em tese, de infração das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação:\n\n1. Justificante: ${nomeCompleto}.\n\n2. Descrição da conduta infracional: O ${nomeCompleto}, no dia ${dataExtenso}, ${descFato}. Com isso, incorreu ${regraDesc}.\n\n3. Cientifico-lhe que a contar do recebimento da presente, abre-se o prazo de 24 horas, para que, querendo, apresente resposta escrita com as provas que entender cabíveis. Fica advertido o acusado que a não entrega da justificação dentro do prazo estipulado, implicará em reconhecimento como verdadeiros os fatos imputados.\n\n[NOME, POSTO/GRADUAÇÃO E FUNÇÃO DO RESPONSÁVEL]`;
                     box.value = termo;
                 });
         } else if(checks.length > 1) {
-             const templateBase = `Termo de Justificação:
-Tendo em vista as informações constantes na Parte Nº ___/___Pel/CAl/EsFAS/${anoAtual}, evidenciando a existência, em tese, de infração das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação:
-
-1. Justificantes: Conforme lista de ${checks.length} alunos selecionados.
-
-2. Descrição da conduta infracional: Os militares selecionados, no dia ${dataExtenso}, ${descFato}. Com isso, incorreram ${regraDesc}.
-
-3. Cientifico-lhes que a contar do recebimento da presente, abre-se o prazo de 24 horas, para que, querendo, apresentem resposta escrita com as provas que entenderem cabíveis.
-
-[NOME, POSTO/GRADUAÇÃO E FUNÇÃO DO RESPONSÁVEL]`;
+             const templateBase = `Termo de Justificação:\nTendo em vista as informações constantes na Parte Nº ___/___Pel/CAl/EsFAS/${anoAtual}, evidenciando a existência, em tese, de infração das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação:\n\n1. Justificantes: Conforme lista de ${checks.length} alunos selecionados.\n\n2. Descrição da conduta infracional: Os militares selecionados, no dia ${dataExtenso}, ${descFato}. Com isso, incorreram ${regraDesc}.\n\n3. Cientifico-lhes que a contar do recebimento da presente, abre-se o prazo de 24 horas, para que, querendo, apresentem resposta escrita com as provas que entenderem cabíveis.\n\n[NOME, POSTO/GRADUAÇÃO E FUNÇÃO DO RESPONSÁVEL]`;
             box.value = templateBase;
         }
     };
