@@ -1,4 +1,5 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+# backend/controllers/justica_controller.py
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, g
 from flask_login import login_required, current_user
 from sqlalchemy import select, or_
 from datetime import datetime
@@ -24,10 +25,8 @@ logger = logging.getLogger(__name__)
 
 # --- HELPER DE HIERARQUIA ---
 def get_rank_value(posto):
-    """Retorna valor numérico para hierarquia (Maior valor = Maior patente)"""
     if not posto: return 0
     p = posto.lower().strip()
-    
     if 'cel' in p: return 100
     if 'maj' in p: return 80
     if 'cap' in p: return 70
@@ -45,21 +44,19 @@ def get_rank_value(posto):
 @justica_bp.route('/')
 @login_required
 def index():
-    # Obtém escola da sessão (usada por admins)
     school_id = UserService.get_current_school_id()
     
     # LÓGICA DE FILTRO E IDENTIFICAÇÃO DE ESCOLA
     if current_user.role == 'aluno':
-        # Aluno: Obrigatoriamente vinculado à escola via Turma
         if not current_user.aluno_profile or not current_user.aluno_profile.turma:
-            flash("Perfil de aluno ou vínculo com turma não encontrado.", "danger")
+            flash("Perfil incompleto.", "danger")
             return redirect(url_for('main.dashboard'))
         
-        # Define school_id a partir do vínculo real do aluno no banco
+        # Identificação automática da escola do aluno
         school_id = current_user.aluno_profile.turma.school_id
+        g.active_school = current_user.aluno_profile.turma.school
         aluno_id = current_user.aluno_profile.id
 
-        # O aluno vê apenas seus próprios registros
         stmt_andamento = select(ProcessoDisciplina).where(
             ProcessoDisciplina.aluno_id == aluno_id,
             ProcessoDisciplina.status != StatusProcesso.FINALIZADO,
@@ -70,14 +67,12 @@ def index():
             ProcessoDisciplina.aluno_id == aluno_id,
             or_(ProcessoDisciplina.status == StatusProcesso.FINALIZADO, ProcessoDisciplina.status == StatusProcesso.ARQUIVADO)
         ).order_by(ProcessoDisciplina.data_decisao.desc()).limit(50)
-        
     else:
         # Administrador/CAL: Exige escola selecionada na sessão administrativa
         if not school_id:
             flash("Nenhuma escola selecionada.", "warning")
             return redirect(url_for('main.dashboard'))
 
-        # Vê todos os alunos da escola ativa
         stmt_andamento = select(ProcessoDisciplina).join(Aluno).join(Turma).where(
             Turma.school_id == school_id,
             ProcessoDisciplina.status != StatusProcesso.FINALIZADO,
@@ -91,8 +86,6 @@ def index():
 
     em_andamento = db.session.scalars(stmt_andamento).all()
     finalizados = db.session.scalars(stmt_finalizados).all()
-
-    # Carrega turmas e regras para modais (somente se houver school_id identificado)
     turmas = TurmaService.get_turmas_by_school(school_id) if school_id else []
     fatos_predefinidos = db.session.scalars(select(DisciplineRule).order_by(DisciplineRule.codigo)).all()
     
@@ -101,10 +94,10 @@ def index():
 
     return render_template('justica/index.html', 
                            em_andamento=em_andamento, 
-                           finalizados=finalizados,
-                           turmas=turmas,
-                           fatos_predefinidos=fatos_predefinidos,
-                           agora_hora=agora_hora,
+                           finalizados=finalizados, 
+                           turmas=turmas, 
+                           fatos_predefinidos=fatos_predefinidos, 
+                           agora_hora=agora_hora, 
                            hoje=hoje)
 
 @justica_bp.route('/registrar-em-massa', methods=['POST'])
@@ -190,7 +183,6 @@ def registrar_em_massa():
         
     return redirect(url_for('justica.index'))
 
-# --- CORREÇÃO AQUI: NOME DA ROTA E PARÂMETRO IGUAL AO TEMPLATE ---
 @justica_bp.route('/dar-ciente/<int:processo_id>', methods=['POST'])
 @login_required
 def dar_ciente(processo_id):
@@ -201,7 +193,7 @@ def dar_ciente(processo_id):
         return redirect(url_for('justica.index'))
 
     is_aluno_dono = (current_user.role == 'aluno' and current_user.aluno_profile and current_user.aluno_profile.id == processo.aluno_id)
-    can_manage = current_user.role != 'aluno' 
+    can_manage = (current_user.role != 'aluno')
 
     if not (is_aluno_dono or can_manage):
         flash("Permissão negada.", "error")
@@ -322,6 +314,16 @@ def fada_boletim():
             .order_by(FadaAvaliacao.id.desc())
         )
         aat, ndisc, fada_val = JusticaService.calcular_aat_final(aluno.id)
+        
+        # Pega punições ativas que descontam nota para exibir aviso no front se necessário
+        # Isso ajuda o front a saber se tem punições pendentes de vínculo
+        dt_inicio, dt_limite = JusticaService.get_datas_limites(aluno.turma_id)
+        punicoes = db.session.scalars(select(ProcessoDisciplina).where(
+            ProcessoDisciplina.aluno_id == aluno.id,
+            ProcessoDisciplina.status == StatusProcesso.FINALIZADO
+        )).all()
+        punicoes_validas = [p for p in punicoes if JusticaService.verificar_elegibilidade_punicao(p, dt_inicio, dt_limite)]
+        
         lista.append({
             'id': aluno.id,
             'aluno': aluno,
@@ -329,7 +331,8 @@ def fada_boletim():
             'ndisc': ndisc,
             'fada': fada_val,
             'aat': aat,
-            'fada_obj': fada_obj
+            'fada_obj': fada_obj,
+            'punicoes_pendentes': punicoes_validas # Passa lista de punições para o template renderizar select de vínculo
         })
         
     return render_template('justica/fada_lista_alunos.html', 
@@ -342,71 +345,71 @@ def fada_boletim():
 @can_manage_justice_required
 def salvar_fada():
     aluno_id = request.form.get('aluno_id')
-    notas = request.form.getlist('notas[]')
-    observacao = request.form.get('observacao')
+    notas = request.form.getlist('notas[]') # Lista de 18 notas
+    obs = request.form.get('observacao')
+    pres_id = request.form.get('presidente_id')
+    m1_id = request.form.get('membro1_id')
+    m2_id = request.form.get('membro2_id')
     
-    presidente_id = request.form.get('presidente_id')
-    membro1_id = request.form.get('membro1_id')
-    membro2_id = request.form.get('membro2_id')
+    if not aluno_id or len(notas) != 18:
+        flash("Dados incompletos.", "danger"); return redirect(url_for('justica.fada_boletim'))
+
+    # --- 1. COLETAR VÍNCULOS DE INFRAÇÕES (Obrigatoriedade) ---
+    processos_ativos = db.session.scalars(select(ProcessoDisciplina).where(
+        ProcessoDisciplina.aluno_id == int(aluno_id),
+        ProcessoDisciplina.status == StatusProcesso.FINALIZADO
+    )).all()
     
-    if not aluno_id or not notas:
-        flash("Dados inválidos.", "danger")
-        return redirect(url_for('justica.fada_boletim'))
-        
-    try:
-        pres = db.session.get(User, int(presidente_id)) if presidente_id else None
-        m1 = db.session.get(User, int(membro1_id)) if membro1_id else None
-        m2 = db.session.get(User, int(membro2_id)) if membro2_id else None
-        
-        if not pres or not m1 or not m2:
-            flash("É obrigatório selecionar os 3 membros da comissão.", "danger")
-            return redirect(url_for('justica.fada_boletim'))
-            
-        rank_pres = get_rank_value(pres.posto_graduacao)
-        if rank_pres < 50:
-            flash(f"O Presidente ({pres.posto_graduacao}) deve ser no mínimo 2º Tenente.", "danger")
-            return redirect(url_for('justica.fada_boletim'))
-        if get_rank_value(m1.posto_graduacao) < 20 or get_rank_value(m2.posto_graduacao) < 20:
-            flash("Os membros devem ser no mínimo 2º Sargentos.", "danger")
-            return redirect(url_for('justica.fada_boletim'))
-            
-    except Exception as e:
-        flash("Erro ao validar comissão.", "danger")
+    dt_inicio, dt_limite = JusticaService.get_datas_limites(db.session.get(Aluno, int(aluno_id)).turma_id)
+    mapa_vinculos = {}
+    
+    for p in processos_ativos:
+        if JusticaService.verificar_elegibilidade_punicao(p, dt_inicio, dt_limite):
+            # Tenta pegar o vínculo vindo do form (input name="vinculo_infracao_{ID}")
+            attr_idx = request.form.get(f'vinculo_infracao_{p.id}')
+            if not attr_idx:
+                flash(f"ERRO: A punição (ID {p.id}) deve ser vinculada a um atributo.", "danger")
+                return redirect(url_for('justica.fada_boletim'))
+            mapa_vinculos[str(p.id)] = attr_idx
+
+    # --- 2. CALCULAR LIMITES COM O MAPA FORNECIDO ---
+    limites_calculados, erro_limite = JusticaService.calcular_limites_fada(int(aluno_id), mapa_vinculos)
+    
+    if erro_limite:
+        flash(f"Erro de Validação: {erro_limite}", "danger")
         return redirect(url_for('justica.fada_boletim'))
 
-    try:
-        fada_existente = db.session.scalar(
-            select(FadaAvaliacao)
-            .where(FadaAvaliacao.aluno_id == int(aluno_id), FadaAvaliacao.status == 'RASCUNHO')
-        )
+    # --- 3. VALIDAR NOTAS CONTRA LIMITES ---
+    notas_float = []
+    for i, n_str in enumerate(notas):
+        try:
+            val = float(n_str)
+            teto = limites_calculados[i]
+            if val > (teto + 0.01):
+                flash(f"ERRO no Atributo {i+1}: Nota {val} excede o limite de {teto:.2f}.", "danger")
+                return redirect(url_for('justica.fada_boletim'))
+            notas_float.append(val)
+        except ValueError:
+            flash("Nota inválida.", "danger"); return redirect(url_for('justica.fada_boletim'))
 
-        soma = sum(float(n) for n in notas)
-        media_final = soma / 18.0
+    # --- 4. SALVAR ---
+    try:
+        fada = db.session.scalar(select(FadaAvaliacao).where(FadaAvaliacao.aluno_id==int(aluno_id), FadaAvaliacao.status=='RASCUNHO'))
+        media = sum(notas_float) / 18.0
         
-        if fada_existente:
-            fada_existente.media_final = media_final
-            fada_existente.observacoes = observacao
-            fada_existente.data_avaliacao = datetime.now().astimezone()
-            fada_existente.presidente_id = int(presidente_id)
-            fada_existente.membro1_id = int(membro1_id)
-            fada_existente.membro2_id = int(membro2_id)
+        if fada:
+            fada.media_final = media; fada.observacoes = obs; fada.data_avaliacao = datetime.now().astimezone()
+            fada.presidente_id = pres_id; fada.membro1_id = m1_id; fada.membro2_id = m2_id
+            attrs = ['expressao', 'planejamento', 'perseveranca', 'apresentacao', 'lealdade', 'tato', 'equilibrio', 'disciplina', 'responsabilidade', 'maturidade', 'assiduidade', 'pontualidade', 'diccao', 'lideranca', 'relacionamento', 'etica', 'produtividade', 'eficiencia']
+            for idx, attr in enumerate(attrs): setattr(fada, attr, notas_float[idx])
         else:
-            nova_fada = FadaAvaliacao(
-                aluno_id=int(aluno_id),
-                lancador_id=current_user.id,
-                data_avaliacao=datetime.now().astimezone(),
-                media_final=media_final,
-                observacoes=observacao,
-                status='RASCUNHO',
-                presidente_id=int(presidente_id),
-                membro1_id=int(membro1_id),
-                membro2_id=int(membro2_id)
-            )
-            db.session.add(nova_fada)
-        
+            nova = FadaAvaliacao(aluno_id=int(aluno_id), lancador_id=current_user.id, media_final=media, observacoes=obs, status='RASCUNHO', presidente_id=pres_id, membro1_id=m1_id, membro2_id=m2_id)
+            attrs = ['expressao', 'planejamento', 'perseveranca', 'apresentacao', 'lealdade', 'tato', 'equilibrio', 'disciplina', 'responsabilidade', 'maturidade', 'assiduidade', 'pontualidade', 'diccao', 'lideranca', 'relacionamento', 'etica', 'produtividade', 'eficiencia']
+            for idx, attr in enumerate(attrs): setattr(nova, attr, notas_float[idx])
+            db.session.add(nova)
+            
         db.session.commit()
-        flash(f"Avaliação salva com sucesso.", "success")
-        
+        flash(f"Avaliação salva com sucesso. Média: {media:.4f}", "success")
     except Exception as e:
         db.session.rollback()
         flash("Erro ao salvar avaliação.", "danger")
@@ -417,73 +420,48 @@ def salvar_fada():
 @login_required
 @can_manage_justice_required
 def enviar_fada_comissao(fada_id):
-    fada = db.session.get(FadaAvaliacao, fada_id)
-    if not fada: return jsonify({'error': 'Erro ID'}), 404
-    
-    aat, ndisc, _ = JusticaService.calcular_aat_final(fada.aluno_id)
-    fada.ndisc_snapshot = ndisc
-    fada.aat_snapshot = aat
-    fada.status = 'EM_ASSINATURA'
-    fada.etapa_atual = 'COMISSAO'
-    fada.data_envio = datetime.now().astimezone()
-    db.session.commit()
-    return jsonify({'success': True, 'message': 'Enviado para assinaturas.'})
+    f = db.session.get(FadaAvaliacao, fada_id)
+    if f:
+        aat, ndisc, _ = JusticaService.calcular_aat_final(f.aluno_id)
+        f.ndisc_snapshot = ndisc; f.aat_snapshot = aat; f.status = 'EM_ASSINATURA'; f.etapa_atual = 'COMISSAO'; f.data_envio = datetime.now().astimezone()
+        db.session.commit()
+        return jsonify({'success': True})
+    return jsonify({'error': 'Erro'}), 404
 
 @justica_bp.route('/fada/assinar-membro/<int:fada_id>', methods=['POST'])
 @login_required
 def assinar_fada_membro(fada_id):
-    fada = db.session.get(FadaAvaliacao, fada_id)
-    if not fada or fada.etapa_atual != 'COMISSAO':
-        return jsonify({'error': 'Indisponível para assinatura.'}), 400
+    f = db.session.get(FadaAvaliacao, fada_id)
+    if not f or f.etapa_atual != 'COMISSAO': return jsonify({'error': 'N/A'}), 400
     
     uid = current_user.id
-    agora = datetime.now().astimezone()
-    ip = request.remote_addr
-    novo_hash = hashlib.sha256(f"{uid}-{agora}-{uuid.uuid4()}".encode()).hexdigest()[:16].upper()
-    assinou = False
+    h = hashlib.sha256(f"{uid}-{datetime.now()}-{uuid.uuid4()}".encode()).hexdigest()[:16].upper()
     
-    if fada.presidente_id == uid:
-        fada.data_ass_pres = agora; fada.hash_pres = novo_hash; fada.ip_pres = ip; assinou = True
-    elif fada.membro1_id == uid:
-        fada.data_ass_m1 = agora; fada.hash_m1 = novo_hash; fada.ip_m1 = ip; assinou = True
-    elif fada.membro2_id == uid:
-        fada.data_ass_m2 = agora; fada.hash_m2 = novo_hash; fada.ip_m2 = ip; assinou = True
-        
-    if not assinou:
-        return jsonify({'error': 'Você não faz parte desta comissão.'}), 403
-        
-    if fada.hash_pres and fada.hash_m1 and fada.hash_m2:
-        fada.etapa_atual = 'ALUNO'
-        flash("Todas as assinaturas recolhidas.", "success")
-    else:
-        flash("Assinatura registrada.", "success")
-        
+    if f.presidente_id == uid: f.hash_pres = h; f.data_ass_pres = datetime.now().astimezone()
+    elif f.membro1_id == uid: f.hash_m1 = h; f.data_ass_m1 = datetime.now().astimezone()
+    elif f.membro2_id == uid: f.hash_m2 = h; f.data_ass_m2 = datetime.now().astimezone()
+    else: return jsonify({'error': 'Não autorizado'}), 403
+    
+    if f.hash_pres and f.hash_m1 and f.hash_m2: f.etapa_atual = 'ALUNO'
     db.session.commit()
     return redirect(url_for('justica.fada_boletim'))
 
 @justica_bp.route('/fada/assinar-aluno/<int:fada_id>', methods=['POST'])
 @login_required
 def assinar_fada_aluno(fada_id):
-    fada = db.session.get(FadaAvaliacao, fada_id)
-    if fada.etapa_atual != 'ALUNO': return jsonify({'error': 'Aguarde a comissão.'}), 400
-
-    acao = request.form.get('acao')
-    if acao == 'assinar':
-        fada.status = 'FINALIZADO'
-        fada.etapa_atual = 'FINALIZADO'
-        fada.data_assinatura = datetime.now().astimezone()
-        fada.ip_assinatura = request.remote_addr
-        fada.user_agent_aluno = request.headers.get('User-Agent')
-        fada.hash_integridade = hashlib.sha256(f"FINAL-{fada.id}-{uuid.uuid4()}".encode()).hexdigest()[:20].upper()
-        flash("Processo finalizado com sucesso.", "success")
-    elif acao == 'recorrer':
-        motivo = request.form.get('motivo_recurso')
-        if not motivo: return jsonify({'error': 'Justificativa obrigatória'}), 400
-        fada.status = 'RECURSO'
-        fada.texto_recurso = motivo
-        fada.data_assinatura = datetime.now().astimezone()
-        flash("Recurso registrado.", "warning")
-        
+    f = db.session.get(FadaAvaliacao, fada_id)
+    if f.etapa_atual != 'ALUNO': return jsonify({'error': 'Aguarde'}), 400
+    
+    if request.form.get('acao') == 'assinar':
+        f.status = 'FINALIZADO'; f.etapa_atual = 'FINALIZADO'
+        f.data_assinatura = datetime.now().astimezone(); f.ip_assinatura = request.remote_addr
+        f.hash_integridade = hashlib.sha256(f"FINAL-{f.id}-{uuid.uuid4()}".encode()).hexdigest()[:20].upper()
+        flash("Assinado com sucesso.", "success")
+    else:
+        f.status = 'RECURSO'; f.texto_recurso = request.form.get('motivo_recurso')
+        f.data_assinatura = datetime.now().astimezone()
+        flash("Recurso enviado.", "warning")
+    
     db.session.commit()
     return redirect(url_for('justica.index'))
 

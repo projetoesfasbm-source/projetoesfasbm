@@ -77,6 +77,8 @@ def painel():
 
         # --- AGRUPAMENTO CONSIDERANDO DURAÇÃO ---
         grupos_dict = {}
+        # CORREÇÃO: Inicializa a lista vazia ANTES de verificar se há horários
+        aulas_agrupadas = []
         
         if horarios:
             for h in horarios:
@@ -113,7 +115,6 @@ def painel():
                     grupos_dict[disc_id]['status'] = 'concluido'
 
             # Ordena e ajusta estrutura para o template
-            aulas_agrupadas = []
             for g in sorted(grupos_dict.values(), key=lambda x: min(x['periodos_expandidos'])):
                 g['periodos'] = sorted(list(set(g['periodos_expandidos'])))
                 aulas_agrupadas.append(g)
@@ -175,7 +176,6 @@ def registrar_aula(primeiro_horario_id):
                     horario_pai = h_virt['obj']
 
                     # 1. Cria Diário COM O PERIODO CORRETO
-                    # ### ALTERAÇÃO AQUI ###
                     novo_diario = DiarioClasse(
                         data_aula=data_aula,
                         turma_id=aluno_chefe.turma_id,
@@ -185,7 +185,6 @@ def registrar_aula(primeiro_horario_id):
                         conteudo_ministrado=request.form.get('conteudo'),
                         periodo=periodo_atual  # Salvando o número exato do tempo (7, 8, etc)
                     )
-                    # ### FIM DA ALTERAÇÃO ###
                     
                     db.session.add(novo_diario)
                     db.session.flush()
