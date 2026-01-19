@@ -17,7 +17,7 @@
 <div class="justice-page-layout">
     <div class="justice-main-content">
         <div class="justice-container">
-            
+
             <div class="justice-options">
                 <button class="btn btn-primary justice-option-btn active" data-target="inProgressContent">Em Andamento</button>
                 <button class="btn btn-warning justice-option-btn" data-target="finalizadosContent">Finalizados</button>
@@ -29,7 +29,7 @@
                     <button class="btn btn-success justice-option-btn" data-target="newElogioContent">
                         <i class="fas fa-star me-1"></i>Novo Elogio
                     </button>
-                    
+
                     {% if show_fada %}
                     <a href="{{ url_for('justica.fada_boletim') }}" class="btn btn-info text-white justice-option-btn">
                         <i class="fas fa-clipboard-list me-1"></i> Boletim / Avaliar (FADA)
@@ -56,7 +56,7 @@
                         <i class="fas fa-print"></i> Exportar Termos
                     </a>
                 </div>
-                
+
                 {% if finalizados %}
                     {% for processo in finalizados %}
                         {% include 'partials/_processo_card_admin.html' if current_user.role != 'aluno' else 'partials/_processo_card_aluno.html' %}
@@ -73,7 +73,7 @@
                          <form method="POST" action="{{ url_for('justica.registrar_em_massa') }}">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <input type="hidden" name="tipo_registro" value="infracao">
-                            
+
                             <input type="hidden" name="origem_punicao" id="hidden_origem_punicao" value="NPCCAL">
                             <input type="hidden" name="is_crime" id="hidden_is_crime" value="false">
 
@@ -93,7 +93,7 @@
                                 </div>
                                 <div class="col-md-7 mb-3">
                                     <label class="form-label fw-bold">2. Detalhes</label>
-                                    
+
                                     <div class="mb-3 p-2 border rounded bg-white">
                                         <label class="small fw-bold d-block mb-1">Tipo de Enquadramento</label>
                                         <div class="form-check form-check-inline">
@@ -179,7 +179,7 @@
                     </div>
                 </div>
             </div>
-            
+
         </div>
     </div>
 </div>
@@ -230,7 +230,7 @@ document.addEventListener('DOMContentLoaded', function() {
             selectRegra.removeAttribute('required');
             selectRegra.value = "";
             inputManual.setAttribute('required', 'required');
-            if (isRDBM) { hiddenOrigem.value = 'RDBM'; hiddenCrime.value = 'false'; } 
+            if (isRDBM) { hiddenOrigem.value = 'RDBM'; hiddenCrime.value = 'false'; }
             else { hiddenOrigem.value = 'NPCCAL'; hiddenCrime.value = 'true'; }
         }
         atualizarTextoInteligente();
@@ -286,7 +286,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const isNPCCAL = document.getElementById('rad_npccal').checked;
         const isRDBM = document.getElementById('rad_rdbm').checked;
         const isCrime = document.getElementById('rad_crime').checked;
-        
+
         let regraDesc = "";
         if (isNPCCAL) {
             if (regSel.selectedIndex >= 0) {
