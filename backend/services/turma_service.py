@@ -1,5 +1,3 @@
-# backend/services/turma_service.py
-
 from flask import current_app
 from sqlalchemy import select
 from datetime import datetime
@@ -13,13 +11,9 @@ from ..models.disciplina import Disciplina
 from ..models.horario import Horario
 
 class TurmaService:
-    # ... (create_turma, update_turma, delete_turma permanecem iguais) ...
-    # Vou replicar apenas os métodos alterados para foco e segurança:
 
     @staticmethod
     def create_turma(data, school_id):
-        # (Código original mantido para brevidade - não houve mudança lógica aqui, apenas substitua pelo seu original se precisar)
-        # ... INSIRA O CÓDIGO DO CREATE_TURMA AQUI SE FOR COPIAR TUDO, MAS A MUDANÇA É ABAIXO ...
         nome_turma = data.get('nome')
         ano = data.get('ano')
         status = data.get('status')
@@ -28,16 +22,20 @@ class TurmaService:
         if not all([nome_turma, ano, school_id]):
             return False, 'Nome, Ano e ID da Escola são obrigatórios.'
 
+        # Verifica duplicidade usando o school_id (Corrigido)
         if db.session.execute(select(Turma).filter_by(nome=nome_turma, school_id=school_id)).scalar_one_or_none():
             return False, f'Uma turma com o nome "{nome_turma}" já existe nesta escola.'
 
         try:
             nova_turma = Turma(nome=nome_turma, ano=ano, school_id=school_id)
             if status: nova_turma.status = status
+            
             db.session.add(nova_turma)
             db.session.flush()
+            
             if alunos_ids:
                 db.session.query(Aluno).filter(Aluno.id.in_(alunos_ids)).update({"turma_id": nova_turma.id}, synchronize_session=False)
+            
             db.session.commit()
             return True, "Turma cadastrada com sucesso!"
         except Exception as e:
@@ -46,14 +44,37 @@ class TurmaService:
 
     @staticmethod
     def update_turma(turma_id, data):
-        # (Código original mantido)
         turma = db.session.get(Turma, turma_id)
         if not turma: return False, "Turma não encontrada."
+        
+        # Captura o nome antigo para verificação
+        old_name = turma.nome
+        new_name = data.get('nome')
+
         try:
-            turma.nome = data.get('nome')
+            turma.nome = new_name
             turma.ano = data.get('ano')
             turma.status = data.get('status')
+            
             db.session.commit()
+
+            # --- PROTEÇÃO CONTRA AULAS FANTASMAS (ADICIONADO) ---
+            # Se o nome mudou, atualiza automaticamente a string 'pelotao' nos horários vinculados
+            if old_name != new_name:
+                # 1. Identifica as disciplinas dessa turma
+                disciplinas_ids = db.session.scalars(
+                    select(Disciplina.id).where(Disciplina.turma_id == turma_id)
+                ).all()
+                
+                if disciplinas_ids:
+                    # 2. Atualiza em massa os horários dessas disciplinas para o novo nome
+                    db.session.query(Horario).filter(
+                        Horario.disciplina_id.in_(disciplinas_ids)
+                    ).update({Horario.pelotao: new_name}, synchronize_session=False)
+                    
+                    db.session.commit()
+            # ----------------------------------------------------
+
             return True, "Turma atualizada."
         except Exception as e:
             db.session.rollback()
@@ -61,17 +82,21 @@ class TurmaService:
 
     @staticmethod
     def delete_turma(turma_id):
-        # (Código original mantido - use o que enviei anteriormente que estava correto)
         turma = db.session.get(Turma, turma_id)
         if not turma: return False, 'Turma não encontrada.'
         try:
+            # Remove horários vinculados às disciplinas da turma
             disciplinas_ids = db.session.scalars(select(Disciplina.id).where(Disciplina.turma_id == turma_id)).all()
             if disciplinas_ids:
                 db.session.query(Horario).filter(Horario.disciplina_id.in_(disciplinas_ids)).delete(synchronize_session=False)
             
+            # Desvincula alunos
             db.session.query(Aluno).filter(Aluno.turma_id == turma_id).update({"turma_id": None}, synchronize_session=False)
+            
+            # Remove cargos e vinculos legados
             db.session.query(TurmaCargo).filter_by(turma_id=turma_id).delete()
             db.session.query(DisciplinaTurma).filter_by(pelotao=turma.nome).delete()
+            
             db.session.delete(turma)
             db.session.commit()
             return True, 'Turma excluída.'
@@ -83,8 +108,6 @@ class TurmaService:
     def get_turmas_by_school(school_id):
         if not school_id: return []
         return db.session.scalars(select(Turma).where(Turma.school_id == school_id).order_by(Turma.nome)).all()
-
-    # --- MUDANÇAS REAIS AQUI ---
 
     @staticmethod
     def get_cargos_da_turma(turma_id, cargos_lista):

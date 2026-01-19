@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing as t
 from .database import db
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy import Date # <--- Adicionado para suportar datas
+from sqlalchemy import Date
 from enum import Enum
 
 if t.TYPE_CHECKING:
@@ -11,13 +11,12 @@ if t.TYPE_CHECKING:
     from .school import School
     from .disciplina import Disciplina 
 
-# CORREÇÃO: Adicionados status antigos (ativa, cancelada) para não quebrar turmas velhas
 class TurmaStatus(str, Enum):
     # Novos status
     EM_ANDAMENTO = "EM_ANDAMENTO"
     CONCLUIDA = "CONCLUIDA"
     
-    # Status Legados (Mantidos para compatibilidade com o que já existe no banco)
+    # Status Legados (Mantidos para compatibilidade)
     ATIVA = "ativa"
     CANCELADA = "cancelada"
     CONCLUIDA_OLD = "concluida" 
@@ -26,17 +25,15 @@ class Turma(db.Model):
     __tablename__ = 'turmas'
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    nome: Mapped[str] = mapped_column(db.String(100), unique=True, nullable=False)
     
-    # CORREÇÃO: Alterado de int para String(20) para aceitar "2025/1"
+    # ALTERAÇÃO: Removido unique=True global. A unicidade agora é composta (ver __table_args__)
+    nome: Mapped[str] = mapped_column(db.String(100), nullable=False)
+    
     ano: Mapped[str] = mapped_column(db.String(20), nullable=False)
     
     school_id: Mapped[int] = mapped_column(db.ForeignKey('schools.id'), nullable=False)
 
-    # --- NOVO CAMPO: DATA DE FORMATURA ---
-    # Essencial para a regra dos 40 dias (Art. 125)
     data_formatura: Mapped[t.Optional[Date]] = mapped_column(Date, nullable=True)
-    # -------------------------------------
 
     status: Mapped[TurmaStatus] = mapped_column(
         db.String(30), 
@@ -51,7 +48,11 @@ class Turma(db.Model):
     disciplinas: Mapped[list["Disciplina"]] = relationship(back_populates="turma", cascade="all, delete-orphan")
     cargos: Mapped[list["TurmaCargo"]] = relationship(back_populates="turma", cascade="all, delete-orphan")
 
-    # Ajuste no __init__ para aceitar string no ano
+    # NOVA REGRA: O nome deve ser único APENAS dentro da mesma escola
+    __table_args__ = (
+        db.UniqueConstraint('nome', 'school_id', name='uq_turma_nome_escola'),
+    )
+
     def __init__(self, nome: str, ano: str, **kw: t.Any) -> None:
         super().__init__(nome=nome, ano=ano, **kw)
 
