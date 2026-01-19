@@ -190,11 +190,12 @@ def registrar_em_massa():
         
     return redirect(url_for('justica.index'))
 
-@justica_bp.route('/dar-ciencia/<int:pid>', methods=['POST'])
+# --- CORREÇÃO AQUI: NOME DA ROTA E PARÂMETRO IGUAL AO TEMPLATE ---
+@justica_bp.route('/dar-ciente/<int:processo_id>', methods=['POST'])
 @login_required
-def dar_ciencia(pid):
+def dar_ciente(processo_id):
     """Registra a ciência do aluno no processo."""
-    processo = db.session.get(ProcessoDisciplina, pid)
+    processo = db.session.get(ProcessoDisciplina, processo_id)
     if not processo:
         flash("Processo não encontrado.", "error")
         return redirect(url_for('justica.index'))
