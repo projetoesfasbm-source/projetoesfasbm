@@ -1,6 +1,4 @@
-# backend/controllers/justica_controller.py
-
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
 from sqlalchemy import select, or_
 from datetime import datetime
@@ -52,6 +50,7 @@ def index():
         flash("Nenhuma escola selecionada.", "warning")
         return redirect(url_for('main.dashboard'))
 
+    # Processos em Andamento
     stmt_andamento = select(ProcessoDisciplina).join(Aluno).join(Turma).where(
         Turma.school_id == school_id,
         ProcessoDisciplina.status != StatusProcesso.FINALIZADO,
@@ -59,6 +58,7 @@ def index():
     ).order_by(ProcessoDisciplina.data_ocorrencia.desc())
     em_andamento = db.session.scalars(stmt_andamento).all()
 
+    # Processos Finalizados
     stmt_finalizados = select(ProcessoDisciplina).join(Aluno).join(Turma).where(
         Turma.school_id == school_id,
         or_(ProcessoDisciplina.status == StatusProcesso.FINALIZADO, ProcessoDisciplina.status == StatusProcesso.ARQUIVADO)
@@ -160,6 +160,81 @@ def registrar_em_massa():
         db.session.rollback()
         flash(f"Erro ao salvar no banco: {e}", "danger")
         
+    return redirect(url_for('justica.index'))
+
+# --- ROTAS DE GESTÃO DE PROCESSOS (RESTAURADAS) ---
+
+@justica_bp.route('/dar-ciencia/<int:pid>', methods=['POST'])
+@login_required
+def dar_ciencia(pid):
+    """Registra a ciência do aluno"""
+    processo = db.session.get(ProcessoDisciplina, pid)
+    if not processo:
+        flash("Processo não encontrado.", "error")
+        return redirect(url_for('justica.index'))
+
+    # Verifica permissão
+    is_aluno_dono = (current_user.role == 'aluno' and current_user.aluno_profile and current_user.aluno_profile.id == processo.aluno_id)
+    can_manage = current_user.role != 'aluno' 
+
+    if not (is_aluno_dono or can_manage):
+        flash("Permissão negada.", "error")
+        return redirect(url_for('justica.index'))
+
+    processo.data_ciencia = datetime.now().astimezone()
+    # Se for punição direta (não RDBM), pode ir direto para finalizado ou aguardar julgamento
+    # Aqui mantemos a lógica padrão: vai para julgamento/análise
+    processo.status = StatusProcesso.EM_JULGAMENTO 
+    
+    db.session.commit()
+    flash("Ciência registrada com sucesso.", "success")
+    return redirect(url_for('justica.index'))
+
+@justica_bp.route('/finalizar-processo/<int:pid>', methods=['POST'])
+@login_required
+@can_manage_justice_required
+def finalizar_processo(pid):
+    """Julga e finaliza o processo"""
+    processo = db.session.get(ProcessoDisciplina, pid)
+    if not processo:
+        flash("Processo não encontrado.", "error")
+        return redirect(url_for('justica.index'))
+
+    decisao = request.form.get('decisao') # 'punir', 'justificar', 'absolver'
+    pontos_finais = request.form.get('pontos_finais', type=float)
+    observacao_final = request.form.get('observacao_decisao')
+
+    if not decisao:
+        flash("Selecione uma decisão.", "warning")
+        return redirect(url_for('justica.index'))
+
+    processo.decisao_final = decisao
+    processo.observacao_decisao = observacao_final
+    processo.data_decisao = datetime.now().astimezone()
+    processo.status = StatusProcesso.FINALIZADO
+
+    if decisao == 'punir':
+        if pontos_finais is not None:
+            processo.pontos = pontos_finais
+    elif decisao in ['justificar', 'absolver']:
+        processo.pontos = 0.0
+
+    db.session.commit()
+    flash("Processo finalizado com sucesso.", "success")
+    return redirect(url_for('justica.index'))
+
+@justica_bp.route('/arquivar-processo/<int:pid>', methods=['POST'])
+@login_required
+@can_manage_justice_required
+def arquivar_processo(pid):
+    processo = db.session.get(ProcessoDisciplina, pid)
+    if not processo:
+        flash("Processo não encontrado.", "error")
+        return redirect(url_for('justica.index'))
+    
+    processo.status = StatusProcesso.ARQUIVADO
+    db.session.commit()
+    flash("Processo arquivado.", "info")
     return redirect(url_for('justica.index'))
 
 @justica_bp.route('/deletar-processo/<int:pid>', methods=['POST'])
@@ -270,12 +345,12 @@ def salvar_fada():
         rank_m1 = get_rank_value(m1.posto_graduacao)
         rank_m2 = get_rank_value(m2.posto_graduacao)
         
-        # Presidente >= 2º Tenente (Valor 50)
+        # Presidente >= 2º Tenente (50)
         if rank_pres < 50:
             flash(f"O Presidente ({pres.posto_graduacao}) deve ser no mínimo 2º Tenente.", "danger")
             return redirect(url_for('justica.fada_boletim'))
             
-        # Membros >= 2º Sargento (Valor 20)
+        # Membros >= 2º Sargento (20)
         if rank_m1 < 20 or rank_m2 < 20:
             flash("Os membros devem ser no mínimo 2º Sargentos.", "danger")
             return redirect(url_for('justica.fada_boletim'))
@@ -330,24 +405,28 @@ def salvar_fada():
 @login_required
 @can_manage_justice_required
 def enviar_fada_comissao(fada_id):
+    """Passo 1: Comandante envia para a Comissão assinar"""
     fada = db.session.get(FadaAvaliacao, fada_id)
     if not fada: return jsonify({'error': 'Erro ID'}), 404
     
     aat, ndisc, _ = JusticaService.calcular_aat_final(fada.aluno_id)
     fada.ndisc_snapshot = ndisc
     fada.aat_snapshot = aat
+    
     fada.status = 'EM_ASSINATURA'
     fada.etapa_atual = 'COMISSAO'
     fada.data_envio = datetime.now().astimezone()
+    
     db.session.commit()
     return jsonify({'success': True, 'message': 'Enviado para assinaturas da comissão.'})
 
 @justica_bp.route('/fada/assinar-membro/<int:fada_id>', methods=['POST'])
 @login_required
 def assinar_fada_membro(fada_id):
+    """Assinatura Individual dos Membros da Comissão"""
     fada = db.session.get(FadaAvaliacao, fada_id)
     if not fada or fada.etapa_atual != 'COMISSAO':
-        return jsonify({'error': 'Documento não disponível.'}), 400
+        return jsonify({'error': 'Documento não está disponível para assinatura.'}), 400
     
     uid = current_user.id
     agora = datetime.now().astimezone()
@@ -355,6 +434,7 @@ def assinar_fada_membro(fada_id):
     novo_hash = hashlib.sha256(f"{uid}-{agora}-{uuid.uuid4()}".encode()).hexdigest()[:16].upper()
     
     assinou = False
+    
     if fada.presidente_id == uid:
         fada.data_ass_pres = agora; fada.hash_pres = novo_hash; fada.ip_pres = ip; assinou = True
     elif fada.membro1_id == uid:
@@ -362,13 +442,14 @@ def assinar_fada_membro(fada_id):
     elif fada.membro2_id == uid:
         fada.data_ass_m2 = agora; fada.hash_m2 = novo_hash; fada.ip_m2 = ip; assinou = True
     
-    if not assinou: return jsonify({'error': 'Você não faz parte desta comissão.'}), 403
-    
+    if not assinou:
+        return jsonify({'error': 'Você não faz parte desta comissão.'}), 403
+        
     if fada.hash_pres and fada.hash_m1 and fada.hash_m2:
         fada.etapa_atual = 'ALUNO'
-        flash("Assinaturas da comissão completas. Liberado para o aluno.", "success")
+        flash("Todas as assinaturas recolhidas. Liberado para o aluno.", "success")
     else:
-        flash("Sua assinatura foi registrada.", "success")
+        flash("Sua assinatura foi registrada com sucesso.", "success")
         
     db.session.commit()
     return redirect(url_for('justica.fada_boletim'))
@@ -377,37 +458,80 @@ def assinar_fada_membro(fada_id):
 @login_required
 def assinar_fada_aluno(fada_id):
     fada = db.session.get(FadaAvaliacao, fada_id)
-    if fada.etapa_atual != 'ALUNO': return jsonify({'error': 'Aguarde comissão.'}), 400
     
+    if fada.etapa_atual != 'ALUNO': return jsonify({'error': 'Aguarde a liberação da comissão.'}), 400
+
     acao = request.form.get('acao')
     if acao == 'assinar':
-        fada.status = 'FINALIZADO'; fada.etapa_atual = 'FINALIZADO'
+        fada.status = 'FINALIZADO'
+        fada.etapa_atual = 'FINALIZADO'
         fada.data_assinatura = datetime.now().astimezone()
         fada.ip_assinatura = request.remote_addr
+        fada.user_agent_aluno = request.headers.get('User-Agent')
         fada.hash_integridade = hashlib.sha256(f"FINAL-{fada.id}-{uuid.uuid4()}".encode()).hexdigest()[:20].upper()
-        flash("Finalizado com sucesso.", "success")
+        
+        flash("Processo finalizado com sucesso.", "success")
+        
     elif acao == 'recorrer':
-        fada.status = 'RECURSO'; fada.texto_recurso = request.form.get('motivo_recurso')
+        motivo = request.form.get('motivo_recurso')
+        if not motivo: return jsonify({'error': 'Justificativa obrigatória'}), 400
+        
+        fada.status = 'RECURSO'
+        fada.texto_recurso = motivo
+        fada.data_assinatura = datetime.now().astimezone()
         flash("Recurso registrado.", "warning")
         
     db.session.commit()
     return redirect(url_for('justica.index'))
 
-# --- UTILITÁRIOS (Rota Restaurada!) ---
+@justica_bp.route('/api/infracoes-pendentes/<int:aluno_id>')
+@login_required
+def api_infracoes_pendentes(aluno_id):
+    aluno = db.session.get(Aluno, aluno_id)
+    if not aluno: return jsonify([])
+    
+    dt_inicio, dt_limite = JusticaService.get_datas_limites(aluno.turma_id)
+    
+    stmt_proc = select(ProcessoDisciplina).where(
+        ProcessoDisciplina.aluno_id == aluno_id,
+        ProcessoDisciplina.status == StatusProcesso.FINALIZADO
+    )
+    processos = db.session.scalars(stmt_proc).all()
+    
+    stmt_elo = select(Elogio).where(Elogio.aluno_id == aluno_id)
+    elogios = db.session.scalars(stmt_elo).all()
+    
+    resultado = []
+    
+    for p in processos:
+        if JusticaService.verificar_elegibilidade_punicao(p, dt_inicio, dt_limite):
+            pontos = 0.0
+            desc = ""
+            if p.is_crime: pontos=3.0; desc="Crime Militar/Comum"
+            elif p.origem_punicao == 'RDBM': pontos=2.0; desc=f"Transgressão RDBM ({p.codigo_infracao or ''})"
+            elif p.pontos: pontos=p.pontos; desc=f"Falta NPCCAL ({p.codigo_infracao or ''})"
+            if pontos > 0:
+                resultado.append({'id': f"inf_{p.id}", 'descricao': desc, 'data': p.data_ocorrencia.strftime('%d/%m/%Y'), 'pontos': pontos, 'tipo': 'infracao'})
+
+    for e in elogios:
+        resultado.append({'id': f"elo_{e.id}", 'descricao': e.descricao or "Elogio", 'data': e.data_elogio.strftime('%d/%m/%Y'), 'pontos': 0.5, 'tipo': 'elogio'})
+                
+    return jsonify(resultado)
 
 @justica_bp.route('/api/alunos-por-turma/<int:turma_id>')
 @login_required
 def get_alunos_turma(turma_id):
-    # Correção: Rota restaurada para listar alunos no select de infração
+    # CORREÇÃO: Restaurada listagem de alunos para o menu de infração
     stmt = select(Aluno).join(User).where(Aluno.turma_id == turma_id).order_by(User.nome_completo)
     alunos = db.session.scalars(stmt).all()
     data = []
     for a in alunos:
+        # Tenta pegar 'num_aluno', fallback 'numero'
+        numero = getattr(a, 'num_aluno', getattr(a, 'numero', ''))
         data.append({
             'id': a.id,
             'nome': a.user.nome_completo,
-            # CORREÇÃO: 'num_aluno' em vez de 'numero'
-            'numero': getattr(a, 'num_aluno', getattr(a, 'numero', '')), 
+            'numero': numero,
             'graduacao': a.user.posto_graduacao or ''
         })
     return jsonify(data)
