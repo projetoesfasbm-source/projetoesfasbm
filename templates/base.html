@@ -113,14 +113,14 @@
             overflow: visible !important;
             display: flex;
             align-items: center;
-            gap: 15px; /* Espaço entre o nome e o botão */
+            gap: 15px;
         }
 
         /* Nome da Escola (Estático) */
         .school-name-display {
             font-weight: 700;
             font-size: 1.1rem;
-            color: inherit !important; /* Cor do tema */
+            color: inherit !important;
             white-space: nowrap;
         }
     </style>
@@ -262,16 +262,11 @@
                     <a href="{{ url_for('admin_escola.espelho_diarios') }}" class="nav-link {% if request.endpoint == 'admin_escola.espelho_diarios' %}active{% endif %}"><div class="nav-icon">📖</div> Diários de Classe (Adm)</a>
                 {% endif %}
 
-                {# CAL NA ESCOLA ATUAL #}
-                {% if current_user.is_cal_in_school(active_sid) %}
+                {# --- JUSTIÇA E DISCIPLINA: VISÍVEL PARA CAL, ADMIN E ALUNOS --- #}
+                {% if current_user.is_cal_in_school(active_sid) or current_user.role == 'aluno' or current_user.role == 'super_admin' or current_user.is_programador %}
                     <div class="nav-separator">JUSTIÇA E DISCIPLINA</div>
                     <a href="{{ url_for('justica.index') }}" class="nav-link {% if request.endpoint and 'justica.' in request.endpoint %}active{% endif %}"><div class="nav-icon">⚖️</div> Justiça e Disciplina</a>
                     <a href="{{ url_for('questionario.index') }}" class="nav-link {% if request.endpoint and 'questionario.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📝</div> Questionários</a>
-                {# ALUNO COMUM #}
-                {% elif current_user.role == 'aluno' %}
-                     <div class="nav-separator">JUSTIÇA E DISCIPLINA</div>
-                     <a href="{{ url_for('justica.index') }}" class="nav-link {% if request.endpoint and 'justica.' in request.endpoint %}active{% endif %}"><div class="nav-icon">⚖️</div> Justiça e Disciplina</a>
-                     <a href="{{ url_for('questionario.index') }}" class="nav-link {% if request.endpoint and 'questionario.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📝</div> Questionários</a>
                 {% endif %}
 
                 {# SENS #}
@@ -490,7 +485,6 @@
                     })
                     .catch(error => {
                         console.error('Erro ao buscar notificações:', error);
-                        if (list) list.innerHTML = '<li><span class="dropdown-item-text text-center text-danger small">Erro ao carregar</span></li>';
                     });
             }
 
@@ -531,15 +525,6 @@
                     } else if (markAllBtn) {
                         e.preventDefault();
                         fetch("{{ url_for('notification.mark_all_as_read') }}", { method: 'POST', headers: { 'X-CSRFToken': csrfToken } }).then(() => fetchNotifications());
-                    } else if (link) {
-                        const parentItem = link.closest('.notification-item');
-                        if (parentItem && parentItem.classList.contains('unread')) {
-                            const btn = parentItem.querySelector('.mark-one-read-btn');
-                            if(btn) {
-                                const notificationId = btn.dataset.id;
-                                fetch(`/notifications/mark-as-read/${notificationId}`, { method: 'POST', headers: { 'X-CSRFToken': csrfToken } });
-                            }
-                        }
                     }
                 });
             }
