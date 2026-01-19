@@ -1,6 +1,4 @@
-# backend/services/user_service.py
-
-from flask import current_app, session, has_request_context # <--- Adicionado has_request_context
+from flask import current_app, session, has_request_context
 from flask_login import current_user
 from sqlalchemy import select, or_
 from sqlalchemy.exc import IntegrityError
@@ -37,7 +35,6 @@ class UserService:
                     foto_perfil=other_profile.foto_perfil if other_profile else 'default.png'
                 )
                 db.session.add(new_profile)
-                # Não faz commit aqui, deixa para o chamador
                 return True
         except Exception as e:
             current_app.logger.error(f"Erro ao criar perfil automático de instrutor: {e}")
@@ -66,10 +63,8 @@ class UserService:
                 new_assignment = UserSchool(user_id=existing_user.id, school_id=school_id, role=role)
                 db.session.add(new_assignment)
                 
-                # --- AUTOMAÇÃO: Se for instrutor, cria perfil ---
                 if role == 'instrutor':
                     UserService._ensure_instrutor_profile(existing_user.id, school_id)
-                # ------------------------------------------------
                 
                 db.session.commit()
                 return True, f"Usuário {matricula} vinculado a esta escola como {role}."
@@ -85,10 +80,8 @@ class UserService:
             
             db.session.add(UserSchool(user_id=new_user.id, school_id=school_id, role=role))
             
-            # --- AUTOMAÇÃO: Se for instrutor, cria perfil ---
             if role == 'instrutor':
                 UserService._ensure_instrutor_profile(new_user.id, school_id)
-            # ------------------------------------------------
 
             db.session.commit()
             return True, f"Usuário {matricula} criado e vinculado como {role}."
@@ -99,10 +92,6 @@ class UserService:
 
     @staticmethod
     def set_user_role_for_school(user_id, school_id, new_role):
-        """
-        Define o cargo de um usuário em uma escola específica.
-        Cria automaticamente o perfil de Instrutor se necessário.
-        """
         user = db.session.get(User, user_id)
         if not user:
             return False, "Usuário não encontrado."
@@ -121,11 +110,8 @@ class UserService:
                 user_school = UserSchool(user_id=user_id, school_id=school_id, role=new_role)
                 db.session.add(user_school)
             
-            # --- AUTOMAÇÃO: A MÁGICA ACONTECE AQUI ---
-            # Se o novo papel for 'instrutor', garantimos que o perfil exista.
             if new_role == 'instrutor':
                 UserService._ensure_instrutor_profile(user_id, school_id)
-            # -----------------------------------------
             
             db.session.commit()
             return True, "Permissão atualizada na escola com sucesso."
@@ -134,7 +120,6 @@ class UserService:
             current_app.logger.error(f"Erro ao setar role: {e}")
             return False, "Erro de banco de dados."
 
-    # Alias para compatibilidade
     assign_school_role = set_user_role_for_school
 
     @staticmethod
@@ -157,7 +142,7 @@ class UserService:
                         UserService._ensure_instrutor_profile(user.id, school_id)
                     existentes += 1
                 else:
-                    existentes += 1 # Já existe, ignora ou atualiza? Aqui só conta.
+                    existentes += 1
                 continue
 
             try:
@@ -182,19 +167,9 @@ class UserService:
 
     @staticmethod
     def get_current_school_id():
-        """
-        Recupera o ID da escola ativa da sessão.
-        VERSÃO SEGURA: Protege contra contexto vazio (CLI/Scripts) e usuário anônimo.
-        """
-        # 1. Proteção de Contexto (Corrige erro em scripts de manutenção)
-        if not has_request_context():
-            return None
-            
-        # 2. Proteção de Autenticação (Corrige erro de 'AnonymousUserMixin')
-        if not current_user or not current_user.is_authenticated:
-            return None
+        if not has_request_context(): return None
+        if not current_user or not current_user.is_authenticated: return None
 
-        # 3. Lógica Original Preservada
         if getattr(current_user, 'role', '') in ['super_admin', 'programador']:
             view_as = session.get('view_as_school_id')
             if view_as: return int(view_as)
@@ -203,7 +178,6 @@ class UserService:
         if active_id:
             try:
                 active_id_int = int(active_id)
-                # Verifica se o vínculo ainda existe (Segurança extra)
                 has_link = db.session.scalar(
                     select(UserSchool.school_id).where(
                         UserSchool.user_id == current_user.id,
@@ -214,7 +188,6 @@ class UserService:
                 else: session.pop('active_school_id', None)
             except Exception: pass
 
-        # 4. Fallback: Se tiver apenas 1 escola, seleciona automático
         all_links = db.session.execute(
             select(UserSchool).where(UserSchool.user_id == current_user.id)
         ).scalars().all()
@@ -254,26 +227,59 @@ class UserService:
             db.session.rollback()
             return False, "Erro ao excluir."
     
-    # Métodos CRUD adicionais necessários para o user_controller.py
     @staticmethod
     def get_by_id(user_id):
         return db.session.get(User, user_id)
 
     @staticmethod
-    def create_user(data):
+    def create_user(data, school_id=None):
+        """
+        Cria um usuário e, CRUCIALMENTE, vincula ele à escola atual.
+        Corrigido para evitar criação de alunos órfãos.
+        """
         try:
+            # Verifica duplicidade
             existing = db.session.scalar(
                 select(User).where(or_(User.email == data['email'], User.matricula == data['matricula']))
             )
             if existing: return False, "E-mail ou matrícula já cadastrados."
 
+            # Cria o usuário
             user = User(
-                email=data['email'], matricula=data['matricula'], nome_completo=data['nome_completo'],
-                nome_de_guerra=data.get('nome_de_guerra'), role=data.get('role', 'aluno'),
+                email=data['email'], 
+                matricula=data['matricula'], 
+                nome_completo=data['nome_completo'],
+                nome_de_guerra=data.get('nome_de_guerra'), 
+                role=data.get('role', 'aluno'),
                 posto_graduacao=data.get('posto_graduacao')
             )
             user.set_password(data['password'])
+            
             db.session.add(user)
+            db.session.flush() # Gera o ID do usuário
+            
+            # --- CORREÇÃO DO BUG DO ALUNO ÓRFÃO ---
+            # Se school_id não foi passado, tenta pegar da sessão
+            if not school_id:
+                school_id = UserService.get_current_school_id()
+            
+            # Se temos uma escola identificada, criamos o vínculo AGORA
+            if school_id:
+                link_role = data.get('role', 'aluno')
+                # Segurança: Programador/SuperAdmin não ganha vínculo automático de aluno
+                if link_role not in ['programador', 'super_admin']:
+                    user_school = UserSchool(
+                        user_id=user.id, 
+                        school_id=school_id, 
+                        role=link_role
+                    )
+                    db.session.add(user_school)
+                    
+                    # Cria perfil extra se for instrutor
+                    if link_role == 'instrutor':
+                        UserService._ensure_instrutor_profile(user.id, school_id)
+            # --------------------------------------
+
             db.session.commit()
             return True, user
         except Exception as e:

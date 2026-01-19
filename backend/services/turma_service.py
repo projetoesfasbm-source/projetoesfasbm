@@ -22,7 +22,7 @@ class TurmaService:
         if not all([nome_turma, ano, school_id]):
             return False, 'Nome, Ano e ID da Escola são obrigatórios.'
 
-        # Verifica duplicidade usando o school_id (Corrigido)
+        # Verifica duplicidade
         if db.session.execute(select(Turma).filter_by(nome=nome_turma, school_id=school_id)).scalar_one_or_none():
             return False, f'Uma turma com o nome "{nome_turma}" já existe nesta escola.'
 
@@ -52,30 +52,57 @@ class TurmaService:
         new_name = data.get('nome')
 
         try:
+            # 1. Atualiza dados básicos
             turma.nome = new_name
             turma.ano = data.get('ano')
             turma.status = data.get('status')
             
+            # Atualiza data de formatura se vier no form
+            if data.get('data_formatura'):
+                turma.data_formatura = data.get('data_formatura')
+
+            # --- CORREÇÃO: Lógica de Atualização de Alunos ---
+            # O problema anterior era que este bloco não existia.
+            
+            ids_selecionados = data.get('alunos_ids')
+            
+            # Nota: Em formulários HTML/WTForms, se nenhum checkbox for marcado, 
+            # 'alunos_ids' pode vir como None ou lista vazia []. Tratamos ambos.
+            if ids_selecionados is not None:
+                # A. REMOVER: Quem está na turma, mas NÃO está na lista nova (Desmarcados)
+                if not ids_selecionados:
+                    # Se a lista nova é vazia, remove TODO MUNDO dessa turma
+                    db.session.query(Aluno).filter(Aluno.turma_id == turma_id).update({"turma_id": None}, synchronize_session=False)
+                else:
+                    # Remove apenas quem não está na lista de selecionados
+                    db.session.query(Aluno).filter(
+                        Aluno.turma_id == turma_id,
+                        Aluno.id.notin_(ids_selecionados)
+                    ).update({"turma_id": None}, synchronize_session=False)
+
+                    # B. ADICIONAR: Vincula quem está na lista nova
+                    db.session.query(Aluno).filter(
+                        Aluno.id.in_(ids_selecionados)
+                    ).update({"turma_id": turma_id}, synchronize_session=False)
+            # ------------------------------------------------
+
             db.session.commit()
 
-            # --- PROTEÇÃO CONTRA AULAS FANTASMAS (ADICIONADO) ---
-            # Se o nome mudou, atualiza automaticamente a string 'pelotao' nos horários vinculados
+            # --- PROTEÇÃO CONTRA AULAS FANTASMAS ---
             if old_name != new_name:
-                # 1. Identifica as disciplinas dessa turma
                 disciplinas_ids = db.session.scalars(
                     select(Disciplina.id).where(Disciplina.turma_id == turma_id)
                 ).all()
                 
                 if disciplinas_ids:
-                    # 2. Atualiza em massa os horários dessas disciplinas para o novo nome
                     db.session.query(Horario).filter(
                         Horario.disciplina_id.in_(disciplinas_ids)
                     ).update({Horario.pelotao: new_name}, synchronize_session=False)
                     
                     db.session.commit()
-            # ----------------------------------------------------
+            # ---------------------------------------
 
-            return True, "Turma atualizada."
+            return True, "Turma atualizada com sucesso."
         except Exception as e:
             db.session.rollback()
             return False, str(e)
@@ -85,15 +112,15 @@ class TurmaService:
         turma = db.session.get(Turma, turma_id)
         if not turma: return False, 'Turma não encontrada.'
         try:
-            # Remove horários vinculados às disciplinas da turma
+            # Remove horários vinculados
             disciplinas_ids = db.session.scalars(select(Disciplina.id).where(Disciplina.turma_id == turma_id)).all()
             if disciplinas_ids:
                 db.session.query(Horario).filter(Horario.disciplina_id.in_(disciplinas_ids)).delete(synchronize_session=False)
             
-            # Desvincula alunos
+            # Desvincula alunos (não apaga o aluno, só tira da turma)
             db.session.query(Aluno).filter(Aluno.turma_id == turma_id).update({"turma_id": None}, synchronize_session=False)
             
-            # Remove cargos e vinculos legados
+            # Remove cargos e vinculos
             db.session.query(TurmaCargo).filter_by(turma_id=turma_id).delete()
             db.session.query(DisciplinaTurma).filter_by(pelotao=turma.nome).delete()
             
@@ -111,14 +138,12 @@ class TurmaService:
 
     @staticmethod
     def get_cargos_da_turma(turma_id, cargos_lista):
-        """Busca cargos garantindo que a lista esteja completa."""
         cargos_db = db.session.scalars(
             select(TurmaCargo).where(TurmaCargo.turma_id == turma_id)
         ).all()
         
         cargos_atuais = {cargo.cargo_nome: cargo.aluno_id for cargo in cargos_db}
 
-        # Garante que todos os cargos oficiais apareçam no dicionário, mesmo que vazios
         for cargo in cargos_lista:
             cargos_atuais.setdefault(cargo, None)
             
@@ -138,20 +163,15 @@ class TurmaService:
             data_evento_str = form_data.get('data_evento')
             data_evento = datetime.strptime(data_evento_str, '%Y-%m-%d') if data_evento_str else datetime.utcnow()
 
-            # 1. Verifica se o cargo é válido (segurança)
             if cargo_nome not in TurmaCargo.get_all_roles():
                 return False, f'O cargo "{cargo_nome}" não é um cargo oficial do sistema.'
 
-            # 2. Busca cargo existente
             cargo_atual = db.session.scalars(
                 select(TurmaCargo).where(TurmaCargo.turma_id == turma_id, TurmaCargo.cargo_nome == cargo_nome)
             ).first()
 
-            # 3. Lógica de Histórico e Atualização
-            
-            # Se já existe alguém no cargo e estamos mudando ou removendo
+            # Lógica de Histórico
             if cargo_atual and cargo_atual.aluno_id and (cargo_atual.aluno_id != aluno_id):
-                # Fecha histórico do aluno anterior
                 historico_antigo = db.session.scalars(select(HistoricoAluno).where(
                     HistoricoAluno.aluno_id == cargo_atual.aluno_id,
                     HistoricoAluno.descricao.like(f"%Assumiu a função de {cargo_nome}%"),
@@ -161,13 +181,11 @@ class TurmaService:
                 if historico_antigo:
                     historico_antigo.data_fim = data_evento
 
-            # Se estamos definindo um novo aluno
             if aluno_id:
                 if not cargo_atual:
                     cargo_atual = TurmaCargo(turma_id=turma_id, cargo_nome=cargo_nome)
                     db.session.add(cargo_atual)
                 
-                # Se mudou o aluno, cria novo histórico
                 if cargo_atual.aluno_id != aluno_id:
                     novo_historico = HistoricoAluno(
                         aluno_id=aluno_id,
@@ -180,9 +198,8 @@ class TurmaService:
                 cargo_atual.aluno_id = aluno_id
             
             else:
-                # Se aluno_id é None, estamos removendo a pessoa do cargo
                 if cargo_atual:
-                    cargo_atual.aluno_id = None # Mantém a linha do cargo, mas sem aluno
+                    cargo_atual.aluno_id = None 
 
             db.session.commit()
             return True, f'Cargo "{cargo_nome}" atualizado com sucesso!'
