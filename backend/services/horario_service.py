@@ -20,7 +20,7 @@ from ..models.user import User
 from .notification_service import NotificationService
 from .instrutor_service import InstrutorService
 from .site_config_service import SiteConfigService
-from .user_service import UserService # Import necessário para pegar a escola atual
+from .user_service import UserService
 
 class HorarioService:
 
@@ -30,7 +30,6 @@ class HorarioService:
         if not horario or not user:
             return False
         
-        # CORREÇÃO: Usa is_sens (que inclui Admin e Programador e verifica contexto)
         if user.is_sens or user.is_admin_escola or user.is_programador:
             return True
             
@@ -146,9 +145,29 @@ class HorarioService:
 
     @staticmethod
     def get_edit_grid_context(pelotao, semana_id, ciclo_id, user):
+        """
+        Retorna o contexto para o modal de edição.
+        CORREÇÃO CRÍTICA: Busca a turma filtrando pela ESCOLA da semana selecionada.
+        Isso impede que 'Turma 01' de Montenegro carregue disciplinas de 'Turma 01' de Porto Alegre.
+        """
         horario_matrix = HorarioService.construir_matriz_horario(pelotao, semana_id, user)
         semana = db.session.get(Semana, semana_id)
         
+        if not semana:
+            return {'success': False, 'message': 'Semana não encontrada.'}
+
+        # --- CORREÇÃO: Identifica a escola através do Ciclo da Semana ---
+        school_id = semana.ciclo.school_id
+        
+        # Busca a turma pelo nome E pelo ID da escola
+        turma_obj = db.session.scalar(
+            select(Turma).where(Turma.nome == pelotao, Turma.school_id == school_id)
+        )
+        # ----------------------------------------------------------------
+
+        if not turma_obj:
+            return {'success': False, 'message': f'Turma "{pelotao}" não encontrada nesta escola.'}
+
         is_admin = user.is_sens or user.is_admin_escola or user.is_programador
 
         def get_horas_agendadas(disciplina_id, pelotao_nome):
@@ -162,12 +181,9 @@ class HorarioService:
                 or 0
             )
 
-        turma_obj = db.session.scalar(select(Turma).where(Turma.nome == pelotao))
-        if not turma_obj:
-            return {'success': False, 'message': 'Turma não encontrada.'}
-
         disciplinas_disponiveis = []
         if is_admin:
+            # Agora usa o ID correto da turma da escola certa
             disciplinas_da_turma = db.session.scalars(
                 select(Disciplina)
                 .where(Disciplina.turma_id == turma_obj.id)
@@ -204,6 +220,7 @@ class HorarioService:
         lista_instrutores = instrutores_paginados if isinstance(instrutores_paginados, list) else instrutores_paginados.items
 
         for i in lista_instrutores:
+            # Opcional: Filtrar instrutores da escola se o modelo tiver school_id
             posto = i.user.posto_graduacao or ''
             nome = i.user.nome_de_guerra or i.user.username
             todos_instrutores.append({"id": i.id, "nome": f"{posto} {nome}".strip()})
@@ -355,16 +372,16 @@ class HorarioService:
                 ) or 0
                 
                 if horario_id:
-                     aula_atual_editando = db.session.get(Horario, horario_id)
-                     if aula_atual_editando:
-                         if aula_atual_editando.group_id:
-                             total_grupo = db.session.scalar(
-                                 select(func.sum(Horario.duracao))
-                                 .where(Horario.group_id == aula_atual_editando.group_id)
-                             ) or 0
-                             total_agendado -= total_grupo
-                         else:
-                             total_agendado -= aula_atual_editando.duracao
+                      aula_atual_editando = db.session.get(Horario, horario_id)
+                      if aula_atual_editando:
+                          if aula_atual_editando.group_id:
+                              total_grupo = db.session.scalar(
+                                  select(func.sum(Horario.duracao))
+                                  .where(Horario.group_id == aula_atual_editando.group_id)
+                              ) or 0
+                              total_agendado -= total_grupo
+                          else:
+                              total_agendado -= aula_atual_editando.duracao
 
                 if (total_agendado + duracao) > disciplina.carga_horaria_prevista:
                     restante = disciplina.carga_horaria_prevista - total_agendado
@@ -541,9 +558,14 @@ class HorarioService:
         return True, 'Aula removida com sucesso!'
 
     @staticmethod
-    def get_aulas_pendentes():
-        # CORREÇÃO: Filtrar pela escola atual
-        school_id = UserService.get_current_school_id()
+    def get_aulas_pendentes(school_id=None):
+        """
+        Retorna todas as aulas pendentes.
+        Se school_id for fornecido, filtra para mostrar apenas as aulas dessa escola.
+        """
+        # Se não vier school_id, tenta pegar da sessão como fallback
+        if not school_id:
+            school_id = UserService.get_current_school_id()
         
         query = select(Horario).options(
             joinedload(Horario.disciplina).joinedload(Disciplina.ciclo),
@@ -552,14 +574,20 @@ class HorarioService:
         ).where(Horario.status == 'pendente')
 
         if school_id:
-            # Faz JOIN com Turma para filtrar por school_id
-            query = query.join(Turma, Horario.pelotao == Turma.nome).where(Turma.school_id == school_id)
+            # --- CORREÇÃO DEFINITIVA DO FILTRO DE ESCOLA ---
+            # Filtra navegando pelos IDs: Horario -> Disciplina -> Turma -> Escola.
+            # Isso é 100% seguro e isola os dados por escola.
+            query = query.join(Disciplina, Horario.disciplina_id == Disciplina.id)\
+                         .join(Turma, Disciplina.turma_id == Turma.id)\
+                         .where(Turma.school_id == school_id)
+            # -----------------------------------------------
 
         return db.session.scalars(query.order_by(Horario.id.desc())).all()
 
     @staticmethod
-    def get_aulas_pendentes_agrupadas():
-        aulas_pendentes_flat = HorarioService.get_aulas_pendentes()
+    def get_aulas_pendentes_agrupadas(school_id=None):
+        # Repassa o school_id recebido do Controller para a função de busca
+        aulas_pendentes_flat = HorarioService.get_aulas_pendentes(school_id=school_id)
         grouped_aulas = defaultdict(list)
         single_aulas = []
 
