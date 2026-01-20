@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, g
 from flask_login import login_required, current_user
 from sqlalchemy import select, or_
-from sqlalchemy.orm import joinedload # Importação necessária para otimização
+from sqlalchemy.orm import joinedload # Importação essencial para performance
 from datetime import datetime
 import uuid
 import hashlib
@@ -80,7 +80,7 @@ def index():
             flash("Nenhuma escola selecionada.", "warning")
             return redirect(url_for('main.dashboard'))
 
-        # OTIMIZAÇÃO: joinedload para evitar N+1 query
+        # OTIMIZAÇÃO: joinedload para evitar N+1 query (Centenas de queries a menos)
         stmt_andamento = select(ProcessoDisciplina).join(Aluno).join(Turma).options(
             joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.user),
             joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.turma)
@@ -216,7 +216,6 @@ def dar_ciente(processo_id):
         return redirect(url_for('justica.index'))
 
     processo.data_ciencia = datetime.now().astimezone()
-    # CORREÇÃO: Status atualizado para ALUNO_NOTIFICADO
     processo.status = StatusProcesso.ALUNO_NOTIFICADO 
     
     db.session.commit()
@@ -505,4 +504,44 @@ def get_aluno_details(aluno_id):
 @justica_bp.route('/exportar-selecao')
 @login_required
 def exportar_selecao():
-    return render_template('justica/exportar_selecao.html')
+    # 1. Busca processos FINALIZADOS para a lista
+    stmt = select(ProcessoDisciplina).where(
+        ProcessoDisciplina.status == StatusProcesso.FINALIZADO
+    ).order_by(ProcessoDisciplina.data_decisao.desc())
+    
+    # Usa joinedload para performance na tabela de exportação também
+    stmt = stmt.options(
+        joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.user)
+    )
+    
+    processos = db.session.scalars(stmt).unique().all()
+    
+    # 2. Passa 'processos' e 'datetime' para o template (Corrige o erro jinja2)
+    return render_template('justica/exportar_selecao.html', processos=processos, datetime=datetime)
+
+@justica_bp.route('/confirmar-publicacao-boletim', methods=['POST'])
+@login_required
+@can_manage_justice_required
+def confirmar_publicacao_boletim():
+    ids_selecionados = request.form.getlist('processos_ids')
+    num_boletim = request.form.get('numero_boletim')
+    
+    if not ids_selecionados or not num_boletim:
+        flash("Selecione os processos e informe o número do boletim.", "warning")
+        return redirect(url_for('justica.exportar_selecao'))
+        
+    count = 0
+    for pid in ids_selecionados:
+        proc = db.session.get(ProcessoDisciplina, int(pid))
+        if proc:
+            # Registra no log de observação
+            msg_pub = f" | Publicado em Boletim nº {num_boletim} em {datetime.now().strftime('%d/%m/%Y')}"
+            if proc.observacao_decisao:
+                proc.observacao_decisao += msg_pub
+            else:
+                proc.observacao_decisao = msg_pub
+            count += 1
+            
+    db.session.commit()
+    flash(f"{count} processos vinculados ao Boletim {num_boletim} com sucesso.", "success")
+    return redirect(url_for('justica.exportar_selecao'))

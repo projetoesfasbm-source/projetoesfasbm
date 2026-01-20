@@ -206,16 +206,25 @@ def salvar_prioridade(semana_id):
 
         data = request.get_json()
 
-        # 1) Botão geral de prioridade
-        semana.priority_active = bool(data.get('status', False))
-
-        # 2) Disciplinas permitidas
+        prioridade_ativa = bool(data.get('status', False))
         disciplinas = data.get('disciplinas', [])
-        semana.priority_disciplines = json.dumps(disciplinas)
-
-        # 3) BLOQUEIOS GRANULARES (TURMA/DIA/PERÍODO) — SALVO DE VERDADE
         bloqueios = data.get('bloqueios', {})
-        semana.priority_blocks = json.dumps(bloqueios)
+
+        semana.priority_active = prioridade_ativa
+
+        # 🔹 REGRA PRINCIPAL (AGORA CORRETA PARA O SEU CASO)
+        if prioridade_ativa:
+            # Guarda disciplinas (vazia ou não)
+            semana.priority_disciplines = json.dumps(disciplinas)
+
+            # Guarda EXATAMENTE os períodos que você marcou
+            # (independente de ter disciplina ou não)
+            semana.priority_blocks = json.dumps(bloqueios)
+
+        else:
+            # Se desligou prioridade, limpa tudo
+            semana.priority_disciplines = json.dumps([])
+            semana.priority_blocks = json.dumps({})
 
         db.session.commit()
         return jsonify({'success': True})

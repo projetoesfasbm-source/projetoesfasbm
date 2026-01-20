@@ -37,8 +37,17 @@
     }
 </style>
 
-<div class="d-flex justify-content-between mb-2 p-2 bg-white border-bottom">
+<div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-white border-bottom">
     <h5 class="m-0">Gerador de Termos DEC</h5>
+    
+    <form action="{{ url_for('justica.confirmar_publicacao_boletim') }}" method="POST" class="d-flex align-items-center gap-2" id="formPublicacao">
+        <input type="text" name="numero_boletim" class="form-control form-control-sm" placeholder="Nº Boletim (Ex: BI 024)" style="width: 150px;">
+        <button type="button" class="btn btn-sm btn-primary" onclick="submeterPublicacao()">
+            <i class="fas fa-save"></i> Registrar
+        </button>
+        <div id="hidden-inputs"></div>
+    </form>
+
     <div>
         <button class="btn btn-sm btn-success" onclick="exportWord()"><i class="fas fa-file-word"></i> Baixar Word</button>
         <button class="btn btn-sm btn-dark" onclick="window.print()"><i class="fas fa-print"></i> Imprimir</button>
@@ -47,13 +56,19 @@
 
 <div class="split-container">
     <div class="left-panel">
-        <div class="p-2 bg-light border-bottom"><small class="text-muted">Selecione os processos:</small></div>
+        <div class="p-2 bg-light border-bottom">
+            <input type="text" class="form-control form-control-sm mb-2" placeholder="Buscar aluno..." onkeyup="filtrarLista(this.value)">
+            <small class="text-muted">Selecione os processos:</small>
+        </div>
         <div class="process-list" style="overflow-y: auto;" id="processList">
             {% for p in processos %}
             <div class="process-item" onclick="toggleProcess({{ p.id }}, this)">
                 <input type="checkbox" id="chk_{{ p.id }}" class="pe-none">
                 <strong>{{ p.aluno.user.posto_graduacao }} {{ p.aluno.user.nome_completo }}</strong><br>
-                <small class="text-muted">{{ p.data_ocorrencia.strftime('%d/%m/%Y') }}</small>
+                <small class="text-muted">Fato: {{ p.data_ocorrencia.strftime('%d/%m/%Y') }}</small><br>
+                {% if p.observacao_decisao and 'Publicado' in p.observacao_decisao %}
+                    <span class="badge bg-success" style="font-size: 0.7em;">Publicado</span>
+                {% endif %}
             </div>
             
             <script type="application/json" id="data_{{ p.id }}">
@@ -69,6 +84,8 @@
                     "origem": "{{ p.origem_punicao }}"
                 }
             </script>
+            {% else %}
+            <div class="p-3 text-center text-muted">Nenhum processo finalizado.</div>
             {% endfor %}
         </div>
     </div>
@@ -110,19 +127,27 @@
             selectedIds.delete(id);
             chk.checked = false;
             el.classList.remove('active');
-            document.getElementById('term_' + id).remove();
+            const termEl = document.getElementById('term_' + id);
+            if(termEl) termEl.remove();
         } else {
             selectedIds.add(id);
             chk.checked = true;
             el.classList.add('active');
             addTerm(id);
         }
-        document.querySelector('#dynamic-content .text-muted').style.display = selectedIds.size ? 'none' : 'block';
-        document.getElementById('count-badge').innerText = selectedIds.size + ' selecionados';
+        
+        // Controla a visibilidade do aviso "Selecione..."
+        const placeholder = document.querySelector('#dynamic-content .text-muted');
+        if (placeholder) {
+            placeholder.style.display = selectedIds.size ? 'none' : 'block';
+        }
     }
 
     function addTerm(id) {
-        const d = JSON.parse(document.getElementById('data_' + id).textContent);
+        const scriptTag = document.getElementById('data_' + id);
+        if (!scriptTag) return;
+        const d = JSON.parse(scriptTag.textContent);
+        
         const html = `
             <div id="term_${id}" class="mb-5 pb-4 border-bottom page-break">
                 <div class="doc-title editable" contenteditable="true">TERMO DE JUSTIFICAÇÃO Nº ${String(id).padStart(3, '0')} / ${d.ano}</div>
@@ -148,6 +173,28 @@
         document.querySelectorAll('.process-item').forEach(item => {
             item.style.display = item.innerText.toLowerCase().includes(texto) ? 'flex' : 'none';
         });
+    }
+
+    // Função para submeter o formulário de publicação (Cria inputs hidden e envia)
+    function submeterPublicacao() {
+        const container = document.getElementById('hidden-inputs');
+        container.innerHTML = ''; // Limpa anteriores
+        
+        if (selectedIds.size === 0) {
+            alert("Selecione pelo menos um processo.");
+            return;
+        }
+        
+        // Cria inputs hidden para cada ID selecionado
+        selectedIds.forEach(id => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'processos_ids';
+            input.value = id;
+            container.appendChild(input);
+        });
+        
+        document.getElementById('formPublicacao').submit();
     }
 
     function exportWord() {
