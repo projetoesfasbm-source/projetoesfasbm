@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, g
 from flask_login import login_required, current_user
 from sqlalchemy import select, or_
+from sqlalchemy.orm import joinedload # Importação necessária para otimização
 from datetime import datetime
 import uuid
 import hashlib
@@ -56,13 +57,20 @@ def index():
         g.active_school = current_user.aluno_profile.turma.school
         aluno_id = current_user.aluno_profile.id
 
-        stmt_andamento = select(ProcessoDisciplina).where(
+        # OTIMIZAÇÃO: joinedload para trazer Aluno, User e Turma em uma única query
+        stmt_andamento = select(ProcessoDisciplina).options(
+            joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.user),
+            joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.turma)
+        ).where(
             ProcessoDisciplina.aluno_id == aluno_id,
             ProcessoDisciplina.status != StatusProcesso.FINALIZADO,
             ProcessoDisciplina.status != StatusProcesso.ARQUIVADO
         ).order_by(ProcessoDisciplina.data_ocorrencia.desc())
         
-        stmt_finalizados = select(ProcessoDisciplina).where(
+        stmt_finalizados = select(ProcessoDisciplina).options(
+            joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.user),
+            joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.turma)
+        ).where(
             ProcessoDisciplina.aluno_id == aluno_id,
             or_(ProcessoDisciplina.status == StatusProcesso.FINALIZADO, ProcessoDisciplina.status == StatusProcesso.ARQUIVADO)
         ).order_by(ProcessoDisciplina.data_decisao.desc()).limit(50)
@@ -72,19 +80,28 @@ def index():
             flash("Nenhuma escola selecionada.", "warning")
             return redirect(url_for('main.dashboard'))
 
-        stmt_andamento = select(ProcessoDisciplina).join(Aluno).join(Turma).where(
+        # OTIMIZAÇÃO: joinedload para evitar N+1 query
+        stmt_andamento = select(ProcessoDisciplina).join(Aluno).join(Turma).options(
+            joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.user),
+            joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.turma)
+        ).where(
             Turma.school_id == school_id,
             ProcessoDisciplina.status != StatusProcesso.FINALIZADO,
             ProcessoDisciplina.status != StatusProcesso.ARQUIVADO
         ).order_by(ProcessoDisciplina.data_ocorrencia.desc())
 
-        stmt_finalizados = select(ProcessoDisciplina).join(Aluno).join(Turma).where(
+        stmt_finalizados = select(ProcessoDisciplina).join(Aluno).join(Turma).options(
+            joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.user),
+            joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.turma)
+        ).where(
             Turma.school_id == school_id,
             or_(ProcessoDisciplina.status == StatusProcesso.FINALIZADO, ProcessoDisciplina.status == StatusProcesso.ARQUIVADO)
         ).order_by(ProcessoDisciplina.data_decisao.desc()).limit(50)
 
-    em_andamento = db.session.scalars(stmt_andamento).all()
-    finalizados = db.session.scalars(stmt_finalizados).all()
+    # .unique() é necessário quando se usa joinedload para garantir que não haja duplicatas na memória do ORM
+    em_andamento = db.session.scalars(stmt_andamento).unique().all()
+    finalizados = db.session.scalars(stmt_finalizados).unique().all()
+    
     turmas = TurmaService.get_turmas_by_school(school_id) if school_id else []
     fatos_predefinidos = db.session.scalars(select(DisciplineRule).order_by(DisciplineRule.codigo)).all()
     
@@ -199,7 +216,7 @@ def dar_ciente(processo_id):
         return redirect(url_for('justica.index'))
 
     processo.data_ciencia = datetime.now().astimezone()
-    # CORREÇÃO: Status atualizado para ALUNO_NOTIFICADO (Corrigido erro do log)
+    # CORREÇÃO: Status atualizado para ALUNO_NOTIFICADO
     processo.status = StatusProcesso.ALUNO_NOTIFICADO 
     
     db.session.commit()

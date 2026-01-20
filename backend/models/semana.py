@@ -8,6 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 if t.TYPE_CHECKING:
     from .ciclo import Ciclo
 
+
 class Semana(db.Model):
     __tablename__ = 'semanas'
 
@@ -31,12 +32,33 @@ class Semana(db.Model):
     mostrar_domingo: Mapped[bool] = mapped_column(default=False, server_default='0')
     periodos_domingo: Mapped[int] = mapped_column(default=0, server_default='0')
 
+    # =========================
     # Configurações de Prioridade
+    # =========================
     priority_active: Mapped[bool] = mapped_column(default=False, server_default='0')
     priority_disciplines: Mapped[str | None] = mapped_column(db.Text, nullable=True)
 
-    def __init__(self, nome: str, data_inicio: date, data_fim: date, ciclo_id: int, **kw: t.Any) -> None:
-        super().__init__(nome=nome, data_inicio=data_inicio, data_fim=data_fim, ciclo_id=ciclo_id, **kw)
+    # >>> NOVO CAMPO PARA BLOQUEIO GRANULAR <<<
+    # Armazena JSON com bloqueios por:
+    # { "T1": { "segunda": ["P1","P2"], "quarta": ["P3"] }, ... }
+    priority_blocks: Mapped[str | None] = mapped_column(db.Text, nullable=True)
+    # <<< FIM DO NOVO CAMPO >>>
+
+    def __init__(
+        self,
+        nome: str,
+        data_inicio: date,
+        data_fim: date,
+        ciclo_id: int,
+        **kw: t.Any
+    ) -> None:
+        super().__init__(
+            nome=nome,
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+            ciclo_id=ciclo_id,
+            **kw
+        )
 
     def __repr__(self):
         return f"<Semana id={self.id} nome='{self.nome}'>"

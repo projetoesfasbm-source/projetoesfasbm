@@ -49,44 +49,38 @@ def gerenciar_semanas(ciclo_id):
     
     school_id = UserService.get_current_school_id()
     
-    # Busca apenas Ciclos da escola atual
     ciclos = db.session.execute(
         select(Ciclo).where(Ciclo.school_id == school_id).order_by(Ciclo.nome)
     ).scalars().all()
     
     form.ciclo_id.choices = [(c.id, c.nome) for c in ciclos]
 
-    # --- LÓGICA DE SELEÇÃO AUTOMÁTICA ---
-    # Se um ID foi passado, verifica se ele é válido para esta escola
     if ciclo_id:
         if not any(c.id == ciclo_id for c in ciclos):
-            ciclo_id = None # Ciclo inválido ou de outra escola
+            ciclo_id = None
 
-    # Se não temos um ciclo selecionado (ou era inválido), mas existem ciclos:
-    # Seleciona automaticamente o ÚLTIMO ciclo criado (maior ID)
     if not ciclo_id and ciclos:
         ultimo_ciclo = max(ciclos, key=lambda c: c.id)
         ciclo_id = ultimo_ciclo.id
 
-    # Query Base: Semanas
     query = select(Semana).join(Ciclo).where(Ciclo.school_id == school_id).order_by(Semana.data_inicio.desc())
     
-    # Aplica o filtro do ciclo selecionado
     if ciclo_id:
         query = query.where(Semana.ciclo_id == ciclo_id)
-        form.ciclo_id.data = ciclo_id # Preenche o form de adição com o ciclo atual
+        form.ciclo_id.data = ciclo_id
     else:
-        # Se não houver ciclos na escola, garante que não traga semanas soltas (segurança)
-        query = query.where(Semana.id == -1) 
+        query = query.where(Semana.id == -1)
     
     semanas = db.session.execute(query).scalars().all()
 
-    return render_template('gerenciar_semanas.html', 
-                           semanas=semanas, 
-                           add_form=form, 
-                           delete_form=delete_form,
-                           todos_os_ciclos=ciclos, 
-                           ciclo_selecionado_id=ciclo_id)
+    return render_template(
+        'gerenciar_semanas.html',
+        semanas=semanas,
+        add_form=form,
+        delete_form=delete_form,
+        todos_os_ciclos=ciclos,
+        ciclo_selecionado_id=ciclo_id
+    )
 
 @semana_bp.route('/adicionar', methods=['POST'])
 @login_required
@@ -101,7 +95,6 @@ def adicionar_semana():
     form.ciclo_id.choices = [(c.id, c.nome) for c in ciclos]
 
     if form.validate_on_submit():
-        # Service valida se o ciclo pertence à escola
         success, message = SemanaService.add_semana(form.data)
         if success:
             flash(message, 'success')
@@ -123,7 +116,6 @@ def editar_semana(semana_id):
     semana = db.session.get(Semana, semana_id)
     school_id = UserService.get_current_school_id()
     
-    # Validação de segurança via Ciclo
     if not semana or (school_id and semana.ciclo.school_id != school_id):
         flash("Semana não encontrada ou não pertence à sua escola.", "danger")
         return redirect(url_for('semana.gerenciar_semanas'))
@@ -154,7 +146,6 @@ def editar_semana(semana_id):
 
     return render_template('editar_semana.html', semana=semana, form=form)
 
-
 @semana_bp.route('/deletar/<int:semana_id>', methods=['POST'])
 @login_required
 @school_admin_or_programmer_required
@@ -178,17 +169,14 @@ def adicionar_ciclo():
     school_id = UserService.get_current_school_id()
     
     if nome_ciclo and school_id:
-        # Verifica se já existe ciclo com esse nome NA MESMA ESCOLA
         exists = db.session.scalar(
             select(Ciclo).where(Ciclo.nome == nome_ciclo, Ciclo.school_id == school_id)
         )
         if not exists:
-            # CRIA O CICLO VINCULADO À ESCOLA
             novo_ciclo = Ciclo(nome=nome_ciclo, school_id=school_id)
             db.session.add(novo_ciclo)
             db.session.commit()
             flash(f"Ciclo '{nome_ciclo}' criado com sucesso!", "success")
-            # Redireciona para o novo ciclo criado
             return redirect(url_for('semana.gerenciar_semanas', ciclo_id=novo_ciclo.id))
         else:
             flash(f"Já existe um ciclo com o nome '{nome_ciclo}' nesta escola.", "danger")
@@ -200,12 +188,9 @@ def adicionar_ciclo():
 @login_required
 @admin_or_programmer_required
 def deletar_ciclo(ciclo_id):
-    # CORREÇÃO: Chama o Service que faz a limpeza em cascata
     success, message = SemanaService.deletar_ciclo(ciclo_id)
-    
     category = 'success' if success else 'danger'
     flash(message, category)
-    
     return redirect(url_for('semana.gerenciar_semanas'))
 
 @semana_bp.route('/<int:semana_id>/salvar-prioridade', methods=['POST'])
@@ -215,18 +200,26 @@ def salvar_prioridade(semana_id):
     try:
         semana = db.session.get(Semana, semana_id)
         school_id = UserService.get_current_school_id()
-        
+
         if not semana or (school_id and semana.ciclo.school_id != school_id):
             return jsonify({'success': False, 'message': 'Semana não encontrada'}), 404
 
         data = request.get_json()
-        semana.priority_active = data.get('status', False)
-        
+
+        # 1) Botão geral de prioridade
+        semana.priority_active = bool(data.get('status', False))
+
+        # 2) Disciplinas permitidas
         disciplinas = data.get('disciplinas', [])
         semana.priority_disciplines = json.dumps(disciplinas)
 
+        # 3) BLOQUEIOS GRANULARES (TURMA/DIA/PERÍODO) — SALVO DE VERDADE
+        bloqueios = data.get('bloqueios', {})
+        semana.priority_blocks = json.dumps(bloqueios)
+
         db.session.commit()
         return jsonify({'success': True})
+
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'message': str(e)}), 500

@@ -16,7 +16,7 @@ class Config:
     # --- BANCO DE DADOS ---
     SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL")
 
-    SQLALCHEMY_ECHO = True
+    SQLALCHEMY_ECHO = False
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True}

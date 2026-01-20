@@ -40,7 +40,6 @@
         
         <div class="controls-group d-flex gap-2 flex-wrap justify-content-end align-items-center">
             
-            {# 1. BOTÃO DATA DE FORMATURA (NOVO) #}
             {% if turma_atual and current_user.is_sens %}
                 <button type="button" class="btn btn-info text-white shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#modalDataFormatura">
                     <i class="fas fa-graduation-cap me-1"></i> 
@@ -52,17 +51,13 @@
                 </button>
             {% endif %}
 
-            {# 2. BOTÃO DE GERENCIAR SEMANAS #}
             {% if current_user.is_sens %}
                 <a href="{{ url_for('semana.gerenciar_semanas') }}" class="btn btn-dark shadow-sm fw-bold">
                     <i class="fas fa-calendar-plus me-1"></i> Gerenciar Semanas / Ciclos
                 </a>
             {% endif %}
 
-            {# 3. BOTÕES QUE DEPENDEM DE UMA SEMANA JÁ EXISTIR #}
             {% if semana_selecionada %}
-                
-                {# BOTÕES ADMINISTRATIVOS #}
                 {% if current_user.is_sens %}
                     <button type="button" class="btn {% if priority_active %}btn-danger text-white{% else %}btn-warning{% endif %} fw-bold shadow-sm" 
                             data-bs-toggle="modal" data-bs-target="#priorityModal">
@@ -75,7 +70,6 @@
                     </a>
                 {% endif %}
                 
-                {# CORREÇÃO: Admin/Sens tem acesso total, Instrutor depende de permissão #}
                 {% if can_schedule_in_this_turma or current_user.is_sens %}
                     <button type="button" class="btn btn-primary" onclick="openConfirmationModal()">
                         Agendar/Desmarcar Aulas
@@ -87,7 +81,6 @@
                         </button>
                     {% endif %}
                 {% endif %}
-
             {% endif %}
         </div>
     </div>
@@ -245,279 +238,224 @@
 {% endblock %}
 
 {% block modals %}
-    
-    {# MODAL DATA FORMATURA (NOVO) #}
-    {% if turma_atual %}
-    <div class="modal fade" id="modalDataFormatura" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header bg-info text-white">
-                    <h5 class="modal-title fw-bold"><i class="fas fa-graduation-cap"></i> Data de Formatura - {{ turma_atual.nome }}</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <form action="{{ url_for('horario.salvar_data_formatura') }}" method="POST">
-                    <div class="modal-body">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input type="hidden" name="turma_id" value="{{ turma_atual.id }}">
-                        
-                        <div class="alert alert-light border">
-                            <p class="small mb-0">
-                                <i class="fas fa-info-circle text-primary"></i> 
-                                Definir a data de formatura encerra o computo da Avaliação Atitudinal 
-                                <strong>40 dias antes</strong> desta data (Art. 125).
-                            </p>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="data_formatura" class="form-label fw-bold">Selecione a Data:</label>
-                            <input type="date" class="form-control" id="data_formatura" name="data_formatura" 
-                                   value="{{ turma_atual.data_formatura.strftime('%Y-%m-%d') if turma_atual.data_formatura else '' }}">
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="submit" class="btn btn-info text-white fw-bold">Salvar Data</button>
-                    </div>
-                </form>
+{% if turma_atual %}
+<div class="modal fade" id="modalDataFormatura" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title fw-bold"><i class="fas fa-graduation-cap"></i> Data de Formatura - {{ turma_atual.nome }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-        </div>
-    </div>
-    {% endif %}
-
-    {% if pelotao_selecionado and semana_selecionada %}
-    <div class="modal-overlay" id="confirmation-modal-overlay">
-        <div class="modal-content" style="max-width: 600px;">
-            <div style="margin-bottom: 1.5rem; background: #f8f9fa; padding: 1rem; border-radius: 8px; border: 1px solid #e9ecef;">
-                <label for="modal-semana-selector" class="form-label" style="font-weight: bold; color: #374151;">
-                    📅 Selecione a Semana para Agendamento:
-                </label>
-                <select id="modal-semana-selector" class="form-select form-control">
-                    {% for semana in todas_as_semanas %}
-                        <option value="{{ semana.id }}" {% if semana.id == semana_selecionada.id %}selected{% endif %}>
-                            {{ semana.nome }} ({{ semana.data_inicio.strftime('%d/%m') }} a {{ semana.data_fim.strftime('%d/%m') }})
-                        </option>
-                    {% endfor %}
-                </select>
-                <small class="text-muted d-block mt-1">
-                    Você pode alterar a semana aqui antes de selecionar a turma.
-                </small>
-            </div>
-
-            {# CORREÇÃO CRÍTICA: Prioriza is_sens sobre o cargo global #}
-            {% if current_user.role == 'instrutor' and not current_user.is_sens %}
-                <h3 id="modal-title">Selecionar Turma</h3>
-                <div class="turma-selection-buttons">
-                    {% for turma in instrutor_turmas_vinculadas %}
-                        <a href="{{ url_for('horario.editar_horario_grid', pelotao=turma.nome, semana_id=semana_selecionada.id, ciclo_id=ciclo_selecionado) }}" 
-                           class="btn btn-primary btn-turma dynamic-week-link">
-                            {{ turma.nome }}
-                        </a>
-                    {% else %}
-                        <p class="text-muted">Nenhum vínculo encontrado. (Ou bloqueio de prioridade ativo)</p>
-                    {% endfor %}
-                </div>
-            {% else %} 
-                <h3 id="modal-title">Confirmar Edição</h3>
-                <div style="background-color: #f1f5f9; padding: 0.5rem; border-radius: 8px; text-align: center; margin-bottom: 1.5rem;">
-                    <strong style="font-size: 1.2rem; color: #1e3a8a;">{{ pelotao_selecionado }}</strong>
-                </div>
-            {% endif %}
-
-            <div class="form-actions" style="justify-content: flex-end; margin-top: 2rem;">
-                <button type="button" class="btn btn-secondary" onclick="closeConfirmationModal()">Cancelar</button>
-                {# Mostra o botão para SENS, Admin ou quem não é instrutor comum #}
-                {% if current_user.is_sens or current_user.role != 'instrutor' %}
-                    <a href="{{ url_for('horario.editar_horario_grid', pelotao=pelotao_selecionado, semana_id=semana_selecionada.id, ciclo_id=ciclo_selecionado) }}" 
-                       class="btn btn-primary dynamic-week-link">
-                        Confirmar e Continuar
-                    </a>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-    {% endif %}
-
-    {% if semana_selecionada and current_user.is_sens %}
-    <div class="modal fade" id="priorityModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header bg-light">
-                    <h5 class="modal-title fw-bold"><i class="fas fa-star text-warning"></i> Configurar Prioridade</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
+            <form action="{{ url_for('horario.salvar_data_formatura') }}" method="POST">
                 <div class="modal-body">
-                    <div class="mb-4">
-                        <label class="form-label text-muted fw-bold small">CONFIGURAÇÃO PARA A SEMANA:</label>
-                        <div class="input-group">
-                            <span class="input-group-text bg-white"><i class="far fa-calendar-alt"></i></span>
-                            <input type="text" class="form-control fw-bold bg-white text-dark" 
-                                   value="{{ semana_selecionada.nome }} ({{ semana_selecionada.data_inicio.strftime('%d/%m') }} a {{ semana_selecionada.data_fim.strftime('%d/%m') }})" 
-                                   disabled readonly>
-                        </div>
-                    </div>
-
-                    <div class="d-flex align-items-center justify-content-between p-3 bg-light border rounded mb-3">
-                        <div>
-                            <label class="form-check-label fw-bold mb-0 text-dark" for="priorityActive">Ativar Modo Prioridade</label>
-                            <div class="small text-muted" style="font-size: 0.85rem;">Bloqueia agendamentos de não listados.</div>
-                        </div>
-                        <div class="form-check form-switch m-0">
-                            <input class="form-check-input scale-125" type="checkbox" id="priorityActive" 
-                                   style="width: 3em; height: 1.5em;"
-                                   {% if priority_active %}checked{% endif %}>
-                        </div>
-                    </div>
-
-                    <div id="priorityListContainer">
-                        <label class="form-label fw-bold mb-2">Disciplinas Permitidas (Nomes Únicos):</label>
-                        <div class="border rounded p-2 bg-white" style="max-height: 250px; overflow-y: auto;">
-                            {% if all_materias_names %}
-                                {% for materia_nome in all_materias_names %}
-                                <div class="form-check border-bottom py-2 position-relative">
-                                    <input class="form-check-input priority-disc-check" type="checkbox" 
-                                           value="{{ materia_nome }}" id="disc-{{ loop.index }}"
-                                           {% if materia_nome in priority_allowed_names %}checked{% endif %}>
-                                    <label class="form-check-label w-100 stretched-link" for="disc-{{ loop.index }}" style="cursor: pointer;">
-                                        {{ materia_nome }}
-                                    </label>
-                                </div>
-                                {% endfor %}
-                            {% else %}
-                                <div class="text-center text-muted py-3">Nenhuma disciplina encontrada na escola.</div>
-                            {% endif %}
-                        </div>
-                        <div class="d-flex justify-content-between mt-2 px-1">
-                            <small class="text-muted">Marque os nomes das disciplinas que terão permissão em TODAS as turmas.</small>
-                            <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none fw-bold" onclick="selectAllPriority(true)">Marcar Todas</button>
-                        </div>
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="turma_id" value="{{ turma_atual.id }}">
+                    <div class="mb-3">
+                        <label for="data_formatura" class="form-label fw-bold">Selecione a Data:</label>
+                        <input type="date" class="form-control" id="data_formatura" name="data_formatura" 
+                               value="{{ turma_atual.data_formatura.strftime('%Y-%m-%d') if turma_atual.data_formatura else '' }}">
                     </div>
                 </div>
-                <div class="modal-footer bg-light">
+                <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn btn-success fw-bold px-4" onclick="savePriorityConfig()">
-                        <i class="fas fa-save me-1"></i> Salvar Alterações
-                    </button>
+                    <button type="submit" class="btn btn-info text-white fw-bold">Salvar Data</button>
                 </div>
-            </div>
+            </form>
         </div>
     </div>
-    {% endif %}
-    
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Seletor de mudança de semana/ciclo na barra superior
-            const semanaSelector = document.getElementById('semana_selector');
-            if (semanaSelector) {
-                semanaSelector.addEventListener('change', function() {
-                    const semanaId = this.value;
-                    const pelotao = "{{ pelotao_selecionado or (todas_as_turmas[0].nome if todas_as_turmas else '') }}";
-                    const ciclo = "{{ ciclo_selecionado }}";
-                    window.location.href = `{{ url_for('horario.index') }}?pelotao=${pelotao}&semana_id=${semanaId}&ciclo=${ciclo}`;
-                });
-            }
+</div>
+{% endif %}
 
-            const modalSemanaSelect = document.getElementById('modal-semana-selector');
-            const weekLinks = document.querySelectorAll('.dynamic-week-link');
+{% if semana_selecionada and current_user.is_sens %}
+<div class="modal fade" id="priorityModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header bg-light">
+        <h5 class="modal-title fw-bold">
+          <i class="fas fa-star text-warning"></i> Configurar Prioridade (Disciplinas + Bloqueios)
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
 
-            if (modalSemanaSelect) {
-                modalSemanaSelect.addEventListener('change', function() {
-                    const newSemanaId = this.value;
-                    weekLinks.forEach(link => {
-                        let currentHref = link.getAttribute('href');
-                        const regex = /(.*\/editar\/[^\/]+\/)(\d+)(\/\d+)/;
-                        if (regex.test(currentHref)) {
-                            const newHref = currentHref.replace(regex, `$1${newSemanaId}$3`);
-                            link.setAttribute('href', newHref);
-                        }
-                    });
-                });
-            }
+      <div class="modal-body">
 
-            const toggleBtn = document.getElementById('weekend-toggle');
-            if (toggleBtn) {
-                toggleBtn.addEventListener('click', function() {
-                    document.body.classList.toggle('weekend-panel-open');
-                });
-            }
-        });
+        <div class="d-flex align-items-center justify-content-between p-3 bg-light border rounded mb-3">
+          <div>
+            <label class="form-check-label fw-bold mb-0 text-dark" for="priorityActive">
+              Ativar Modo Prioridade
+            </label>
+            <div class="small text-muted">
+              Bloqueia agendamentos de não listados E permite bloquear períodos específicos.
+            </div>
+          </div>
+          <div class="form-check form-switch m-0">
+            <input class="form-check-input scale-125" type="checkbox" id="priorityActive"
+                   {% if priority_active %}checked{% endif %}>
+          </div>
+        </div>
 
-        const confirmationModal = document.getElementById('confirmation-modal-overlay');
+        <h6 class="fw-bold mb-2">1) Disciplinas Permitidas</h6>
+        <div class="border rounded p-2 bg-white mb-4" style="max-height: 250px; overflow-y: auto;">
+          {% for materia_nome in all_materias_names %}
+          <div class="form-check border-bottom py-2">
+            <input class="form-check-input priority-disc-check"
+                   type="checkbox"
+                   value="{{ materia_nome }}"
+                   id="disc-{{ loop.index }}"
+                   {% if materia_nome in priority_allowed_names %}checked{% endif %}>
+            <label class="form-check-label w-100" for="disc-{{ loop.index }}">
+              {{ materia_nome }}
+            </label>
+          </div>
+          {% endfor %}
+        </div>
 
-        function openConfirmationModal() {
-            if (confirmationModal) {
-                confirmationModal.classList.add('visible');
-                document.body.style.overflow = 'hidden';
-            }
-        }
+        <h6 class="fw-bold mb-2">2) Bloquear Períodos por Turma</h6>
+        <p class="small text-muted">
+          Marque os períodos que <strong>ficarão BLOQUEADOS</strong> quando o modo prioridade estiver ativo.
+        </p>
 
-        function closeConfirmationModal() {
-            if (confirmationModal) {
-                confirmationModal.classList.remove('visible');
-                document.body.style.overflow = '';
-            }
-        }
+        <!-- NOVO SELECT DE TURMA -->
+        <div class="mb-3">
+          <label for="turmaPrioritySelect" class="form-label fw-bold">Selecionar Turma:</label>
+          <select id="turmaPrioritySelect" class="form-select">
+            {% for turma in todas_as_turmas %}
+            <option value="{{ turma.nome }}">{{ turma.nome }}</option>
+            {% endfor %}
+          </select>
+        </div>
 
-        if (confirmationModal) {
-            confirmationModal.addEventListener('click', (e) => {
-                if (e.target === confirmationModal) {
-                    closeConfirmationModal();
-                }
-            });
-        }
+        {% for turma in todas_as_turmas %}
+        <div class="card mb-3 priority-turma-card" data-turma-card="{{ turma.nome }}">
+          <div class="card-header bg-light fw-bold">
+            {{ turma.nome }}
+          </div>
+          <div class="card-body p-2">
 
-        function selectAllPriority(state) {
-            document.querySelectorAll('.priority-disc-check').forEach(ch => ch.checked = state);
-        }
+            <table class="table table-sm table-bordered text-center align-middle">
+              <thead>
+                <tr>
+                  <th>Período</th>
+                  <th>Seg</th><th>Ter</th><th>Qua</th><th>Qui</th><th>Sex</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for p in range(1,16) %}
+                <tr>
+                  <td class="fw-bold">P{{ p }}</td>
+                  {% for dia in ['segunda','terca','quarta','quinta','sexta'] %}
+                  <td>
+                    <input type="checkbox"
+                           class="block-check"
+                           data-turma="{{ turma.nome }}"
+                           data-dia="{{ dia }}"
+                           data-periodo="P{{ p }}">
+                  </td>
+                  {% endfor %}
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
 
-        function savePriorityConfig() {
-            const active = document.getElementById('priorityActive').checked;
-            const checks = document.querySelectorAll('.priority-disc-check:checked');
-            const names = Array.from(checks).map(c => c.value);
+          </div>
+        </div>
+        {% endfor %}
 
-            const btn = document.querySelector('#priorityModal .btn-success');
-            const originalText = btn.innerHTML;
-            btn.innerHTML = 'Salvando...';
-            btn.disabled = true;
+      </div>
 
-            fetch('/semana/{{ semana_selecionada.id }}/salvar-prioridade', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': '{{ csrf_token() }}'
-                },
-                body: JSON.stringify({ status: active, disciplinas: names })
-            })
-            .then(res => res.json())
-            .then(data => {
-                if(data.success) {
-                    location.reload();
-                } else {
-                    alert('Erro ao salvar: ' + (data.message || 'Erro desconhecido'));
-                    btn.innerHTML = originalText;
-                    btn.disabled = false;
-                }
-            })
-            .catch(err => {
-                console.error(err);
-                alert('Erro de conexão.');
-                btn.innerHTML = originalText;
-                btn.disabled = false;
-            });
-        }
-    </script>
-    <style>
-        .scale-125 { transform: scale(1.4); cursor: pointer; }
-        .blocked-slot { background-color: #fee2e2 !important; cursor: not-allowed; } 
-        .horario-header-container { background-color: var(--color-white); border-radius: var(--border-radius); padding: 1.5rem 2rem; margin-bottom: 1.5rem; box-shadow: var(--shadow-soft); }
-        .horario-selectors { margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--color-border); }
-        .pelotao-pills { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.5rem; }
-        .semana-selector-wrapper { display: flex; align-items: center; gap: 1rem; max-width: 500px; }
-        .semana-selector-wrapper label { font-weight: 600; white-space: nowrap; }
-        .horario-actions { display: flex; justify-content: center; margin-top: 1.5rem; }
-        .ciclo-selector { display: flex; align-items: center; gap: 1rem; padding: 1rem; background-color: var(--color-background); border-radius: 8px; border: 1px solid var(--color-border); margin-top: 1rem; }
-        .header-dia small { font-weight: 400; font-size: 0.8em; opacity: 0.8; }
-        .weekend-slot.disabled { background-color: #f1f5f9; cursor: not-allowed; }
-        .turma-selection-buttons { display: flex; flex-wrap: wrap; gap: 1rem; justify-content: center; padding: 1rem 0; }
-        .btn-turma { flex-grow: 1; padding: 1rem; font-size: 1.1rem; }
-    </style>
+      <div class="modal-footer bg-light">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-success fw-bold px-4" onclick="savePriorityConfig()">
+          <i class="fas fa-save me-1"></i> Salvar Alterações
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<script>
+function savePriorityConfig() {
+  const active = document.getElementById('priorityActive').checked;
+
+  const names = Array.from(
+    document.querySelectorAll('.priority-disc-check:checked')
+  ).map(c => c.value);
+
+  let bloqueios = {};
+
+  document.querySelectorAll('.block-check:checked').forEach(ch => {
+    const t = ch.dataset.turma;
+    const d = ch.dataset.dia;
+    const p = ch.dataset.periodo;
+
+    if (!bloqueios[t]) bloqueios[t] = {};
+    if (!bloqueios[t][d]) bloqueios[t][d] = [];
+    bloqueios[t][d].push(p);
+  });
+
+  const btn = document.querySelector('#priorityModal .btn-success');
+  const originalText = btn.innerHTML;
+  btn.innerHTML = 'Salvando...';
+  btn.disabled = true;
+
+  fetch('/semana/{{ semana_selecionada.id }}/salvar-prioridade', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': '{{ csrf_token() }}'
+    },
+    body: JSON.stringify({
+      status: active,
+      disciplinas: names,
+      bloqueios: bloqueios
+    })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) {
+      location.reload();
+    } else {
+      alert('Erro: ' + (data.message || 'desconhecido'));
+      btn.innerHTML = originalText;
+      btn.disabled = false;
+    }
+  })
+  .catch(err => {
+    console.error(err);
+    alert('Erro de conexão.');
+    btn.innerHTML = originalText;
+    btn.disabled = false;
+  });
+}
+
+// NOVA LÓGICA DE FILTRO POR TURMA
+document.addEventListener('DOMContentLoaded', function() {
+  const select = document.getElementById('turmaPrioritySelect');
+  const cards = document.querySelectorAll('.priority-turma-card');
+
+  function filtrarTurma() {
+    const escolhida = select.value;
+
+    cards.forEach(card => {
+      if (card.dataset.turmaCard === escolhida) {
+        card.style.display = 'block';
+      } else {
+        card.style.display = 'none';
+      }
+    });
+  }
+
+  if (select) {
+    filtrarTurma(); // aplica ao abrir o modal
+    select.addEventListener('change', filtrarTurma);
+  }
+});
+</script>
+
+<style>
+.scale-125 { transform: scale(1.4); cursor: pointer; }
+.blocked-slot { background-color: #fee2e2 !important; cursor: not-allowed; }
+</style>
+
 {% endblock %}
