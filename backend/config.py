@@ -15,10 +15,12 @@ class Config:
 
     # --- BANCO DE DADOS ---
     SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL")
-    
+
+    SQLALCHEMY_ECHO = True
+
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True}
-    
+
     # --- NOVAS CONFIGURAÇÕES DE SEGURANÇA PARA COOKIES ---
     SESSION_COOKIE_SECURE = True
     REMEMBER_COOKIE_SECURE = True

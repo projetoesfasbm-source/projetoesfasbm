@@ -1,4 +1,3 @@
-# backend/controllers/justica_controller.py
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, g
 from flask_login import login_required, current_user
 from sqlalchemy import select, or_
@@ -11,7 +10,7 @@ from ..models.database import db
 from ..models.processo_disciplina import ProcessoDisciplina, StatusProcesso
 from ..models.elogio import Elogio
 from ..models.aluno import Aluno
-from ..models.user import User 
+from ..models.user import User
 from ..models.turma import Turma
 from ..models.discipline_rule import DisciplineRule
 from ..models.fada_avaliacao import FadaAvaliacao
@@ -200,7 +199,8 @@ def dar_ciente(processo_id):
         return redirect(url_for('justica.index'))
 
     processo.data_ciencia = datetime.now().astimezone()
-    processo.status = StatusProcesso.EM_JULGAMENTO 
+    # CORREÇÃO: Status atualizado para ALUNO_NOTIFICADO (Corrigido erro do log)
+    processo.status = StatusProcesso.ALUNO_NOTIFICADO 
     
     db.session.commit()
     flash("Ciência registrada com sucesso.", "success")
@@ -315,8 +315,7 @@ def fada_boletim():
         )
         aat, ndisc, fada_val = JusticaService.calcular_aat_final(aluno.id)
         
-        # Pega punições ativas que descontam nota para exibir aviso no front se necessário
-        # Isso ajuda o front a saber se tem punições pendentes de vínculo
+        # Pega punições ativas
         dt_inicio, dt_limite = JusticaService.get_datas_limites(aluno.turma_id)
         punicoes = db.session.scalars(select(ProcessoDisciplina).where(
             ProcessoDisciplina.aluno_id == aluno.id,
@@ -332,7 +331,7 @@ def fada_boletim():
             'fada': fada_val,
             'aat': aat,
             'fada_obj': fada_obj,
-            'punicoes_pendentes': punicoes_validas # Passa lista de punições para o template renderizar select de vínculo
+            'punicoes_pendentes': punicoes_validas
         })
         
     return render_template('justica/fada_lista_alunos.html', 
@@ -365,7 +364,6 @@ def salvar_fada():
     
     for p in processos_ativos:
         if JusticaService.verificar_elegibilidade_punicao(p, dt_inicio, dt_limite):
-            # Tenta pegar o vínculo vindo do form (input name="vinculo_infracao_{ID}")
             attr_idx = request.form.get(f'vinculo_infracao_{p.id}')
             if not attr_idx:
                 flash(f"ERRO: A punição (ID {p.id}) deve ser vinculada a um atributo.", "danger")
@@ -374,10 +372,8 @@ def salvar_fada():
 
     # --- 2. CALCULAR LIMITES COM O MAPA FORNECIDO ---
     limites_calculados, erro_limite = JusticaService.calcular_limites_fada(int(aluno_id), mapa_vinculos)
-    
     if erro_limite:
-        flash(f"Erro de Validação: {erro_limite}", "danger")
-        return redirect(url_for('justica.fada_boletim'))
+        flash(f"Erro de Validação: {erro_limite}", "danger"); return redirect(url_for('justica.fada_boletim'))
 
     # --- 3. VALIDAR NOTAS CONTRA LIMITES ---
     notas_float = []
@@ -469,33 +465,25 @@ def assinar_fada_aluno(fada_id):
 @login_required
 def api_infracoes_pendentes(aluno_id):
     aluno = db.session.get(Aluno, aluno_id)
-    if not aluno: return jsonify([])
     dt_inicio, dt_limite = JusticaService.get_datas_limites(aluno.turma_id)
-    stmt_proc = select(ProcessoDisciplina).where(ProcessoDisciplina.aluno_id == aluno_id, ProcessoDisciplina.status == StatusProcesso.FINALIZADO)
-    processos = db.session.scalars(stmt_proc).all()
-    resultado = []
+    processos = db.session.scalars(select(ProcessoDisciplina).where(ProcessoDisciplina.aluno_id==aluno_id, ProcessoDisciplina.status==StatusProcesso.FINALIZADO)).all()
+    res = []
     for p in processos:
         if JusticaService.verificar_elegibilidade_punicao(p, dt_inicio, dt_limite):
-            resultado.append({'id': f"inf_{p.id}", 'descricao': p.codigo_infracao, 'data': p.data_ocorrencia.strftime('%d/%m/%Y'), 'pontos': p.pontos, 'tipo': 'infracao'})
-    return jsonify(resultado)
+            res.append({'id': p.id, 'descricao': p.codigo_infracao, 'pontos': p.pontos})
+    return jsonify(res)
 
 @justica_bp.route('/api/alunos-por-turma/<int:turma_id>')
 @login_required
 def get_alunos_turma(turma_id):
-    stmt = select(Aluno).join(User).where(Aluno.turma_id == turma_id).order_by(User.nome_completo)
-    alunos = db.session.scalars(stmt).all()
-    data = []
-    for a in alunos:
-        numero = getattr(a, 'num_aluno', getattr(a, 'numero', ''))
-        data.append({'id': a.id, 'nome': a.user.nome_completo, 'numero': numero, 'graduacao': a.user.posto_graduacao or ''})
-    return jsonify(data)
+    alunos = db.session.scalars(select(Aluno).join(User).where(Aluno.turma_id==turma_id).order_by(User.nome_completo)).all()
+    return jsonify([{'id': a.id, 'nome': a.user.nome_completo, 'graduacao': a.user.posto_graduacao or ''} for a in alunos])
 
 @justica_bp.route('/api/aluno-details/<int:aluno_id>')
 @login_required
 def get_aluno_details(aluno_id):
-    aluno = db.session.get(Aluno, aluno_id)
-    if not aluno: return jsonify({})
-    return jsonify({'nome_completo': aluno.user.nome_completo, 'matricula': aluno.user.matricula, 'posto_graduacao': aluno.user.posto_graduacao or 'Aluno'})
+    a = db.session.get(Aluno, aluno_id)
+    return jsonify({'nome_completo': a.user.nome_completo, 'matricula': a.user.matricula, 'posto_graduacao': a.user.posto_graduacao}) if a else jsonify({})
 
 @justica_bp.route('/exportar-selecao')
 @login_required

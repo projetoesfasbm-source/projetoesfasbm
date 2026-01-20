@@ -41,6 +41,7 @@ class User(UserMixin, db.Model):
     must_change_password: Mapped[bool] = mapped_column(default=False, nullable=False)
 
     # --- RELACIONAMENTOS ---
+    # useList=False garante que seja tratado como objeto único (1-to-1)
     aluno_profile: Mapped['Aluno'] = relationship('Aluno', back_populates='user', uselist=False, cascade="all, delete-orphan")
     instrutor_profile: Mapped['Instrutor'] = relationship('Instrutor', back_populates='user', uselist=False, cascade="all, delete-orphan")
     user_schools: Mapped[list['UserSchool']] = relationship('UserSchool', back_populates='user', cascade="all, delete-orphan", lazy='selectin')

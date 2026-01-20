@@ -1,9 +1,10 @@
 from flask import Blueprint, render_template, request, flash, redirect, url_for, g
 from flask_login import login_required, current_user
-from datetime import date, datetime
-from sqlalchemy import select, or_, and_
+from datetime import date, datetime, timedelta
+from sqlalchemy import select, or_, and_, func
 from sqlalchemy.orm import joinedload 
 import re
+import pytz
 
 from backend.models.database import db
 from backend.models.horario import Horario
@@ -13,9 +14,23 @@ from backend.models.diario_classe import DiarioClasse
 from backend.models.frequencia import FrequenciaAluno
 from backend.models.semana import Semana
 from backend.models.disciplina import Disciplina
-from backend.models.turma import Turma  # Import essencial para o filtro de escola
+from backend.models.turma import Turma
+from backend.models.ciclo import Ciclo
 
 chefe_bp = Blueprint('chefe', __name__, url_prefix='/chefe')
+
+def get_data_hoje_brasil():
+    """Retorna a data atual no fuso horário de São Paulo."""
+    try:
+        tz = pytz.timezone('America/Sao_Paulo')
+        return datetime.now(tz).date()
+    except Exception:
+        return (datetime.utcnow() - timedelta(hours=3)).date()
+
+def get_dia_semana_str(data_obj):
+    """Retorna o dia da semana formatado conforme padrão do banco."""
+    dias = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
+    return dias[data_obj.weekday()]
 
 def get_variacoes_nome_turma(nome_original):
     """Gera variações comuns de nomes de turma para busca flexível."""
@@ -25,10 +40,11 @@ def get_variacoes_nome_turma(nome_original):
         if match:
             num_str = match.group(1)
             num_int = int(num_str)
-            variacoes.add(f"Turma {num_str}")      # "Turma 01"
-            variacoes.add(f"Turma {num_int}")      # "Turma 1"
-            variacoes.add(f"{num_str}º Pelotão")   # "01º Pelotão"
-            variacoes.add(f"{num_int}º Pelotão")   # "1º Pelotão"
+            variacoes.add(f"Turma {num_str}")
+            variacoes.add(f"Turma {num_int}")
+            variacoes.add(f"{num_str}º Pelotão")
+            variacoes.add(f"{num_int}º Pelotão")
+            variacoes.add(str(num_int))
     except Exception:
         pass
     return list(variacoes)
@@ -45,7 +61,7 @@ def verify_chefe_permission():
 @login_required
 def debug_screen():
     output = []
-    output.append("<h1>Diagnóstico: Raio-X com Filtro de Escola</h1>")
+    output.append("<h1>Diagnóstico Chefe de Turma (Varredura Semanal Segura)</h1>")
     
     try:
         aluno = current_user.aluno_profile
@@ -53,55 +69,75 @@ def debug_screen():
             return "Erro: Aluno sem turma vinculada."
             
         escola_id = aluno.turma.school_id
-        output.append(f"<h3>1. Perfil e Contexto</h3>")
-        output.append(f"<ul><li><strong>Aluno:</strong> {aluno.user.nome_completo}</li>")
-        output.append(f"<li><strong>Sua Turma:</strong> '{aluno.turma.nome}' (ID: {aluno.turma_id})</li>")
-        output.append(f"<li><strong>Sua Escola (SchoolID):</strong> <span style='color:blue; font-size:1.2em'><b>{escola_id}</b></span></li></ul>")
+        data_hoje = get_data_hoje_brasil()
+        dia_str = get_dia_semana_str(data_hoje)
+
+        output.append(f"<ul>")
+        output.append(f"<li><strong>Aluno:</strong> {aluno.user.nome_completo}</li>")
+        output.append(f"<li><strong>Turma ID:</strong> {aluno.turma_id} | <strong>Nome:</strong> {aluno.turma.nome}</li>")
+        output.append(f"<li><strong>Escola ID:</strong> {escola_id}</li>")
+        output.append(f"<li><strong>Data Base:</strong> {data_hoje} ({dia_str})</li>")
+        output.append(f"</ul>")
         
-        data_hoje = date.today()
-        semana = db.session.query(Semana).filter(Semana.data_inicio <= data_hoje, Semana.data_fim >= data_hoje).first()
-        
-        if not semana:
-            output.append("<h3 style='color:red'>ERRO: Nenhuma semana letiva ativa hoje!</h3>")
-            return "<br>".join(output)
-            
-        dias = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
-        dia_str = dias[data_hoje.weekday()]
-        
-        output.append(f"<h3>2. Varredura Segura ({dia_str})</h3>")
-        output.append(f"<p>Buscando aulas SOMENTE na escola <strong>{escola_id}</strong>...</p>")
-        
-        # Busca todas as aulas do dia, mas FILTRANDO pela escola
-        horarios = db.session.query(Horario).join(Horario.disciplina).join(Disciplina.turma).filter(
-            Turma.school_id == escola_id, # <--- TRAVA DE SEGURANÇA
-            Horario.semana_id == semana.id, 
-            Horario.dia_semana == dia_str
+        # BUSCA CORRIGIDA: Filtra semanas SOMENTE da escola atual através do Ciclo
+        semanas = db.session.query(Semana).join(Ciclo).filter(
+            Ciclo.school_id == escola_id,
+            Semana.data_inicio <= data_hoje, 
+            Semana.data_fim >= data_hoje
         ).all()
         
-        output.append("<table border='1' cellpadding='5' style='width:100%; border-collapse:collapse'>")
-        output.append("<tr style='background:#f0f0f0'><th>ID Aula</th><th>Matéria</th><th>Turma da Aula</th><th>School ID</th><th>Compatível com Você?</th></tr>")
+        if not semanas:
+            output.append(f"<h3 style='color:red'>ERRO: Nenhuma semana encontrada para a Escola {escola_id} na data de hoje.</h3>")
+            output.append("<p>Verifique se existe um Ciclo e uma Semana cadastrados para esta data nesta escola.</p>")
+            return "<br>".join(output)
         
-        if not horarios:
-            output.append("<tr><td colspan='5' style='text-align:center'>Nenhuma aula encontrada nesta escola para hoje.</td></tr>")
+        semana_ids = [s.id for s in semanas]
+        nomes_semanas = ", ".join([f"{s.nome} (ID {s.id})" for s in semanas])
+        output.append(f"<p><strong>Semanas Ativas Detectadas (Escola {escola_id}):</strong> {nomes_semanas}</p>")
+
+        # Query de Teste PERMISSIVA usando IN para semana_id
+        horarios_raw = db.session.query(Horario)\
+            .outerjoin(Horario.disciplina)\
+            .outerjoin(Disciplina.turma)\
+            .filter(
+                Turma.school_id == escola_id,
+                Horario.semana_id.in_(semana_ids)
+            ).all()
+
+        output.append("<table border='1' cellpadding='5'><tr><th>ID</th><th>Matéria</th><th>Turma ID (Disc)</th><th>Pelotão (Txt)</th><th>Dia no Banco</th><th>Semana ID</th><th>Status</th></tr>")
         
-        for h in horarios:
-            disc_turma = h.disciplina.turma
+        variacoes = get_variacoes_nome_turma(aluno.turma.nome)
+
+        if not horarios_raw:
+             output.append(f"<tr><td colspan='7'>Nenhum horário encontrado para esta escola nas semanas IDs: {semana_ids}.</td></tr>")
+
+        for h in horarios_raw:
+            # Proteção caso disciplina seja None devido ao outerjoin
+            disc_turma_id = h.disciplina.turma_id if h.disciplina else None
+            materia_nome = h.disciplina.materia if h.disciplina else "N/A"
+
+            eh_minha_turma_id = (disc_turma_id == aluno.turma_id)
+            eh_meu_nome = (h.pelotao == aluno.turma.nome) or (h.pelotao in variacoes)
             
-            # Verifica compatibilidade
-            eh_minha_turma = (disc_turma.id == aluno.turma_id)
-            eh_meu_nome = (h.pelotao == aluno.turma.nome) or (h.pelotao in get_variacoes_nome_turma(aluno.turma.nome))
+            status_txt = "Invisível"
+            bg = "#f9f9f9"
+
+            if eh_minha_turma_id:
+                status_txt = "<b>Visível (Por ID Turma)</b>"
+                bg = "#dff0d8"
+            elif eh_meu_nome:
+                status_txt = "<b>Visível (Por Nome/Pelotão)</b>"
+                bg = "#d9edf7"
             
-            cor = "#dff0d8" if (eh_minha_turma or eh_meu_nome) else "#fff"
-            status = "<b>SIM</b>" if (eh_minha_turma or eh_meu_nome) else "Não (Outra turma desta escola)"
-            
-            output.append(f"<tr style='background:{cor}'>")
+            output.append(f"<tr style='background:{bg}'>")
             output.append(f"<td>{h.id}</td>")
-            output.append(f"<td>{h.disciplina.materia}</td>")
-            output.append(f"<td>{disc_turma.nome} (ID: {disc_turma.id})</td>")
-            output.append(f"<td>{disc_turma.school_id}</td>")
-            output.append(f"<td>{status}</td>")
+            output.append(f"<td>{materia_nome}</td>")
+            output.append(f"<td>{disc_turma_id} (Meu: {aluno.turma_id})</td>")
+            output.append(f"<td>{h.pelotao}</td>")
+            output.append(f"<td>{h.dia_semana}</td>")
+            output.append(f"<td>{h.semana_id}</td>")
+            output.append(f"<td>{status_txt}</td>")
             output.append("</tr>")
-            
         output.append("</table>")
 
     except Exception as e:
@@ -121,47 +157,71 @@ def painel():
             flash("Acesso restrito ou aluno sem turma.", "danger")
             return redirect(url_for('main.index'))
 
+        # Data e Semana
         data_str = request.args.get('data')
-        data_selecionada = datetime.strptime(data_str, '%Y-%m-%d').date() if data_str else date.today()
+        data_hoje = get_data_hoje_brasil()
+        data_selecionada = datetime.strptime(data_str, '%Y-%m-%d').date() if data_str else data_hoje
         
-        semana_ativa = db.session.query(Semana).filter(
+        # CORREÇÃO: Busca TODAS as semanas ativas APENAS DA ESCOLA DO ALUNO
+        semanas_ativas = db.session.query(Semana).join(Ciclo).filter(
+            Ciclo.school_id == aluno.turma.school_id,
             Semana.data_inicio <= data_selecionada,
             Semana.data_fim >= data_selecionada
-        ).first()
+        ).all()
 
-        if not semana_ativa:
+        if not semanas_ativas:
             return render_template('chefe/painel.html', aluno=aluno, aulas_agrupadas=[], data_selecionada=data_selecionada, erro_semana=True)
 
-        dias_semana = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
-        dia_str = dias_semana[data_selecionada.weekday()]
+        semana_ids = [s.id for s in semanas_ativas]
+        dia_str = get_dia_semana_str(data_selecionada)
         
-        # --- BUSCA SEGURA (COM TRAVA DE ESCOLA) ---
         variacoes_nome = get_variacoes_nome_turma(aluno.turma.nome)
         
-        # O JOIN com Turma permite filtrar Turma.school_id
-        horarios = db.session.query(Horario).join(Horario.disciplina).join(Disciplina.turma).options(
-            joinedload(Horario.disciplina),
-            joinedload(Horario.instrutor)
-        ).filter(
-            Turma.school_id == aluno.turma.school_id,   # <--- TRAVA CRÍTICA DE SEGURANÇA
-            Horario.semana_id == semana_ativa.id,
-            Horario.dia_semana == dia_str,
+        # Query principal usando outerjoin e filtro de escola/semana correto
+        query = db.session.query(Horario)\
+            .outerjoin(Horario.disciplina)\
+            .outerjoin(Disciplina.turma)\
+            .options(
+                joinedload(Horario.disciplina),
+                joinedload(Horario.instrutor)
+            ).filter(
+                Turma.school_id == aluno.turma.school_id,
+                Horario.semana_id.in_(semana_ids),
+                Horario.dia_semana.ilike(f"{dia_str}%")
+            )
+
+        # Filtro abrangente: ID ou Nome
+        query = query.filter(
             or_(
                 Disciplina.turma_id == aluno.turma_id,
                 Horario.pelotao == aluno.turma.nome,
                 Horario.pelotao.in_(variacoes_nome)
             )
-        ).order_by(Horario.periodo).all()
+        )
 
+        horarios = query.order_by(Horario.periodo).all()
+
+        # Busca diários já lançados
         diarios_hoje = db.session.query(DiarioClasse).filter_by(
             data_aula=data_selecionada, 
             turma_id=aluno.turma_id
         ).all()
-        disciplinas_concluidas = set([d.disciplina_id for d in diarios_hoje])
+        
+        aulas_concluidas_keys = set()
+        for d in diarios_hoje:
+            if d.periodo:
+                aulas_concluidas_keys.add(f"{d.disciplina_id}_{d.periodo}")
+            else:
+                aulas_concluidas_keys.add(f"{d.disciplina_id}_legacy")
 
         grupos_dict = {}
+        
         if horarios:
             for h in horarios:
+                # Proteção para disciplina nula no caso de outerjoin
+                if not h.disciplina:
+                    continue
+
                 disc_id = h.disciplina_id
                 
                 if disc_id not in grupos_dict:
@@ -178,20 +238,29 @@ def painel():
                         'horarios_reais': [], 
                         'periodos_expandidos': [], 
                         'status': 'pendente',
-                        'primeiro_horario_id': h.id
+                        'primeiro_horario_id': h.id,
+                        'total_tempos': 0,
+                        'tempos_concluidos': 0
                     }
                 
-                grupos_dict[disc_id]['horarios_reais'].append(h)
                 duracao = h.duracao if h.duracao and h.duracao > 0 else 1
+                grupos_dict[disc_id]['horarios_reais'].append(h)
+                grupos_dict[disc_id]['total_tempos'] += duracao
+
                 for i in range(duracao):
-                    periodo_real = h.periodo + i
-                    grupos_dict[disc_id]['periodos_expandidos'].append(periodo_real)
-                
-                if h.status == 'concluido' or disc_id in disciplinas_concluidas:
-                    grupos_dict[disc_id]['status'] = 'concluido'
+                    p = h.periodo + i
+                    grupos_dict[disc_id]['periodos_expandidos'].append(p)
+                    
+                    key = f"{disc_id}_{p}"
+                    legacy_key = f"{disc_id}_legacy"
+                    
+                    if key in aulas_concluidas_keys or legacy_key in aulas_concluidas_keys or h.status == 'concluido':
+                        grupos_dict[disc_id]['tempos_concluidos'] += 1
 
             for g in sorted(grupos_dict.values(), key=lambda x: min(x['periodos_expandidos'])):
                 g['periodos'] = sorted(list(set(g['periodos_expandidos'])))
+                if g['tempos_concluidos'] >= g['total_tempos'] and g['total_tempos'] > 0:
+                    g['status'] = 'concluido'
                 aulas_agrupadas.append(g)
 
         return render_template('chefe/painel.html', aluno=aluno, aulas_agrupadas=aulas_agrupadas, data_selecionada=data_selecionada, erro_semana=False)
@@ -209,47 +278,68 @@ def registrar_aula(primeiro_horario_id):
         aluno_chefe = verify_chefe_permission()
         if not aluno_chefe: return redirect(url_for('main.index'))
 
-        # Carrega o horário garantindo que pertence à mesma escola (via disciplina -> turma)
-        horario_base = db.session.query(Horario).join(Horario.disciplina).join(Disciplina.turma).filter(
-            Horario.id == primeiro_horario_id,
-            Turma.school_id == aluno_chefe.turma.school_id # <--- VERIFICAÇÃO DE SEGURANÇA
-        ).first()
+        # Carrega o horário base com outerjoin
+        horario_base = db.session.query(Horario)\
+            .outerjoin(Horario.disciplina)\
+            .outerjoin(Disciplina.turma)\
+            .filter(
+                Horario.id == primeiro_horario_id,
+                Turma.school_id == aluno_chefe.turma.school_id
+            ).first()
 
         if not horario_base: 
             flash("Horário não encontrado ou não pertence à sua escola.", "danger")
             return redirect(url_for('chefe.painel'))
 
         data_str = request.args.get('data')
-        data_aula = datetime.strptime(data_str, '%Y-%m-%d').date() if data_str else date.today()
+        data_hoje = get_data_hoje_brasil()
+        data_aula = datetime.strptime(data_str, '%Y-%m-%d').date() if data_str else data_hoje
 
         variacoes_nome = get_variacoes_nome_turma(aluno_chefe.turma.nome)
         
-        # Busca os outros tempos com a mesma trava de segurança
-        horarios_db = db.session.query(Horario).join(Horario.disciplina).join(Disciplina.turma).filter(
-            Turma.school_id == aluno_chefe.turma.school_id, # <--- TRAVA
-            Horario.semana_id == horario_base.semana_id,
-            Horario.dia_semana == horario_base.dia_semana,
-            Horario.disciplina_id == horario_base.disciplina_id,
-            or_(
-                Disciplina.turma_id == aluno_chefe.turma_id,
-                Horario.pelotao == aluno_chefe.turma.nome,
-                Horario.pelotao.in_(variacoes_nome)
-            )
-        ).order_by(Horario.periodo).all()
+        # Recupera os horários irmãos com outerjoin
+        horarios_db = db.session.query(Horario)\
+            .outerjoin(Horario.disciplina)\
+            .outerjoin(Disciplina.turma)\
+            .filter(
+                Turma.school_id == aluno_chefe.turma.school_id,
+                Horario.semana_id == horario_base.semana_id,
+                Horario.dia_semana == horario_base.dia_semana,
+                Horario.disciplina_id == horario_base.disciplina_id,
+                or_(
+                    Disciplina.turma_id == aluno_chefe.turma_id,
+                    Horario.pelotao == aluno_chefe.turma.nome,
+                    Horario.pelotao.in_(variacoes_nome)
+                )
+            ).order_by(Horario.periodo).all()
 
         horarios_expandidos = []
         for h in horarios_db:
             duracao = h.duracao if h.duracao and h.duracao > 0 else 1
             for i in range(duracao):
                 p = h.periodo + i
-                horarios_expandidos.append({'periodo': p, 'horario_pai_id': h.id, 'obj': h})
+                existe = db.session.query(DiarioClasse).filter_by(
+                    data_aula=data_aula,
+                    turma_id=aluno_chefe.turma_id,
+                    disciplina_id=h.disciplina_id,
+                    periodo=p
+                ).first()
+                
+                if not existe:
+                    horarios_expandidos.append({'periodo': p, 'horario_pai_id': h.id, 'obj': h})
         
         horarios_expandidos.sort(key=lambda x: x['periodo'])
+        
+        if not horarios_expandidos:
+            flash("Todas as aulas desta disciplina já foram registradas para hoje.", "info")
+            return redirect(url_for('chefe.painel', data=data_aula))
+
         alunos_turma = db.session.query(Aluno).filter_by(turma_id=aluno_chefe.turma_id).order_by(Aluno.num_aluno).all()
 
         if request.method == 'POST':
             try:
                 ids_horarios_pais_atualizados = set()
+                count_regs = 0
                 for h_virt in horarios_expandidos:
                     periodo_atual = h_virt['periodo']
                     horario_pai = h_virt['obj']
@@ -275,9 +365,11 @@ def registrar_aula(primeiro_horario_id):
                         horario_pai.status = 'concluido'
                         db.session.add(horario_pai)
                         ids_horarios_pais_atualizados.add(horario_pai.id)
+                    
+                    count_regs += 1
 
                 db.session.commit()
-                flash(f"Salvo com sucesso! {len(horarios_expandidos)} tempos registrados.", "success")
+                flash(f"Salvo com sucesso! {count_regs} tempos registrados.", "success")
                 return redirect(url_for('chefe.painel', data=data_aula))
             except Exception as e:
                 db.session.rollback()
