@@ -51,13 +51,27 @@ def assinar(diario_id):
     if request.method == 'POST':
         tipo = request.form.get('tipo_assinatura')
         salvar = request.form.get('salvar_padrao') == 'on'
+        
+        # Captura os dados de texto do formulário
+        conteudo_ministrado = request.form.get('conteudo_ministrado')
+        observacoes = request.form.get('observacoes')
+        
         dados = None
 
         if tipo == 'canvas': dados = request.form.get('assinatura_base64')
         elif tipo == 'upload': dados = request.files.get('assinatura_upload')
         elif tipo == 'padrao': dados = True
 
-        ok, msg = DiarioService.assinar_diario(diario.id, current_user.id, tipo, dados, salvar)
+        ok, msg = DiarioService.assinar_diario(
+            diario_id=diario.id, 
+            user_id=current_user.id, 
+            tipo_assinatura=tipo, 
+            dados_assinatura=dados, 
+            salvar_padrao=salvar,
+            conteudo_atualizado=conteudo_ministrado,
+            observacoes_atualizadas=observacoes
+        )
+        
         if ok:
             flash(msg, "success")
             return redirect(url_for('diario.listar_pendentes', status='assinado'))

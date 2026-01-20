@@ -59,7 +59,7 @@
         </div>
         <div class="card-body">
             
-            <div class="alert alert-secondary border-0 shadow-sm text-dark">
+            <div class="alert alert-secondary border-0 shadow-sm text-dark mb-4">
                 <div class="row">
                     <div class="col-md-6">
                         <strong><i class="far fa-calendar-alt me-1"></i> Data:</strong> {{ diario.data_aula.strftime('%d/%m/%Y') }}<br>
@@ -74,36 +74,36 @@
             </div>
 
             {% if diario.periodo_resumo %}
-            <div class="alert alert-info border-0 shadow-sm d-flex align-items-center">
+            <div class="alert alert-info border-0 shadow-sm d-flex align-items-center mb-4">
                 <i class="fas fa-info-circle fa-2x me-3"></i>
                 <div>
                     <strong>Validação em Bloco:</strong><br>
-                    Você está assinando <strong>{{ diario.total_aulas_bloco }} aulas</strong> consecutivas ({{ diario.periodo_resumo }}).
+                    Você está editando e assinando <strong>{{ diario.total_aulas_bloco }} aulas</strong> consecutivas ({{ diario.periodo_resumo }}).
                 </div>
             </div>
             {% endif %}
 
-            <div class="mb-4">
-                <label class="form-label text-muted fw-bold">Conteúdo Ministrado:</label>
-                <div class="p-3 bg-light border border-secondary rounded text-dark" style="white-space: pre-wrap;">{{ diario.conteudo_ministrado }}</div>
-            </div>
-
-            {% if diario.observacoes %}
-            <div class="mb-4">
-                <label class="form-label text-muted fw-bold">Observações:</label>
-                <div class="p-3 bg-light border border-secondary rounded text-dark" style="white-space: pre-wrap;">{{ diario.observacoes }}</div>
-            </div>
-            {% endif %}
-
-            <hr class="my-4">
-
-            <h5 class="mb-3"><i class="fas fa-pen-nib me-2"></i>Assinatura do Instrutor</h5>
-            
             <form method="POST" enctype="multipart/form-data" id="formAssinatura">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="tipo_assinatura" id="tipo_assinatura" value="">
                 <input type="hidden" name="assinatura_base64" id="assinatura_base64">
 
+                <div class="mb-4">
+                    <label for="conteudo_ministrado" class="form-label text-muted fw-bold">Conteúdo Ministrado:</label>
+                    <textarea class="form-control shadow-sm" id="conteudo_ministrado" name="conteudo_ministrado" rows="5" required>{{ diario.conteudo_ministrado }}</textarea>
+                    <div class="form-text">Você pode ajustar o conteúdo ministrado antes de assinar.</div>
+                </div>
+
+                <div class="mb-4">
+                    <label for="observacoes" class="form-label text-muted fw-bold">Observações:</label>
+                    <textarea class="form-control shadow-sm" id="observacoes" name="observacoes" rows="3">{{ diario.observacoes }}</textarea>
+                    <div class="form-text">Registre ocorrências ou detalhes relevantes da aula.</div>
+                </div>
+
+                <hr class="my-4">
+
+                <h5 class="mb-3"><i class="fas fa-pen-nib me-2"></i>Assinatura do Instrutor</h5>
+                
                 <ul class="nav nav-pills mb-3" id="signTab" role="tablist">
                     {% if instrutor.assinatura_padrao_path %}
                     <li class="nav-item">

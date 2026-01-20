@@ -180,7 +180,7 @@ class DiarioService:
         return db.session.scalars(stmt).first(), instrutor
 
     @staticmethod
-    def assinar_diario(diario_id, user_id, tipo_assinatura, dados_assinatura=None, salvar_padrao=False):
+    def assinar_diario(diario_id, user_id, tipo_assinatura, dados_assinatura=None, salvar_padrao=False, conteudo_atualizado=None, observacoes_atualizadas=None):
         diario_pai, instrutor = DiarioService.get_diario_para_assinatura(diario_id, user_id)
         if not diario_pai:
             return False, "Permissão negada ou diário não encontrado."
@@ -225,6 +225,14 @@ class DiarioService:
                 d.status = 'assinado'
                 d.data_assinatura = timestamp
                 d.instrutor_assinante_id = user_id
+                
+                # Atualiza o conteúdo e observações, se fornecidos
+                if conteudo_atualizado:
+                    d.conteudo_ministrado = conteudo_atualizado
+                
+                if observacoes_atualizadas is not None:
+                    d.observacoes = observacoes_atualizadas
+                
                 count += 1
 
             if salvar_padrao and tipo_assinatura in ['canvas', 'upload']:
@@ -234,7 +242,7 @@ class DiarioService:
                 instrutor.assinatura_padrao_path = f"uploads/signatures/{def_name}"
 
             db.session.commit()
-            return True, f"Sucesso! {count} aulas validadas em bloco."
+            return True, f"Sucesso! {count} aulas validadas e atualizadas em bloco."
 
         except Exception as e:
             db.session.rollback()

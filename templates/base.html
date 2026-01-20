@@ -250,7 +250,8 @@
                     <a href="{{ url_for('horario.index') }}" class="nav-link {% if request.endpoint and ('horario.' in request.endpoint or 'semana.' in request.endpoint) %}active{% endif %}"><div class="nav-icon">📅</div> Quadro Horário</a>
                     
                     {# LINK EXCLUSIVO PARA INSTRUTOR: ASSINAR DIÁRIOS #}
-                    {% if current_user.is_instrutor_in_school(active_sid) %}
+                    {# CORREÇÃO: SENS, CAL e ADMIN também podem ser instrutores e precisam ver este link #}
+                    {% if current_user.is_instrutor_in_school(active_sid) or current_user.is_sens_in_school(active_sid) or current_user.is_cal_in_school(active_sid) or current_user.role == 'super_admin' %}
                         <a href="{{ url_for('diario.listar_pendentes') }}" class="nav-link {% if request.endpoint and 'diario.' in request.endpoint %}active{% endif %}">
                             <div class="nav-icon">✍️</div> Validar Diários
                         </a>
