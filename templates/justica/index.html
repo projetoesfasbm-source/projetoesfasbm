@@ -245,31 +245,26 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // --- LÓGICA DO BOTÃO ANALISAR (ABRIR MODAL) ---
-    // Usa delegação de eventos para funcionar mesmo em elementos dinâmicos
+    // --- LÓGICA CORRETA PARA EXPANDIR O FORMULÁRIO DE ANÁLISE (INLINE) ---
     document.body.addEventListener('click', function(event) {
-        const btn = event.target.closest('.btn-analisar');
+        // Verifica se clicou no botão ou no ícone/texto dentro dele
+        const btn = event.target.closest('.js-toggle-analise-form');
+        
         if (btn) {
-            const pid = btn.dataset.id;
-            const aluno = btn.dataset.aluno;
-            const fato = btn.dataset.fato;
+            const targetId = btn.getAttribute('data-target-form');
+            const formContainer = document.querySelector(targetId);
             
-            // Preenche o Modal
-            document.getElementById('modalAlunoNome').textContent = aluno;
-            document.getElementById('modalFatoDesc').textContent = fato;
-            
-            // Ajusta a Action do Form (Rota de finalizar)
-            const form = document.getElementById('formAnaliseProcesso');
-            form.action = "/justica-e-disciplina/finalizar-processo/" + pid;
-            
-            // Abre o Modal (Suporte Bootstrap 5)
-            try {
-                const modalEl = document.getElementById('modalAnalise');
-                const modal = new bootstrap.Modal(modalEl);
-                modal.show();
-            } catch(e) {
-                // Fallback (se usar jQuery/Bootstrap 4)
-                if(typeof $ !== 'undefined') $('#modalAnalise').modal('show');
+            if (formContainer) {
+                // Alterna a visibilidade
+                if (formContainer.style.display === 'none' || formContainer.style.display === '') {
+                    formContainer.style.display = 'block';
+                    btn.querySelector('.js-toggle-text').textContent = 'Ocultar';
+                    btn.classList.replace('btn-success', 'btn-secondary');
+                } else {
+                    formContainer.style.display = 'none';
+                    btn.querySelector('.js-toggle-text').textContent = 'Analisar';
+                    btn.classList.replace('btn-secondary', 'btn-success');
+                }
             }
         }
     });

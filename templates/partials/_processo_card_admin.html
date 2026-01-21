@@ -12,7 +12,7 @@
             </div>
 
             <div class="btn-group">
-                {% if processo.status == 'Aguardando Ciência' %}
+                {% if processo.status == 'AGUARDANDO_CIENCIA' %}
                 <form action="{{ url_for('justica.deletar_processo', pid=processo.id) }}" method="POST" onsubmit="return confirm('Tem certeza que deseja excluir este processo? Esta ação não pode ser desfeita.');" class="ms-2">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir Processo">
@@ -21,7 +21,7 @@
                 </form>
                 {% endif %}
 
-                {% if processo.status in ['Aluno Notificado', 'Defesa Enviada'] %}
+                {% if processo.status in ['ALUNO_NOTIFICADO', 'DEFESA_ENVIADA'] %}
                 <button class="btn btn-sm btn-success js-toggle-analise-form"
                         data-target-form="#analise-form-{{ processo.id }}">
                     <i class="fas fa-gavel me-1"></i>
@@ -43,7 +43,7 @@
             <small class="text-muted">Registrado por {{ processo.relator.nome_completo }} em {{ processo.data_ocorrencia.strftime('%d/%m/%Y às %H:%M') }}</small>
         </div>
 
-        {% if processo.status in ['Aluno Notificado', 'Defesa Enviada'] %}
+        {% if processo.status in ['ALUNO_NOTIFICADO', 'DEFESA_ENVIADA'] %}
             <div class="process-detail bg-light p-3 rounded border mt-3">
                 <span class="detail-label">Defesa do Aluno:</span>
                 {% if processo.defesa %}
@@ -55,10 +55,10 @@
             </div>
         {% endif %}
 
-        {% if processo.status == 'Finalizado' %}
+        {% if processo.status == 'FINALIZADO' %}
             <div class="process-detail bg-light p-3 rounded border border-2 mt-3">
                 <span class="detail-label text-success">Decisão Final ({{ processo.decisao_final }}):</span>
-                
+
                 {% if processo.tipo_sancao %}
                     <p class="fw-bold text-dark">
                         Sanção: {{ processo.tipo_sancao }}
@@ -67,7 +67,7 @@
                         {% endif %}
                     </p>
                 {% endif %}
-                
+
                 {% if processo.detalhes_sancao %}
                     <p class="preserve-whitespace fw-bold">{{ processo.detalhes_sancao }}</p>
                 {% endif %}
@@ -89,7 +89,7 @@
             </div>
         {% endif %}
 
-        {% if processo.status in ['Aluno Notificado', 'Defesa Enviada'] %}
+        {% if processo.status in ['ALUNO_NOTIFICADO', 'DEFESA_ENVIADA'] %}
         <div class="analise-form-container border p-3 mt-3 rounded bg-light" id="analise-form-{{ processo.id }}" style="display: none;">
 
             <h5 class="mb-3">Finalizar Processo de {{ processo.aluno.user.nome_completo }}</h5>
@@ -108,9 +108,9 @@
                 <div class="mb-3">
                     <label class="form-label d-block"><strong>Defesa:</strong> {{ processo.defesa or "Aluno não apresentou defesa." }}</label>
                 </div>
-                
+
                 <hr>
-                
+
                 <div class="mb-3">
                     <label class="form-label fw-bold">Enquadramento Legal</label>
                     <select name="origem_punicao" class="form-select">
@@ -192,17 +192,17 @@
         var decisao = document.getElementById('decisao_final-' + pid).value;
         var divSancao = document.getElementById('div-sancao-' + pid);
         var divTurnos = document.getElementById('div-turnos-' + pid);
-        
+
         // Reset inicial
         divSancao.style.display = 'none';
         divTurnos.style.display = 'none';
-        
+
         if (decisao === 'Procedente') {
             divSancao.style.display = 'block';
         } else if (decisao === 'Sustação da Dispensa') {
             divTurnos.style.display = 'block';
         }
-        
+
         // Verifica se precisa mostrar campo de dias baseado na sanção selecionada
         checkDias(pid);
     }
@@ -211,7 +211,7 @@
         var sancaoSelect = document.getElementById('tipo_sancao-' + pid);
         var divDias = document.getElementById('div-dias-' + pid);
         var divSancao = document.getElementById('div-sancao-' + pid);
-        
+
         // Só mostra dias se a div de sanção estiver visível E a sanção exigir dias
         if (divSancao.style.display !== 'none' && sancaoSelect && ['Detenção', 'Prisão'].includes(sancaoSelect.value)) {
             divDias.style.display = 'block';

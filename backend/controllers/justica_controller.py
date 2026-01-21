@@ -1,3 +1,4 @@
+#backend/controllers/justica_controller.py
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, g
 from flask_login import login_required, current_user
 from sqlalchemy import select, or_
@@ -221,6 +222,45 @@ def dar_ciente(processo_id):
     db.session.commit()
     flash("Ciência registrada com sucesso.", "success")
     return redirect(url_for('justica.index'))
+
+# --- ROTA INSERIDA PARA CORRIGIR O ERRO 404 ---
+@justica_bp.route('/enviar-defesa/<int:processo_id>', methods=['POST'])
+@login_required
+def enviar_defesa(processo_id):
+    """Permite ao aluno enviar sua defesa/justificativa."""
+    processo = db.session.get(ProcessoDisciplina, processo_id)
+    if not processo:
+        flash("Processo não encontrado.", "error")
+        return redirect(url_for('justica.index'))
+
+    # Verifica se o usuário é o aluno dono do processo
+    is_aluno_dono = (current_user.role == 'aluno' and current_user.aluno_profile and current_user.aluno_profile.id == processo.aluno_id)
+    
+    # Apenas o aluno (ou admins/programadores se necessário para debug, mas a regra de negócio é o aluno)
+    if not is_aluno_dono:
+        flash("Permissão negada. Apenas o aluno autuado pode enviar a defesa.", "error")
+        return redirect(url_for('justica.index'))
+
+    texto_defesa = request.form.get('defesa')
+    if not texto_defesa or not texto_defesa.strip():
+        flash("A justificativa não pode estar vazia.", "warning")
+        return redirect(url_for('justica.index'))
+
+    # Atualiza o processo
+    processo.defesa = texto_defesa
+    processo.data_defesa = datetime.now().astimezone()
+    processo.status = StatusProcesso.DEFESA_ENVIADA
+
+    try:
+        db.session.commit()
+        flash("Justificativa/Defesa enviada com sucesso.", "success")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao enviar defesa: {e}")
+        flash(f"Erro ao salvar defesa: {str(e)}", "danger")
+
+    return redirect(url_for('justica.index'))
+# ----------------------------------------------
 
 @justica_bp.route('/finalizar-processo/<int:pid>', methods=['POST'])
 @login_required

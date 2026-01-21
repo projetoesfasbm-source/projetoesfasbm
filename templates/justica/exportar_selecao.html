@@ -7,27 +7,27 @@
     .split-container { display: flex; height: calc(100vh - 120px); gap: 20px; overflow: hidden; }
     .left-panel { width: 350px; flex-shrink: 0; background: #fff; border: 1px solid #ddd; border-radius: 5px; display: flex; flex-direction: column; }
     .right-panel { flex-grow: 1; background: #e9ebee; border: 1px solid #ddd; border-radius: 5px; overflow-y: auto; padding: 20px; display: flex; justify-content: center; }
-    
+
     .a4-page {
         background: white; width: 21cm; min-height: 29.7cm;
         padding: 2.5cm 2cm; margin-bottom: 30px; box-shadow: 0 0 15px rgba(0,0,0,0.1);
         font-family: 'Times New Roman', Times, serif; color: black; line-height: 1.5; font-size: 12pt;
     }
-    
+
     .editable:hover { background: #ffffd0; cursor: text; outline: 1px dashed #ccc; }
-    
+
     .doc-header { text-align: center; font-weight: bold; margin-bottom: 1.5cm; text-transform: uppercase; font-size: 11pt; border: 2px solid #000; padding: 10px; }
     .doc-title { text-align: center; font-weight: bold; margin: 0.5cm 0; text-decoration: underline; text-transform: uppercase; }
-    
+
     p { margin-bottom: 6pt; text-align: justify; margin-top: 0; }
-    
-    .sancao-box { 
-        border: 1px solid #000; padding: 10px; margin: 10px 0; background: #fff; 
+
+    .sancao-box {
+        border: 1px solid #000; padding: 10px; margin: 10px 0; background: #fff;
     }
-    
+
     .process-item { padding: 12px; border-bottom: 1px solid #eee; cursor: pointer; }
     .process-item.active { background: #e3f2fd; border-left: 4px solid #0d6efd; }
-    
+
     @media print {
         body * { visibility: hidden; }
         .right-panel, .right-panel * { visibility: visible; }
@@ -39,7 +39,7 @@
 
 <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-white border-bottom">
     <h5 class="m-0">Gerador de Termos DEC</h5>
-    
+
     <form action="{{ url_for('justica.confirmar_publicacao_boletim') }}" method="POST" class="d-flex align-items-center gap-2" id="formPublicacao">
         <input type="text" name="numero_boletim" class="form-control form-control-sm" placeholder="Nº Boletim (Ex: BI 024)" style="width: 150px;">
         <button type="button" class="btn btn-sm btn-primary" onclick="submeterPublicacao()">
@@ -70,7 +70,7 @@
                     <span class="badge bg-success" style="font-size: 0.7em;">Publicado</span>
                 {% endif %}
             </div>
-            
+
             <script type="application/json" id="data_{{ p.id }}">
                 {
                     "id": {{ p.id }},
@@ -78,11 +78,11 @@
                     "data_fato": "{{ p.data_ocorrencia.strftime('%d/%m/%Y') }}",
                     "aluno": "{{ p.aluno.user.posto_graduacao }} {{ p.aluno.user.nome_completo }}",
                     "matricula": "{{ p.aluno.user.matricula }}",
-                    "fato": "{{ p.fato_constatado | replace('\n', ' ') | replace('"', '\\"') }}",
-                    "defesa": "{{ p.defesa | replace('\n', '<br>') | replace('"', '\\"') if p.defesa else '(Espaço reservado para defesa escrita)' }}",
+                    "fato": "{{ p.fato_constatado | replace('\r', '') | replace('\n', ' ') | replace('"', '\\"') }}",
+                    "defesa": "{{ p.defesa | replace('\r', '') | replace('\n', '<br>') | replace('"', '\\"') if p.defesa else '(Espaço reservado para defesa escrita)' }}",
                     "decisao_texto": "{{ p.decisao_final or '' }} {{ p.tipo_sancao or '' }} {{ '(' ~ p.dias_sancao ~ ' dias)' if p.dias_sancao else '' }}",
                     "origem": "{{ p.origem_punicao }}"
-                }
+                 }
             </script>
             {% else %}
             <div class="p-3 text-center text-muted">Nenhum processo finalizado.</div>
@@ -103,11 +103,11 @@
                     DEC – {{ nome_escola }}
                 {% endif %}
             </div>
-            
+
             <div id="dynamic-content">
                 <p class="text-center text-muted mt-5">Selecione processos na lista à esquerda.</p>
             </div>
-            
+
             <div class="text-center mt-5 pt-5 editable" contenteditable="true">
                 <p>Quartel em <span style="background: #ffffd0;">[DIGITE A CIDADE]</span>, {{ datetime.now().strftime('%d de %B de %Y') }}.</p>
                 <br><br><br>
@@ -135,7 +135,7 @@
             el.classList.add('active');
             addTerm(id);
         }
-        
+
         // Controla a visibilidade do aviso "Selecione..."
         const placeholder = document.querySelector('#dynamic-content .text-muted');
         if (placeholder) {
@@ -147,7 +147,7 @@
         const scriptTag = document.getElementById('data_' + id);
         if (!scriptTag) return;
         const d = JSON.parse(scriptTag.textContent);
-        
+
         const html = `
             <div id="term_${id}" class="mb-5 pb-4 border-bottom page-break">
                 <div class="doc-title editable" contenteditable="true">TERMO DE JUSTIFICAÇÃO Nº ${String(id).padStart(3, '0')} / ${d.ano}</div>
@@ -179,12 +179,12 @@
     function submeterPublicacao() {
         const container = document.getElementById('hidden-inputs');
         container.innerHTML = ''; // Limpa anteriores
-        
+
         if (selectedIds.size === 0) {
             alert("Selecione pelo menos um processo.");
             return;
         }
-        
+
         // Cria inputs hidden para cada ID selecionado
         selectedIds.forEach(id => {
             const input = document.createElement('input');
@@ -193,7 +193,7 @@
             input.value = id;
             container.appendChild(input);
         });
-        
+
         document.getElementById('formPublicacao').submit();
     }
 
