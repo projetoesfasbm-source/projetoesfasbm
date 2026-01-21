@@ -12,7 +12,6 @@ from ..models.ciclo import Ciclo
 from ..models.disciplina import Disciplina
 from ..models.disciplina_turma import DisciplinaTurma
 from ..models.turma import Turma
-# Importação do Model que você forneceu (Verifique se o nome do arquivo é este mesmo)
 from ..models.historico_disciplina import HistoricoDisciplina 
 
 from .user_service import UserService
@@ -132,14 +131,16 @@ class SemanaService:
              else:
                  return False, "Ciclo de destino inválido ou de outra escola."
         
-        semana.mostrar_periodo_13 = 'mostrar_periodo_13' in data
-        semana.mostrar_periodo_14 = 'mostrar_periodo_14' in data
-        semana.mostrar_periodo_15 = 'mostrar_periodo_15' in data
+        # CORREÇÃO: Usar o valor contido em 'data' em vez de checar se a chave existe.
+        # O controller envia explicitamente True/False nestas chaves.
+        semana.mostrar_periodo_13 = bool(data.get('mostrar_periodo_13'))
+        semana.mostrar_periodo_14 = bool(data.get('mostrar_periodo_14'))
+        semana.mostrar_periodo_15 = bool(data.get('mostrar_periodo_15'))
         
-        semana.mostrar_sabado = 'mostrar_sabado' in data
+        semana.mostrar_sabado = bool(data.get('mostrar_sabado'))
         semana.periodos_sabado = int(data.get('periodos_sabado') or 0)
         
-        semana.mostrar_domingo = 'mostrar_domingo' in data
+        semana.mostrar_domingo = bool(data.get('mostrar_domingo'))
         semana.periodos_domingo = int(data.get('periodos_domingo') or 0)
 
         try:
