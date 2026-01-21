@@ -50,11 +50,12 @@
             </div>
 
             <div class="justice-content" id="finalizadosContent">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h3 class="justice-content-title mb-0">Processos Finalizados</h3>
-                    <a href="{{ url_for('justica.exportar_selecao') }}" class="btn btn-sm btn-outline-secondary">
-                        <i class="fas fa-print"></i> Exportar Termos
-                    </a>
+                <div class="d-flex justify-content-end mb-3">
+                    {% if current_user.role != 'aluno' %}
+                        <a href="{{ url_for('justica.exportar_selecao') }}" class="btn btn-sm btn-outline-dark">
+                            <i class="fas fa-file-export"></i> Exportar Termos
+                        </a>
+                    {% endif %}
                 </div>
 
                 {% if finalizados %}
@@ -233,7 +234,7 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    
+
     // --- LÓGICA DAS ABAS (TABS) ---
     document.querySelectorAll('.justice-option-btn').forEach(btn => {
         btn.addEventListener('click', function(e) {
@@ -249,11 +250,11 @@ document.addEventListener('DOMContentLoaded', function() {
     document.body.addEventListener('click', function(event) {
         // Verifica se clicou no botão ou no ícone/texto dentro dele
         const btn = event.target.closest('.js-toggle-analise-form');
-        
+
         if (btn) {
             const targetId = btn.getAttribute('data-target-form');
             const formContainer = document.querySelector(targetId);
-            
+
             if (formContainer) {
                 // Alterna a visibilidade
                 if (formContainer.style.display === 'none' || formContainer.style.display === '') {
