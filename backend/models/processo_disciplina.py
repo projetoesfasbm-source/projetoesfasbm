@@ -1,8 +1,8 @@
 # backend/models/processo_disciplina.py
 from __future__ import annotations
 import typing as t
+import enum
 from datetime import datetime
-from enum import Enum
 
 from sqlalchemy import ForeignKey, String, Float, Text, Boolean, Integer, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -15,7 +15,7 @@ if t.TYPE_CHECKING:
     from .user import User
     from .discipline_rule import DisciplineRule
 
-class StatusProcesso(str, Enum):
+class StatusProcesso(str, enum.Enum):
     AGUARDANDO_CIENCIA = "AGUARDANDO_CIENCIA"
     ALUNO_NOTIFICADO = "ALUNO_NOTIFICADO"
     DEFESA_ENVIADA = "DEFESA_ENVIADA"
@@ -37,13 +37,17 @@ class ProcessoDisciplina(db.Model):
     observacao: Mapped[t.Optional[str]] = mapped_column(Text, nullable=True)
     pontos: Mapped[float] = mapped_column(Float, default=0.0)
     
-    status: Mapped[StatusProcesso] = mapped_column(
+    # --- SOLUÇÃO DEFINITIVA ---
+    # Define como String no banco para evitar travamento de ENUM
+    # O Python usa o Enum class para atribuir o valor default
+    status: Mapped[str] = mapped_column(
         String(50), 
-        default=StatusProcesso.AGUARDANDO_CIENCIA,
-        server_default=StatusProcesso.AGUARDANDO_CIENCIA.value
+        default=StatusProcesso.AGUARDANDO_CIENCIA.value,
+        server_default=StatusProcesso.AGUARDANDO_CIENCIA.value,
+        nullable=False
     )
     
-    # DATAS (Atenção aqui: data_registro é nova)
+    # DATAS
     data_ocorrencia: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
     data_registro: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
     data_ciente: Mapped[t.Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -61,10 +65,8 @@ class ProcessoDisciplina(db.Model):
     origem_punicao: Mapped[str] = mapped_column(String(20), default='NPCCAL')
     ciente_aluno: Mapped[bool] = mapped_column(Boolean, default=False)
 
-    # RELACIONAMENTOS CORRIGIDOS (Sem conflito)
-    # Se 'Aluno' já tem 'processos_disciplinares', usamos ele aqui ou criamos um novo sem overlap.
-    # Vou usar backref simples para evitar o erro de 'overlaps' se o Aluno não tiver nada definido explicitamente.
-    # Se Aluno tiver definido, o backref será ignorado ou complementado.
+    # RELACIONAMENTOS
+    # Mantendo backref conforme solicitado para não quebrar compatibilidade
     aluno = relationship("Aluno", backref="processos_novos") 
     
     relator: Mapped["User"] = relationship(foreign_keys=[relator_id])
