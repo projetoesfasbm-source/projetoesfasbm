@@ -71,9 +71,9 @@
                 {% endif %}
                 
                 {% if can_schedule_in_this_turma or current_user.is_sens %}
-                    <button type="button" class="btn btn-primary" onclick="openConfirmationModal()">
-                        Agendar/Desmarcar Aulas
-                    </button>
+                    <a href="{{ url_for('horario.editar_horario_grid', pelotao=pelotao_selecionado, semana_id=semana_selecionada.id, ciclo_id=ciclo_selecionado) }}" class="btn btn-primary">
+                        <i class="fas fa-edit me-1"></i> Agendar/Desmarcar Aulas
+                    </a>
                 {% else %}
                     {% if current_user.role == 'instrutor' %}
                         <button class="btn btn-secondary" disabled title="Você não tem permissão nesta turma ou o modo prioridade está ativo para outras disciplinas.">
@@ -298,9 +298,9 @@
         <div class="border rounded p-2 bg-white mb-4" style="max-height: 250px; overflow-y: auto;">
           {% for materia_nome in all_materias_names %}
           <div class="form-check border-bottom py-2">
-            <input class="form-check-input priority-disc-check"
-                   type="checkbox"
-                   value="{{ materia_nome }}"
+            <input class="form-check-input priority-disc-check" 
+                   type="checkbox" 
+                   value="{{ materia_nome }}" 
                    id="disc-{{ loop.index }}"
                    {% if materia_nome in priority_allowed_names %}checked{% endif %}>
             <label class="form-check-label w-100" for="disc-{{ loop.index }}">
@@ -315,7 +315,6 @@
           Marque os períodos que <strong>ficarão BLOQUEADOS</strong> quando o modo prioridade estiver ativo.
         </p>
 
-        <!-- NOVO SELECT DE TURMA -->
         <div class="mb-3">
           <label for="turmaPrioritySelect" class="form-label fw-bold">Selecionar Turma:</label>
           <select id="turmaPrioritySelect" class="form-select">
@@ -331,7 +330,7 @@
             {{ turma.nome }}
           </div>
           <div class="card-body p-2">
-
+            
             <table class="table table-sm table-bordered text-center align-middle">
               <thead>
                 <tr>
@@ -345,9 +344,9 @@
                   <td class="fw-bold">P{{ p }}</td>
                   {% for dia in ['segunda','terca','quarta','quinta','sexta'] %}
                   <td>
-                    <input type="checkbox"
-                           class="block-check"
-                           data-turma="{{ turma.nome }}"
+                    <input type="checkbox" 
+                           class="block-check" 
+                           data-turma="{{ turma.nome }}" 
                            data-dia="{{ dia }}"
                            data-periodo="P{{ p }}">
                   </td>
@@ -377,7 +376,7 @@
 <script>
 function savePriorityConfig() {
   const active = document.getElementById('priorityActive').checked;
-
+  
   const names = Array.from(
     document.querySelectorAll('.priority-disc-check:checked')
   ).map(c => c.value);
@@ -436,7 +435,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function filtrarTurma() {
     const escolhida = select.value;
-
+    
     cards.forEach(card => {
       if (card.dataset.turmaCard === escolhida) {
         card.style.display = 'block';
