@@ -167,7 +167,11 @@
                             {% for col_idx in range(5) %}
                                 {% set aula = horario_matrix[row_idx][col_idx] %}
                                 
-                                {% if aula %}
+                                {% if aula.blocked %}
+                                    <td class="schedule-slot blocked-slot-visual">
+                                        <i class="fas fa-lock text-danger"></i>
+                                    </td>
+                                {% elif aula.id or aula.is_disposicao %}
                                     {% include 'partials/_horario_slot_view.html' %}
                                 {% else %}
                                     <td class="schedule-slot free {% if priority_active and not can_schedule_in_this_turma %}blocked-slot{% endif %}"></td>
@@ -210,7 +214,9 @@
                                 
                                 {% if semana_selecionada.mostrar_sabado %}
                                     {% set aula = horario_matrix[row_idx][5] %}
-                                    {% if aula %}
+                                    {% if aula.blocked %}
+                                        <td class="schedule-slot blocked-slot-visual"><i class="fas fa-lock text-danger"></i></td>
+                                    {% elif aula.id or aula.is_disposicao %}
                                         {% include 'partials/_horario_slot_view.html' %}
                                     {% else %}
                                         <td class="schedule-slot free weekend-slot {% if priority_active and not can_schedule_in_this_turma %}blocked-slot{% endif %}"></td>
@@ -219,7 +225,9 @@
                                 
                                 {% if semana_selecionada.mostrar_domingo %}
                                     {% set aula = horario_matrix[row_idx][6] %}
-                                    {% if aula %}
+                                    {% if aula.blocked %}
+                                        <td class="schedule-slot blocked-slot-visual"><i class="fas fa-lock text-danger"></i></td>
+                                    {% elif aula.id or aula.is_disposicao %}
                                         {% include 'partials/_horario_slot_view.html' %}
                                     {% else %}
                                         <td class="schedule-slot free weekend-slot {% if priority_active and not can_schedule_in_this_turma %}blocked-slot{% endif %}"></td>
@@ -344,11 +352,15 @@
                   <td class="fw-bold">P{{ p }}</td>
                   {% for dia in ['segunda','terca','quarta','quinta','sexta'] %}
                   <td>
+                    {% set p_str = 'P' ~ p %}
+                    {% set blocks_for_turma = priority_blocks_obj.get(turma.nome, {}) %}
+                    {% set blocks_for_dia = blocks_for_turma.get(dia, []) %}
                     <input type="checkbox" 
                            class="block-check" 
                            data-turma="{{ turma.nome }}" 
                            data-dia="{{ dia }}"
-                           data-periodo="P{{ p }}">
+                           data-periodo="P{{ p }}"
+                           {% if p_str in blocks_for_dia %}checked{% endif %}>
                   </td>
                   {% endfor %}
                 </tr>
@@ -455,6 +467,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <style>
 .scale-125 { transform: scale(1.4); cursor: pointer; }
 .blocked-slot { background-color: #fee2e2 !important; cursor: not-allowed; }
+.blocked-slot-visual { background-color: #d1d5db !important; text-align: center; vertical-align: middle; cursor: not-allowed; }
 </style>
 
 {% endblock %}

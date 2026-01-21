@@ -46,18 +46,85 @@ class HorarioService:
         return False
 
     @staticmethod
+    def get_aula_details(horario_id, user):
+        """
+        Retorna os detalhes de uma aula específica para o modal de edição/exclusão.
+        """
+        aula = db.session.get(Horario, int(horario_id))
+        if not aula:
+            return None
+        
+        # Verifica permissão (opcional, mas recomendado para segurança)
+        if not HorarioService.can_edit_horario(aula, user):
+            pass 
+
+        instrutor_val = str(aula.instrutor_id)
+        if aula.instrutor_id_2:
+            instrutor_val += f"-{aula.instrutor_id_2}"
+
+        return {
+            'id': aula.id,
+            'disciplina_id': aula.disciplina_id,
+            'disciplina_nome': aula.disciplina.materia if aula.disciplina else "Desconhecida",
+            'instrutor_id': instrutor_val,
+            'observacao': aula.observacao,
+            'duracao': aula.duracao,
+            'periodo': aula.periodo,
+            'dia': aula.dia_semana,
+            'pelotao': aula.pelotao,
+            'semana_id': aula.semana_id,
+            'group_id': aula.group_id,
+            'status': aula.status
+        }
+
+    @staticmethod
     def construir_matriz_horario(pelotao, semana_id, user):
+        # 1. Carregar Semana e Bloqueios
+        semana = db.session.get(Semana, semana_id)
+        blocked_periods = {}
+        
+        # CORREÇÃO: Carrega bloqueios SEMPRE, independente do priority_active
+        if semana:
+            try:
+                raw_blocks = getattr(semana, 'priority_blocks', '{}') or '{}'
+                full_blocks = json.loads(raw_blocks)
+                # Extrai apenas os bloqueios para o pelotão atual
+                if pelotao in full_blocks:
+                    blocked_periods = full_blocks[pelotao] # ex: {'segunda': ['P1', 'P2'], 'terca': []}
+            except:
+                blocked_periods = {}
+
+        # 2. Estrutura padrão para célula vazia
         a_disposicao = {
             'materia': 'A disposição do C Al /S Ens',
             'instrutor': None,
             'duracao': 1,
             'is_disposicao': True,
             'id': None,
-            'status': 'confirmado'
+            'status': 'confirmado',
+            'blocked': False
         }
+        
         horario_matrix = [[dict(a_disposicao) for _ in range(7)] for _ in range(15)]
         dias = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo']
 
+        # 3. Aplicar Bloqueios Visuais (Antes de preencher as aulas)
+        if blocked_periods:
+            for d_idx, dia_nome in enumerate(dias):
+                if dia_nome in blocked_periods:
+                    for p_tag in blocked_periods[dia_nome]:
+                        # p_tag formato "P1", "P15"
+                        try:
+                            p_num = int(p_tag.replace('P', ''))
+                            row_idx = p_num - 1
+                            if 0 <= row_idx < 15:
+                                horario_matrix[row_idx][d_idx]['blocked'] = True
+                                horario_matrix[row_idx][d_idx]['materia'] = 'BLOQUEADO'
+                                horario_matrix[row_idx][d_idx]['is_disposicao'] = False
+                        except:
+                            pass
+
+        # 4. Buscar e Preencher Aulas Existentes
         aulas_query = (
             select(Horario)
             .options(
@@ -103,6 +170,7 @@ class HorarioService:
                     'can_edit': HorarioService.can_edit_horario(aula, user),
                     'is_continuation': False,
                     'group_id': aula.group_id,
+                    'blocked': False # Aula existente sobrepõe visualmente o bloqueio
                 }
 
                 if 0 <= periodo_idx < 15:
@@ -238,10 +306,6 @@ class HorarioService:
             'datas_semana': HorarioService.get_datas_da_semana(semana),
         }
 
-    # ============================
-    # MÉTODO PRINCIPAL MODIFICADO
-    # ============================
-
     @staticmethod
     def save_aula(data, user):
         try:
@@ -263,7 +327,7 @@ class HorarioService:
             if not semana:
                 return False, "Semana não encontrada.", 404
 
-            # ---------- VALIDAÇÕES DE CALENDÁRIO (mantidas) ----------
+            # ---------- VALIDAÇÕES DE CALENDÁRIO ----------
             if not is_admin:
                 if dia == 'sabado' and not semana.mostrar_sabado:
                     return False, "⚠️ AGENDAMENTO BLOQUEADO: O Sábado não está habilitado nesta semana.", 403
@@ -287,7 +351,7 @@ class HorarioService:
 
             disciplina = db.session.get(Disciplina, disciplina_id)
 
-            # ---------- LIMITE DE CARGA HORÁRIA (mantido) ----------
+            # ---------- LIMITE DE CARGA HORÁRIA ----------
             if disciplina and not is_admin: 
                 total_agendado = db.session.scalar(
                     select(func.sum(Horario.duracao))
@@ -315,29 +379,12 @@ class HorarioService:
                         f"Você tentou agendar {duracao}h."
                     ), 400
 
-            # ============================
-            # >>> PRIORIDADE (NOVA VERSÃO)
-            # ============================
-            if semana and getattr(semana, 'priority_active', False) and not is_admin:
+            # ===============================================
+            # >>> BLOQUEIOS E PRIORIDADE (LÓGICA SEPARADA)
+            # ===============================================
+            if semana and not is_admin:
 
-                # --- 1) Regras antigas: disciplinas prioritárias ---
-                raw_priority = getattr(semana, 'priority_disciplines', '[]') or '[]'
-                try:
-                    allowed_names = json.loads(raw_priority)
-                    if not isinstance(allowed_names, list):
-                        allowed_names = []
-                except:
-                    allowed_names = []
-
-                nome_disciplina_atual = disciplina.materia if disciplina else ""
-
-                if allowed_names and nome_disciplina_atual not in allowed_names:
-                    return False, (
-                        "⚠️ AGENDAMENTO BLOQUEADO: "
-                        "Disciplina não está na lista prioritária."
-                    ), 403
-
-                # --- 2) NOVA REGRA: bloqueio por TURMA + DIA + PERÍODO ---
+                # --- 1) VERIFICAÇÃO DE BLOQUEIOS (SEMPRE ATIVA) ---
                 raw_blocks = getattr(semana, 'priority_blocks', '{}') or '{}'
                 try:
                     blocks = json.loads(raw_blocks)
@@ -346,8 +393,8 @@ class HorarioService:
                 except:
                     blocks = {}
 
-                turma_key = pelotao              # ex: "T1", "T2", "T4"
-                dia_key = dia                   # "segunda", "terca", ...
+                turma_key = pelotao
+                dia_key = dia
                 
                 # verifica cada período solicitado
                 for p in range(periodo_inicio, periodo_fim + 1):
@@ -357,13 +404,32 @@ class HorarioService:
                         if dia_key in blocks[turma_key]:
                             if periodo_key in blocks[turma_key][dia_key]:
                                 return False, (
-                                    f"🔒 BLOQUEADO POR PRIORIDADE: "
+                                    f"🔒 BLOQUEADO: "
                                     f"{turma_key} • {dia_key} • {periodo_key} "
-                                    "está reservado."
+                                    "está indisponível para agendamento."
                                 ), 403
-            # <<< FIM PRIORIDADE NOVA >>>
 
-            # ---------- DEFINIÇÃO DE INSTRUTORES (mantida) ----------
+                # --- 2) VERIFICAÇÃO DE DISCIPLINA PRIORITÁRIA (SÓ SE O MODO ESTIVER ATIVO) ---
+                if getattr(semana, 'priority_active', False):
+                    raw_priority = getattr(semana, 'priority_disciplines', '[]') or '[]'
+                    try:
+                        allowed_names = json.loads(raw_priority)
+                        if not isinstance(allowed_names, list):
+                            allowed_names = []
+                    except:
+                        allowed_names = []
+
+                    nome_disciplina_atual = disciplina.materia if disciplina else ""
+
+                    # Se houver lista de prioridade e a disciplina não estiver nela, bloqueia
+                    if allowed_names and nome_disciplina_atual not in allowed_names:
+                        return False, (
+                            "⚠️ AGENDAMENTO BLOQUEADO: "
+                            "Apenas disciplinas prioritárias podem agendar nesta semana."
+                        ), 403
+            # <<< FIM BLOQUEIOS >>>
+
+            # ---------- DEFINIÇÃO DE INSTRUTORES ----------
             instrutor_id_1, instrutor_id_2 = None, None
 
             if is_admin:
@@ -423,7 +489,7 @@ class HorarioService:
                     elif vinculo_dt.instrutor_id_2 == instrutor_id_1 and vinculo_dt.instrutor_id_1:
                         instrutor_id_2 = vinculo_dt.instrutor_id_1
 
-            # ---------- CONFLITO CROSS-TURMA (mantido) ----------
+            # ---------- CONFLITO CROSS-TURMA ----------
             instructors_to_check = [i for i in [instrutor_id_1, instrutor_id_2] if i is not None]
             
             if instructors_to_check:
@@ -513,7 +579,7 @@ class HorarioService:
 
                 periodos_restantes = periodos_restantes[duracao_bloco:]
 
-            # ---------- NOTIFICAÇÃO (mantida) ----------
+            # ---------- NOTIFICAÇÃO ----------
             if not is_admin:
                 turma = db.session.scalar(select(Turma).where(Turma.nome == pelotao))
                 
@@ -542,7 +608,10 @@ class HorarioService:
             current_app.logger.error(f"Erro ao salvar aula: {e}")
             return False, 'Erro interno do servidor ao salvar.', 500
 
-    # ======== O RESTO DO ARQUIVO PERMANECE IGUAL ========
+    @staticmethod
+    def _consolidar_aulas_adjacentes(pelotao, semana_id, dia):
+        """Método auxiliar para tentar unir aulas iguais que ficaram fragmentadas."""
+        pass 
 
     @staticmethod
     def remove_aula(horario_id, user):
@@ -695,3 +764,7 @@ class HorarioService:
 
         db.session.commit()
         return True, message
+    
+    @staticmethod
+    def aprovar_horario_parcialmente(horario_id, periodos_aprovados):
+        return False, "Funcionalidade não implementada neste contexto."

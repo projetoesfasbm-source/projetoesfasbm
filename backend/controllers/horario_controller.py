@@ -151,7 +151,8 @@ def index():
     instrutor_turmas_vinculadas = []
     priority_active = False
     priority_allowed_names = [] 
-    all_materias_names = []      
+    priority_blocks_obj = {} # Objeto de bloqueios parseado
+    all_materias_names = []       
 
     if school_id:
         try:
@@ -167,10 +168,19 @@ def index():
 
     if semana_selecionada:
         priority_active = getattr(semana_selecionada, 'priority_active', False)
+        
+        # Parse Disciplinas Prioritárias
         try:
             priority_allowed_names = json.loads(getattr(semana_selecionada, 'priority_disciplines', '[]') or '[]')
         except:
             priority_allowed_names = []
+
+        # Parse Bloqueios (NOVO) - Envia para o template preencher os checkboxes
+        try:
+            raw_blocks = getattr(semana_selecionada, 'priority_blocks', '{}') or '{}'
+            priority_blocks_obj = json.loads(raw_blocks)
+        except:
+            priority_blocks_obj = {}
 
         # REGRA 1: Admin/SENS da escola atual tem acesso irrestrito
         if current_user.is_sens or current_user.is_admin_escola or current_user.is_programador:
@@ -236,6 +246,7 @@ def index():
                            all_disciplinas=all_disciplinas,
                            priority_active=priority_active,
                            priority_allowed_names=priority_allowed_names,
+                           priority_blocks_obj=priority_blocks_obj, # Passando o objeto de bloqueios
                            all_materias_names=all_materias_names)
 
 @horario_bp.route('/save-priority-config', methods=['POST'])

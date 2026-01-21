@@ -212,19 +212,10 @@ def salvar_prioridade(semana_id):
 
         semana.priority_active = prioridade_ativa
 
-        # 🔹 REGRA PRINCIPAL (AGORA CORRETA PARA O SEU CASO)
-        if prioridade_ativa:
-            # Guarda disciplinas (vazia ou não)
-            semana.priority_disciplines = json.dumps(disciplinas)
-
-            # Guarda EXATAMENTE os períodos que você marcou
-            # (independente de ter disciplina ou não)
-            semana.priority_blocks = json.dumps(bloqueios)
-
-        else:
-            # Se desligou prioridade, limpa tudo
-            semana.priority_disciplines = json.dumps([])
-            semana.priority_blocks = json.dumps({})
+        # CORREÇÃO: Salva os dados independentemente do status do botão de prioridade.
+        # Isso permite que os bloqueios de período funcionem mesmo se o "Modo Prioridade" (Restrição de Disciplina) estiver OFF.
+        semana.priority_disciplines = json.dumps(disciplinas)
+        semana.priority_blocks = json.dumps(bloqueios)
 
         db.session.commit()
         return jsonify({'success': True})
