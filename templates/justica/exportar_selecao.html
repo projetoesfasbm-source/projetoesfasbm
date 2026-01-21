@@ -4,42 +4,121 @@
 
 {% block content %}
 <style>
+    /* --- ESTILOS DE TELA (SCREEN) --- */
     .split-container { display: flex; height: calc(100vh - 120px); gap: 20px; overflow: hidden; }
     .left-panel { width: 350px; flex-shrink: 0; background: #fff; border: 1px solid #ddd; border-radius: 5px; display: flex; flex-direction: column; }
-    .right-panel { flex-grow: 1; background: #e9ebee; border: 1px solid #ddd; border-radius: 5px; overflow-y: auto; padding: 20px; display: flex; justify-content: center; }
-
+    
+    .right-panel { 
+        flex-grow: 1; 
+        background: #525659; /* Fundo cinza escuro estilo Word/PDF Reader */
+        border: 1px solid #ddd; 
+        border-radius: 5px; 
+        overflow-y: auto; 
+        padding: 30px; 
+        display: block; 
+        text-align: center; 
+    }
+    
+    /* Folha A4 na tela */
     .a4-page {
-        background: white; width: 21cm; min-height: 29.7cm;
-        padding: 2.5cm 2cm; margin-bottom: 30px; box-shadow: 0 0 15px rgba(0,0,0,0.1);
-        font-family: 'Times New Roman', Times, serif; color: black; line-height: 1.5; font-size: 12pt;
+        background: white; 
+        width: 21cm; 
+        min-height: 29.7cm;
+        height: auto; 
+        padding: 2cm 2cm; /* Margem padrão ABNT aprox */
+        margin: 0 auto 30px auto; 
+        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        font-family: 'Times New Roman', Times, serif; 
+        color: black; 
+        line-height: 1.5; 
+        font-size: 12pt;
+        text-align: left; 
+        overflow: visible;
+        position: relative;
     }
-
+    
     .editable:hover { background: #ffffd0; cursor: text; outline: 1px dashed #ccc; }
-
-    .doc-header { text-align: center; font-weight: bold; margin-bottom: 1.5cm; text-transform: uppercase; font-size: 11pt; border: 2px solid #000; padding: 10px; }
+    
+    .doc-header { text-align: center; font-weight: bold; margin-bottom: 1.0cm; text-transform: uppercase; font-size: 11pt; border: 2px solid #000; padding: 10px; }
     .doc-title { text-align: center; font-weight: bold; margin: 0.5cm 0; text-decoration: underline; text-transform: uppercase; }
-
+    
     p { margin-bottom: 6pt; text-align: justify; margin-top: 0; }
-
-    .sancao-box {
-        border: 1px solid #000; padding: 10px; margin: 10px 0; background: #fff;
+    
+    .sancao-box { 
+        border: 1px solid #000; padding: 10px; margin: 10px 0; background: #fff; 
     }
-
+    
     .process-item { padding: 12px; border-bottom: 1px solid #eee; cursor: pointer; }
     .process-item.active { background: #e3f2fd; border-left: 4px solid #0d6efd; }
 
+    /* --- ESTILOS DE IMPRESSÃO (CRÍTICO) --- */
     @media print {
-        body * { visibility: hidden; }
-        .right-panel, .right-panel * { visibility: visible; }
-        .right-panel { position: absolute; left: 0; top: 0; width: 100%; height: auto; background: white; border: none; overflow: visible; padding: 0; margin: 0; }
-        .a4-page { box-shadow: none; margin: 0; width: 100%; page-break-after: always; padding: 2cm 1.5cm; }
-        .no-print { display: none !important; }
+        @page {
+            size: A4;
+            margin: 1.5cm; /* Define margem física da impressora */
+        }
+
+        body {
+            background-color: white !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        /* Oculta interface do sistema */
+        nav, header, footer, .left-panel, .d-flex, .no-print, .btn, form, h5 {
+            display: none !important;
+        }
+
+        .split-container {
+            display: block !important;
+            height: auto !important;
+            overflow: visible !important;
+        }
+
+        .right-panel {
+            background: white !important;
+            border: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            width: 100% !important;
+            position: static !important;
+            overflow: visible !important;
+        }
+
+        .a4-page {
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important; /* Remove padding pois @page já tem margem */
+            box-shadow: none !important;
+            border: none !important;
+            min-height: auto !important;
+        }
+
+        /* Força quebra de página correta entre termos */
+        .page-break {
+            page-break-after: always !important;
+            break-after: page !important;
+            display: block !important;
+            border-bottom: none !important; /* Remove linha de separação na impressão */
+            margin-bottom: 0 !important;
+            padding-bottom: 0 !important;
+        }
+        
+        /* Evita quebra dentro de um parágrafo ou caixa */
+        p, .sancao-box {
+            page-break-inside: avoid;
+        }
+        
+        /* Ajuste do cabeçalho na impressão */
+        .doc-header {
+            margin-top: 0 !important;
+        }
     }
 </style>
 
-<div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-white border-bottom">
+<div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-white border-bottom no-print">
     <h5 class="m-0">Gerador de Termos DEC</h5>
-
+    
     <form action="{{ url_for('justica.confirmar_publicacao_boletim') }}" method="POST" class="d-flex align-items-center gap-2" id="formPublicacao">
         <input type="text" name="numero_boletim" class="form-control form-control-sm" placeholder="Nº Boletim (Ex: BI 024)" style="width: 150px;">
         <button type="button" class="btn btn-sm btn-primary" onclick="submeterPublicacao()">
@@ -55,7 +134,7 @@
 </div>
 
 <div class="split-container">
-    <div class="left-panel">
+    <div class="left-panel no-print">
         <div class="p-2 bg-light border-bottom">
             <input type="text" class="form-control form-control-sm mb-2" placeholder="Buscar aluno..." onkeyup="filtrarLista(this.value)">
             <small class="text-muted">Selecione os processos:</small>
@@ -70,7 +149,7 @@
                     <span class="badge bg-success" style="font-size: 0.7em;">Publicado</span>
                 {% endif %}
             </div>
-
+            
             <script type="application/json" id="data_{{ p.id }}">
                 {
                     "id": {{ p.id }},
@@ -78,11 +157,11 @@
                     "data_fato": "{{ p.data_ocorrencia.strftime('%d/%m/%Y') }}",
                     "aluno": "{{ p.aluno.user.posto_graduacao }} {{ p.aluno.user.nome_completo }}",
                     "matricula": "{{ p.aluno.user.matricula }}",
-                    "fato": "{{ p.fato_constatado | replace('\r', '') | replace('\n', ' ') | replace('"', '\\"') }}",
-                    "defesa": "{{ p.defesa | replace('\r', '') | replace('\n', '<br>') | replace('"', '\\"') if p.defesa else '(Espaço reservado para defesa escrita)' }}",
+                    "fato": "{{ p.fato_constatado | replace('\r', '') | replace('\n', ' ') | replace('"', '\\"') | safe }}",
+                    "defesa": "{{ p.defesa | replace('\r', '') | replace('\n', '<br>') | replace('"', '\\"') | safe if p.defesa else '(Espaço reservado para defesa escrita)' }}",
                     "decisao_texto": "{{ p.decisao_final or '' }} {{ p.tipo_sancao or '' }} {{ '(' ~ p.dias_sancao ~ ' dias)' if p.dias_sancao else '' }}",
                     "origem": "{{ p.origem_punicao }}"
-                 }
+                }
             </script>
             {% else %}
             <div class="p-3 text-center text-muted">Nenhum processo finalizado.</div>
@@ -92,6 +171,54 @@
 
     <div class="right-panel" id="docPreview">
         <div class="a4-page" id="docContent">
+            
+            <div id="placeholder-msg" class="text-center text-muted mt-5 pt-5 no-print">
+                <i class="fas fa-arrow-left fa-2x mb-3"></i><br>
+                Selecione os processos na lista à esquerda para gerar os termos.
+            </div>
+
+            <div id="dynamic-content">
+                </div>
+            
+        </div>
+    </div>
+</div>
+
+<script>
+    let selectedIds = new Set();
+
+    function toggleProcess(id, el) {
+        const chk = document.getElementById('chk_' + id);
+        
+        // Remove aviso inicial ao selecionar primeiro item
+        const placeholder = document.getElementById('placeholder-msg');
+        if(placeholder) placeholder.style.display = 'none';
+
+        if (selectedIds.has(id)) {
+            selectedIds.delete(id);
+            chk.checked = false;
+            el.classList.remove('active');
+            const termEl = document.getElementById('term_' + id);
+            if(termEl) termEl.remove();
+            
+            // Se não sobrar nenhum, mostra o aviso novamente
+            if(selectedIds.size === 0 && placeholder) placeholder.style.display = 'block';
+            
+        } else {
+            selectedIds.add(id);
+            chk.checked = true;
+            el.classList.add('active');
+            addTerm(id);
+        }
+    }
+
+    function addTerm(id) {
+        const scriptTag = document.getElementById('data_' + id);
+        if (!scriptTag) return;
+        const d = JSON.parse(scriptTag.textContent);
+        
+        // Cabeçalho único para cada termo (necessário para quebras de página funcionarem bem)
+        const headerHTML = `
             <div class="doc-header editable" contenteditable="true">
                 ESTADO DO RIO GRANDE DO SUL<br>
                 SECRETARIA DA SEGURANÇA PÚBLICA<br>
@@ -103,68 +230,38 @@
                     DEC – {{ nome_escola }}
                 {% endif %}
             </div>
-
-            <div id="dynamic-content">
-                <p class="text-center text-muted mt-5">Selecione processos na lista à esquerda.</p>
-            </div>
-
-            <div class="text-center mt-5 pt-5 editable" contenteditable="true">
-                <p>Quartel em <span style="background: #ffffd0;">[DIGITE A CIDADE]</span>, {{ datetime.now().strftime('%d de %B de %Y') }}.</p>
-                <br><br><br>
-                <div style="border-top: 1px solid #000; width: 60%; display: inline-block;"></div>
-                <p style="margin-top: 5px;"><strong>[NOME, POSTO/GRADUAÇÃO E FUNÇÃO DO RESPONSÁVEL]</strong></p>
-            </div>
-        </div>
-    </div>
-</div>
-
-<script>
-    let selectedIds = new Set();
-
-    function toggleProcess(id, el) {
-        const chk = document.getElementById('chk_' + id);
-        if (selectedIds.has(id)) {
-            selectedIds.delete(id);
-            chk.checked = false;
-            el.classList.remove('active');
-            const termEl = document.getElementById('term_' + id);
-            if(termEl) termEl.remove();
-        } else {
-            selectedIds.add(id);
-            chk.checked = true;
-            el.classList.add('active');
-            addTerm(id);
-        }
-
-        // Controla a visibilidade do aviso "Selecione..."
-        const placeholder = document.querySelector('#dynamic-content .text-muted');
-        if (placeholder) {
-            placeholder.style.display = selectedIds.size ? 'none' : 'block';
-        }
-    }
-
-    function addTerm(id) {
-        const scriptTag = document.getElementById('data_' + id);
-        if (!scriptTag) return;
-        const d = JSON.parse(scriptTag.textContent);
+        `;
 
         const html = `
-            <div id="term_${id}" class="mb-5 pb-4 border-bottom page-break">
+            <div id="term_${id}" class="page-break mb-5 pb-5 border-bottom border-secondary">
+                ${headerHTML}
+                
                 <div class="doc-title editable" contenteditable="true">TERMO DE JUSTIFICAÇÃO Nº ${String(id).padStart(3, '0')} / ${d.ano}</div>
+                
                 <p><strong>1. DO FATO:</strong></p>
                 <div class="editable" contenteditable="true">
                     <p>No dia ${d.data_fato}, o(a) <strong>${d.aluno}</strong>, Matrícula ${d.matricula}, teve a seguinte conduta observada:</p>
                     <p style="padding-left: 1cm; font-style: italic;">"${d.fato}"</p>
                 </div>
+                
                 <p><strong>2. DA DEFESA:</strong></p>
-                <div class="editable" contenteditable="true" style="border:1px solid #ccc; padding:10px; min-height:2cm;">${d.defesa}</div>
+                <div class="editable" contenteditable="true" style="border:1px solid #ccc; padding:10px; min-height:2cm; margin-bottom: 10px;">${d.defesa}</div>
+                
                 <p><strong>3. DA SOLUÇÃO:</strong></p>
                 <p>Diante do exposto, o Comandante/Chefe RESOLVE:</p>
                 <div class="sancao-box editable" contenteditable="true">
                     <p><strong>DECISÃO:</strong> <span style="color: #00008B; font-weight: bold;">${d.decisao_texto}</span></p>
                     <p><strong>ENQUADRAMENTO:</strong> ${d.origem}</p>
                 </div>
+
+                <div class="text-center mt-5 pt-4 editable" contenteditable="true">
+                    <p>Quartel em <span style="background: #ffffd0;">[DIGITE A CIDADE]</span>, {{ datetime.now().strftime('%d de %B de %Y') }}.</p>
+                    <br><br>
+                    <div style="border-top: 1px solid #000; width: 60%; display: inline-block;"></div>
+                    <p style="margin-top: 5px;"><strong>[NOME, POSTO/GRADUAÇÃO E FUNÇÃO DO RESPONSÁVEL]</strong></p>
+                </div>
             </div>`;
+            
         document.getElementById('dynamic-content').insertAdjacentHTML('beforeend', html);
     }
 
@@ -175,17 +272,15 @@
         });
     }
 
-    // Função para submeter o formulário de publicação (Cria inputs hidden e envia)
     function submeterPublicacao() {
         const container = document.getElementById('hidden-inputs');
-        container.innerHTML = ''; // Limpa anteriores
-
+        container.innerHTML = ''; 
+        
         if (selectedIds.size === 0) {
             alert("Selecione pelo menos um processo.");
             return;
         }
-
-        // Cria inputs hidden para cada ID selecionado
+        
         selectedIds.forEach(id => {
             const input = document.createElement('input');
             input.type = 'hidden';
@@ -193,14 +288,18 @@
             input.value = id;
             container.appendChild(input);
         });
-
+        
         document.getElementById('formPublicacao').submit();
     }
 
     function exportWord() {
         var header = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Termos</title><style>body{font-family:'Times New Roman'; font-size:12pt;} @page Section1 {size:595.3pt 841.9pt; margin:70.85pt 56.7pt 70.85pt 56.7pt; mso-header-margin:35.4pt; mso-footer-margin:35.4pt; mso-paper-source:0;} div.Section1 {page:Section1;}</style></head><body><div class='Section1'>";
         var footer = "</div></body></html>";
-        var content = document.getElementById("docContent").innerHTML;
+        var content = document.getElementById("dynamic-content").innerHTML; // Pega apenas os termos gerados
+        
+        // Remove as bordas de visualização antes de exportar
+        content = content.replace(/border-bottom border-secondary/g, ''); 
+        
         var source = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(header + content + footer);
         var link = document.createElement("a");
         link.href = source;

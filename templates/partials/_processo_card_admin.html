@@ -111,15 +111,27 @@
 
                 <hr>
 
-                <div class="mb-3">
-                    <label class="form-label fw-bold">Enquadramento Legal</label>
-                    <select name="origem_punicao" class="form-select">
-                        <option value="NPCCAL">NPCCAL (Regimento Interno)</option>
-                        <option value="RDBM">RDBM (Regulamento Disciplinar)</option>
-                        <option value="CPM">CPM (Código Penal Militar)</option>
-                    </select>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold text-muted">Enquadramento Legal (Original)</label>
+                        <p class="form-control-plaintext fw-bold">{{ processo.origem_punicao or 'NPCCAL' }}</p>
+                        <input type="hidden" name="origem_punicao" value="{{ processo.origem_punicao or 'NPCCAL' }}">
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold text-muted">Classificação de Crime</label>
+                        {% if processo.is_crime %}
+                            <div class="alert alert-danger py-1 px-2 m-0 d-inline-block">
+                                <i class="fas fa-exclamation-circle"></i> Configura CRIME
+                            </div>
+                            <input type="hidden" name="is_crime" value="on">
+                        {% else %}
+                            <p class="form-control-plaintext text-success">
+                                <i class="fas fa-check-circle"></i> Transgressão Disciplinar (Não é crime)
+                            </p>
+                            {% endif %}
+                    </div>
                 </div>
-
                 <div class="row">
                     <div class="col-md-6 mb-3">
                         <label for="decisao_final-{{ processo.id }}" class="form-label">Decisão Final</label>
@@ -162,13 +174,6 @@
                         <option value="07 turnos (42H)">07 turnos (42H)</option>
                         <option value="08 turnos (48H)">08 turnos (48H)</option>
                     </select>
-                </div>
-
-                <div class="mb-3 form-check form-switch p-3 border rounded bg-white">
-                    <input class="form-check-input" type="checkbox" name="is_crime" id="is_crime-{{ processo.id }}">
-                    <label class="form-check-label text-danger fw-bold" for="is_crime-{{ processo.id }}">
-                        Esta conduta configura CRIME?
-                    </label>
                 </div>
 
                 <div class="mb-3">
