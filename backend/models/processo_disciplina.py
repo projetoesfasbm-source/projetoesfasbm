@@ -27,7 +27,7 @@ class ProcessoDisciplina(db.Model):
     __tablename__ = 'processos_disciplina'
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    
+
     aluno_id: Mapped[int] = mapped_column(ForeignKey('alunos.id'), nullable=False)
     relator_id: Mapped[int] = mapped_column(ForeignKey('users.id'), nullable=False)
     regra_id: Mapped[t.Optional[int]] = mapped_column(ForeignKey('discipline_rules.id'), nullable=True)
@@ -36,17 +36,17 @@ class ProcessoDisciplina(db.Model):
     fato_constatado: Mapped[str] = mapped_column(Text, nullable=False)
     observacao: Mapped[t.Optional[str]] = mapped_column(Text, nullable=True)
     pontos: Mapped[float] = mapped_column(Float, default=0.0)
-    
+
     # --- SOLUÇÃO DEFINITIVA ---
     # Define como String no banco para evitar travamento de ENUM
     # O Python usa o Enum class para atribuir o valor default
     status: Mapped[str] = mapped_column(
-        String(50), 
+        String(50),
         default=StatusProcesso.AGUARDANDO_CIENCIA.value,
         server_default=StatusProcesso.AGUARDANDO_CIENCIA.value,
         nullable=False
     )
-    
+
     # DATAS
     data_ocorrencia: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
     data_registro: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
@@ -67,8 +67,8 @@ class ProcessoDisciplina(db.Model):
 
     # RELACIONAMENTOS
     # Mantendo backref conforme solicitado para não quebrar compatibilidade
-    aluno = relationship("Aluno", backref="processos_novos") 
-    
+    aluno = relationship("Aluno", backref=db.backref("processos_novos", overlaps="processos_disciplinares"))
+
     relator: Mapped["User"] = relationship(foreign_keys=[relator_id])
     regra: Mapped[t.Optional["DisciplineRule"]] = relationship()
 
