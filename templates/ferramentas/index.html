@@ -1,65 +1,69 @@
 {% extends "base.html" %}
 
+{% block title %}Ferramentas do Administrador{% endblock %}
+
 {% block content %}
-<div class="container mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><i class="fas fa-tools me-2"></i>Ferramentas Administrativas</h2>
-        <a href="{{ url_for('main.dashboard') }}" class="btn btn-secondary">
-            <i class="fas fa-arrow-left me-1"></i>Voltar
-        </a>
-    </div>
-
-    <div class="row g-4">
-        <div class="col-md-4">
-            <div class="card h-100 shadow-sm border-start border-4 border-info">
-                <div class="card-body text-center">
-                    <div class="mb-3 text-info">
-                        <i class="fas fa-history fa-3x"></i>
-                    </div>
-                    <h5 class="card-title">Logs de Ações</h5>
-                    <p class="card-text text-muted small">
-                        Visualize o histórico de ações executadas por administradores e instrutores nesta escola.
-                    </p>
-                    <a href="{{ url_for('tools.logs_admin') }}" class="btn btn-outline-info w-100 stretched-link">
-                        Acessar Logs
-                    </a>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-4">
-            <div class="card h-100 shadow-sm border-start border-4 border-danger">
-                <div class="card-body text-center">
-                    <div class="mb-3 text-danger">
-                        <i class="fas fa-biohazard fa-3x"></i>
-                    </div>
-                    <h5 class="card-title">Reset de Escola</h5>
-                    <p class="card-text text-muted small">
-                        Limpar dados de turmas, alunos ou restaurar configurações de fábrica. Ações irreversíveis.
-                    </p>
-                    <a href="{{ url_for('tools.reset_escola') }}" class="btn btn-outline-danger w-100 stretched-link">
-                        Acessar Reset
-                    </a>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-4">
-            <div class="card h-100 shadow-sm border-start border-4 border-primary">
-                <div class="card-body text-center">
-                    <div class="mb-3 text-primary">
-                        <i class="fas fa-envelope-open-text fa-3x"></i>
-                    </div>
-                    <h5 class="card-title">Mail Merge</h5>
-                    <p class="card-text text-muted small">
-                        Gerar e-mails em massa para alunos ou instrutores baseado em modelos.
-                    </p>
-                    <a href="{{ url_for('tools.mail_merge') }}" class="btn btn-outline-primary w-100 stretched-link">
-                        Acessar Mail Merge
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
+<div class="content-header">
+    <h1>Ferramentas do Administrador</h1>
+    <p>Acesse ferramentas de gerenciamento avançado e personalização do sistema.</p>
 </div>
+
+<div class="modules-grid">
+    <a href="{{ url_for('tools.logs_admin') }}" class="module-card-link">
+        <div class="module-card">
+            <div class="card-content">
+                <div class="card-icon">📜</div>
+                <h3 class="card-title">Logs de Auditoria</h3>
+                <p class="card-description">Visualize o histórico de ações críticas realizadas por administradores e instrutores.</p>
+            </div>
+        </div>
+    </a>
+
+    <a href="{{ url_for('tools.reset_escola') }}" class="module-card-link">
+        <div class="module-card">
+            <div class="card-content">
+                <div class="card-icon">🔄</div>
+                <h3 class="card-title">Reset de Escola</h3>
+                <p class="card-description">Exclua em massa todos os alunos, instrutores ou disciplinas para iniciar um novo ciclo de curso.</p>
+            </div>
+        </div>
+    </a>
+    
+    <a href="{{ url_for('customizer.index') }}" class="module-card-link">
+        <div class="module-card">
+            <div class="card-content">
+                <div class="card-icon">🎨</div>
+                <h3 class="card-title">Personalizar Site</h3>
+                <p class="card-description">Altere as cores, logos e imagens de fundo do sistema para se adequar à identidade visual da sua escola.</p>
+            </div>
+        </div>
+    </a>
+    
+    <a href="{{ url_for('assets.manage_assets') }}" class="module-card-link">
+        <div class="module-card">
+            <div class="card-content">
+                <div class="card-icon">📁</div>
+                <h3 class="card-title">Gerenciar Assets</h3>
+                <p class="card-description">Faça o upload e gerencie as imagens (logos, ícones, fundos) que serão usadas na personalização do site.</p>
+            </div>
+        </div>
+    </a>
+
+    <a href="{{ url_for('tools.mail_merge') }}" class="module-card-link">
+        <div class="module-card">
+            <div class="card-content">
+                <div class="card-icon">✉️</div>
+                <h3 class="card-title">Mala Direta</h3>
+                <p class="card-description">Gere documentos em massa (certificados, ofícios) a partir de um template Word e uma planilha Excel.</p>
+            </div>
+        </div>
+    </a>
+</div>
+
+<style>
+.module-card-link {
+    text-decoration: none;
+    color: inherit;
+}
+</style>
 {% endblock %}

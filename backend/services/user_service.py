@@ -1,3 +1,5 @@
+# backend/services/user_service.py
+
 from flask import current_app, session, has_request_context
 from flask_login import current_user
 from sqlalchemy import select, or_
@@ -300,3 +302,21 @@ class UserService:
         except Exception as e:
             db.session.rollback()
             return False, str(e)
+
+    # --- NOVO MÉTODO ADICIONADO ---
+    @staticmethod
+    def get_users_by_school(school_id):
+        """
+        Retorna todos os usuários vinculados à escola especificada.
+        Utilizado para preencher dropdowns de filtros em logs e relatórios.
+        """
+        try:
+            return db.session.scalars(
+                select(User)
+                .join(UserSchool)
+                .where(UserSchool.school_id == school_id)
+                .order_by(User.nome_completo)
+            ).all()
+        except Exception as e:
+            current_app.logger.error(f"Erro ao buscar usuários da escola {school_id}: {e}")
+            return []
