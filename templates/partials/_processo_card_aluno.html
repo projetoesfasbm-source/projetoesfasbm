@@ -2,7 +2,7 @@
     <div class="card-body">
         <div class="process-header d-flex justify-content-between align-items-start">
             <div>
-                <span class="status-badge badge 
+                <span class="status-badge badge
                     {% if 'AGUARDANDO' in (processo.status|string|upper) %}bg-warning text-dark
                     {% elif 'NOTIFICADO' in (processo.status|string|upper) %}bg-info text-dark
                     {% elif 'DEFESA' in (processo.status|string|upper) %}bg-primary
@@ -23,7 +23,7 @@
             <span class="detail-label fw-bold text-muted small text-uppercase">Fato Constatado:</span>
             <p class="preserve-whitespace">{{ processo.fato_constatado }}</p>
         </div>
-        
+
         {% if processo.observacao %}
         <div class="process-detail mb-3">
             <span class="detail-label fw-bold text-muted small text-uppercase">Termo de Justificação (Relator):</span>
@@ -33,7 +33,7 @@
         {% endif %}
 
         {# --- ÁREA DE AÇÃO DO ALUNO (CORRIGIDA) --- #}
-        
+
         {# CASO 1: AGUARDANDO CIÊNCIA #}
         {% if 'AGUARDANDO' in (processo.status | string | upper) %}
             <div class="alert alert-warning mt-3 border-warning">
@@ -63,7 +63,7 @@
                         O prazo está correndo. Digite sua justificativa abaixo e clique em enviar.
                     </div>
                 </div>
-                
+
                 <form action="{{ url_for('justica.enviar_defesa', processo_id=processo.id) }}" method="POST">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="form-group mb-3">
@@ -84,7 +84,7 @@
                 </span>
                 <p class="preserve-whitespace fst-italic mt-2">{{ processo.defesa }}</p>
                 <small class="text-muted d-block mt-2">
-                    Enviada em {{ processo.data_defesa.strftime('%d/%m/%Y às %H:%M') if processo.data_defesa else 'Data N/A' }}. 
+                    Enviada em {{ processo.data_defesa.strftime('%d/%m/%Y às %H:%M') if processo.data_defesa else 'Data N/A' }}.
                     {% if 'FINALIZADO' not in (processo.status | string | upper) %}
                         Aguardando análise.
                     {% endif %}
@@ -103,7 +103,7 @@
 
                 {% if processo.decisao_final != 'Justificado' %}
                     <p class="preserve-whitespace fw-bold mt-2 text-dark">
-                        {{ processo.tipo_sancao }} 
+                        {{ processo.tipo_sancao }}
                         {% if processo.dias_sancao %}({{ processo.dias_sancao }} dias){% endif %}
                     </p>
                 {% endif %}
