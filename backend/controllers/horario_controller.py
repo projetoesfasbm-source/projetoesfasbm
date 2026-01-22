@@ -74,7 +74,7 @@ def index():
         
         # --- LÓGICA DE FILTRO PARA INSTRUTOR (BASEADO EM VÍNCULO MÚLTIPLO) ---
         # Se NÃO for Admin/SENS na escola atual
-        if not current_user.is_sens:
+        if not current_user.is_sens and not current_user.is_admin_escola and not current_user.is_programador:
             # Busca TODOS os IDs de instrutor deste usuário (para cobrir múltiplos vínculos/escolas)
             my_instrutor_ids = db.session.scalars(
                 select(Instrutor.id).where(Instrutor.user_id == current_user.id)
@@ -82,9 +82,11 @@ def index():
 
             if my_instrutor_ids:
                 try:
+                    # CORREÇÃO CRÍTICA: Join via relacionamentos (IDs) e não por String (nome == pelotao)
                     turmas_vinculadas = db.session.scalars(
                         select(Turma)
-                        .join(DisciplinaTurma, Turma.nome == DisciplinaTurma.pelotao)
+                        .join(Disciplina, Disciplina.turma_id == Turma.id)
+                        .join(DisciplinaTurma, DisciplinaTurma.disciplina_id == Disciplina.id)
                         .where(
                             Turma.school_id == school_id,
                             or_(
@@ -184,10 +186,11 @@ def index():
             ).all()
             
             if my_instrutor_ids:
-                # Busca turmas onde este instrutor tem vínculo na escola atual
+                # CORREÇÃO CRÍTICA: Mesmo Fix do filtro inicial (Join por IDs)
                 instrutor_turmas_vinculadas = db.session.scalars(
                     select(Turma)
-                    .join(DisciplinaTurma, Turma.nome == DisciplinaTurma.pelotao)
+                    .join(Disciplina, Disciplina.turma_id == Turma.id)
+                    .join(DisciplinaTurma, DisciplinaTurma.disciplina_id == Disciplina.id)
                     .where(
                         Turma.school_id == school_id,
                         or_(
@@ -205,14 +208,18 @@ def index():
                         can_schedule_in_this_turma = True
                     else:
                         if priority_allowed_names:
-                            query_match = select(DisciplinaTurma).join(Disciplina).where(
-                                DisciplinaTurma.pelotao == turma_selecionada_nome,
-                                Disciplina.materia.in_(priority_allowed_names),
-                                or_(
-                                    DisciplinaTurma.instrutor_id_1.in_(my_instrutor_ids), 
-                                    DisciplinaTurma.instrutor_id_2.in_(my_instrutor_ids)
+                            # CORREÇÃO CRÍTICA: Join por IDs para validar prioridade
+                            query_match = select(DisciplinaTurma)\
+                                .join(Disciplina, DisciplinaTurma.disciplina_id == Disciplina.id)\
+                                .join(Turma, Disciplina.turma_id == Turma.id)\
+                                .where(
+                                    Turma.nome == turma_selecionada_nome,
+                                    Disciplina.materia.in_(priority_allowed_names),
+                                    or_(
+                                        DisciplinaTurma.instrutor_id_1.in_(my_instrutor_ids), 
+                                        DisciplinaTurma.instrutor_id_2.in_(my_instrutor_ids)
+                                    )
                                 )
-                            )
                             if db.session.execute(query_match).first():
                                 can_schedule_in_this_turma = True
 
@@ -333,11 +340,14 @@ def get_aula_details(horario_id):
 @horario_bp.route('/api/instrutores-vinculados/<pelotao>/<int:disciplina_id>')
 @login_required
 def get_instrutores_vinculados(pelotao, disciplina_id):
+    # CORREÇÃO CRÍTICA: Removido filtro por 'pelotao' string que causava o erro.
+    # O disciplina_id já é único e pertence a uma turma específica.
+    # Filtrar por disciplina_id é o suficiente e mais seguro.
     vinculo = db.session.scalar(
         select(DisciplinaTurma).options(
             joinedload(DisciplinaTurma.instrutor_1).joinedload(Instrutor.user), 
             joinedload(DisciplinaTurma.instrutor_2).joinedload(Instrutor.user)
-        ).where(DisciplinaTurma.pelotao == pelotao, DisciplinaTurma.disciplina_id == disciplina_id)
+        ).where(DisciplinaTurma.disciplina_id == disciplina_id)
     )
     if not vinculo: return jsonify([])
     

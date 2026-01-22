@@ -3,12 +3,13 @@
 from flask import Blueprint, render_template, request, flash, redirect, url_for, send_file
 from flask_login import login_required, current_user
 import io
-from datetime import datetime
+from datetime import datetime, timedelta
 
-from utils.decorators import admin_or_programmer_required
+from utils.decorators import admin_or_programmer_required, admin_escola_required
 from ..services.user_service import UserService
 from ..services.admin_tools_service import AdminToolsService
 from ..services.mail_merge_service import MailMergeService
+from ..services.log_service import LogService
 
 tools_bp = Blueprint('tools', __name__, url_prefix='/ferramentas')
 
@@ -81,8 +82,55 @@ def clear_data():
     elif action == 'clear_instructors':
         success, message = AdminToolsService.clear_instructors(school_id)
     elif action == 'clear_disciplines':
-        # CORREÇÃO: Nome do método corrigido (removido o 'ni' extra de disciplinines)
         success, message = AdminToolsService.clear_disciplines(school_id)
 
     flash(message, 'success' if success else 'danger')
     return redirect(url_for('tools.reset_escola'))
+
+# --- NOVA FUNCIONALIDADE: LOGS DE AUDITORIA ---
+@tools_bp.route('/logs')
+@login_required
+@admin_or_programmer_required # Permite que Admin Escola e Programador vejam os logs
+def logs_admin():
+    school_id = UserService.get_current_school_id()
+    if not school_id:
+        flash("Nenhuma escola selecionada.", "warning")
+        return redirect(url_for('main.dashboard'))
+
+    # Filtros da URL
+    data_inicio_str = request.args.get('data_inicio')
+    data_fim_str = request.args.get('data_fim')
+    filtro_user_id = request.args.get('user_id', type=int)
+
+    # Converter datas
+    if data_inicio_str:
+        data_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d')
+    else:
+        data_inicio = datetime.now() - timedelta(days=7)
+    
+    if data_fim_str:
+        # Ajuste para pegar o final do dia na data fim
+        data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').replace(hour=23, minute=59, second=59)
+    else:
+        data_fim = datetime.now()
+
+    # Buscar Logs
+    logs = LogService.get_logs(
+        school_id=school_id, 
+        date_start=data_inicio, 
+        date_end=data_fim, 
+        user_id=filtro_user_id,
+        limit=200 # Limite de segurança para performance
+    )
+
+    # Buscar lista de usuários da escola para o filtro (Admins e Instrutores)
+    users_escola = UserService.get_users_by_school(school_id)
+
+    return render_template(
+        'ferramentas/logs_admin.html',
+        logs=logs,
+        users=users_escola,
+        data_inicio=data_inicio.strftime('%Y-%m-%d'),
+        data_fim=data_fim.strftime('%Y-%m-%d'),
+        filtro_user_id=filtro_user_id
+    )
