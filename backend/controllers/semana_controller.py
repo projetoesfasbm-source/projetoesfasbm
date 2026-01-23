@@ -225,6 +225,9 @@ def salvar_prioridade(semana_id):
         disciplinas = data.get('disciplinas', [])
         semana.priority_disciplines = json.dumps(disciplinas)
 
+        # FORÇA A LIMPEZA DOS BLOQUEIOS DE PERÍODO (Funcionalidade Removida)
+        semana.priority_blocks = json.dumps({}) 
+
         db.session.commit()
         return jsonify({'success': True})
     except Exception as e:

@@ -79,20 +79,8 @@ class HorarioService:
 
     @staticmethod
     def construir_matriz_horario(pelotao, semana_id, user):
-        # 1. Carregar Semana e Bloqueios
+        # 1. Carregar Semana (Sem lógica de bloqueio de períodos)
         semana = db.session.get(Semana, semana_id)
-        blocked_periods = {}
-        
-        # CORREÇÃO: Carrega bloqueios SEMPRE, independente do priority_active
-        if semana:
-            try:
-                raw_blocks = getattr(semana, 'priority_blocks', '{}') or '{}'
-                full_blocks = json.loads(raw_blocks)
-                # Extrai apenas os bloqueios para o pelotão atual
-                if pelotao in full_blocks:
-                    blocked_periods = full_blocks[pelotao] # ex: {'segunda': ['P1', 'P2'], 'terca': []}
-            except:
-                blocked_periods = {}
 
         # 2. Estrutura padrão para célula vazia
         a_disposicao = {
@@ -102,29 +90,15 @@ class HorarioService:
             'is_disposicao': True,
             'id': None,
             'status': 'confirmado',
-            'blocked': False
+            'blocked': False # Mantido como False fixo, pois a funcionalidade foi removida
         }
         
         horario_matrix = [[dict(a_disposicao) for _ in range(7)] for _ in range(15)]
         dias = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo']
 
-        # 3. Aplicar Bloqueios Visuais (Antes de preencher as aulas)
-        if blocked_periods:
-            for d_idx, dia_nome in enumerate(dias):
-                if dia_nome in blocked_periods:
-                    for p_tag in blocked_periods[dia_nome]:
-                        # p_tag formato "P1", "P15"
-                        try:
-                            p_num = int(p_tag.replace('P', ''))
-                            row_idx = p_num - 1
-                            if 0 <= row_idx < 15:
-                                horario_matrix[row_idx][d_idx]['blocked'] = True
-                                horario_matrix[row_idx][d_idx]['materia'] = 'BLOQUEADO'
-                                horario_matrix[row_idx][d_idx]['is_disposicao'] = False
-                        except:
-                            pass
+        # (Removido bloco de aplicação visual de bloqueios)
 
-        # 4. Buscar e Preencher Aulas Existentes
+        # 3. Buscar e Preencher Aulas Existentes
         aulas_query = (
             select(Horario)
             .options(
@@ -170,7 +144,7 @@ class HorarioService:
                     'can_edit': HorarioService.can_edit_horario(aula, user),
                     'is_continuation': False,
                     'group_id': aula.group_id,
-                    'blocked': False # Aula existente sobrepõe visualmente o bloqueio
+                    'blocked': False
                 }
 
                 if 0 <= periodo_idx < 15:
@@ -380,36 +354,12 @@ class HorarioService:
                     ), 400
 
             # ===============================================
-            # >>> BLOQUEIOS E PRIORIDADE (LÓGICA SEPARADA)
+            # >>> PRIORIDADE DE DISCIPLINA (MANTIDO)
             # ===============================================
             if semana and not is_admin:
+                # (Lógica de BLOQUEIO DE PERÍODO foi removida daqui)
 
-                # --- 1) VERIFICAÇÃO DE BLOQUEIOS (SEMPRE ATIVA) ---
-                raw_blocks = getattr(semana, 'priority_blocks', '{}') or '{}'
-                try:
-                    blocks = json.loads(raw_blocks)
-                    if not isinstance(blocks, dict):
-                        blocks = {}
-                except:
-                    blocks = {}
-
-                turma_key = pelotao
-                dia_key = dia
-                
-                # verifica cada período solicitado
-                for p in range(periodo_inicio, periodo_fim + 1):
-                    periodo_key = f"P{p}"
-
-                    if turma_key in blocks:
-                        if dia_key in blocks[turma_key]:
-                            if periodo_key in blocks[turma_key][dia_key]:
-                                return False, (
-                                    f"🔒 BLOQUEADO: "
-                                    f"{turma_key} • {dia_key} • {periodo_key} "
-                                    "está indisponível para agendamento."
-                                ), 403
-
-                # --- 2) VERIFICAÇÃO DE DISCIPLINA PRIORITÁRIA (SÓ SE O MODO ESTIVER ATIVO) ---
+                # --- VERIFICAÇÃO DE DISCIPLINA PRIORITÁRIA ---
                 if getattr(semana, 'priority_active', False):
                     raw_priority = getattr(semana, 'priority_disciplines', '[]') or '[]'
                     try:
@@ -427,7 +377,7 @@ class HorarioService:
                             "⚠️ AGENDAMENTO BLOQUEADO: "
                             "Apenas disciplinas prioritárias podem agendar nesta semana."
                         ), 403
-            # <<< FIM BLOQUEIOS >>>
+            # <<< FIM PRIORIDADE >>>
 
             # ---------- DEFINIÇÃO DE INSTRUTORES ----------
             instrutor_id_1, instrutor_id_2 = None, None

@@ -9,9 +9,42 @@ from ..models.horario import Horario
 from ..models.turma import Turma
 from ..models.ciclo import Ciclo
 from ..models.semana import Semana
+from .user_service import UserService # Necessário para a validação de permissão
 
 class DisciplinaService:
     
+    @staticmethod
+    def _padronizar_nome_disciplina(nome):
+        """
+        Padroniza o nome da disciplina para Title Case (Iniciais Maiúsculas),
+        mantendo preposições e artigos em minúsculo.
+        Ex: 'ATENDIMENTO PRÉ HOSPITALAR' -> 'Atendimento Pré Hospitalar'
+        Ex: 'administração pública aplicada' -> 'Administração Pública Aplicada'
+        """
+        if not nome:
+            return ""
+        
+        # Lista de termos que devem permanecer em minúsculo (exceto se for a primeira palavra)
+        termos_minusculos = [
+            'de', 'da', 'do', 'das', 'dos', 
+            'e', 'em', 'na', 'no', 'nas', 'nos', 
+            'para', 'por', 'com', 'a', 'o', 'as', 'os'
+        ]
+
+        # Divide o texto, limpa espaços extras e converte para minúsculo inicial
+        palavras = nome.strip().lower().split()
+        palavras_formatadas = []
+
+        for i, palavra in enumerate(palavras):
+            # A primeira palavra sempre é capitalizada.
+            # As demais são capitalizadas apenas se não estiverem na lista de exceções.
+            if i == 0 or palavra not in termos_minusculos:
+                palavras_formatadas.append(palavra.capitalize())
+            else:
+                palavras_formatadas.append(palavra)
+
+        return " ".join(palavras_formatadas)
+
     @staticmethod
     def get_dados_progresso(disciplina):
         """
@@ -127,7 +160,7 @@ class DisciplinaService:
 
     @staticmethod
     def get_disciplinas_by_school(school_id):
-        stmt = select(Disciplina).join(Turma).where(Turma.school_id == school_id)
+        stmt = select(Disciplina).join(Turma).where(Turma.school_id == school_id).order_by(Disciplina.materia)
         return db.session.scalars(stmt).all()
 
     @staticmethod
@@ -137,8 +170,11 @@ class DisciplinaService:
     @staticmethod
     def create_disciplina(data):
         try:
+            # PADRONIZAÇÃO DE NOME
+            materia_padronizada = DisciplinaService._padronizar_nome_disciplina(data['materia'])
+
             nova_disciplina = Disciplina(
-                materia=data['materia'],
+                materia=materia_padronizada,
                 carga_horaria_prevista=data['carga_horaria_prevista'],
                 carga_horaria_cumprida=0,
                 turma_id=data['turma_id'],
@@ -164,16 +200,27 @@ class DisciplinaService:
             return nova_disciplina, "Disciplina criada com sucesso."
         except Exception as e:
             db.session.rollback()
+            # Log de erro é importante aqui
+            current_app.logger.error(f"Erro ao criar disciplina: {e}")
             raise e
 
     @staticmethod
     def update_disciplina(id, data):
         disciplina = db.session.get(Disciplina, id)
         if disciplina:
-            disciplina.materia = data.get('materia', disciplina.materia)
+            # Validação de Permissão (Adicionado para segurança extra, como no exemplo anterior)
+            active_school_id = UserService.get_current_school_id()
+            if active_school_id and disciplina.turma and disciplina.turma.school_id != active_school_id:
+                return False, 'Permissão negada.'
+
+            # PADRONIZAÇÃO DE NOME (Se o campo 'materia' vier no update)
+            if 'materia' in data and data['materia']:
+                disciplina.materia = DisciplinaService._padronizar_nome_disciplina(data['materia'])
+            
             disciplina.carga_horaria_prevista = data.get('carga_horaria_prevista', disciplina.carga_horaria_prevista)
             if 'carga_horaria_cumprida' in data:
                 disciplina.carga_horaria_cumprida = data['carga_horaria_cumprida']
+            
             db.session.commit()
             return True, "Atualizado com sucesso."
         return False, "Disciplina não encontrada."
@@ -182,6 +229,14 @@ class DisciplinaService:
     def delete_disciplina(id):
         disciplina = db.session.get(Disciplina, id)
         if disciplina:
+            # Validação de Permissão
+            active_school_id = UserService.get_current_school_id()
+            if active_school_id and disciplina.turma and disciplina.turma.school_id != active_school_id:
+                return False
+
+            # Remove vínculos antes de deletar (Segurança de integridade)
+            db.session.query(DisciplinaTurma).filter_by(disciplina_id=id).delete()
+            
             db.session.delete(disciplina)
             db.session.commit()
             return True
