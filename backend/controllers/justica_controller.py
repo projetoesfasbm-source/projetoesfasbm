@@ -1,8 +1,7 @@
-#backend/controllers/justica_controller.py
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, g
 from flask_login import login_required, current_user
 from sqlalchemy import select, or_
-from sqlalchemy.orm import joinedload # Importação essencial para performance
+from sqlalchemy.orm import joinedload
 from datetime import datetime
 import uuid
 import hashlib
@@ -16,9 +15,14 @@ from ..models.user import User
 from ..models.turma import Turma
 from ..models.discipline_rule import DisciplineRule
 from ..models.fada_avaliacao import FadaAvaliacao
+
+# IMPORTAÇÃO DOS SERVIÇOS
 from ..services.justica_service import JusticaService
 from ..services.user_service import UserService
 from ..services.turma_service import TurmaService
+from ..services.email_service import EmailService
+from ..services.notification_service import NotificationService
+
 from utils.decorators import admin_or_programmer_required, can_manage_justice_required
 
 justica_bp = Blueprint('justica', __name__, url_prefix='/justica-e-disciplina')
@@ -47,18 +51,15 @@ def get_rank_value(posto):
 def index():
     school_id = UserService.get_current_school_id()
     
-    # LÓGICA DE FILTRO E IDENTIFICAÇÃO DE ESCOLA
     if current_user.role == 'aluno':
         if not current_user.aluno_profile or not current_user.aluno_profile.turma:
             flash("Perfil incompleto.", "danger")
             return redirect(url_for('main.dashboard'))
         
-        # Identificação automática da escola do aluno
         school_id = current_user.aluno_profile.turma.school_id
         g.active_school = current_user.aluno_profile.turma.school
         aluno_id = current_user.aluno_profile.id
 
-        # OTIMIZAÇÃO: joinedload para trazer Aluno, User e Turma em uma única query
         stmt_andamento = select(ProcessoDisciplina).options(
             joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.user),
             joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.turma)
@@ -76,12 +77,10 @@ def index():
             or_(ProcessoDisciplina.status == StatusProcesso.FINALIZADO, ProcessoDisciplina.status == StatusProcesso.ARQUIVADO)
         ).order_by(ProcessoDisciplina.data_decisao.desc()).limit(50)
     else:
-        # Administrador/CAL: Exige escola selecionada na sessão administrativa
         if not school_id:
             flash("Nenhuma escola selecionada.", "warning")
             return redirect(url_for('main.dashboard'))
 
-        # OTIMIZAÇÃO: joinedload para evitar N+1 query (Centenas de queries a menos)
         stmt_andamento = select(ProcessoDisciplina).join(Aluno).join(Turma).options(
             joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.user),
             joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.turma)
@@ -99,7 +98,6 @@ def index():
             or_(ProcessoDisciplina.status == StatusProcesso.FINALIZADO, ProcessoDisciplina.status == StatusProcesso.ARQUIVADO)
         ).order_by(ProcessoDisciplina.data_decisao.desc()).limit(50)
 
-    # .unique() é necessário quando se usa joinedload para garantir que não haja duplicatas na memória do ORM
     em_andamento = db.session.scalars(stmt_andamento).unique().all()
     finalizados = db.session.scalars(stmt_finalizados).unique().all()
     
@@ -138,6 +136,8 @@ def registrar_em_massa():
         return redirect(url_for('justica.index'))
 
     count = 0
+    processos_criados = []
+
     if tipo == 'infracao':
         regra_id = request.form.get('regra_id')
         observacao = request.form.get('observacao')
@@ -172,6 +172,9 @@ def registrar_em_massa():
                     pontos=pontos_iniciais
                 )
                 db.session.add(novo_processo)
+                # Flush para garantir que o ID exista para o e-mail
+                db.session.flush() 
+                processos_criados.append(novo_processo)
                 count += 1
             except Exception as e:
                 logger.error(f"Erro ao criar processo aluno {aid}: {e}")
@@ -193,6 +196,28 @@ def registrar_em_massa():
 
     try:
         db.session.commit()
+        
+        # --- BLOCO DE NOTIFICAÇÃO ---
+        if tipo == 'infracao':
+            for proc in processos_criados:
+                try:
+                    aluno = db.session.get(Aluno, proc.aluno_id)
+                    if aluno and aluno.user:
+                        link_processo = url_for('justica.index', _external=True)
+                        
+                        # 1. Enviar Email
+                        EmailService.send_justice_notification_email(aluno.user, proc, link_processo)
+                        
+                        # 2. Notificação no Sistema (CORRIGIDO: Sem 'title')
+                        NotificationService.create_notification(
+                            user_id=aluno.user.id,
+                            message=f"Foi aberto um novo processo disciplinar (ID {proc.id}). Acesse para dar ciência.",
+                            url=link_processo
+                        )
+                except Exception as e:
+                    logger.error(f"Erro ao notificar aluno {proc.aluno_id}: {e}")
+        # ----------------------------
+
         flash(f"{count} registros criados com sucesso.", "success")
     except Exception as e:
         db.session.rollback()
@@ -203,7 +228,6 @@ def registrar_em_massa():
 @justica_bp.route('/dar-ciente/<int:processo_id>', methods=['POST'])
 @login_required
 def dar_ciente(processo_id):
-    """Registra a ciência do aluno no processo."""
     processo = db.session.get(ProcessoDisciplina, processo_id)
     if not processo:
         flash("Processo não encontrado.", "error")
@@ -223,20 +247,16 @@ def dar_ciente(processo_id):
     flash("Ciência registrada com sucesso.", "success")
     return redirect(url_for('justica.index'))
 
-# --- ROTA INSERIDA PARA CORRIGIR O ERRO 404 ---
 @justica_bp.route('/enviar-defesa/<int:processo_id>', methods=['POST'])
 @login_required
 def enviar_defesa(processo_id):
-    """Permite ao aluno enviar sua defesa/justificativa."""
     processo = db.session.get(ProcessoDisciplina, processo_id)
     if not processo:
         flash("Processo não encontrado.", "error")
         return redirect(url_for('justica.index'))
 
-    # Verifica se o usuário é o aluno dono do processo
     is_aluno_dono = (current_user.role == 'aluno' and current_user.aluno_profile and current_user.aluno_profile.id == processo.aluno_id)
     
-    # Apenas o aluno (ou admins/programadores se necessário para debug, mas a regra de negócio é o aluno)
     if not is_aluno_dono:
         flash("Permissão negada. Apenas o aluno autuado pode enviar a defesa.", "error")
         return redirect(url_for('justica.index'))
@@ -246,7 +266,6 @@ def enviar_defesa(processo_id):
         flash("A justificativa não pode estar vazia.", "warning")
         return redirect(url_for('justica.index'))
 
-    # Atualiza o processo
     processo.defesa = texto_defesa
     processo.data_defesa = datetime.now().astimezone()
     processo.status = StatusProcesso.DEFESA_ENVIADA
@@ -260,13 +279,15 @@ def enviar_defesa(processo_id):
         flash(f"Erro ao salvar defesa: {str(e)}", "danger")
 
     return redirect(url_for('justica.index'))
-# ----------------------------------------------
 
 @justica_bp.route('/finalizar-processo/<int:pid>', methods=['POST'])
 @login_required
 @can_manage_justice_required
 def finalizar_processo(pid):
-    """Julga e finaliza o processo disciplinar."""
+    """
+    Julga e finaliza o processo disciplinar.
+    Dispara e-mail e notificação ao aluno.
+    """
     processo = db.session.get(ProcessoDisciplina, pid)
     if not processo:
         flash("Processo não encontrado.", "error")
@@ -280,9 +301,12 @@ def finalizar_processo(pid):
         flash("Selecione uma decisão.", "warning")
         return redirect(url_for('justica.index'))
 
+    # Atualiza dados do julgamento
     processo.decisao_final = decisao
     processo.observacao_decisao = observacao_final
     processo.data_decisao = datetime.now().astimezone()
+    
+    # CORREÇÃO: Força o status para FINALIZADO
     processo.status = StatusProcesso.FINALIZADO
 
     if decisao == 'punir':
@@ -291,8 +315,35 @@ def finalizar_processo(pid):
     elif decisao in ['justificar', 'absolver']:
         processo.pontos = 0.0
 
-    db.session.commit()
-    flash("Processo finalizado/julgado com sucesso.", "success")
+    try:
+        db.session.commit()
+        
+        # --- BLOCO DE NOTIFICAÇÃO ---
+        try:
+            aluno = db.session.get(Aluno, processo.aluno_id)
+            if aluno and aluno.user:
+                # 1. Enviar Email com Veredito
+                EmailService.send_justice_verdict_email(aluno.user, processo)
+                
+                # 2. Notificação Sistema (CORRIGIDO: Sem 'title')
+                link_processo = url_for('justica.index', _external=True)
+                msg_status = "PUNIDO" if decisao == 'punir' else "JUSTIFICADO/ABSOLVIDO"
+                NotificationService.create_notification(
+                    user_id=aluno.user.id,
+                    message=f"Seu processo (ID {processo.id}) foi julgado como {msg_status}. Verifique os detalhes.",
+                    url=link_processo
+                )
+        except Exception as e:
+            logger.error(f"Erro ao enviar notificações de veredito para processo {processo.id}: {e}")
+        # ----------------------------
+
+        flash("Processo finalizado/julgado com sucesso.", "success")
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao finalizar processo {pid}: {e}")
+        flash(f"Erro ao salvar decisão: {str(e)}", "danger")
+        
     return redirect(url_for('justica.index'))
 
 @justica_bp.route('/arquivar-processo/<int:pid>', methods=['POST'])
