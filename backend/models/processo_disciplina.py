@@ -37,9 +37,7 @@ class ProcessoDisciplina(db.Model):
     observacao: Mapped[t.Optional[str]] = mapped_column(Text, nullable=True)
     pontos: Mapped[float] = mapped_column(Float, default=0.0)
 
-    # --- SOLUÇÃO DEFINITIVA ---
-    # Define como String no banco para evitar travamento de ENUM
-    # O Python usa o Enum class para atribuir o valor default
+    # Status definido como String no banco para evitar travamento de ENUM
     status: Mapped[str] = mapped_column(
         String(50),
         default=StatusProcesso.AGUARDANDO_CIENCIA.value,
@@ -51,22 +49,37 @@ class ProcessoDisciplina(db.Model):
     data_ocorrencia: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
     data_registro: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
     data_ciente: Mapped[t.Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    
+    # Campo auxiliar para compatibilidade com controllers que chamam data_ciencia
+    @property
+    def data_ciencia(self):
+        return self.data_ciente
+    
+    @data_ciencia.setter
+    def data_ciencia(self, value):
+        self.data_ciente = value
+
     data_defesa: Mapped[t.Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     data_decisao: Mapped[t.Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # CAMPOS DE TEXTO E DECISÃO
     defesa: Mapped[t.Optional[str]] = mapped_column(Text, nullable=True)
     decisao_final: Mapped[t.Optional[str]] = mapped_column(String(50), nullable=True)
     fundamentacao: Mapped[t.Optional[str]] = mapped_column(Text, nullable=True)
+    
+    # ADICIONADO: Campo legado/backup essencial para evitar o erro AttributeError
+    observacao_decisao: Mapped[t.Optional[str]] = mapped_column(Text, nullable=True)
+    
     detalhes_sancao: Mapped[t.Optional[str]] = mapped_column(Text, nullable=True)
 
+    # OUTROS DADOS
     is_crime: Mapped[bool] = mapped_column(Boolean, default=False)
     tipo_sancao: Mapped[t.Optional[str]] = mapped_column(String(50), nullable=True)
     dias_sancao: Mapped[int] = mapped_column(Integer, default=0)
     origem_punicao: Mapped[str] = mapped_column(String(20), default='NPCCAL')
     ciente_aluno: Mapped[bool] = mapped_column(Boolean, default=False)
 
-    # RELACIONAMENTOS
-    # Mantendo backref conforme solicitado para não quebrar compatibilidade
+    # RELACIONAMENTOS (Mantidos conforme original para evitar quebras)
     aluno = relationship("Aluno", backref=db.backref("processos_novos", overlaps="processos_disciplinares"))
 
     relator: Mapped["User"] = relationship(foreign_keys=[relator_id])
@@ -74,3 +87,17 @@ class ProcessoDisciplina(db.Model):
 
     def __repr__(self):
         return f"<Processo {self.id} - Aluno {self.aluno_id} - {self.status}>"
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'aluno_nome': self.aluno.user.nome_completo if self.aluno and self.aluno.user else "Desconhecido",
+            'turma': self.aluno.turma.nome if self.aluno and self.aluno.turma else "N/A",
+            'data_ocorrencia': self.data_ocorrencia.strftime('%d/%m/%Y'),
+            'fato': self.fato_constatado,
+            'status': self.status,
+            'pontos': self.pontos,
+            'decisao': self.decisao_final,
+            # Garante que retorna algum texto se existir
+            'fundamentacao': self.fundamentacao or self.observacao_decisao
+        }

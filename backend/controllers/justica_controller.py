@@ -3,6 +3,8 @@ from flask_login import login_required, current_user
 from sqlalchemy import select, or_
 from sqlalchemy.orm import joinedload
 from datetime import datetime
+import uuid
+import hashlib
 import logging
 
 from ..models.database import db
@@ -14,7 +16,7 @@ from ..models.turma import Turma
 from ..models.discipline_rule import DisciplineRule
 from ..models.fada_avaliacao import FadaAvaliacao
 
-# SERVIÇOS
+# IMPORTAÇÃO DOS SERVIÇOS
 from ..services.justica_service import JusticaService
 from ..services.user_service import UserService
 from ..services.turma_service import TurmaService
@@ -26,20 +28,20 @@ from utils.decorators import admin_or_programmer_required, can_manage_justice_re
 justica_bp = Blueprint('justica', __name__, url_prefix='/justica-e-disciplina')
 logger = logging.getLogger(__name__)
 
-# --- HELPER ---
+# --- HELPER DE HIERARQUIA ---
 def get_rank_value(posto):
     if not posto: return 0
     p = posto.lower().strip()
     if 'cel' in p: return 100
     if 'maj' in p: return 80
     if 'cap' in p: return 70
-    if '1º ten' in p: return 60
-    if '2º ten' in p: return 50
+    if '1º ten' in p or '1 ten' in p: return 60
+    if '2º ten' in p or '2 ten' in p or 'tenente' in p: return 50
     if 'asp' in p: return 45
     if 'sub' in p: return 40
-    if '1º sgt' in p: return 30
-    if '2º sgt' in p: return 20
-    if '3º sgt' in p: return 10
+    if '1º sgt' in p or '1 sgt' in p: return 30
+    if '2º sgt' in p or '2 sgt' in p: return 20
+    if '3º sgt' in p or '3 sgt' in p: return 10
     if 'cb' in p: return 5
     if 'sd' in p: return 1
     return 0
@@ -170,7 +172,7 @@ def registrar_em_massa():
                     pontos=pontos_iniciais
                 )
                 db.session.add(novo_processo)
-                db.session.flush()
+                db.session.flush() 
                 processos_criados.append(novo_processo)
                 count += 1
             except Exception as e:
@@ -194,7 +196,6 @@ def registrar_em_massa():
     try:
         db.session.commit()
         
-        # --- BLOCO DE NOTIFICAÇÃO ---
         if tipo == 'infracao':
             for proc in processos_criados:
                 try:
@@ -279,7 +280,7 @@ def enviar_defesa(processo_id):
 @can_manage_justice_required
 def finalizar_processo(pid):
     """
-    Julga o processo.
+    Julga e finaliza o processo disciplinar.
     Opções: Justificado, Advertência, Repreensão, Sustação da Dispensa.
     """
     processo = db.session.get(ProcessoDisciplina, pid)
@@ -287,10 +288,9 @@ def finalizar_processo(pid):
         flash("Processo não encontrado.", "error")
         return redirect(url_for('justica.index'))
 
-    # 1. Coleta dados
-    decisao = request.form.get('decisao') # Valor exato: "Advertência", "Repreensão"...
+    decisao = request.form.get('decisao') 
     
-    # IMPORTANTE: Captura 'fundamentacao' e salva em ambos os campos para garantir
+    # Captura a fundamentação do campo correto
     fundamentacao_texto = request.form.get('fundamentacao')
     
     turnos_sustacao = request.form.get('turnos_sustacao')
@@ -301,27 +301,25 @@ def finalizar_processo(pid):
         flash("Selecione uma decisão válida.", "warning")
         return redirect(url_for('justica.index'))
 
-    # 2. Atualiza Status e Dados Básicos
+    # Salva valores básicos
     processo.decisao_final = decisao
     processo.data_decisao = datetime.now().astimezone()
     processo.status = StatusProcesso.FINALIZADO
     
-    # Salva o texto da justificativa/veredito
+    # SALVA O TEXTO NOS DOIS CAMPOS (Compatibilidade)
     processo.fundamentacao = fundamentacao_texto
-    processo.observacao_decisao = fundamentacao_texto # Backup legado
+    processo.observacao_decisao = fundamentacao_texto
 
-    # 3. Lógica Específica por Tipo de Decisão
+    # Lógica de Sanção
     if decisao in ['Advertência', 'Repreensão']:
         processo.tipo_sancao = decisao
-        processo.dias_sancao = 0 # Sem dias para estes tipos
+        processo.dias_sancao = 0 
         processo.detalhes_sancao = None
-        # Se for punição, mantém os pontos
         if pontos_finais is not None:
              processo.pontos = pontos_finais
     
     elif decisao == 'Sustação da Dispensa':
         processo.tipo_sancao = "Sustação da Dispensa"
-        # Salva a quantidade de turnos nos detalhes
         processo.detalhes_sancao = turnos_sustacao if turnos_sustacao else "Quantidade não informada"
         processo.dias_sancao = 0
         processo.pontos = pontos_finais if pontos_finais else 0.0
@@ -339,8 +337,10 @@ def finalizar_processo(pid):
         try:
             aluno = db.session.get(Aluno, processo.aluno_id)
             if aluno and aluno.user:
+                # E-mail
                 EmailService.send_justice_verdict_email(aluno.user, processo)
                 
+                # Sistema
                 link_processo = url_for('justica.index', _external=True)
                 NotificationService.create_notification(
                     user_id=aluno.user.id,

@@ -43,6 +43,7 @@
             <small class="text-muted">Registrado por {{ processo.relator.nome_completo }} em {{ processo.data_ocorrencia.strftime('%d/%m/%Y às %H:%M') }}</small>
         </div>
 
+        {# Exibe a defesa no cartão (Removida do form abaixo para não duplicar) #}
         {% if (processo.status | string | upper) in ['ALUNO_NOTIFICADO', 'DEFESA_ENVIADA', 'EM_ANALISE'] %}
             <div class="process-detail bg-light p-3 rounded border mt-3">
                 <span class="detail-label">Defesa do Aluno:</span>
@@ -55,11 +56,11 @@
             </div>
         {% endif %}
 
+        {# Visualização após finalizado #}
         {% if (processo.status | string | upper) == 'FINALIZADO' %}
             <div class="process-detail bg-light p-3 rounded border border-2 mt-3">
                 <span class="detail-label text-success">Decisão Final ({{ processo.decisao_final }}):</span>
 
-                {# Exibe Enquadramento (Origem Punicao ou Codigo Infracao) #}
                 <p class="mb-1"><strong>Enquadramento:</strong> {{ processo.origem_punicao }} {{ ('- ' + processo.codigo_infracao) if processo.codigo_infracao else '' }}</p>
 
                 {% if processo.tipo_sancao %}
@@ -68,15 +69,8 @@
                     </p>
                 {% endif %}
                 
-                {# Exibe detalhes da sanção (Turnos) se houver #}
                 {% if processo.detalhes_sancao %}
                      <p class="fw-bold text-dark text-uppercase small">Detalhes: {{ processo.detalhes_sancao }}</p>
-                {% endif %}
-
-                {% if processo.is_crime %}
-                    <div class="alert alert-danger py-1 px-2 d-inline-block mt-1 mb-2">
-                        <i class="fas fa-exclamation-circle"></i> CONFIGURA CRIME
-                    </div>
                 {% endif %}
 
                 <hr class="my-2">
@@ -86,7 +80,7 @@
             </div>
         {% endif %}
 
-        {# Formulário de Análise (Invisível por padrão, ativado pelo botão) #}
+        {# Formulário de Análise #}
         {% if (processo.status | string | upper) in ['ALUNO_NOTIFICADO', 'DEFESA_ENVIADA', 'EM_ANALISE'] %}
         <div class="analise-form-container border p-3 mt-3 rounded bg-light" id="analise-form-{{ processo.id }}" style="display: none;">
 
@@ -97,22 +91,16 @@
 
                 <div class="mb-3">
                     <label class="form-label d-block"><strong>Fato:</strong> {{ processo.fato_constatado }}</label>
-
-                    {% if permite_pontuacao and processo.pontos and processo.pontos > 0 %}
-                        <label class="form-label d-block text-danger"><strong>Pontuação Original da Infração:</strong> {{ processo.pontos }} pontos</label>
+                    {% if processo.pontos and processo.pontos > 0 %}
+                        <label class="form-label d-block text-danger"><strong>Pontuação Original:</strong> {{ processo.pontos }} pontos</label>
                     {% endif %}
                 </div>
-
-                <div class="mb-3">
-                    <label class="form-label d-block"><strong>Defesa:</strong> {{ processo.defesa or "Aluno não apresentou defesa." }}</label>
-                </div>
-
+                
                 <hr>
 
                 <div class="row">
                     <div class="col-md-6 mb-3">
                         <label for="decisao-{{ processo.id }}" class="form-label">Decisão Final</label>
-                        {# IMPORTANTE: name="decisao" para compatibilidade com o controller #}
                         <select name="decisao" id="decisao-{{ processo.id }}" class="form-select" onchange="toggleFormularioSancao('{{ processo.id }}')" required>
                             <option value="" disabled selected>Selecione a decisão...</option>
                             <option value="Justificado">Justificado (Sem Sanção)</option>
@@ -165,11 +153,9 @@
         var divTurnos = document.getElementById('div-turnos-' + pid);
         var selectTurnos = document.getElementById('turnos_sustacao-' + pid);
 
-        // Reset
         divTurnos.style.display = 'none';
         if (selectTurnos) selectTurnos.required = false;
 
-        // Apenas Sustação tem turnos visíveis
         if (decisao === 'Sustação da Dispensa') {
             divTurnos.style.display = 'block';
             if (selectTurnos) selectTurnos.required = true;

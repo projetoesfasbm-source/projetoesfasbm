@@ -120,9 +120,11 @@
     <h5 class="m-0">Gerador de Termos DEC</h5>
     
     <form action="{{ url_for('justica.confirmar_publicacao_boletim') }}" method="POST" class="d-flex align-items-center gap-2" id="formPublicacao">
-        <input type="text" name="numero_boletim" class="form-control form-control-sm" placeholder="Nº Boletim (Ex: BI 024)" style="width: 150px;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <input type="text" name="numero_boletim" class="form-control form-control-sm" placeholder="Nº Boletim (Ex: BI 024)" style="width: 150px;" required>
         <button type="button" class="btn btn-sm btn-primary" onclick="submeterPublicacao()">
-            <i class="fas fa-save"></i> Registrar
+            <i class="fas fa-save"></i> Registrar Publicação
         </button>
         <div id="hidden-inputs"></div>
     </form>
@@ -145,11 +147,15 @@
                 <input type="checkbox" id="chk_{{ p.id }}" class="pe-none">
                 <strong>{{ p.aluno.user.posto_graduacao }} {{ p.aluno.user.nome_completo }}</strong><br>
                 <small class="text-muted">Fato: {{ p.data_ocorrencia.strftime('%d/%m/%Y') }}</small><br>
+                
+                <span class="badge bg-secondary" style="font-size: 0.7em;">{{ p.decisao_final }}</span>
+                
                 {% if p.observacao_decisao and 'Publicado' in p.observacao_decisao %}
                     <span class="badge bg-success" style="font-size: 0.7em;">Publicado</span>
                 {% endif %}
             </div>
             
+            {# JSON com os dados completos, incluindo a fundamentação correta #}
             <script type="application/json" id="data_{{ p.id }}">
                 {
                     "id": {{ p.id }},
@@ -159,8 +165,11 @@
                     "matricula": "{{ p.aluno.user.matricula }}",
                     "fato": "{{ p.fato_constatado | replace('\r', '') | replace('\n', ' ') | replace('"', '\\"') | safe }}",
                     "defesa": "{{ p.defesa | replace('\r', '') | replace('\n', '<br>') | replace('"', '\\"') | safe if p.defesa else '(Espaço reservado para defesa escrita)' }}",
-                    "decisao_texto": "{{ p.decisao_final or '' }} {{ p.tipo_sancao or '' }} {{ '(' ~ p.dias_sancao ~ ' dias)' if p.dias_sancao else '' }}",
-                    "origem": "{{ p.origem_punicao }}"
+                    "decisao_texto": "{{ p.decisao_final or 'Não julgado' }}",
+                    "tipo_sancao": "{{ p.tipo_sancao or '' }}",
+                    "detalhes": "{{ p.detalhes_sancao or '' }}",
+                    "origem": "{{ p.origem_punicao }} {{ ('- ' + p.codigo_infracao) if p.codigo_infracao else '' }}",
+                    "fundamentacao": "{{ (p.fundamentacao or p.observacao_decisao or 'Sem fundamentação registrada.') | replace('\r', '') | replace('\n', '<br>') | replace('"', '\\"') | safe }}"
                 }
             </script>
             {% else %}
@@ -217,7 +226,7 @@
         if (!scriptTag) return;
         const d = JSON.parse(scriptTag.textContent);
         
-        // Cabeçalho único para cada termo (necessário para quebras de página funcionarem bem)
+        // Cabeçalho único para cada termo
         const headerHTML = `
             <div class="doc-header editable" contenteditable="true">
                 ESTADO DO RIO GRANDE DO SUL<br>
@@ -231,6 +240,21 @@
                 {% endif %}
             </div>
         `;
+
+        // Lógica de exibição da sanção dentro do JS
+        let sancaoHTML = '';
+        
+        if (d.tipo_sancao === 'Sustação da Dispensa') {
+            sancaoHTML = `
+                <p><strong>TIPO DE SANÇÃO:</strong> Sustação da Dispensa</p>
+                <p><strong>QUANTIDADE:</strong> ${d.detalhes}</p>
+            `;
+        } else if (d.tipo_sancao) {
+            // Advertência, Repreensão, etc (sem dias)
+            sancaoHTML = `
+                <p><strong>TIPO DE SANÇÃO:</strong> ${d.tipo_sancao}</p>
+            `;
+        }
 
         const html = `
             <div id="term_${id}" class="page-break mb-5 pb-5 border-bottom border-secondary">
@@ -252,6 +276,10 @@
                 <div class="sancao-box editable" contenteditable="true">
                     <p><strong>DECISÃO:</strong> <span style="color: #00008B; font-weight: bold;">${d.decisao_texto}</span></p>
                     <p><strong>ENQUADRAMENTO:</strong> ${d.origem}</p>
+                    
+                    <p><strong>FUNDAMENTAÇÃO:</strong> ${d.fundamentacao}</p>
+                    
+                    ${sancaoHTML}
                 </div>
 
                 <div class="text-center mt-5 pt-4 editable" contenteditable="true">
@@ -295,7 +323,7 @@
     function exportWord() {
         var header = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Termos</title><style>body{font-family:'Times New Roman'; font-size:12pt;} @page Section1 {size:595.3pt 841.9pt; margin:70.85pt 56.7pt 70.85pt 56.7pt; mso-header-margin:35.4pt; mso-footer-margin:35.4pt; mso-paper-source:0;} div.Section1 {page:Section1;}</style></head><body><div class='Section1'>";
         var footer = "</div></body></html>";
-        var content = document.getElementById("dynamic-content").innerHTML; // Pega apenas os termos gerados
+        var content = document.getElementById("dynamic-content").innerHTML;
         
         // Remove as bordas de visualização antes de exportar
         content = content.replace(/border-bottom border-secondary/g, ''); 

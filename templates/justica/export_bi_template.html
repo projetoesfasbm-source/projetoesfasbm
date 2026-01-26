@@ -5,11 +5,11 @@
     <title>Termo de Justificação - Visualização e Exportação</title>
     <style>
         /* Estilos para parecer Word/A4 na tela */
-        body { 
-            background: #e9ebee; 
-            font-family: 'Times New Roman', Times, serif; 
-            margin: 0; padding: 20px; 
-            display: flex; flex-direction: column; align-items: center; 
+        body {
+            background: #e9ebee;
+            font-family: 'Times New Roman', Times, serif;
+            margin: 0; padding: 20px;
+            display: flex; flex-direction: column; align-items: center;
         }
         .page-container {
             background: white;
@@ -25,13 +25,13 @@
             min-height: 1em;
         }
         .editable:hover { border-color: #aaa; background: #fffdf0; cursor: text; }
-        
+
         /* Estilos do Documento */
         .header { text-align: center; font-weight: bold; margin-bottom: 1cm; line-height: 1.2; text-transform: uppercase; font-size: 12pt; }
         .title { text-align: center; font-weight: bold; margin: 0.5cm 0; text-decoration: underline; text-transform: uppercase; }
         p { text-align: justify; margin-bottom: 6pt; margin-top: 0; line-height: 1.5; font-size: 12pt; }
         .sancao-box { border: 1px solid #000; padding: 10px; margin: 10px 0; background-color: #fafafa; }
-        
+
         /* Controles de Tela (Botões) */
         .controls {
             position: fixed; top: 10px; right: 10px; z-index: 1000;
@@ -41,7 +41,7 @@
         button { cursor: pointer; padding: 8px 15px; font-size: 14px; border: none; border-radius: 4px; color: white; font-weight: bold; }
         .btn-word { background: #2b579a; }
         .btn-print { background: #555; }
-        
+
         @media print {
             body { background: white; margin: 0; padding: 0; display: block; }
             .page-container { box-shadow: none; margin: 0; width: 100%; height: auto; page-break-after: always; }
@@ -89,23 +89,37 @@
 
             <div class="sancao-box editable" contenteditable="true">
                 <p><strong>DECISÃO:</strong> {{ processo.decisao_final or '________________' }}</p>
-                
-                <p><strong>FUNDAMENTAÇÃO:</strong> {{ processo.fundamentacao or '____________________________________________________' }}</p>
 
-                {% if processo.status == 'Finalizado' or processo.status == 'FINALIZADO' %}
-                    {% if processo.decisao_final not in ['JUSTIFICADO', 'ARQUIVADO', 'ANULADO'] %}
-                        <p><strong>TIPO DE SANÇÃO:</strong> {{ processo.tipo_sancao or '________________' }}</p>
-                        <p><strong>QUANTIDADE:</strong> {{ processo.dias_sancao if processo.dias_sancao else '____' }} dias.</p>
-                        <p><strong>ENQUADRAMENTO:</strong> {{ processo.origem_punicao }}</p>
+                <p><strong>ENQUADRAMENTO:</strong> {{ processo.origem_punicao or '________________' }} {{ ('- ' + processo.codigo_infracao) if processo.codigo_infracao else '' }}</p>
+
+                <p><strong>FUNDAMENTAÇÃO:</strong> {{ processo.fundamentacao or processo.observacao_decisao or '____________________________________________________' }}</p>
+
+                {% if processo.status == 'FINALIZADO' or processo.status == 'Finalizado' %}
+                    
+                    {# CASO 1: SUSTAÇÃO (Mostra Turnos) #}
+                    {% if processo.decisao_final == 'Sustação da Dispensa' or processo.tipo_sancao == 'Sustação da Dispensa' %}
+                        <p><strong>TIPO DE SANÇÃO:</strong> Sustação da Dispensa</p>
+                        <p><strong>QUANTIDADE:</strong> {{ processo.detalhes_sancao or '____' }}</p>
+
+                    {# CASO 2: ADVERTÊNCIA OU REPREENSÃO (Sem dias) #}
+                    {% elif processo.decisao_final in ['Advertência', 'Repreensão'] %}
+                         <p><strong>TIPO DE SANÇÃO:</strong> {{ processo.decisao_final }}</p>
+                    
+                    {# CASO 3: OUTROS #}
+                    {% elif processo.decisao_final not in ['Justificado', 'Justificar', 'Absolvido', 'Absolver', 'Anular', 'Anulado'] %}
+                         <p><strong>TIPO DE SANÇÃO:</strong> {{ processo.tipo_sancao or '________________' }}</p>
+                         {% if processo.dias_sancao and processo.dias_sancao > 0 %}
+                            <p><strong>QUANTIDADE:</strong> {{ processo.dias_sancao }} dias.</p>
+                         {% endif %}
                     {% endif %}
+
                 {% else %}
-                    <p><strong>SANÇÃO:</strong> ( ) Justificar ( ) Advertência ( ) Repreensão ( ) Detenção</p>
-                    <p><strong>DIAS:</strong> _______ dias.</p>
+                    <p><strong>SANÇÃO:</strong> ( ) Justificar ( ) Advertência ( ) Repreensão ( ) Sustação</p>
                 {% endif %}
             </div>
 
             <div class="editable" contenteditable="true" style="text-align: center; margin-top: 2cm;">
-                <p>Quartel em Santa Maria, {{ hoje }}.</p>
+                <p>Quartel em Santa Maria, {{ datetime.now().strftime('%d/%m/%Y') }}.</p>
                 <br><br>
                 <div style="border-top: 1px solid #000; width: 300px; display: inline-block;"></div>
                 <p><strong>COMANDANTE / CHEFE DA DIVISÃO DE ENSINO</strong></p>
@@ -122,7 +136,7 @@
              "<head><meta charset='utf-8'><title>Export HTML to Word Document with JavaScript</title></head><body>";
         var footer = "</body></html>";
         var sourceHTML = header+document.getElementById("document-content").innerHTML+footer;
-        
+
         var source = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(sourceHTML);
         var fileDownload = document.createElement("a");
         document.body.appendChild(fileDownload);
