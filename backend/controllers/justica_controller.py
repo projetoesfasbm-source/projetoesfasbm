@@ -3,8 +3,6 @@ from flask_login import login_required, current_user
 from sqlalchemy import select, or_
 from sqlalchemy.orm import joinedload
 from datetime import datetime
-import uuid
-import hashlib
 import logging
 
 from ..models.database import db
@@ -16,7 +14,7 @@ from ..models.turma import Turma
 from ..models.discipline_rule import DisciplineRule
 from ..models.fada_avaliacao import FadaAvaliacao
 
-# IMPORTAÇÃO DOS SERVIÇOS
+# SERVIÇOS
 from ..services.justica_service import JusticaService
 from ..services.user_service import UserService
 from ..services.turma_service import TurmaService
@@ -28,20 +26,20 @@ from utils.decorators import admin_or_programmer_required, can_manage_justice_re
 justica_bp = Blueprint('justica', __name__, url_prefix='/justica-e-disciplina')
 logger = logging.getLogger(__name__)
 
-# --- HELPER DE HIERARQUIA ---
+# --- HELPER ---
 def get_rank_value(posto):
     if not posto: return 0
     p = posto.lower().strip()
     if 'cel' in p: return 100
     if 'maj' in p: return 80
     if 'cap' in p: return 70
-    if '1º ten' in p or '1 ten' in p: return 60
-    if '2º ten' in p or '2 ten' in p or 'tenente' in p: return 50
+    if '1º ten' in p: return 60
+    if '2º ten' in p: return 50
     if 'asp' in p: return 45
     if 'sub' in p: return 40
-    if '1º sgt' in p or '1 sgt' in p: return 30
-    if '2º sgt' in p or '2 sgt' in p: return 20
-    if '3º sgt' in p or '3 sgt' in p: return 10
+    if '1º sgt' in p: return 30
+    if '2º sgt' in p: return 20
+    if '3º sgt' in p: return 10
     if 'cb' in p: return 5
     if 'sd' in p: return 1
     return 0
@@ -172,8 +170,7 @@ def registrar_em_massa():
                     pontos=pontos_iniciais
                 )
                 db.session.add(novo_processo)
-                # Flush para garantir que o ID exista para o e-mail
-                db.session.flush() 
+                db.session.flush()
                 processos_criados.append(novo_processo)
                 count += 1
             except Exception as e:
@@ -205,18 +202,15 @@ def registrar_em_massa():
                     if aluno and aluno.user:
                         link_processo = url_for('justica.index', _external=True)
                         
-                        # 1. Enviar Email
                         EmailService.send_justice_notification_email(aluno.user, proc, link_processo)
                         
-                        # 2. Notificação no Sistema (CORRIGIDO: Sem 'title')
                         NotificationService.create_notification(
                             user_id=aluno.user.id,
-                            message=f"Foi aberto um novo processo disciplinar (ID {proc.id}). Acesse para dar ciência.",
+                            message=f"Foi aberto um processo disciplinar (ID {proc.id}). Acesse para dar ciência.",
                             url=link_processo
                         )
                 except Exception as e:
                     logger.error(f"Erro ao notificar aluno {proc.aluno_id}: {e}")
-        # ----------------------------
 
         flash(f"{count} registros criados com sucesso.", "success")
     except Exception as e:
@@ -285,64 +279,83 @@ def enviar_defesa(processo_id):
 @can_manage_justice_required
 def finalizar_processo(pid):
     """
-    Julga e finaliza o processo disciplinar.
-    Dispara e-mail e notificação ao aluno.
+    Julga o processo.
+    Opções: Justificado, Advertência, Repreensão, Sustação da Dispensa.
     """
     processo = db.session.get(ProcessoDisciplina, pid)
     if not processo:
         flash("Processo não encontrado.", "error")
         return redirect(url_for('justica.index'))
 
-    decisao = request.form.get('decisao') # 'punir', 'justificar', 'absolver'
+    # 1. Coleta dados
+    decisao = request.form.get('decisao') # Valor exato: "Advertência", "Repreensão"...
+    
+    # IMPORTANTE: Captura 'fundamentacao' e salva em ambos os campos para garantir
+    fundamentacao_texto = request.form.get('fundamentacao')
+    
+    turnos_sustacao = request.form.get('turnos_sustacao')
     pontos_finais = request.form.get('pontos_finais', type=float)
-    observacao_final = request.form.get('observacao_decisao')
 
     if not decisao:
-        flash("Selecione uma decisão.", "warning")
+        logger.error(f"FALHA JULGAMENTO: Campo 'decisao' vazio. Form: {request.form}")
+        flash("Selecione uma decisão válida.", "warning")
         return redirect(url_for('justica.index'))
 
-    # Atualiza dados do julgamento
+    # 2. Atualiza Status e Dados Básicos
     processo.decisao_final = decisao
-    processo.observacao_decisao = observacao_final
     processo.data_decisao = datetime.now().astimezone()
-    
-    # CORREÇÃO: Força o status para FINALIZADO
     processo.status = StatusProcesso.FINALIZADO
+    
+    # Salva o texto da justificativa/veredito
+    processo.fundamentacao = fundamentacao_texto
+    processo.observacao_decisao = fundamentacao_texto # Backup legado
 
-    if decisao == 'punir':
+    # 3. Lógica Específica por Tipo de Decisão
+    if decisao in ['Advertência', 'Repreensão']:
+        processo.tipo_sancao = decisao
+        processo.dias_sancao = 0 # Sem dias para estes tipos
+        processo.detalhes_sancao = None
+        # Se for punição, mantém os pontos
         if pontos_finais is not None:
-            processo.pontos = pontos_finais
-    elif decisao in ['justificar', 'absolver']:
+             processo.pontos = pontos_finais
+    
+    elif decisao == 'Sustação da Dispensa':
+        processo.tipo_sancao = "Sustação da Dispensa"
+        # Salva a quantidade de turnos nos detalhes
+        processo.detalhes_sancao = turnos_sustacao if turnos_sustacao else "Quantidade não informada"
+        processo.dias_sancao = 0
+        processo.pontos = pontos_finais if pontos_finais else 0.0
+        
+    elif decisao == 'Justificado':
+        processo.tipo_sancao = None
+        processo.dias_sancao = 0
+        processo.detalhes_sancao = None
         processo.pontos = 0.0
 
     try:
         db.session.commit()
         
-        # --- BLOCO DE NOTIFICAÇÃO ---
+        # --- NOTIFICAÇÕES ---
         try:
             aluno = db.session.get(Aluno, processo.aluno_id)
             if aluno and aluno.user:
-                # 1. Enviar Email com Veredito
                 EmailService.send_justice_verdict_email(aluno.user, processo)
                 
-                # 2. Notificação Sistema (CORRIGIDO: Sem 'title')
                 link_processo = url_for('justica.index', _external=True)
-                msg_status = "PUNIDO" if decisao == 'punir' else "JUSTIFICADO/ABSOLVIDO"
                 NotificationService.create_notification(
                     user_id=aluno.user.id,
-                    message=f"Seu processo (ID {processo.id}) foi julgado como {msg_status}. Verifique os detalhes.",
+                    message=f"Processo {processo.id} julgado: {decisao}. Veja detalhes.",
                     url=link_processo
                 )
         except Exception as e:
-            logger.error(f"Erro ao enviar notificações de veredito para processo {processo.id}: {e}")
-        # ----------------------------
+            logger.error(f"Erro ao enviar notificações de veredito {pid}: {e}")
 
-        flash("Processo finalizado/julgado com sucesso.", "success")
+        flash("Processo finalizado com sucesso.", "success")
         
     except Exception as e:
         db.session.rollback()
         logger.error(f"Erro ao finalizar processo {pid}: {e}")
-        flash(f"Erro ao salvar decisão: {str(e)}", "danger")
+        flash(f"Erro ao salvar: {str(e)}", "danger")
         
     return redirect(url_for('justica.index'))
 

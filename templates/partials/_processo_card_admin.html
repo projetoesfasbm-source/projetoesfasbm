@@ -12,7 +12,6 @@
             </div>
 
             <div class="btn-group">
-                {# Verifica status convertendo para string e maiúsculo para evitar erros #}
                 {% if (processo.status | string | upper) == 'AGUARDANDO_CIENCIA' %}
                 <form action="{{ url_for('justica.deletar_processo', pid=processo.id) }}" method="POST" onsubmit="return confirm('Tem certeza que deseja excluir este processo? Esta ação não pode ser desfeita.');" class="ms-2">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -22,7 +21,6 @@
                 </form>
                 {% endif %}
 
-                {# CORREÇÃO: Adicionado EM_ANALISE para garantir que processos legados ou em análise apareçam #}
                 {% if (processo.status | string | upper) in ['ALUNO_NOTIFICADO', 'DEFESA_ENVIADA', 'EM_ANALISE'] %}
                 <button class="btn btn-sm btn-success js-toggle-analise-form"
                         data-target-form="#analise-form-{{ processo.id }}">
@@ -45,7 +43,6 @@
             <small class="text-muted">Registrado por {{ processo.relator.nome_completo }} em {{ processo.data_ocorrencia.strftime('%d/%m/%Y às %H:%M') }}</small>
         </div>
 
-        {# Exibe a defesa se o aluno já foi notificado ou enviou #}
         {% if (processo.status | string | upper) in ['ALUNO_NOTIFICADO', 'DEFESA_ENVIADA', 'EM_ANALISE'] %}
             <div class="process-detail bg-light p-3 rounded border mt-3">
                 <span class="detail-label">Defesa do Aluno:</span>
@@ -58,26 +55,22 @@
             </div>
         {% endif %}
 
-        {# Exibe detalhes finais se já foi julgado #}
         {% if (processo.status | string | upper) == 'FINALIZADO' %}
             <div class="process-detail bg-light p-3 rounded border border-2 mt-3">
                 <span class="detail-label text-success">Decisão Final ({{ processo.decisao_final }}):</span>
 
+                {# Exibe Enquadramento (Origem Punicao ou Codigo Infracao) #}
+                <p class="mb-1"><strong>Enquadramento:</strong> {{ processo.origem_punicao }} {{ ('- ' + processo.codigo_infracao) if processo.codigo_infracao else '' }}</p>
+
                 {% if processo.tipo_sancao %}
                     <p class="fw-bold text-dark">
                         Sanção: {{ processo.tipo_sancao }}
-                        {% if processo.dias_sancao %}
-                             - {{ processo.dias_sancao }} dias
-                        {% endif %}
                     </p>
                 {% endif %}
-
+                
+                {# Exibe detalhes da sanção (Turnos) se houver #}
                 {% if processo.detalhes_sancao %}
-                    <p class="preserve-whitespace fw-bold">{{ processo.detalhes_sancao }}</p>
-                {% endif %}
-
-                {% if processo.origem_punicao %}
-                    <p class="text-muted mb-1"><small>Enquadramento: {{ processo.origem_punicao }}</small></p>
+                     <p class="fw-bold text-dark text-uppercase small">Detalhes: {{ processo.detalhes_sancao }}</p>
                 {% endif %}
 
                 {% if processo.is_crime %}
@@ -88,7 +81,7 @@
 
                 <hr class="my-2">
                 <span class="detail-label">Fundamentação:</span>
-                <p class="preserve-whitespace">{{ processo.fundamentacao }}</p>
+                <p class="preserve-whitespace">{{ processo.fundamentacao or processo.observacao_decisao or "Sem fundamentação registrada." }}</p>
                 <small class="text-muted">Decisão em {{ processo.data_decisao.strftime('%d/%m/%Y às %H:%M') }}</small>
             </div>
         {% endif %}
@@ -116,62 +109,23 @@
 
                 <hr>
 
-                {# --- ÁREA INFORMATIVA (Sem Redundância) --- #}
-                <div class="row mb-3">
-                    <div class="col-md-6">
-                        <label class="form-label fw-bold text-muted">Enquadramento Legal (Original)</label>
-                        <p class="form-control-plaintext fw-bold">{{ processo.origem_punicao or 'NPCCAL' }}</p>
-                        {# Input Hidden para manter o valor original ao salvar #}
-                        <input type="hidden" name="origem_punicao" value="{{ processo.origem_punicao or 'NPCCAL' }}">
-                    </div>
-
-                    <div class="col-md-6">
-                        <label class="form-label fw-bold text-muted">Classificação de Crime</label>
-                        {% if processo.is_crime %}
-                            <div class="alert alert-danger py-1 px-2 m-0 d-inline-block">
-                                <i class="fas fa-exclamation-circle"></i> Configura CRIME
-                            </div>
-                            <input type="hidden" name="is_crime" value="on">
-                        {% else %}
-                            <p class="form-control-plaintext text-success">
-                                <i class="fas fa-check-circle"></i> Transgressão Disciplinar (Não é crime)
-                            </p>
-                        {% endif %}
-                    </div>
-                </div>
-                {# --- FIM DA ÁREA INFORMATIVA --- #}
-
                 <div class="row">
                     <div class="col-md-6 mb-3">
-                        <label for="decisao_final-{{ processo.id }}" class="form-label">Decisão Final</label>
-                        <select name="decisao_final" id="decisao_final-{{ processo.id }}" class="form-select" onchange="toggleFormularioSancao('{{ processo.id }}')" required>
-                            <option value="" disabled selected>Selecione...</option>
-                            <option value="Justificado">Justificado (Sem Punição)</option>
-                            <option value="Procedente">Procedente (Com Punição)</option>
-                            <option value="Sustação da Dispensa">Sustação da Dispensa (Legado)</option>
-                        </select>
-                    </div>
-
-                    <div class="col-md-6 mb-3" id="div-sancao-{{ processo.id }}" style="display: none;">
-                        <label class="form-label">Tipo de Sanção</label>
-                        <select name="tipo_sancao" id="tipo_sancao-{{ processo.id }}" class="form-select" onchange="checkDias('{{ processo.id }}')">
-                            <option value="">-- Selecione --</option>
-                            <option value="Advertência">Advertência</option>
-                            <option value="Repreensão">Repreensão</option>
-                            <option value="Detenção">Detenção</option>
-                            <option value="Prisão">Prisão</option>
-                            <option value="Licenciamento">Licenciamento</option>
+                        <label for="decisao-{{ processo.id }}" class="form-label">Decisão Final</label>
+                        {# IMPORTANTE: name="decisao" para compatibilidade com o controller #}
+                        <select name="decisao" id="decisao-{{ processo.id }}" class="form-select" onchange="toggleFormularioSancao('{{ processo.id }}')" required>
+                            <option value="" disabled selected>Selecione a decisão...</option>
+                            <option value="Justificado">Justificado (Sem Sanção)</option>
+                            <option value="Advertência">Advertência (Com Sanção)</option>
+                            <option value="Repreensão">Repreensão (Com Sanção)</option>
+                            <option value="Sustação da Dispensa">Sustação da Dispensa (Com Sanção)</option>
                         </select>
                     </div>
                 </div>
 
-                <div class="mb-3" id="div-dias-{{ processo.id }}" style="display: none;">
-                    <label class="form-label">Quantidade de Dias</label>
-                    <input type="number" name="dias_sancao" id="dias_sancao-{{ processo.id }}" class="form-control" placeholder="Ex: 2">
-                </div>
-
+                {# Campo de Turnos (Aparece APENAS para Sustação da Dispensa) #}
                 <div class="mb-3" id="div-turnos-{{ processo.id }}" style="display: none;">
-                    <label for="turnos_sustacao-{{ processo.id }}" class="form-label">Quantidade de Turnos</label>
+                    <label for="turnos_sustacao-{{ processo.id }}" class="form-label fw-bold text-danger">Quantidade de Turnos de Sustação</label>
                     <select name="turnos_sustacao" id="turnos_sustacao-{{ processo.id }}" class="form-select">
                         <option value="" disabled selected>Selecione a quantidade...</option>
                         <option value="01 turno (6H)">01 turno (6H)</option>
@@ -187,8 +141,10 @@
 
                 <div class="mb-3">
                     <label for="fundamentacao-{{ processo.id }}" class="form-label">Fundamentação da Decisão</label>
-                    <textarea name="fundamentacao" id="fundamentacao-{{ processo.id }}" class="form-control" rows="5" placeholder="Descreva por que a defesa foi (ou não) aceita e a base para a decisão." required></textarea>
+                    <textarea name="fundamentacao" id="fundamentacao-{{ processo.id }}" class="form-control" rows="5" placeholder="Descreva a fundamentação..." required></textarea>
                 </div>
+                
+                <input type="hidden" name="pontos_finais" value="{{ processo.pontos }}">
 
                 <div class="d-flex justify-content-end gap-2 mt-3">
                     <button type="button" class="btn btn-secondary js-toggle-analise-form" data-target-form="#analise-form-{{ processo.id }}">Cancelar</button>
@@ -201,36 +157,22 @@
 </div>
 
 <script>
-    // Função unificada para controlar visibilidade dos campos
     function toggleFormularioSancao(pid) {
-        var decisao = document.getElementById('decisao_final-' + pid).value;
-        var divSancao = document.getElementById('div-sancao-' + pid);
+        var decisaoSelect = document.getElementById('decisao-' + pid);
+        if (!decisaoSelect) return;
+        
+        var decisao = decisaoSelect.value;
         var divTurnos = document.getElementById('div-turnos-' + pid);
+        var selectTurnos = document.getElementById('turnos_sustacao-' + pid);
 
-        // Reset inicial
-        if (divSancao) divSancao.style.display = 'none';
-        if (divTurnos) divTurnos.style.display = 'none';
+        // Reset
+        divTurnos.style.display = 'none';
+        if (selectTurnos) selectTurnos.required = false;
 
-        if (decisao === 'Procedente') {
-            if (divSancao) divSancao.style.display = 'block';
-        } else if (decisao === 'Sustação da Dispensa') {
-            if (divTurnos) divTurnos.style.display = 'block';
-        }
-
-        // Verifica se precisa mostrar campo de dias baseado na sanção selecionada
-        checkDias(pid);
-    }
-
-    function checkDias(pid) {
-        var sancaoSelect = document.getElementById('tipo_sancao-' + pid);
-        var divDias = document.getElementById('div-dias-' + pid);
-        var divSancao = document.getElementById('div-sancao-' + pid);
-
-        // Só mostra dias se a div de sanção estiver visível E a sanção exigir dias
-        if (divSancao && divSancao.style.display !== 'none' && sancaoSelect && ['Detenção', 'Prisão'].includes(sancaoSelect.value)) {
-            if (divDias) divDias.style.display = 'block';
-        } else {
-            if (divDias) divDias.style.display = 'none';
+        // Apenas Sustação tem turnos visíveis
+        if (decisao === 'Sustação da Dispensa') {
+            divTurnos.style.display = 'block';
+            if (selectTurnos) selectTurnos.required = true;
         }
     }
 </script>
