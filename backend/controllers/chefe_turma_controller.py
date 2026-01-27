@@ -65,7 +65,7 @@ def verify_chefe_permission():
     except Exception:
         return None
 
-# --- ROTA ATUALIZADA COM LÓGICA DE PERMISSÃO DE EDIÇÃO ---
+# --- ROTA ATUALIZADA: ACESSO ADMIN AO CADERNO DE CHAMADA ---
 
 @chefe_bp.route('/caderno-chamada')
 @login_required
@@ -74,22 +74,25 @@ def caderno_chamada():
     if not permissao:
         abort(403)
 
-    pode_editar = False # Padrão: apenas visualização
+    pode_editar = False
+    active_sid = session.get('active_school_id')
 
     if permissao == "admin":
         turma_id = request.args.get('turma_id', type=int)
+
+        # Se o admin ainda não escolheu a turma, mostra a lista de seleção
         if not turma_id:
-            flash("Selecione uma turma.", "info")
-            return redirect(url_for('main.index'))
+            turmas_escola = Turma.query.filter_by(school_id=active_sid).order_by(Turma.nome).all()
+            return render_template('selecionar_turma.html', turmas=turmas_escola, destino='chefe.caderno_chamada')
+
         turma = db.session.get(Turma, turma_id)
-        pode_editar = True # Admin sempre edita
+        pode_editar = True # Admin sempre tem permissão de edição
     else:
         aluno_chefe = Aluno.query.filter_by(user_id=current_user.id).first()
         if not aluno_chefe or not aluno_chefe.turma_id:
             abort(404, description="Vínculo de turma não identificado.")
         turma = db.session.get(Turma, aluno_chefe.turma_id)
 
-        # VERIFICAÇÃO: O aluno logado é o chefe desta turma?
         cargo = TurmaCargo.query.filter_by(turma_id=turma.id, aluno_id=aluno_chefe.id, cargo_nome=TurmaCargo.ROLE_CHEFE).first()
         if cargo:
             pode_editar = True
@@ -102,7 +105,7 @@ def caderno_chamada():
         .all()
 
     return render_template(
-        'chefe_turma/caderno_chamada.html',
+        'caderno_chamada.html',
         alunos=alunos_turma,
         turma=turma,
         pode_editar=pode_editar,
@@ -214,11 +217,14 @@ def painel():
             flash("Acesso restrito.", "danger")
             return redirect(url_for('main.index'))
 
+        active_sid = session.get('active_school_id')
+
         if permissao == "admin":
             turma_id = request.args.get('turma_id', type=int)
             if not turma_id:
-                flash("Administrador, selecione uma turma na lista.", "info")
-                return redirect(url_for('main.index'))
+                turmas_escola = Turma.query.filter_by(school_id=active_sid).order_by(Turma.nome).all()
+                return render_template('selecionar_turma.html', turmas=turmas_escola, destino='chefe.painel')
+
             turma_obj = db.session.get(Turma, turma_id)
             aluno = None
         else:
@@ -241,7 +247,7 @@ def painel():
         ).all()
 
         if not semanas_ativas:
-            return render_template('chefe/painel.html', aluno=aluno, turma=turma_obj, aulas_agrupadas=[], data_selecionada=data_selecionada, erro_semana=True)
+            return render_template('painel.html', aluno=aluno, turma=turma_obj, aulas_agrupadas=[], data_selecionada=data_selecionada, erro_semana=True, is_admin=(permissao == "admin"))
 
         semana_ids = [s.id for s in semanas_ativas]
         dia_str = get_dia_semana_str(data_selecionada)
@@ -275,7 +281,6 @@ def painel():
         ).all()
 
         aulas_concluidas_keys = set()
-        # CORREÇÃO AQUI: De diaries_hoje para diarios_hoje
         for d in diarios_hoje:
             if d.periodo:
                 aulas_concluidas_keys.add(f"{d.disciplina_id}_{d.periodo}")

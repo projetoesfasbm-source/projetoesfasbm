@@ -7,6 +7,7 @@
     <div class="card mb-4 border-0 shadow-sm">
         <div class="card-body bg-primary text-white rounded">
             <h4 class="mb-1"><i class="fas fa-clipboard-check me-2"></i> Controle de Presença</h4>
+            {# AJUSTE: Usa 'turma.nome' diretamente para evitar erro se 'aluno' for None #}
             <p class="mb-0 opacity-75">Turma: <strong>{{ turma.nome }}</strong> | Data: {{ data_atual }}</p>
         </div>
     </div>
@@ -24,7 +25,8 @@
                     </div>
                     <div>
                         <h6 class="mb-0 fw-bold">{{ aluno.nome_de_guerra }}</h6>
-                        <small class="text-muted">{{ aluno.identidade_militar or 'Nº ' ~ aluno.numero_chamada }}</small>
+                        {# AJUSTE: Adicionado fallback para número de chamada caso identidade_militar seja nula #}
+                        <small class="text-muted">{{ aluno.identidade_militar if aluno.identidade_militar else 'Nº ' ~ (aluno.numero_chamada or loop.index) }}</small>
                     </div>
                 </div>
 
@@ -50,6 +52,7 @@
                 </div>
                 
                 <div class="alert alert-info py-2">
+                    {# AJUSTE: Garante que o nome do responsável apareça corretamente seja admin ou aluno #}
                     <small><i class="fas fa-info-circle me-1"></i> Ao salvar, será registrada a sua assinatura digital ({{ current_user.nome_completo }}).</small>
                 </div>
 
