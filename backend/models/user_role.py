@@ -1,5 +1,4 @@
 # backend/models/user_role.py
-
 from __future__ import annotations
 import typing as t
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -7,25 +6,16 @@ from .database import db
 
 if t.TYPE_CHECKING:
     from .user import User
-    from .school import School
 
 class UserRole(db.Model):
-    __tablename__ = "user_roles"
+    __tablename__ = 'user_roles'
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(db.ForeignKey('users.id'), nullable=False)
+    role_name: Mapped[str] = mapped_column(db.String(50), nullable=False)
 
-    # FK para o usuário
-    user_id: Mapped[int] = mapped_column(db.Integer, db.ForeignKey("users.id"), nullable=False)
-    
-    # FK para a escola
-    school_id: Mapped[int] = mapped_column(db.Integer, db.ForeignKey("schools.id"), nullable=False)
-    
-    # O papel específico nesta escola (ex: 'admin_sens', 'admin_cal', 'instrutor')
-    role: Mapped[str] = mapped_column(db.String(20), nullable=False)
-
-    # Relacionamentos
+    # Relacionamento com User, referenciando a propriedade 'roles' no User
     user: Mapped["User"] = relationship("User", back_populates="roles")
-    school: Mapped["School"] = relationship("School", back_populates="user_roles")
 
     def __repr__(self):
-        return f"<UserRole {self.user_id}-{self.role}@{self.school_id}>"
+        return f'<UserRole {self.role_name} for User {self.user_id}>'

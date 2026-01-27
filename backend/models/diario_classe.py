@@ -42,7 +42,9 @@ class DiarioClasse(db.Model):
 
     # Relacionamentos
     turma: Mapped["Turma"] = relationship()
-    disciplina: Mapped["Disciplina"] = relationship()
+    
+    # Atualizado para linkar com o cascade da Disciplina
+    disciplina: Mapped["Disciplina"] = relationship(back_populates="diarios")
     
     # Relacionamento com quem preencheu (Chefe)
     responsavel: Mapped["User"] = relationship(foreign_keys=[responsavel_id])

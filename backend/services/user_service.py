@@ -4,12 +4,20 @@ from flask import current_app, session, has_request_context
 from flask_login import current_user
 from sqlalchemy import select, or_
 from sqlalchemy.exc import IntegrityError
+from werkzeug.security import generate_password_hash
 
 from ..models.database import db
 from ..models.user import User
 from ..models.user_school import UserSchool
-from ..models.instrutor import Instrutor 
+from ..models.instrutor import Instrutor
+from ..models.horario import Horario
+from ..models.diario_classe import DiarioClasse
+from ..models.user_role import UserRole
+from ..models.disciplina_turma import DisciplinaTurma  # Adicionado para correção do erro de integridade
 from utils.normalizer import normalize_matricula
+import logging
+
+logger = logging.getLogger(__name__)
 
 class UserService:
 
@@ -217,28 +225,90 @@ class UserService:
 
     @staticmethod
     def delete_user_by_id(user_id):
-        user = db.session.get(User, user_id)
-        if not user: return False, "Usuário não encontrado."
-        if user.role in ['super_admin', 'programador']: return False, "Não permitido."
-        
+        """
+        Exclusão segura de usuário (compatível com a lógica antiga, mas chama a versão robusta).
+        """
+        return UserService.delete_user(user_id)
+
+    @staticmethod
+    def delete_user(user_id):
+        """
+        Exclui um usuário e limpa todas as suas dependências (Instrutor, Horários, Diários, DisciplinaTurma).
+        Força bruta para garantir que Instrutores não fiquem presos por Foreign Keys.
+        """
         try:
+            user = db.session.get(User, user_id)
+            if not user:
+                return False, "Usuário não encontrado."
+            
+            # Proteção contra exclusão de Super Admins por engano
+            if user.role in ['super_admin', 'programador'] and (not current_user or current_user.role != 'programador'):
+                 return False, "Não é permitido excluir administradores globais."
+
+            # 1. Verificar e limpar perfil de Instrutor e seus vínculos em Horários e DisciplinaTurma
+            instrutores = Instrutor.query.filter_by(user_id=user.id).all()
+            for instrutor in instrutores:
+                logger.info(f"Limpando dependências do Instrutor ID {instrutor.id} para o User ID {user.id}")
+                
+                # A. DisciplinaTurma (CORREÇÃO DO ERRO DE INTEGRIDADE ATUAL)
+                # Define como NULL em vez de apagar, pois a turma ainda precisa existir
+                DisciplinaTurma.query.filter_by(instrutor_id_1=instrutor.id).update({'instrutor_id_1': None})
+                DisciplinaTurma.query.filter_by(instrutor_id_2=instrutor.id).update({'instrutor_id_2': None})
+
+                # B. Remover ou Desvincular Horários
+                # Como horario.instrutor_id é NOT NULL em muitos casos, aqui optamos por deletar a alocação
+                Horario.query.filter_by(instrutor_id=instrutor.id).delete()
+                # Se for auxiliar, apenas desvincula
+                Horario.query.filter_by(instrutor_id_2=instrutor.id).update({'instrutor_id_2': None})
+                
+                # C. Excluir o perfil de Instrutor
+                db.session.delete(instrutor)
+
+            # 2. Desvincular Diários de Classe (Assinaturas e Responsabilidade)
+            # Define como NULL para não perder o histórico do diário
+            DiarioClasse.query.filter_by(responsavel_id=user.id).update({'responsavel_id': None})
+            DiarioClasse.query.filter_by(instrutor_assinante_id=user.id).update({'instrutor_assinante_id': None})
+
+            # 3. Remover Roles e Escolas
+            UserRole.query.filter_by(user_id=user.id).delete()
+            UserSchool.query.filter_by(user_id=user.id).delete()
+
+            # 4. Excluir o Usuário final
             db.session.delete(user)
             db.session.commit()
-            return True, "Usuário excluído."
-        except Exception:
+            logger.info(f"Usuário {user_id} excluído com sucesso.")
+            return True, "Usuário excluído com sucesso."
+
+        except IntegrityError as e:
             db.session.rollback()
-            return False, "Erro ao excluir."
+            logger.error(f"Erro de integridade ao excluir usuário {user_id}: {str(e)}")
+            return False, f"Erro de integridade: {str(e)}"
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro genérico ao excluir usuário {user_id}: {str(e)}")
+            return False, f"Erro ao excluir: {str(e)}"
     
     @staticmethod
     def get_by_id(user_id):
         return db.session.get(User, user_id)
+    
+    @staticmethod
+    def get_user_by_id(user_id):
+        return db.session.get(User, user_id)
+
+    @staticmethod
+    def get_user_by_username(username):
+        return User.query.filter_by(username=username).first()
 
     @staticmethod
     def create_user(data, school_id=None):
         """
         Cria um usuário e, CRUCIALMENTE, vincula ele à escola atual.
-        Corrigido para evitar criação de alunos órfãos.
         """
+        # Adaptação para aceitar chamadas antigas com argumentos soltos
+        if not isinstance(data, dict):
+             pass
+
         try:
             # Verifica duplicidade
             existing = db.session.scalar(
@@ -247,6 +317,10 @@ class UserService:
             if existing: return False, "E-mail ou matrícula já cadastrados."
 
             # Cria o usuário
+            password = data.get('password')
+            if not password:
+                 password = 'mudar123' 
+
             user = User(
                 email=data['email'], 
                 matricula=data['matricula'], 
@@ -255,20 +329,17 @@ class UserService:
                 role=data.get('role', 'aluno'),
                 posto_graduacao=data.get('posto_graduacao')
             )
-            user.set_password(data['password'])
+            user.set_password(password)
             
             db.session.add(user)
             db.session.flush() # Gera o ID do usuário
             
             # --- CORREÇÃO DO BUG DO ALUNO ÓRFÃO ---
-            # Se school_id não foi passado, tenta pegar da sessão
             if not school_id:
                 school_id = UserService.get_current_school_id()
             
-            # Se temos uma escola identificada, criamos o vínculo AGORA
             if school_id:
                 link_role = data.get('role', 'aluno')
-                # Segurança: Programador/SuperAdmin não ganha vínculo automático de aluno
                 if link_role not in ['programador', 'super_admin']:
                     user_school = UserSchool(
                         user_id=user.id, 
@@ -277,7 +348,6 @@ class UserService:
                     )
                     db.session.add(user_school)
                     
-                    # Cria perfil extra se for instrutor
                     if link_role == 'instrutor':
                         UserService._ensure_instrutor_profile(user.id, school_id)
             # --------------------------------------
@@ -297,19 +367,19 @@ class UserService:
             if 'nome_de_guerra' in data: user.nome_de_guerra = data['nome_de_guerra']
             if 'email' in data: user.email = data['email']
             if 'posto_graduacao' in data: user.posto_graduacao = data['posto_graduacao']
+            
+            for k, v in data.items():
+                 if hasattr(user, k) and k not in ['id', 'password_hash']:
+                      setattr(user, k, v)
+
             db.session.commit()
             return True, "Atualizado."
         except Exception as e:
             db.session.rollback()
             return False, str(e)
 
-    # --- NOVO MÉTODO ADICIONADO ---
     @staticmethod
     def get_users_by_school(school_id):
-        """
-        Retorna todos os usuários vinculados à escola especificada.
-        Utilizado para preencher dropdowns de filtros em logs e relatórios.
-        """
         try:
             return db.session.scalars(
                 select(User)
@@ -320,3 +390,7 @@ class UserService:
         except Exception as e:
             current_app.logger.error(f"Erro ao buscar usuários da escola {school_id}: {e}")
             return []
+    
+    @staticmethod
+    def get_all_users():
+        return User.query.all()

@@ -11,6 +11,8 @@ if t.TYPE_CHECKING:
     from .disciplina_turma import DisciplinaTurma
     from .turma import Turma
     from .ciclo import Ciclo
+    from .diario_classe import DiarioClasse
+    from .horario import Horario
 
 class Disciplina(db.Model):
     __tablename__ = 'disciplinas'
@@ -30,6 +32,12 @@ class Disciplina(db.Model):
     
     historico_disciplinas: Mapped[list["HistoricoDisciplina"]] = relationship(back_populates="disciplina", cascade="all, delete-orphan")
     associacoes_turmas: Mapped[list["DisciplinaTurma"]] = relationship(back_populates="disciplina", cascade="all, delete-orphan")
+    
+    # Relacionamento para exclusão em cascata dos diários associados
+    diarios: Mapped[list["DiarioClasse"]] = relationship(back_populates="disciplina", cascade="all, delete-orphan")
+
+    # Relacionamento para exclusão em cascata dos horários associados
+    horarios: Mapped[list["Horario"]] = relationship(back_populates="disciplina", cascade="all, delete-orphan")
     
     # Adiciona uma constraint de unicidade para a matéria dentro de uma turma
     __table_args__ = (db.UniqueConstraint('materia', 'turma_id', name='_materia_turma_uc'),)

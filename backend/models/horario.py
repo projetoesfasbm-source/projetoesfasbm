@@ -36,7 +36,10 @@ class Horario(db.Model):
 
     # Relacionamentos
     semana: Mapped["Semana"] = relationship()
-    disciplina: Mapped["Disciplina"] = relationship()
+    
+    # Atualizado para linkar com o cascade da Disciplina
+    disciplina: Mapped["Disciplina"] = relationship(back_populates="horarios")
+    
     instrutor: Mapped["Instrutor"] = relationship(foreign_keys=[instrutor_id])
     
     instrutor_2: Mapped[t.Optional["Instrutor"]] = relationship(foreign_keys=[instrutor_id_2])

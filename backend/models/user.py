@@ -1,3 +1,4 @@
+# backend/models/user.py
 from __future__ import annotations
 import typing as t
 from flask_login import UserMixin
@@ -14,6 +15,7 @@ if t.TYPE_CHECKING:
     from .instrutor import Instrutor
     from .notification import Notification
     from .push_subscription import PushSubscription
+    from .user_role import UserRole # Import apenas para type checking
 
 class User(UserMixin, db.Model):
     __tablename__ = 'users'
@@ -45,6 +47,9 @@ class User(UserMixin, db.Model):
     aluno_profile: Mapped['Aluno'] = relationship('Aluno', back_populates='user', uselist=False, cascade="all, delete-orphan")
     instrutor_profile: Mapped['Instrutor'] = relationship('Instrutor', back_populates='user', uselist=False, cascade="all, delete-orphan")
     user_schools: Mapped[list['UserSchool']] = relationship('UserSchool', back_populates='user', cascade="all, delete-orphan", lazy='selectin')
+
+    # CORREÇÃO: Relacionamento definido usando string para evitar circularidade e KeyErrors
+    roles: Mapped[list['UserRole']] = relationship('UserRole', back_populates='user', cascade="all, delete-orphan")
 
     notifications: Mapped[list['Notification']] = relationship('Notification', back_populates='user', cascade="all, delete-orphan")
     push_subscriptions: Mapped[list['PushSubscription']] = relationship('PushSubscription', back_populates='user', cascade="all, delete-orphan")
