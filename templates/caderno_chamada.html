@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block title %}Caderno de Chamada - SisGEn{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="card mb-4 border-0 shadow-sm">
+        <div class="card-body bg-primary text-white rounded">
+            <h4 class="mb-1"><i class="fas fa-clipboard-check me-2"></i> Controle de Presença</h4>
+            <p class="mb-0 opacity-75">Turma: <strong>{{ turma.nome }}</strong> | Data: {{ data_atual }}</p>
+        </div>
+    </div>
+
+    <form id="formChamada" method="POST" action="{{ url_for('chefe.salvar_chamada') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="turma_id" value="{{ turma.id }}">
+
+        <div class="list-group shadow-sm">
+            {% for aluno in alunos %}
+            <div class="list-group-item list-group-item-action d-flex align-items-center justify-content-between p-3">
+                <div class="d-flex align-items-center">
+                    <div class="me-3">
+                        <span class="badge bg-secondary rounded-pill">{{ loop.index }}º</span>
+                    </div>
+                    <div>
+                        <h6 class="mb-0 fw-bold">{{ aluno.nome_de_guerra }}</h6>
+                        <small class="text-muted">{{ aluno.identidade_militar or 'Nº ' ~ aluno.numero_chamada }}</small>
+                    </div>
+                </div>
+
+                <div class="btn-group" role="group" aria-label="Status de Presença">
+                    <input type="radio" class="btn-check" name="status_{{ aluno.id }}" id="pres_{{ aluno.id }}" value="presente" checked>
+                    <label class="btn btn-outline-success btn-sm px-3" for="pres_{{ aluno.id }}">P</label>
+
+                    <input type="radio" class="btn-check" name="status_{{ aluno.id }}" id="atraso_{{ aluno.id }}" value="atraso">
+                    <label class="btn btn-outline-warning btn-sm px-3" for="atraso_{{ aluno.id }}">A</label>
+
+                    <input type="radio" class="btn-check" name="status_{{ aluno.id }}" id="falta_{{ aluno.id }}" value="falta">
+                    <label class="btn btn-outline-danger btn-sm px-3" for="falta_{{ aluno.id }}">F</label>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="card mt-4 mb-5 border-0 shadow-sm">
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="observacoes" class="form-label fw-bold">Observações do Dia</label>
+                    <textarea class="form-control" id="observacoes" name="observacoes" rows="3" placeholder="Ex: Aluno X em consulta médica, Aluno Y na guarda..."></textarea>
+                </div>
+                
+                <div class="alert alert-info py-2">
+                    <small><i class="fas fa-info-circle me-1"></i> Ao salvar, será registrada a sua assinatura digital ({{ current_user.nome_completo }}).</small>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-lg w-100 py-3 shadow">
+                    <i class="fas fa-save me-2"></i> Finalizar Chamada
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<style>
+    /* Estilo para destacar a seleção do botão de rádio */
+    .btn-check:checked + .btn-outline-success { background-color: #198754; color: white; }
+    .btn-check:checked + .btn-outline-warning { background-color: #ffc107; color: black; }
+    .btn-check:checked + .btn-outline-danger { background-color: #dc3545; color: white; }
+
+    .list-group-item {
+        transition: background-color 0.2s;
+        border-left: 4px solid transparent;
+    }
+    
+    .list-group-item:hover {
+        background-color: rgba(0,0,0,0.02);
+    }
+
+    /* Cores laterais para facilitar a visualização visual rápida */
+    .list-group-item:has(input[value="falta"]:checked) {
+        border-left-color: #dc3545;
+        background-color: rgba(220, 53, 69, 0.05);
+    }
+</style>
+
+<script>
+    // Alerta de confirmação antes de enviar
+    document.getElementById('formChamada').addEventListener('submit', function(e) {
+        if(!confirm('Deseja finalizar a chamada? Esta ação registrará as presenças para a data de hoje.')) {
+            e.preventDefault();
+        }
+    });
+</script>
+{% endblock %}

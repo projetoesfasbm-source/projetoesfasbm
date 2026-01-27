@@ -231,7 +231,7 @@
                 <div class="nav-separator">GERAL</div>
                 <a href="{{ url_for('main.safebrowser') }}" class="nav-link {% if request.endpoint == 'main.safebrowser' %}active{% endif %}"><div class="nav-icon">🛡️</div> SafeBrowser</a>
 
-                {# VERIFICAÇÃO DE STAFF OU INSTRUTOR/ALUNO NA ESCOLA ATUAL #}
+                {# VISÍVEL PARA QUEM TEM VÍNCULO OU É ADMIN/ALUNO #}
                 {% if current_user.is_staff_in_school(active_sid) or current_user.is_instrutor_in_school(active_sid) or current_user.role in ['super_admin', 'aluno'] %}
                     <a href="{{ url_for('aluno.listar_alunos') }}" class="nav-link {% if request.endpoint and 'aluno.' in request.endpoint and 'historico' not in request.endpoint %}active{% endif %}"><div class="nav-icon">👥</div> Alunos</a>
                     <a href="{{ url_for('instrutor.listar_instrutores') }}" class="nav-link {% if request.endpoint and 'instrutor.' in request.endpoint %}active{% endif %}"><div class="nav-icon">🎓</div> Instrutores</a>
@@ -239,55 +239,51 @@
                     <a href="{{ url_for('disciplina.listar_disciplinas') }}" class="nav-link {% if request.endpoint and 'disciplina.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📚</div> Disciplinas</a>
                 {% endif %}
 
-                {# APENAS SENS NA ESCOLA ATUAL #}
+                {# APENAS SENS #}
                 {% if current_user.is_sens_in_school(active_sid) %}
                     <a href="{{ url_for('vinculo.gerenciar_vinculos') }}" class="nav-link {% if request.endpoint and 'vinculo.' in request.endpoint %}active{% endif %}"><div class="nav-icon">🔗</div> Vínculos</a>
                 {% endif %}
 
-                {# STAFF, INSTRUTOR OU ALUNO #}
-                {% if current_user.is_staff_in_school(active_sid) or current_user.is_instrutor_in_school(active_sid) or current_user.role in ['super_admin', 'aluno'] %}
-                    <div class="nav-separator">ACADÊMICO</div>
-                    <a href="{{ url_for('horario.index') }}" class="nav-link {% if request.endpoint and ('horario.' in request.endpoint or 'semana.' in request.endpoint) %}active{% endif %}"><div class="nav-icon">📅</div> Quadro Horário</a>
+                <div class="nav-separator">ACADÊMICO</div>
+                <a href="{{ url_for('horario.index') }}" class="nav-link {% if request.endpoint and ('horario.' in request.endpoint or 'semana.' in request.endpoint) %}active{% endif %}"><div class="nav-icon">📅</div> Quadro Horário</a>
 
-                    {# ADIÇÃO DO LINK CADERNO DE CHAMADA #}
-                    {% if current_user.role == 'super_admin' or current_user.is_staff_in_school(active_sid) or current_user.role == 'chefe_turma' %}
-                     <a href="{{ url_for('chefe.painel') }}" class="nav-link {% if request.endpoint and 'chefe.' in request.endpoint %}active{% endif %}">
-                         <div class="nav-icon">📋</div> Caderno de Chamada
-                     </a>
+                {# CADERNO DE CHAMADA: AGORA VISÍVEL PARA TODOS OS USUÁRIOS LOGADOS #}
+                <a href="{{ url_for('chefe.painel') }}" class="nav-link {% if request.endpoint and 'chefe.' in request.endpoint %}active{% endif %}">
+                    <div class="nav-icon">📋</div> Caderno de Chamada
+                </a>
+
+                {# VALIDAR DIÁRIOS #}
+                {% if current_user.is_instrutor_in_school(active_sid) or current_user.is_sens_in_school(active_sid) or current_user.is_cal_in_school(active_sid) or current_user.role == 'super_admin' %}
+                    <a href="{{ url_for('diario.listar_pendentes') }}" class="nav-link {% if request.endpoint and 'diario.' in request.endpoint %}active{% endif %}">
+                        <div class="nav-icon">✍️</div> Validar Diários
+                    </a>
                 {% endif %}
 
-                    {# LINK EXCLUSIVO PARA INSTRUTOR: ASSINAR DIÁRIOS #}
-                    {% if current_user.is_instrutor_in_school(active_sid) or current_user.is_sens_in_school(active_sid) or current_user.is_cal_in_school(active_sid) or current_user.role == 'super_admin' %}
-                        <a href="{{ url_for('diario.listar_pendentes') }}" class="nav-link {% if request.endpoint and 'diario.' in request.endpoint %}active{% endif %}">
-                            <div class="nav-icon">✍️</div> Validar Diários
-                        </a>
-                    {% endif %}
-                {% endif %}
-
-                {# APENAS SENS #}
+                {# DIÁRIOS ADM #}
                 {% if current_user.is_sens_in_school(active_sid) %}
                     <a href="{{ url_for('admin_escola.espelho_diarios') }}" class="nav-link {% if request.endpoint == 'admin_escola.espelho_diarios' %}active{% endif %}"><div class="nav-icon">📖</div> Diários de Classe (Adm)</a>
                 {% endif %}
 
-                {# --- JUSTIÇA E DISCIPLINA: VISÍVEL PARA CAL, ADMIN E ALUNOS --- #}
+                {# JUSTIÇA E DISCIPLINA #}
                 {% if current_user.is_cal_in_school(active_sid) or current_user.role == 'aluno' or current_user.role == 'super_admin' or current_user.is_programador %}
                     <div class="nav-separator">JUSTIÇA E DISCIPLINA</div>
                     <a href="{{ url_for('justica.index') }}" class="nav-link {% if request.endpoint and 'justica.' in request.endpoint %}active{% endif %}"><div class="nav-icon">⚖️</div> Justiça e Disciplina</a>
                     <a href="{{ url_for('questionario.index') }}" class="nav-link {% if request.endpoint and 'questionario.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📝</div> Questionários</a>
                 {% endif %}
 
-                {# SENS #}
+                {# GESTÃO DE AULAS #}
                 {% if current_user.is_sens_in_school(active_sid) %}
                     <div class="nav-separator">GESTÃO DE AULAS</div>
                     <a href="{{ url_for('horario.aprovar_horarios') }}" class="nav-link {% if request.endpoint == 'horario.aprovar_horarios' %}active{% endif %}"><div class="nav-icon">👍</div> Aprovar Aulas</a>
                 {% endif %}
 
-                {# SENS #}
+                {# RELATÓRIOS #}
                 {% if current_user.is_sens_in_school(active_sid) %}
                      <div class="nav-separator">RELATÓRIOS</div>
                     <a href="{{ url_for('relatorios.index') }}" class="nav-link {% if request.endpoint and 'relatorios.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📊</div> Relatórios</a>
                 {% endif %}
 
+                {# PORTAL DO ALUNO #}
                 {% if current_user.role == 'aluno' and current_user.aluno_profile %}
                     <div class="nav-separator">PORTAL DO ALUNO</div>
                     <a href="{{ url_for('historico.index') }}" class="nav-link {% if request.endpoint and 'historico.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📊</div> Meu CTSP</a>
@@ -298,7 +294,7 @@
                     <a href="{{ url_for('super_admin.dashboard') }}" class="nav-link {% if request.endpoint and 'super_admin.' in request.endpoint %}active{% endif %}"><div class="nav-icon">👑</div> Painel Super Admin</a>
                  {% endif %}
 
-                 {# ADMIN GERAL DA ESCOLA OU PROGRAMADOR #}
+                 {# ADMINISTRAÇÃO #}
                  {% if current_user.is_admin_escola_in_school(active_sid) or current_user.is_programador %}
                     <div class="nav-separator">ADMINISTRAÇÃO</div>
                     <a href="{{ url_for('tools.index') }}" class="nav-link {% if request.endpoint and ('tools.' in request.endpoint or 'assets.' in request.endpoint or 'customizer.' in request.endpoint) %}active{% endif %}"><div class="nav-icon">🛠️</div> Ferramentas Admin</a>
@@ -486,7 +482,7 @@
             // --- Gerenciamento de Notificações ---
             const badge = document.getElementById('notification-badge');
             const list = document.getElementById('notification-list');
-            const csrfToken = document.querySelector('meta[name=\"csrf-token\"]').getAttribute('content');
+            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
             function fetchNotifications() {
                 fetch("{{ url_for('notification.get_dropdown_data') }}")
@@ -513,17 +509,17 @@
                         notifications.forEach(n => {
                             const item = document.createElement('li');
                             const itemClass = n.is_read ? 'read' : 'unread';
-                            const markAsReadButton = n.is_read ? '' : `<button class=\"btn btn-sm btn-outline-primary mark-one-read-btn\" data-id=\"${n.id}\" title=\"Marcar como lida\">✓</button>`;
-                            item.innerHTML = `<div class=\"dropdown-item notification-item ${itemClass}\"><a href=\"${n.url}\" class=\"notification-link-main\"><p class=\"notification-message\">${n.message}</p><small class=\"notification-date\">${n.created_at}</small></a>${markAsReadButton}</div>`;
+                            const markAsReadButton = n.is_read ? '' : `<button class="btn btn-sm btn-outline-primary mark-one-read-btn" data-id="${n.id}" title="Marcar como lida">✓</button>`;
+                            item.innerHTML = `<div class="dropdown-item notification-item ${itemClass}"><a href="${n.url}" class="notification-link-main"><p class="notification-message">${n.message}</p><small class="notification-date">${n.created_at}</small></a>${markAsReadButton}</div>`;
                             list.appendChild(item);
                         });
-                        list.innerHTML += '<li><hr class=\"dropdown-divider\" style=\"margin: 0;\"></li>';
+                        list.innerHTML += '<li><hr class="dropdown-divider" style="margin: 0;"></li>';
                         if (unread_count > 0) {
-                            list.innerHTML += '<li><a class=\"dropdown-item text-center small\" href=\"#\" id=\"mark-all-read-btn\">Marcar todas como lidas</a></li>';
+                            list.innerHTML += '<li><a class="dropdown-item text-center small" href="#" id="mark-all-read-btn">Marcar todas como lidas</a></li>';
                         }
-                        list.innerHTML += `<li><a class=\"dropdown-item text-center\" href=\"{{ url_for('notification.index') }}\">Ver todas</a></li>`;
+                        list.innerHTML += `<li><a class="dropdown-item text-center" href="{{ url_for('notification.index') }}">Ver todas</a></li>`;
                     } else {
-                        list.innerHTML = '<li><span class=\"dropdown-item-text text-center text-muted p-2\">Nenhuma notificação recente</span></li>';
+                        list.innerHTML = '<li><span class="dropdown-item-text text-center text-muted p-2">Nenhuma notificação recente</span></li>';
                     }
                 }
             }
@@ -532,7 +528,6 @@
                 list.addEventListener('click', function(e) {
                     const markOneBtn = e.target.closest('.mark-one-read-btn');
                     const markAllBtn = e.target.closest('#mark-all-read-btn');
-                    const link = e.target.closest('a.notification-link-main');
 
                     if (markOneBtn) {
                         e.stopPropagation();

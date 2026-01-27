@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, flash, redirect, url_for, g, session
+from flask import Blueprint, render_template, request, flash, redirect, url_for, g, session, abort
 from flask_login import login_required, current_user
 from datetime import date, datetime, timedelta
 from sqlalchemy import select, or_, and_, func
@@ -66,6 +66,46 @@ def verify_chefe_permission():
     except Exception:
         return None
 
+# --- NOVA FUNÇÃO ANEXADA ---
+
+@chefe_bp.route('/caderno-chamada')
+@login_required
+def caderno_chamada():
+    # Segurança: Apenas papel 'chefe_turma' ou Admin
+    permissao = verify_chefe_permission()
+    if not permissao:
+        abort(403)
+
+    if permissao == "admin":
+        turma_id = request.args.get('turma_id', type=int)
+        if not turma_id:
+            flash("Selecione uma turma.", "info")
+            return redirect(url_for('main.index'))
+        turma = db.session.get(Turma, turma_id)
+    else:
+        # Identifica o aluno associado ao usuário logado (Lógica original fornecida)
+        aluno_chefe = Aluno.query.filter_by(user_id=current_user.id).first()
+        if not aluno_chefe or not aluno_chefe.turma_id:
+            abort(404, description="Vínculo de turma não identificado.")
+        turma = db.session.get(Turma, aluno_chefe.turma_id)
+
+    if not turma:
+        abort(404)
+
+    # Busca a turma e os alunos (Ordenação: Antiguidade)
+    alunos_turma = Aluno.query.filter_by(turma_id=turma.id)\
+        .order_by(Aluno.antiguidade.asc())\
+        .all()
+
+    return render_template(
+        'chefe_turma/caderno_chamada.html',
+        alunos=alunos_turma,
+        turma=turma,
+        is_admin=(permissao == "admin")
+    )
+
+# --- FUNÇÕES ORIGINAIS PRESERVADAS INTEGRALMENTE ---
+
 @chefe_bp.route('/debug')
 @login_required
 def debug_screen():
@@ -73,10 +113,9 @@ def debug_screen():
     output.append("<h1>Diagnóstico Chefe de Turma (Varredura Semanal Segura)</h1>")
     
     try:
-        # ADIÇÃO: Ajuste para o debug funcionar para Admin também (simulando a primeira turma se for admin)
         permissao = verify_chefe_permission()
         if permissao == "admin":
-            aluno = Aluno.query.filter(Aluno.turma_id != None).first() # Pega um aluno qualquer para teste
+            aluno = Aluno.query.filter(Aluno.turma_id != None).first() 
             output.append("<p style='color:orange'>Modo Admin: Simulando diagnóstico com primeiro aluno encontrado.</p>")
         else:
             aluno = current_user.aluno_profile
@@ -170,14 +209,13 @@ def painel():
             flash("Acesso restrito.", "danger")
             return redirect(url_for('main.index'))
 
-        # ADIÇÃO: Define a turma baseada em quem acessa (Admin escolhe via URL, Chefe é fixo)
         if permissao == "admin":
             turma_id = request.args.get('turma_id', type=int)
             if not turma_id:
                 flash("Administrador, selecione uma turma na lista.", "info")
                 return redirect(url_for('main.index')) 
             turma_obj = db.session.get(Turma, turma_id)
-            aluno = None # Admin não tem perfil de aluno
+            aluno = None 
         else:
             aluno = permissao
             turma_id = aluno.turma_id
@@ -187,7 +225,6 @@ def painel():
             flash("Turma não encontrada.", "danger")
             return redirect(url_for('main.index'))
 
-        # Data e Semana (MANTIDO ORIGINAL)
         data_str = request.args.get('data')
         data_hoje = get_data_hoje_brasil()
         data_selecionada = datetime.strptime(data_str, '%Y-%m-%d').date() if data_str else data_hoje
@@ -287,7 +324,6 @@ def painel():
                     g['status'] = 'concluido'
                 aulas_agrupadas.append(g)
 
-        # ADIÇÃO: Passa turma_obj e flag is_admin para o template
         return render_template('chefe/painel.html', aluno=aluno, turma=turma_obj, aulas_agrupadas=aulas_agrupadas, data_selecionada=data_selecionada, erro_semana=False, is_admin=(permissao == "admin"))
 
     except Exception as e:
@@ -300,21 +336,17 @@ def painel():
 @login_required
 def registrar_aula(primeiro_horario_id):
     try:
-        # ADIÇÃO: Verificação de permissão flexível
         permissao = verify_chefe_permission()
         if not permissao: return redirect(url_for('main.index'))
 
-        # ADIÇÃO: Busca o horário primeiro para saber de qual turma ele é
         horario_base_temp = db.session.get(Horario, primeiro_horario_id)
         if not horario_base_temp:
             flash("Horário não encontrado.", "danger")
             return redirect(url_for('chefe.painel'))
             
-        # Define os IDs de turma e escola para as queries abaixo
         turma_id_alvo = horario_base_temp.disciplina.turma_id
         escola_id_alvo = horario_base_temp.disciplina.turma.school_id
 
-        # Carrega o horário base com a lógica original
         horario_base = db.session.query(Horario)\
             .outerjoin(Horario.disciplina)\
             .outerjoin(Disciplina.turma)\
