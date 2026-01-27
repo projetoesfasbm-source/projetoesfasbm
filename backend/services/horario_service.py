@@ -79,7 +79,7 @@ class HorarioService:
 
     @staticmethod
     def construir_matriz_horario(pelotao, semana_id, user):
-        # 1. Carregar Semana (Sem lógica de bloqueio de períodos)
+        # 1. Carregar Semana
         semana = db.session.get(Semana, semana_id)
 
         # 2. Estrutura padrão para célula vazia
@@ -90,13 +90,11 @@ class HorarioService:
             'is_disposicao': True,
             'id': None,
             'status': 'confirmado',
-            'blocked': False # Mantido como False fixo, pois a funcionalidade foi removida
+            'blocked': False
         }
         
         horario_matrix = [[dict(a_disposicao) for _ in range(7)] for _ in range(15)]
         dias = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo']
-
-        # (Removido bloco de aplicação visual de bloqueios)
 
         # 3. Buscar e Preencher Aulas Existentes
         aulas_query = (
@@ -116,7 +114,10 @@ class HorarioService:
                 periodo_idx = aula.periodo - 1
 
                 can_see_pending_details = HorarioService.can_edit_horario(aula, user)
-                show_details = aula.status == 'confirmado' or can_see_pending_details
+                
+                # CORREÇÃO DO BUG DE VISUALIZAÇÃO:
+                # Se não é pendente, é aprovado/confirmado, logo deve ser exibido.
+                show_details = aula.status != 'pendente' or can_see_pending_details
 
                 instrutores_display_list = []
                 if aula.instrutor and aula.instrutor.user:
@@ -144,7 +145,10 @@ class HorarioService:
                     'can_edit': HorarioService.can_edit_horario(aula, user),
                     'is_continuation': False,
                     'group_id': aula.group_id,
-                    'blocked': False
+                    'blocked': False,
+                    # --- NOVOS CAMPOS PARA DESTAQUE VISUAL ---
+                    'raw_instrutor_id': aula.instrutor_id,
+                    'raw_instrutor_id_2': aula.instrutor_id_2
                 }
 
                 if 0 <= periodo_idx < 15:
@@ -357,9 +361,6 @@ class HorarioService:
             # >>> PRIORIDADE DE DISCIPLINA (MANTIDO)
             # ===============================================
             if semana and not is_admin:
-                # (Lógica de BLOQUEIO DE PERÍODO foi removida daqui)
-
-                # --- VERIFICAÇÃO DE DISCIPLINA PRIORITÁRIA ---
                 if getattr(semana, 'priority_active', False):
                     raw_priority = getattr(semana, 'priority_disciplines', '[]') or '[]'
                     try:
@@ -371,7 +372,6 @@ class HorarioService:
 
                     nome_disciplina_atual = disciplina.materia if disciplina else ""
 
-                    # Se houver lista de prioridade e a disciplina não estiver nela, bloqueia
                     if allowed_names and nome_disciplina_atual not in allowed_names:
                         return False, (
                             "⚠️ AGENDAMENTO BLOQUEADO: "

@@ -1,10 +1,26 @@
 {% if aula != 'SKIP' %}
+    {# Lógica de Destaque #}
+    {% set is_my_class = false %}
+    {% if current_user.is_authenticated and current_user.role == 'instrutor' and current_user.instrutor_profile %}
+        {# Agora usamos os campos 'raw' que foram adicionados no Service #}
+        {% if aula.raw_instrutor_id == current_user.instrutor_profile.id or (aula.raw_instrutor_id_2 and aula.raw_instrutor_id_2 == current_user.instrutor_profile.id) %}
+             {% set is_my_class = true %}
+        {% endif %}
+    {% endif %}
+
     <td class="schedule-slot" rowspan="{{ aula.duracao if not aula.is_disposicao else 1 }}" style="vertical-align: middle; position: relative;">
-        <div class="slot-content {% if aula.is_disposicao %}disposicao{% endif %} {% if aula.status == 'pendente' %}pendente{% endif %}" 
+        <div class="slot-content 
+                    {% if aula.is_disposicao %}disposicao{% endif %} 
+                    {% if aula.status == 'pendente' %}pendente{% endif %}
+                    {# APLICA DESTAQUE SE: For minha aula E NÃO for pendente (ou seja, Agendada e Autorizada) #}
+                    {% if is_my_class and aula.status != 'pendente' %}aula-destaque-usuario{% endif %}" 
              style="height: 100%; min-height: 80px; display: flex; flex-direction: column; justify-content: center; padding: 4px;">
             
             <div class="disciplina-title" style="font-weight: bold; line-height: 1.2; margin-bottom: 2px;">
                 {{ aula.materia }}
+                {% if is_my_class and aula.status != 'pendente' %}
+                    <i class="fas fa-check-circle text-success ms-1" title="Sua aula confirmada"></i>
+                {% endif %}
             </div>
 
             {% if aula.instrutor %}

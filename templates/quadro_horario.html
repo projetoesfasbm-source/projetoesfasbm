@@ -519,5 +519,22 @@
         .weekend-slot.disabled { background-color: #f1f5f9; cursor: not-allowed; }
         .turma-selection-buttons { display: flex; flex-wrap: wrap; gap: 1rem; justify-content: center; padding: 1rem 0; }
         .btn-turma { flex-grow: 1; padding: 1rem; font-size: 1.1rem; }
+
+        /* ESTILO DE DESTAQUE PARA AULA DO USUÁRIO */
+        .aula-destaque-usuario {
+            background-color: #d1fae5 !important; /* Fundo verde claro vibrante */
+            border: 4px solid #059669 !important; /* Borda grossa em todos os lados (Verde Esmeralda) */
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 0 15px rgba(5, 150, 105, 0.4) !important; /* Sombra externa para dar "pop" */
+            z-index: 1; /* Garante prioridade visual */
+        }
+        .aula-destaque-usuario .disciplina-title {
+            color: #064e3b !important; /* Texto verde bem escuro para contraste */
+            font-weight: 900 !important; /* Extra negrito */
+            text-decoration: underline; /* Sublinhado para reforçar */
+        }
+        .aula-destaque-usuario .instrutor-name {
+            color: #065f46 !important;
+            font-weight: bold;
+        }
     </style>
 {% endblock %}
