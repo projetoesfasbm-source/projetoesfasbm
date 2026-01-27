@@ -2,14 +2,14 @@ from flask import Blueprint, render_template, request, flash, redirect, url_for,
 from flask_login import login_required, current_user
 from datetime import date, datetime, timedelta
 from sqlalchemy import select, or_, and_, func
-from sqlalchemy.orm import joinedload 
+from sqlalchemy.orm import joinedload
 import re
 import pytz
 
 from backend.models.database import db
 from backend.models.horario import Horario
 from backend.models.aluno import Aluno
-from backend.models.turma_cargo import TurmaCargo 
+from backend.models.turma_cargo import TurmaCargo
 from backend.models.diario_classe import DiarioClasse
 from backend.models.frequencia import FrequenciaAluno
 from backend.models.semana import Semana
@@ -54,8 +54,7 @@ def verify_chefe_permission():
     try:
         if not current_user.is_authenticated:
             return None
-        
-        # ADIÇÃO: Permite que Staff/SuperAdmin também acesse
+
         active_sid = session.get('active_school_id')
         if current_user.role == 'super_admin' or (hasattr(current_user, 'is_staff_in_school') and current_user.is_staff_in_school(active_sid)):
             return "admin"
@@ -66,15 +65,16 @@ def verify_chefe_permission():
     except Exception:
         return None
 
-# --- NOVA FUNÇÃO ANEXADA ---
+# --- ROTA ATUALIZADA COM LÓGICA DE PERMISSÃO DE EDIÇÃO ---
 
 @chefe_bp.route('/caderno-chamada')
 @login_required
 def caderno_chamada():
-    # Segurança: Apenas papel 'chefe_turma' ou Admin
     permissao = verify_chefe_permission()
     if not permissao:
         abort(403)
+
+    pode_editar = False # Padrão: apenas visualização
 
     if permissao == "admin":
         turma_id = request.args.get('turma_id', type=int)
@@ -82,17 +82,21 @@ def caderno_chamada():
             flash("Selecione uma turma.", "info")
             return redirect(url_for('main.index'))
         turma = db.session.get(Turma, turma_id)
+        pode_editar = True # Admin sempre edita
     else:
-        # Identifica o aluno associado ao usuário logado (Lógica original fornecida)
         aluno_chefe = Aluno.query.filter_by(user_id=current_user.id).first()
         if not aluno_chefe or not aluno_chefe.turma_id:
             abort(404, description="Vínculo de turma não identificado.")
         turma = db.session.get(Turma, aluno_chefe.turma_id)
 
+        # VERIFICAÇÃO: O aluno logado é o chefe desta turma?
+        cargo = TurmaCargo.query.filter_by(turma_id=turma.id, aluno_id=aluno_chefe.id, cargo_nome=TurmaCargo.ROLE_CHEFE).first()
+        if cargo:
+            pode_editar = True
+
     if not turma:
         abort(404)
 
-    # Busca a turma e os alunos (Ordenação: Antiguidade)
     alunos_turma = Aluno.query.filter_by(turma_id=turma.id)\
         .order_by(Aluno.antiguidade.asc())\
         .all()
@@ -101,28 +105,29 @@ def caderno_chamada():
         'chefe_turma/caderno_chamada.html',
         alunos=alunos_turma,
         turma=turma,
+        pode_editar=pode_editar,
         is_admin=(permissao == "admin")
     )
 
-# --- FUNÇÕES ORIGINAIS PRESERVADAS INTEGRALMENTE ---
+# --- FUNÇÕES ORIGINAIS PRESERVADAS ---
 
 @chefe_bp.route('/debug')
 @login_required
 def debug_screen():
     output = []
     output.append("<h1>Diagnóstico Chefe de Turma (Varredura Semanal Segura)</h1>")
-    
+
     try:
         permissao = verify_chefe_permission()
         if permissao == "admin":
-            aluno = Aluno.query.filter(Aluno.turma_id != None).first() 
+            aluno = Aluno.query.filter(Aluno.turma_id != None).first()
             output.append("<p style='color:orange'>Modo Admin: Simulando diagnóstico com primeiro aluno encontrado.</p>")
         else:
             aluno = current_user.aluno_profile
 
         if not aluno or not aluno.turma:
             return "Erro: Aluno sem turma vinculada ou nenhum dado para simular."
-            
+
         escola_id = aluno.turma.school_id
         data_hoje = get_data_hoje_brasil()
         dia_str = get_dia_semana_str(data_hoje)
@@ -133,18 +138,18 @@ def debug_screen():
         output.append(f"<li><strong>Escola ID:</strong> {escola_id}</li>")
         output.append(f"<li><strong>Data Base:</strong> {data_hoje} ({dia_str})</li>")
         output.append(f"</ul>")
-        
+
         semanas = db.session.query(Semana).join(Ciclo).filter(
             Ciclo.school_id == escola_id,
-            Semana.data_inicio <= data_hoje, 
+            Semana.data_inicio <= data_hoje,
             Semana.data_fim >= data_hoje
         ).all()
-        
+
         if not semanas:
             output.append(f"<h3 style='color:red'>ERRO: Nenhuma semana encontrada para a Escola {escola_id} na data de hoje.</h3>")
             output.append("<p>Verifique se existe um Ciclo e uma Semana cadastrados para esta data nesta escola.</p>")
             return "<br>".join(output)
-        
+
         semana_ids = [s.id for s in semanas]
         nomes_semanas = ", ".join([f"{s.nome} (ID {s.id})" for s in semanas])
         output.append(f"<p><strong>Semanas Ativas Detectadas (Escola {escola_id}):</strong> {nomes_semanas}</p>")
@@ -158,7 +163,7 @@ def debug_screen():
             ).all()
 
         output.append("<table border='1' cellpadding='5'><tr><th>ID</th><th>Matéria</th><th>Turma ID (Disc)</th><th>Pelotão (Txt)</th><th>Dia no Banco</th><th>Semana ID</th><th>Status</th></tr>")
-        
+
         variacoes = get_variacoes_nome_turma(aluno.turma.nome)
 
         if not horarios_raw:
@@ -170,7 +175,7 @@ def debug_screen():
 
             eh_minha_turma_id = (disc_turma_id == aluno.turma_id)
             eh_meu_nome = (h.pelotao == aluno.turma.nome) or (h.pelotao in variacoes)
-            
+
             status_txt = "Invisível"
             bg = "#f9f9f9"
 
@@ -180,7 +185,7 @@ def debug_screen():
             elif eh_meu_nome:
                 status_txt = "<b>Visível (Por Nome/Pelotão)</b>"
                 bg = "#d9edf7"
-            
+
             output.append(f"<tr style='background:{bg}'>")
             output.append(f"<td>{h.id}</td>")
             output.append(f"<td>{materia_nome}</td>")
@@ -204,7 +209,7 @@ def painel():
     try:
         aulas_agrupadas = []
         permissao = verify_chefe_permission()
-        
+
         if not permissao:
             flash("Acesso restrito.", "danger")
             return redirect(url_for('main.index'))
@@ -213,9 +218,9 @@ def painel():
             turma_id = request.args.get('turma_id', type=int)
             if not turma_id:
                 flash("Administrador, selecione uma turma na lista.", "info")
-                return redirect(url_for('main.index')) 
+                return redirect(url_for('main.index'))
             turma_obj = db.session.get(Turma, turma_id)
-            aluno = None 
+            aluno = None
         else:
             aluno = permissao
             turma_id = aluno.turma_id
@@ -228,7 +233,7 @@ def painel():
         data_str = request.args.get('data')
         data_hoje = get_data_hoje_brasil()
         data_selecionada = datetime.strptime(data_str, '%Y-%m-%d').date() if data_str else data_hoje
-        
+
         semanas_ativas = db.session.query(Semana).join(Ciclo).filter(
             Ciclo.school_id == turma_obj.school_id,
             Semana.data_inicio <= data_selecionada,
@@ -241,7 +246,7 @@ def painel():
         semana_ids = [s.id for s in semanas_ativas]
         dia_str = get_dia_semana_str(data_selecionada)
         variacoes_nome = get_variacoes_nome_turma(turma_obj.nome)
-        
+
         query = db.session.query(Horario)\
             .outerjoin(Horario.disciplina)\
             .outerjoin(Disciplina.turma)\
@@ -265,11 +270,12 @@ def painel():
         horarios = query.order_by(Horario.periodo).all()
 
         diarios_hoje = db.session.query(DiarioClasse).filter_by(
-            data_aula=data_selecionada, 
+            data_aula=data_selecionada,
             turma_id=turma_id
         ).all()
-        
+
         aulas_concluidas_keys = set()
+        # CORREÇÃO AQUI: De diaries_hoje para diarios_hoje
         for d in diarios_hoje:
             if d.periodo:
                 aulas_concluidas_keys.add(f"{d.disciplina_id}_{d.periodo}")
@@ -277,14 +283,14 @@ def painel():
                 aulas_concluidas_keys.add(f"{d.disciplina_id}_legacy")
 
         grupos_dict = {}
-        
+
         if horarios:
             for h in horarios:
                 if not h.disciplina:
                     continue
 
                 disc_id = h.disciplina_id
-                
+
                 if disc_id not in grupos_dict:
                     nome_instrutor = "N/A"
                     if h.instrutor:
@@ -296,14 +302,14 @@ def painel():
                     grupos_dict[disc_id] = {
                         'disciplina': h.disciplina,
                         'nome_instrutor': nome_instrutor,
-                        'horarios_reais': [], 
-                        'periodos_expandidos': [], 
+                        'horarios_reais': [],
+                        'periodos_expandidos': [],
                         'status': 'pendente',
                         'primeiro_horario_id': h.id,
                         'total_tempos': 0,
                         'tempos_concluidos': 0
                     }
-                
+
                 duracao = h.duracao if h.duracao and h.duracao > 0 else 1
                 grupos_dict[disc_id]['horarios_reais'].append(h)
                 grupos_dict[disc_id]['total_tempos'] += duracao
@@ -311,10 +317,10 @@ def painel():
                 for i in range(duracao):
                     p = h.periodo + i
                     grupos_dict[disc_id]['periodos_expandidos'].append(p)
-                    
+
                     key = f"{disc_id}_{p}"
                     legacy_key = f"{disc_id}_legacy"
-                    
+
                     if key in aulas_concluidas_keys or legacy_key in aulas_concluidas_keys or h.status == 'concluido':
                         grupos_dict[disc_id]['tempos_concluidos'] += 1
 
@@ -339,11 +345,25 @@ def registrar_aula(primeiro_horario_id):
         permissao = verify_chefe_permission()
         if not permissao: return redirect(url_for('main.index'))
 
+        aluno_user = Aluno.query.filter_by(user_id=current_user.id).first()
+        is_chefe = False
+        horario_base_temp = db.session.get(Horario, primeiro_horario_id)
+
+        if horario_base_temp and aluno_user:
+            turma_id_alvo = horario_base_temp.disciplina.turma_id
+            cargo = TurmaCargo.query.filter_by(turma_id=turma_id_alvo, aluno_id=aluno_user.id, cargo_nome=TurmaCargo.ROLE_CHEFE).first()
+            if cargo:
+                is_chefe = True
+
+        if request.method == 'POST' and not (permissao == "admin" or is_chefe):
+            flash("Apenas o Chefe de Turma pode registrar presenças.", "danger")
+            return redirect(url_for('chefe.caderno_chamada'))
+
         horario_base_temp = db.session.get(Horario, primeiro_horario_id)
         if not horario_base_temp:
             flash("Horário não encontrado.", "danger")
             return redirect(url_for('chefe.painel'))
-            
+
         turma_id_alvo = horario_base_temp.disciplina.turma_id
         escola_id_alvo = horario_base_temp.disciplina.turma.school_id
 
@@ -355,7 +375,7 @@ def registrar_aula(primeiro_horario_id):
                 Turma.school_id == escola_id_alvo
             ).first()
 
-        if not horario_base: 
+        if not horario_base:
             flash("Horário não encontrado.", "danger")
             return redirect(url_for('chefe.painel'))
 
@@ -364,7 +384,7 @@ def registrar_aula(primeiro_horario_id):
         data_aula = datetime.strptime(data_str, '%Y-%m-%d').date() if data_str else data_hoje
 
         variacoes_nome = get_variacoes_nome_turma(horario_base.disciplina.turma.nome)
-        
+
         horarios_db = db.session.query(Horario)\
             .outerjoin(Horario.disciplina)\
             .outerjoin(Disciplina.turma)\
@@ -391,12 +411,12 @@ def registrar_aula(primeiro_horario_id):
                     disciplina_id=h.disciplina_id,
                     periodo=p
                 ).first()
-                
+
                 if not existe:
                     horarios_expandidos.append({'periodo': p, 'horario_pai_id': h.id, 'obj': h})
-        
+
         horarios_expandidos.sort(key=lambda x: x['periodo'])
-        
+
         if not horarios_expandidos:
             flash("Todas as aulas desta disciplina já foram registradas para hoje.", "info")
             return redirect(url_for('chefe.painel', data=data_aula, turma_id=turma_id_alvo))
@@ -427,12 +447,12 @@ def registrar_aula(primeiro_horario_id):
                         key = f"presenca_{aluno.id}_{periodo_atual}"
                         presente = request.form.get(key) == 'on'
                         db.session.add(FrequenciaAluno(diario_id=novo_diario.id, aluno_id=aluno.id, presente=presente))
-                    
+
                     if horario_pai.id not in ids_horarios_pais_atualizados:
                         horario_pai.status = 'concluido'
                         db.session.add(horario_pai)
                         ids_horarios_pais_atualizados.add(horario_pai.id)
-                    
+
                     count_regs += 1
 
                 db.session.commit()
@@ -446,7 +466,7 @@ def registrar_aula(primeiro_horario_id):
         if horario_base.instrutor:
              if hasattr(horario_base.instrutor, 'user') and horario_base.instrutor.user:
                  nome_instrutor = horario_base.instrutor.user.nome_de_guerra
-        
+
         return render_template('chefe/registrar.html', horarios=horarios_expandidos, disciplina=horario_base.disciplina, nome_instrutor=nome_instrutor, alunos=alunos_turma, data_aula=data_aula, turma_id=turma_id_alvo)
 
     except Exception as e:
