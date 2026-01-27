@@ -250,7 +250,6 @@
                     <a href="{{ url_for('horario.index') }}" class="nav-link {% if request.endpoint and ('horario.' in request.endpoint or 'semana.' in request.endpoint) %}active{% endif %}"><div class="nav-icon">📅</div> Quadro Horário</a>
                     
                     {# LINK EXCLUSIVO PARA INSTRUTOR: ASSINAR DIÁRIOS #}
-                    {# CORREÇÃO: SENS, CAL e ADMIN também podem ser instrutores e precisam ver este link #}
                     {% if current_user.is_instrutor_in_school(active_sid) or current_user.is_sens_in_school(active_sid) or current_user.is_cal_in_school(active_sid) or current_user.role == 'super_admin' %}
                         <a href="{{ url_for('diario.listar_pendentes') }}" class="nav-link {% if request.endpoint and 'diario.' in request.endpoint %}active{% endif %}">
                             <div class="nav-icon">✍️</div> Validar Diários
@@ -286,6 +285,13 @@
                     <div class="nav-separator">PORTAL DO ALUNO</div>
                     <a href="{{ url_for('historico.index') }}" class="nav-link {% if request.endpoint and 'historico.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📊</div> Meu CTSP</a>
                     <a href="{{ url_for('chefe.painel') }}" class="nav-link {% if request.endpoint and 'chefe.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📋</div> Chefe de Turma</a>
+                    
+                    {# MODIFICAÇÃO: CADERNO DE CHAMADA PARA O CHEFE DE TURMA #}
+                    {% if current_user.aluno_profile.funcao_atual == 'Chefe de Turma' %}
+                    <a href="{{ url_for('chefe.caderno_chamada') }}" class="nav-link {% if request.endpoint == 'chefe.caderno_chamada' %}active{% endif %}">
+                        <div class="nav-icon">📒</div> Caderno de Chamada
+                    </a>
+                    {% endif %}
                 {% endif %}
 
                  {% if current_user.role == 'super_admin' %}
