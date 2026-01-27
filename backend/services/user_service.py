@@ -10,9 +10,9 @@ from ..models.database import db
 from ..models.user import User
 from ..models.user_school import UserSchool
 from ..models.instrutor import Instrutor
+from ..models.aluno import Aluno
 from ..models.horario import Horario
 from ..models.diario_classe import DiarioClasse
-# Removido UserRole pois a tabela não existe
 from ..models.disciplina_turma import DisciplinaTurma
 from utils.normalizer import normalize_matricula
 import logging
@@ -233,8 +233,8 @@ class UserService:
     @staticmethod
     def delete_user(user_id):
         """
-        Exclui um usuário e limpa todas as suas dependências (Instrutor, Horários, Diários, DisciplinaTurma).
-        Força bruta para garantir que Instrutores não fiquem presos por Foreign Keys.
+        Exclui um usuário e limpa todas as suas dependências (Instrutor, Aluno, Horários, etc.).
+        Força bruta para garantir que Foreign Keys não impeçam a exclusão.
         """
         try:
             user = db.session.get(User, user_id)
@@ -245,34 +245,53 @@ class UserService:
             if user.role in ['super_admin', 'programador'] and (not current_user or current_user.role != 'programador'):
                  return False, "Não é permitido excluir administradores globais."
 
-            # 1. Verificar e limpar perfil de Instrutor e seus vínculos em Horários e DisciplinaTurma
+            logger.info(f"Iniciando exclusão do usuário {user_id}...")
+
+            # ----------------------------------------------------
+            # 1. LIMPEZA DE INSTRUTOR
+            # ----------------------------------------------------
             instrutores = Instrutor.query.filter_by(user_id=user.id).all()
             for instrutor in instrutores:
-                logger.info(f"Limpando dependências do Instrutor ID {instrutor.id} para o User ID {user.id}")
+                logger.info(f"Limpando dependências do Instrutor ID {instrutor.id}")
                 
-                # A. DisciplinaTurma - Desvincular instrutor das turmas
-                # Define como NULL em vez de apagar, pois a turma ainda precisa existir
+                # A. DisciplinaTurma - Desvincular instrutor das turmas (Set NULL)
                 try:
                     DisciplinaTurma.query.filter_by(instrutor_id_1=instrutor.id).update({'instrutor_id_1': None})
                     DisciplinaTurma.query.filter_by(instrutor_id_2=instrutor.id).update({'instrutor_id_2': None})
                 except Exception as e:
-                    logger.warning(f"Erro ao limpar DisciplinaTurma (pode ser tabela inexistente): {e}")
+                    logger.warning(f"Erro ao limpar DisciplinaTurma: {e}")
 
-                # B. Remover ou Desvincular Horários
+                # B. Remover Horários (Onde é titular) e Desvincular (Onde é auxiliar)
                 Horario.query.filter_by(instrutor_id=instrutor.id).delete()
                 Horario.query.filter_by(instrutor_id_2=instrutor.id).update({'instrutor_id_2': None})
                 
                 # C. Excluir o perfil de Instrutor
                 db.session.delete(instrutor)
 
-            # 2. Desvincular Diários de Classe (Assinaturas e Responsabilidade)
+            # ----------------------------------------------------
+            # 2. LIMPEZA DE ALUNO (NOVO)
+            # ----------------------------------------------------
+            aluno = db.session.scalar(select(Aluno).filter_by(user_id=user.id))
+            if aluno:
+                logger.info(f"Removendo perfil de Aluno ID {aluno.id}")
+                # Dependências como Frequencia e Notas geralmente tem cascade no Model.
+                # Se houver erro de integridade aqui, adicionar deleção manual de FrequenciaAluno.
+                db.session.delete(aluno)
+
+            # ----------------------------------------------------
+            # 3. LIMPEZA GERAL
+            # ----------------------------------------------------
+            # Desvincular Diários de Classe (Assinaturas e Responsabilidade)
             DiarioClasse.query.filter_by(responsavel_id=user.id).update({'responsavel_id': None})
             DiarioClasse.query.filter_by(instrutor_assinante_id=user.id).update({'instrutor_assinante_id': None})
 
-            # 3. Remover Escolas (Roles ignorado pois tabela nao existe)
-            UserSchool.query.filter_by(user_id=user.id).delete()
+            # Remover Vínculos com Escolas (UserSchool)
+            # FIX: Usando delete direto via db.session para evitar erro de Join implícito
+            db.session.query(UserSchool).filter(UserSchool.user_id == user.id).delete()
 
-            # 4. Excluir o Usuário final
+            # ----------------------------------------------------
+            # 4. EXCLUSÃO FINAL
+            # ----------------------------------------------------
             db.session.delete(user)
             db.session.commit()
             logger.info(f"Usuário {user_id} excluído com sucesso.")
@@ -301,9 +320,6 @@ class UserService:
 
     @staticmethod
     def create_user(data, school_id=None):
-        """
-        Cria um usuário e, CRUCIALMENTE, vincula ele à escola atual.
-        """
         if not isinstance(data, dict):
              pass
 
@@ -378,10 +394,14 @@ class UserService:
 
     @staticmethod
     def get_users_by_school(school_id):
+        """
+        Retorna todos os usuários vinculados à escola especificada.
+        Utilizado para preencher dropdowns de filtros em logs e relatórios.
+        """
         try:
             return db.session.scalars(
                 select(User)
-                .join(UserSchool)
+                .join(User.user_schools) # Join explícito para evitar ambiguidade
                 .where(UserSchool.school_id == school_id)
                 .order_by(User.nome_completo)
             ).all()

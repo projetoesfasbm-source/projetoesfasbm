@@ -101,7 +101,7 @@ def caderno_chamada():
         abort(404)
 
     alunos_turma = Aluno.query.filter_by(turma_id=turma.id)\
-        .order_by(Aluno.antiguidade.asc())\
+        .order_by(Aluno.user_id.asc())\
         .all()
 
     return render_template(

@@ -1,6 +1,6 @@
 # backend/services/dashboard_service.py
 
-from sqlalchemy import select, func
+from sqlalchemy import select, func, and_
 from ..models.database import db
 from ..models.user import User
 from ..models.aluno import Aluno
@@ -17,14 +17,22 @@ class DashboardService:
     def get_dashboard_data(school_id=None):
         
         # --- Contagens Básicas ---
+        # CORREÇÃO: Filtra explicitamente pelo role 'aluno' na tabela UserSchool para não contar admins
         alunos_query = select(func.count(Aluno.id)).join(User, Aluno.user_id == User.id).where(User.is_active == True)
         if school_id:
-            alunos_query = alunos_query.join(UserSchool, UserSchool.user_id == User.id).where(UserSchool.school_id == school_id)
+            alunos_query = alunos_query.join(UserSchool, UserSchool.user_id == User.id).where(
+                UserSchool.school_id == school_id,
+                UserSchool.role == 'aluno'  # <--- Filtro Adicionado
+            )
         total_alunos = db.session.scalar(alunos_query) or 0
         
+        # CORREÇÃO: Mesma lógica para instrutores, garantindo que só conta quem tem role 'instrutor'
         instrutores_query = select(func.count(Instrutor.id)).join(User, Instrutor.user_id == User.id).where(User.is_active == True)
         if school_id:
-            instrutores_query = instrutores_query.join(UserSchool, UserSchool.user_id == User.id).where(UserSchool.school_id == school_id)
+            instrutores_query = instrutores_query.join(UserSchool, UserSchool.user_id == User.id).where(
+                UserSchool.school_id == school_id,
+                UserSchool.role == 'instrutor' # <--- Filtro Adicionado
+            )
         total_instrutores = db.session.scalar(instrutores_query) or 0
         
         disciplinas_query = select(func.count(func.distinct(Disciplina.materia)))
@@ -38,7 +46,6 @@ class DashboardService:
             aulas_pendentes_query = aulas_pendentes_query.join(Turma, Horario.pelotao == Turma.nome).where(Turma.school_id == school_id)
         
         lista_aulas_pendentes = db.session.scalars(aulas_pendentes_query).all()
-        # CORREÇÃO: Calcula o total para evitar o erro no template
         total_aulas_pendentes = len(lista_aulas_pendentes)
 
         # --- PROCESSOS PENDENTES (Para CAL) ---
@@ -62,7 +69,6 @@ class DashboardService:
             'total_alunos': total_alunos,
             'total_instrutores': total_instrutores,
             'total_disciplinas': total_disciplinas,
-            # CORREÇÃO: Envia tanto o número (para o Admin) quanto a lista (para o SENS)
             'aulas_pendentes': total_aulas_pendentes, 
             'lista_aulas_pendentes': lista_aulas_pendentes,
             'lista_processos_pendentes': lista_processos_pendentes,
