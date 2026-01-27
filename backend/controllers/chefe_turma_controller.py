@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, flash, redirect, url_for, g
+from flask import Blueprint, render_template, request, flash, redirect, url_for, g, session
 from flask_login import login_required, current_user
 from datetime import date, datetime, timedelta
 from sqlalchemy import select, or_, and_, func
@@ -50,8 +50,17 @@ def get_variacoes_nome_turma(nome_original):
     return list(variacoes)
 
 def verify_chefe_permission():
+    """Retorna o perfil do aluno ou 'admin' para membros da staff."""
     try:
-        if not current_user.is_authenticated or not current_user.aluno_profile:
+        if not current_user.is_authenticated:
+            return None
+        
+        # ADIÇÃO: Permite que Staff/SuperAdmin também acesse
+        active_sid = session.get('active_school_id')
+        if current_user.role == 'super_admin' or (hasattr(current_user, 'is_staff_in_school') and current_user.is_staff_in_school(active_sid)):
+            return "admin"
+
+        if not current_user.aluno_profile:
             return None
         return current_user.aluno_profile
     except Exception:
@@ -64,9 +73,16 @@ def debug_screen():
     output.append("<h1>Diagnóstico Chefe de Turma (Varredura Semanal Segura)</h1>")
     
     try:
-        aluno = current_user.aluno_profile
+        # ADIÇÃO: Ajuste para o debug funcionar para Admin também (simulando a primeira turma se for admin)
+        permissao = verify_chefe_permission()
+        if permissao == "admin":
+            aluno = Aluno.query.filter(Aluno.turma_id != None).first() # Pega um aluno qualquer para teste
+            output.append("<p style='color:orange'>Modo Admin: Simulando diagnóstico com primeiro aluno encontrado.</p>")
+        else:
+            aluno = current_user.aluno_profile
+
         if not aluno or not aluno.turma:
-            return "Erro: Aluno sem turma vinculada."
+            return "Erro: Aluno sem turma vinculada ou nenhum dado para simular."
             
         escola_id = aluno.turma.school_id
         data_hoje = get_data_hoje_brasil()
@@ -79,7 +95,6 @@ def debug_screen():
         output.append(f"<li><strong>Data Base:</strong> {data_hoje} ({dia_str})</li>")
         output.append(f"</ul>")
         
-        # BUSCA CORRIGIDA: Filtra semanas SOMENTE da escola atual através do Ciclo
         semanas = db.session.query(Semana).join(Ciclo).filter(
             Ciclo.school_id == escola_id,
             Semana.data_inicio <= data_hoje, 
@@ -95,7 +110,6 @@ def debug_screen():
         nomes_semanas = ", ".join([f"{s.nome} (ID {s.id})" for s in semanas])
         output.append(f"<p><strong>Semanas Ativas Detectadas (Escola {escola_id}):</strong> {nomes_semanas}</p>")
 
-        # Query de Teste PERMISSIVA usando IN para semana_id
         horarios_raw = db.session.query(Horario)\
             .outerjoin(Horario.disciplina)\
             .outerjoin(Disciplina.turma)\
@@ -112,7 +126,6 @@ def debug_screen():
              output.append(f"<tr><td colspan='7'>Nenhum horário encontrado para esta escola nas semanas IDs: {semana_ids}.</td></tr>")
 
         for h in horarios_raw:
-            # Proteção caso disciplina seja None devido ao outerjoin
             disc_turma_id = h.disciplina.turma_id if h.disciplina else None
             materia_nome = h.disciplina.materia if h.disciplina else "N/A"
 
@@ -151,33 +164,47 @@ def debug_screen():
 def painel():
     try:
         aulas_agrupadas = []
-        aluno = verify_chefe_permission()
+        permissao = verify_chefe_permission()
         
-        if not aluno or not aluno.turma_id:
-            flash("Acesso restrito ou aluno sem turma.", "danger")
+        if not permissao:
+            flash("Acesso restrito.", "danger")
             return redirect(url_for('main.index'))
 
-        # Data e Semana
+        # ADIÇÃO: Define a turma baseada em quem acessa (Admin escolhe via URL, Chefe é fixo)
+        if permissao == "admin":
+            turma_id = request.args.get('turma_id', type=int)
+            if not turma_id:
+                flash("Administrador, selecione uma turma na lista.", "info")
+                return redirect(url_for('main.index')) 
+            turma_obj = db.session.get(Turma, turma_id)
+            aluno = None # Admin não tem perfil de aluno
+        else:
+            aluno = permissao
+            turma_id = aluno.turma_id
+            turma_obj = aluno.turma
+
+        if not turma_obj:
+            flash("Turma não encontrada.", "danger")
+            return redirect(url_for('main.index'))
+
+        # Data e Semana (MANTIDO ORIGINAL)
         data_str = request.args.get('data')
         data_hoje = get_data_hoje_brasil()
         data_selecionada = datetime.strptime(data_str, '%Y-%m-%d').date() if data_str else data_hoje
         
-        # CORREÇÃO: Busca TODAS as semanas ativas APENAS DA ESCOLA DO ALUNO
         semanas_ativas = db.session.query(Semana).join(Ciclo).filter(
-            Ciclo.school_id == aluno.turma.school_id,
+            Ciclo.school_id == turma_obj.school_id,
             Semana.data_inicio <= data_selecionada,
             Semana.data_fim >= data_selecionada
         ).all()
 
         if not semanas_ativas:
-            return render_template('chefe/painel.html', aluno=aluno, aulas_agrupadas=[], data_selecionada=data_selecionada, erro_semana=True)
+            return render_template('chefe/painel.html', aluno=aluno, turma=turma_obj, aulas_agrupadas=[], data_selecionada=data_selecionada, erro_semana=True)
 
         semana_ids = [s.id for s in semanas_ativas]
         dia_str = get_dia_semana_str(data_selecionada)
+        variacoes_nome = get_variacoes_nome_turma(turma_obj.nome)
         
-        variacoes_nome = get_variacoes_nome_turma(aluno.turma.nome)
-        
-        # Query principal usando outerjoin e filtro de escola/semana correto
         query = db.session.query(Horario)\
             .outerjoin(Horario.disciplina)\
             .outerjoin(Disciplina.turma)\
@@ -185,26 +212,24 @@ def painel():
                 joinedload(Horario.disciplina),
                 joinedload(Horario.instrutor)
             ).filter(
-                Turma.school_id == aluno.turma.school_id,
+                Turma.school_id == turma_obj.school_id,
                 Horario.semana_id.in_(semana_ids),
                 Horario.dia_semana.ilike(f"{dia_str}%")
             )
 
-        # Filtro abrangente: ID ou Nome
         query = query.filter(
             or_(
-                Disciplina.turma_id == aluno.turma_id,
-                Horario.pelotao == aluno.turma.nome,
+                Disciplina.turma_id == turma_id,
+                Horario.pelotao == turma_obj.nome,
                 Horario.pelotao.in_(variacoes_nome)
             )
         )
 
         horarios = query.order_by(Horario.periodo).all()
 
-        # Busca diários já lançados
         diarios_hoje = db.session.query(DiarioClasse).filter_by(
             data_aula=data_selecionada, 
-            turma_id=aluno.turma_id
+            turma_id=turma_id
         ).all()
         
         aulas_concluidas_keys = set()
@@ -218,7 +243,6 @@ def painel():
         
         if horarios:
             for h in horarios:
-                # Proteção para disciplina nula no caso de outerjoin
                 if not h.disciplina:
                     continue
 
@@ -263,7 +287,8 @@ def painel():
                     g['status'] = 'concluido'
                 aulas_agrupadas.append(g)
 
-        return render_template('chefe/painel.html', aluno=aluno, aulas_agrupadas=aulas_agrupadas, data_selecionada=data_selecionada, erro_semana=False)
+        # ADIÇÃO: Passa turma_obj e flag is_admin para o template
+        return render_template('chefe/painel.html', aluno=aluno, turma=turma_obj, aulas_agrupadas=aulas_agrupadas, data_selecionada=data_selecionada, erro_semana=False, is_admin=(permissao == "admin"))
 
     except Exception as e:
         import traceback
@@ -275,40 +300,50 @@ def painel():
 @login_required
 def registrar_aula(primeiro_horario_id):
     try:
-        aluno_chefe = verify_chefe_permission()
-        if not aluno_chefe: return redirect(url_for('main.index'))
+        # ADIÇÃO: Verificação de permissão flexível
+        permissao = verify_chefe_permission()
+        if not permissao: return redirect(url_for('main.index'))
 
-        # Carrega o horário base com outerjoin
+        # ADIÇÃO: Busca o horário primeiro para saber de qual turma ele é
+        horario_base_temp = db.session.get(Horario, primeiro_horario_id)
+        if not horario_base_temp:
+            flash("Horário não encontrado.", "danger")
+            return redirect(url_for('chefe.painel'))
+            
+        # Define os IDs de turma e escola para as queries abaixo
+        turma_id_alvo = horario_base_temp.disciplina.turma_id
+        escola_id_alvo = horario_base_temp.disciplina.turma.school_id
+
+        # Carrega o horário base com a lógica original
         horario_base = db.session.query(Horario)\
             .outerjoin(Horario.disciplina)\
             .outerjoin(Disciplina.turma)\
             .filter(
                 Horario.id == primeiro_horario_id,
-                Turma.school_id == aluno_chefe.turma.school_id
+                Turma.school_id == escola_id_alvo
             ).first()
 
         if not horario_base: 
-            flash("Horário não encontrado ou não pertence à sua escola.", "danger")
+            flash("Horário não encontrado.", "danger")
             return redirect(url_for('chefe.painel'))
 
         data_str = request.args.get('data')
         data_hoje = get_data_hoje_brasil()
         data_aula = datetime.strptime(data_str, '%Y-%m-%d').date() if data_str else data_hoje
 
-        variacoes_nome = get_variacoes_nome_turma(aluno_chefe.turma.nome)
+        variacoes_nome = get_variacoes_nome_turma(horario_base.disciplina.turma.nome)
         
-        # Recupera os horários irmãos com outerjoin
         horarios_db = db.session.query(Horario)\
             .outerjoin(Horario.disciplina)\
             .outerjoin(Disciplina.turma)\
             .filter(
-                Turma.school_id == aluno_chefe.turma.school_id,
+                Turma.school_id == escola_id_alvo,
                 Horario.semana_id == horario_base.semana_id,
                 Horario.dia_semana == horario_base.dia_semana,
                 Horario.disciplina_id == horario_base.disciplina_id,
                 or_(
-                    Disciplina.turma_id == aluno_chefe.turma_id,
-                    Horario.pelotao == aluno_chefe.turma.nome,
+                    Disciplina.turma_id == turma_id_alvo,
+                    Horario.pelotao == horario_base.disciplina.turma.nome,
                     Horario.pelotao.in_(variacoes_nome)
                 )
             ).order_by(Horario.periodo).all()
@@ -320,7 +355,7 @@ def registrar_aula(primeiro_horario_id):
                 p = h.periodo + i
                 existe = db.session.query(DiarioClasse).filter_by(
                     data_aula=data_aula,
-                    turma_id=aluno_chefe.turma_id,
+                    turma_id=turma_id_alvo,
                     disciplina_id=h.disciplina_id,
                     periodo=p
                 ).first()
@@ -332,9 +367,9 @@ def registrar_aula(primeiro_horario_id):
         
         if not horarios_expandidos:
             flash("Todas as aulas desta disciplina já foram registradas para hoje.", "info")
-            return redirect(url_for('chefe.painel', data=data_aula))
+            return redirect(url_for('chefe.painel', data=data_aula, turma_id=turma_id_alvo))
 
-        alunos_turma = db.session.query(Aluno).filter_by(turma_id=aluno_chefe.turma_id).order_by(Aluno.num_aluno).all()
+        alunos_turma = db.session.query(Aluno).filter_by(turma_id=turma_id_alvo).order_by(Aluno.num_aluno).all()
 
         if request.method == 'POST':
             try:
@@ -346,7 +381,7 @@ def registrar_aula(primeiro_horario_id):
 
                     novo_diario = DiarioClasse(
                         data_aula=data_aula,
-                        turma_id=aluno_chefe.turma_id,
+                        turma_id=turma_id_alvo,
                         disciplina_id=horario_pai.disciplina_id,
                         responsavel_id=current_user.id,
                         observacoes=request.form.get('observacoes'),
@@ -370,7 +405,7 @@ def registrar_aula(primeiro_horario_id):
 
                 db.session.commit()
                 flash(f"Salvo com sucesso! {count_regs} tempos registrados.", "success")
-                return redirect(url_for('chefe.painel', data=data_aula))
+                return redirect(url_for('chefe.painel', data=data_aula, turma_id=turma_id_alvo))
             except Exception as e:
                 db.session.rollback()
                 flash(f"Erro ao salvar: {str(e)}", "danger")
@@ -380,7 +415,7 @@ def registrar_aula(primeiro_horario_id):
              if hasattr(horario_base.instrutor, 'user') and horario_base.instrutor.user:
                  nome_instrutor = horario_base.instrutor.user.nome_de_guerra
         
-        return render_template('chefe/registrar.html', horarios=horarios_expandidos, disciplina=horario_base.disciplina, nome_instrutor=nome_instrutor, alunos=alunos_turma, data_aula=data_aula)
+        return render_template('chefe/registrar.html', horarios=horarios_expandidos, disciplina=horario_base.disciplina, nome_instrutor=nome_instrutor, alunos=alunos_turma, data_aula=data_aula, turma_id=turma_id_alvo)
 
     except Exception as e:
         import traceback

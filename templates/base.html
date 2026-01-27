@@ -248,7 +248,14 @@
                 {% if current_user.is_staff_in_school(active_sid) or current_user.is_instrutor_in_school(active_sid) or current_user.role in ['super_admin', 'aluno'] %}
                     <div class="nav-separator">ACADÊMICO</div>
                     <a href="{{ url_for('horario.index') }}" class="nav-link {% if request.endpoint and ('horario.' in request.endpoint or 'semana.' in request.endpoint) %}active{% endif %}"><div class="nav-icon">📅</div> Quadro Horário</a>
-                    
+
+                    {# ADIÇÃO DO LINK CADERNO DE CHAMADA #}
+                    {% if current_user.role == 'super_admin' or current_user.is_staff_in_school(active_sid) or current_user.role == 'chefe_turma' %}
+                     <a href="{{ url_for('chefe.painel') }}" class="nav-link {% if request.endpoint and 'chefe.' in request.endpoint %}active{% endif %}">
+                         <div class="nav-icon">📋</div> Caderno de Chamada
+                     </a>
+                {% endif %}
+
                     {# LINK EXCLUSIVO PARA INSTRUTOR: ASSINAR DIÁRIOS #}
                     {% if current_user.is_instrutor_in_school(active_sid) or current_user.is_sens_in_school(active_sid) or current_user.is_cal_in_school(active_sid) or current_user.role == 'super_admin' %}
                         <a href="{{ url_for('diario.listar_pendentes') }}" class="nav-link {% if request.endpoint and 'diario.' in request.endpoint %}active{% endif %}">
@@ -284,14 +291,6 @@
                 {% if current_user.role == 'aluno' and current_user.aluno_profile %}
                     <div class="nav-separator">PORTAL DO ALUNO</div>
                     <a href="{{ url_for('historico.index') }}" class="nav-link {% if request.endpoint and 'historico.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📊</div> Meu CTSP</a>
-                    <a href="{{ url_for('chefe.painel') }}" class="nav-link {% if request.endpoint and 'chefe.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📋</div> Chefe de Turma</a>
-                    
-                    {# MODIFICAÇÃO: CADERNO DE CHAMADA PARA O CHEFE DE TURMA #}
-                    {% if current_user.aluno_profile.funcao_atual == 'Chefe de Turma' %}
-                    <a href="{{ url_for('chefe.caderno_chamada') }}" class="nav-link {% if request.endpoint == 'chefe.caderno_chamada' %}active{% endif %}">
-                        <div class="nav-icon">📒</div> Caderno de Chamada
-                    </a>
-                    {% endif %}
                 {% endif %}
 
                  {% if current_user.role == 'super_admin' %}
@@ -400,6 +399,7 @@
             });
         }
 
+        // Registrar Service Worker
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function() {
                 navigator.serviceWorker.register('/sw.js?v=4.0').then(function(registration) {
@@ -416,16 +416,20 @@
                 return new bootstrap.Dropdown(dropdownToggleEl)
             });
 
+            // Controle da Sidebar Responsiva
             const sidebar = document.getElementById('sidebar');
             const sidebarToggle = document.getElementById('sidebarToggle');
             const sidebarOverlay = document.getElementById('sidebarOverlay');
+
             function toggleSidebar() {
                 if (sidebar) sidebar.classList.toggle('open');
                 if (sidebarOverlay) sidebarOverlay.classList.toggle('active');
             }
+
             if (sidebarToggle) sidebarToggle.addEventListener('click', toggleSidebar);
             if (sidebarOverlay) sidebarOverlay.addEventListener('click', toggleSidebar);
 
+            // Logica para troca de senha AJAX
             const changePasswordModal = document.getElementById('changePasswordModal');
             if (changePasswordModal) {
                 const savePasswordBtn = document.getElementById('savePasswordBtn');
@@ -438,6 +442,7 @@
                         new_password: passwordForm.new_password.value,
                         confirm_new_password: passwordForm.confirm_new_password.value
                     };
+
                     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
                     fetch("{{ url_for('user.change_password_ajax') }}", {
@@ -452,6 +457,7 @@
                     .then(data => {
                         alertBox.textContent = data.message;
                         alertBox.style.display = 'block';
+
                         if (data.success) {
                             alertBox.className = 'alert alert-success';
                             setTimeout(() => {
@@ -477,9 +483,10 @@
                 });
             }
 
+            // --- Gerenciamento de Notificações ---
             const badge = document.getElementById('notification-badge');
             const list = document.getElementById('notification-list');
-            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+            const csrfToken = document.querySelector('meta[name=\"csrf-token\"]').getAttribute('content');
 
             function fetchNotifications() {
                 fetch("{{ url_for('notification.get_dropdown_data') }}")
@@ -496,25 +503,27 @@
             }
 
             function updateNotificationUI(unread_count, notifications) {
-                if (badge) badge.textContent = unread_count;
-                if (badge) badge.style.display = unread_count > 0 ? 'block' : 'none';
+                if (badge) {
+                    badge.textContent = unread_count;
+                    badge.style.display = unread_count > 0 ? 'block' : 'none';
+                }
                 if (list) {
                     list.innerHTML = '';
                     if (notifications && notifications.length > 0) {
                         notifications.forEach(n => {
                             const item = document.createElement('li');
                             const itemClass = n.is_read ? 'read' : 'unread';
-                            const markAsReadButton = n.is_read ? '' : `<button class="btn btn-sm btn-outline-primary mark-one-read-btn" data-id="${n.id}" title="Marcar como lida">✓</button>`;
-                            item.innerHTML = `<div class="dropdown-item notification-item ${itemClass}"><a href="${n.url}" class="notification-link-main"><p class="notification-message">${n.message}</p><small class="notification-date">${n.created_at}</small></a>${markAsReadButton}</div>`;
+                            const markAsReadButton = n.is_read ? '' : `<button class=\"btn btn-sm btn-outline-primary mark-one-read-btn\" data-id=\"${n.id}\" title=\"Marcar como lida\">✓</button>`;
+                            item.innerHTML = `<div class=\"dropdown-item notification-item ${itemClass}\"><a href=\"${n.url}\" class=\"notification-link-main\"><p class=\"notification-message\">${n.message}</p><small class=\"notification-date\">${n.created_at}</small></a>${markAsReadButton}</div>`;
                             list.appendChild(item);
                         });
-                        list.innerHTML += '<li><hr class="dropdown-divider" style="margin: 0;"></li>';
+                        list.innerHTML += '<li><hr class=\"dropdown-divider\" style=\"margin: 0;\"></li>';
                         if (unread_count > 0) {
-                            list.innerHTML += '<li><a class="dropdown-item text-center small" href="#" id="mark-all-read-btn">Marcar todas como lidas</a></li>';
+                            list.innerHTML += '<li><a class=\"dropdown-item text-center small\" href=\"#\" id=\"mark-all-read-btn\">Marcar todas como lidas</a></li>';
                         }
-                        list.innerHTML += `<li><a class="dropdown-item text-center" href="{{ url_for('notification.index') }}">Ver todas</a></li>`;
+                        list.innerHTML += `<li><a class=\"dropdown-item text-center\" href=\"{{ url_for('notification.index') }}\">Ver todas</a></li>`;
                     } else {
-                        list.innerHTML = '<li><span class="dropdown-item-text text-center text-muted p-2">Nenhuma notificação recente</span></li>';
+                        list.innerHTML = '<li><span class=\"dropdown-item-text text-center text-muted p-2\">Nenhuma notificação recente</span></li>';
                     }
                 }
             }
