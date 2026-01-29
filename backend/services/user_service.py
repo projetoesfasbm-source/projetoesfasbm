@@ -22,17 +22,58 @@ logger = logging.getLogger(__name__)
 class UserService:
 
     @staticmethod
+    def get_current_school_id():
+        """
+        Retorna o ID da escola ativa na sessão ou baseada no contexto do usuário.
+        """
+        if not has_request_context(): return None
+        if not current_user or not current_user.is_authenticated: return None
+
+        # Super Admins e Programadores podem ter uma escola "Visualizar Como"
+        if getattr(current_user, 'role', '') in ['super_admin', 'programador']:
+            view_as = session.get('view_as_school_id')
+            if view_as: return int(view_as)
+
+        # Tenta pegar da sessão
+        active_id = session.get('active_school_id')
+        if active_id:
+            try:
+                active_id_int = int(active_id)
+                # Verifica se o usuário AINDA tem acesso a essa escola no banco
+                has_link = db.session.scalar(
+                    select(UserSchool.school_id).where(
+                        UserSchool.user_id == current_user.id,
+                        UserSchool.school_id == active_id_int
+                    )
+                )
+                if has_link: return active_id_int
+                else: session.pop('active_school_id', None)
+            except Exception: pass
+
+        # Se não tiver na sessão, tenta pegar a única escola disponível
+        all_links = db.session.execute(
+            select(UserSchool).where(UserSchool.user_id == current_user.id)
+        ).scalars().all()
+
+        if len(all_links) == 1:
+            chosen_id = all_links[0].school_id
+            session['active_school_id'] = chosen_id
+            return chosen_id
+            
+        return None
+
+    @staticmethod
     def _ensure_instrutor_profile(user_id, school_id):
         """
-        Função auxiliar interna: Garante que exista um perfil de Instrutor
-        para o usuário nesta escola. Se não existir, cria um padrão.
+        Garante que exista um perfil de Instrutor para o usuário nesta escola específica.
         """
+        if not school_id: return False
         try:
             exists = db.session.scalar(
                 select(Instrutor).filter_by(user_id=user_id, school_id=school_id)
             )
             if not exists:
-                # Tenta copiar dados de outro perfil existente (opcional) ou usa padrão
+                # Tenta copiar dados de outro perfil existente para facilitar
                 other_profile = db.session.scalar(
                     select(Instrutor).filter_by(user_id=user_id).limit(1)
                 )
@@ -51,74 +92,194 @@ class UserService:
         return False
 
     @staticmethod
+    def _ensure_user_school(user_id, school_id, role):
+        """
+        MÉTODO CENTRAL DE VINCULAÇÃO.
+        Garante que o usuário tenha o vínculo com a escola ESPECÍFICA solicitada.
+        NÃO afeta vínculos com outras escolas.
+        """
+        if not school_id: return False
+
+        # Verifica se já existe O vínculo nesta escola específica
+        existing_link = db.session.scalar(
+            select(UserSchool).where(
+                UserSchool.user_id == user_id,
+                UserSchool.school_id == school_id
+            )
+        )
+        
+        if existing_link:
+            # Se já existe, apenas garante que o papel está atualizado
+            if existing_link.role != role:
+                existing_link.role = role
+            return True # Já estava vinculado
+
+        # Se não existe vínculo COM ESTA ESCOLA, cria um novo.
+        new_link = UserSchool(user_id=user_id, school_id=school_id, role=role)
+        db.session.add(new_link)
+        return True
+
+    @staticmethod
     def pre_register_user(data, school_id):
         matricula = normalize_matricula(data.get('matricula'))
-        role = (data.get('role') or '').strip()
+        role = (data.get('role') or 'aluno').strip()
 
-        if not matricula or not role:
-            return False, "Matrícula e Função são obrigatórios."
+        if not matricula:
+            return False, "Matrícula é obrigatória."
         if not school_id:
-            return False, "A escola é obrigatória."
+            return False, "A escola é obrigatória para o vínculo."
 
-        existing_user = db.session.scalar(select(User).filter_by(matricula=matricula))
-
-        if existing_user:
-            existing_link = db.session.scalar(
-                select(UserSchool).filter_by(user_id=existing_user.id, school_id=school_id)
-            )
-            if existing_link:
-                return False, f"O usuário {matricula} já está vinculado a esta escola."
-            
-            try:
-                new_assignment = UserSchool(user_id=existing_user.id, school_id=school_id, role=role)
-                db.session.add(new_assignment)
-                
-                if role == 'instrutor':
-                    UserService._ensure_instrutor_profile(existing_user.id, school_id)
-                
-                db.session.commit()
-                return True, f"Usuário {matricula} vinculado a esta escola como {role}."
-            except Exception as e:
-                db.session.rollback()
-                current_app.logger.error(f"Erro ao vincular: {e}")
-                return False, "Erro ao vincular."
-        
         try:
-            new_user = User(matricula=matricula, role='aluno', is_active=False)
-            db.session.add(new_user)
-            db.session.flush()
-            
-            db.session.add(UserSchool(user_id=new_user.id, school_id=school_id, role=role))
-            
+            # 1. Busca ou Cria o Usuário Globalmente
+            user = db.session.scalar(select(User).filter_by(matricula=matricula))
+
+            is_new_user = False
+            if not user:
+                is_new_user = True
+                user = User(
+                    matricula=matricula,
+                    username=matricula, # Temporário
+                    role=role,
+                    is_active=True, # Pré-cadastro já ativa para login
+                    must_change_password=True
+                )
+                user.set_password(matricula) # Senha inicial = matrícula
+                db.session.add(user)
+                db.session.flush() # Gera ID
+
+                # CORREÇÃO DO ERRO 'opm required': Passamos um valor padrão '-'
+                if role == 'aluno':
+                    db.session.add(Aluno(user_id=user.id, opm='-'))
+
+            # 2. Garante o Vínculo SOMENTE com a Escola Solicitada
+            # Se ele já existir em outra escola, isso não afeta nada aqui.
+            UserService._ensure_user_school(user.id, school_id, role)
+
+            # 3. Se for instrutor, garante o perfil de instrutor nesta escola
             if role == 'instrutor':
-                UserService._ensure_instrutor_profile(new_user.id, school_id)
+                UserService._ensure_instrutor_profile(user.id, school_id)
 
             db.session.commit()
-            return True, f"Usuário {matricula} criado e vinculado como {role}."
+
+            msg = "Usuário criado e vinculado." if is_new_user else "Usuário existente vinculado a esta escola."
+            return True, msg
+
         except Exception as e:
             db.session.rollback()
             current_app.logger.error(f"Erro no pré-cadastro: {e}")
-            return False, "Erro ao criar usuário."
+            return False, f"Erro interno: {str(e)}"
+
+    @staticmethod
+    def batch_pre_register_users(matriculas, role, school_id):
+        if not role or not school_id: return False, 0, 0
+
+        novos = 0
+        existentes = 0
+
+        try:
+            for m in matriculas:
+                matricula = normalize_matricula(m)
+                if not matricula: continue
+
+                user = db.session.scalar(select(User).filter_by(matricula=matricula))
+                
+                if user:
+                    # Usuário existe: Apenas garante o vínculo com ESTA escola
+                    UserService._ensure_user_school(user.id, school_id, role)
+                    if role == 'instrutor':
+                        UserService._ensure_instrutor_profile(user.id, school_id)
+                    existentes += 1
+                else:
+                    # Usuário novo: Cria e vincula
+                    user = User(
+                        matricula=matricula,
+                        username=matricula,
+                        role=role,
+                        is_active=True,
+                        must_change_password=True
+                    )
+                    user.set_password(matricula)
+                    db.session.add(user)
+                    db.session.flush()
+                    
+                    # CORREÇÃO DO ERRO 'opm required'
+                    if role == 'aluno':
+                        db.session.add(Aluno(user_id=user.id, opm='-'))
+                    
+                    UserService._ensure_user_school(user.id, school_id, role)
+                    if role == 'instrutor':
+                        UserService._ensure_instrutor_profile(user.id, school_id)
+                        
+                    novos += 1
+
+            db.session.commit()
+            return True, novos, existentes
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Erro no batch: {e}")
+            return False, 0, 0
+
+    @staticmethod
+    def create_user(data, school_id=None):
+        """
+        Criação completa de usuário (geralmente via Admin Tools ou Cadastro Manual).
+        """
+        try:
+            # Verifica duplicidade global
+            existing = db.session.scalar(
+                select(User).where(or_(User.email == data['email'], User.matricula == data['matricula']))
+            )
+            if existing: return False, "E-mail ou matrícula já cadastrados no sistema."
+
+            # Define a escola do contexto se não passada
+            if not school_id:
+                school_id = UserService.get_current_school_id()
+
+            role = data.get('role', 'aluno')
+            password = data.get('password') or 'mudar123'
+
+            user = User(
+                email=data['email'], 
+                matricula=data['matricula'], 
+                nome_completo=data['nome_completo'],
+                nome_de_guerra=data.get('nome_de_guerra'), 
+                role=role,
+                posto_graduacao=data.get('posto_graduacao'),
+                is_active=True,
+                must_change_password=True
+            )
+            user.set_password(password)
+            
+            db.session.add(user)
+            db.session.flush()
+            
+            # CORREÇÃO DO ERRO 'opm required'
+            if role == 'aluno':
+                db.session.add(Aluno(user_id=user.id, opm='-'))
+
+            # VINCULAÇÃO
+            if school_id and role not in ['programador', 'super_admin']:
+                UserService._ensure_user_school(user.id, school_id, role)
+                if role == 'instrutor':
+                    UserService._ensure_instrutor_profile(user.id, school_id)
+
+            db.session.commit()
+            return True, user
+        except Exception as e:
+            db.session.rollback()
+            return False, str(e)
 
     @staticmethod
     def set_user_role_for_school(user_id, school_id, new_role):
         user = db.session.get(User, user_id)
-        if not user:
-            return False, "Usuário não encontrado."
+        if not user: return False, "Usuário não encontrado."
             
         if user.role == User.ROLE_PROGRAMADOR:
              return False, "Não é possível alterar cargo de Programador via escola."
 
-        user_school = db.session.scalar(
-            select(UserSchool).filter_by(user_id=user_id, school_id=school_id)
-        )
-
         try:
-            if user_school:
-                user_school.role = new_role
-            else:
-                user_school = UserSchool(user_id=user_id, school_id=school_id, role=new_role)
-                db.session.add(user_school)
+            # Usa o método centralizado para garantir o vínculo/atualização
+            UserService._ensure_user_school(user_id, school_id, new_role)
             
             if new_role == 'instrutor':
                 UserService._ensure_instrutor_profile(user_id, school_id)
@@ -133,248 +294,8 @@ class UserService:
     assign_school_role = set_user_role_for_school
 
     @staticmethod
-    def batch_pre_register_users(matriculas, role, school_id):
-        if not role: return False, 0, 0
-
-        novos = 0
-        existentes = 0
-
-        for m in matriculas:
-            matricula = normalize_matricula(m)
-            if not matricula: continue
-
-            user = db.session.scalar(select(User).filter_by(matricula=matricula))
-            if user:
-                link = db.session.scalar(select(UserSchool).filter_by(user_id=user.id, school_id=school_id))
-                if not link:
-                    db.session.add(UserSchool(user_id=user.id, school_id=school_id, role=role))
-                    if role == 'instrutor':
-                        UserService._ensure_instrutor_profile(user.id, school_id)
-                    existentes += 1
-                else:
-                    existentes += 1
-                continue
-
-            try:
-                new_user = User(matricula=matricula, role='aluno', is_active=False)
-                db.session.add(new_user)
-                db.session.flush()
-                db.session.add(UserSchool(user_id=new_user.id, school_id=school_id, role=role))
-                if role == 'instrutor':
-                    UserService._ensure_instrutor_profile(new_user.id, school_id)
-                novos += 1
-            except Exception:
-                db.session.rollback()
-                return False, 0, 0
-
-        try:
-            db.session.commit()
-            return True, novos, existentes
-        except Exception as e:
-            db.session.rollback()
-            current_app.logger.error(f"Erro no batch: {e}")
-            return False, 0, 0
-
-    @staticmethod
-    def get_current_school_id():
-        if not has_request_context(): return None
-        if not current_user or not current_user.is_authenticated: return None
-
-        if getattr(current_user, 'role', '') in ['super_admin', 'programador']:
-            view_as = session.get('view_as_school_id')
-            if view_as: return int(view_as)
-
-        active_id = session.get('active_school_id')
-        if active_id:
-            try:
-                active_id_int = int(active_id)
-                has_link = db.session.scalar(
-                    select(UserSchool.school_id).where(
-                        UserSchool.user_id == current_user.id,
-                        UserSchool.school_id == active_id_int
-                    )
-                )
-                if has_link: return active_id_int
-                else: session.pop('active_school_id', None)
-            except Exception: pass
-
-        all_links = db.session.execute(
-            select(UserSchool).where(UserSchool.user_id == current_user.id)
-        ).scalars().all()
-
-        if len(all_links) == 1:
-            chosen_id = all_links[0].school_id
-            session['active_school_id'] = chosen_id
-            return chosen_id
-            
-        return None
-
-    @staticmethod
-    def remove_school_role(user_id, school_id):
-        user = db.session.get(User, user_id)
-        if user and user.role in ['super_admin', 'programador']:
-            return False, "Não permitido."
-
-        assignment = db.session.scalar(select(UserSchool).filter_by(user_id=user_id, school_id=school_id))
-        if not assignment:
-            return False, "Vínculo não encontrado."
-
-        db.session.delete(assignment)
-        db.session.commit()
-        return True, "Vínculo removido."
-
-    @staticmethod
-    def delete_user_by_id(user_id):
-        """
-        Exclusão segura de usuário (compatível com a lógica antiga, mas chama a versão robusta).
-        """
-        return UserService.delete_user(user_id)
-
-    @staticmethod
-    def delete_user(user_id):
-        """
-        Exclui um usuário e limpa todas as suas dependências (Instrutor, Aluno, Horários, etc.).
-        Força bruta para garantir que Foreign Keys não impeçam a exclusão.
-        """
-        try:
-            user = db.session.get(User, user_id)
-            if not user:
-                return False, "Usuário não encontrado."
-            
-            # Proteção contra exclusão de Super Admins por engano
-            if user.role in ['super_admin', 'programador'] and (not current_user or current_user.role != 'programador'):
-                 return False, "Não é permitido excluir administradores globais."
-
-            logger.info(f"Iniciando exclusão do usuário {user_id}...")
-
-            # ----------------------------------------------------
-            # 1. LIMPEZA DE INSTRUTOR
-            # ----------------------------------------------------
-            instrutores = Instrutor.query.filter_by(user_id=user.id).all()
-            for instrutor in instrutores:
-                logger.info(f"Limpando dependências do Instrutor ID {instrutor.id}")
-                
-                # A. DisciplinaTurma - Desvincular instrutor das turmas (Set NULL)
-                try:
-                    DisciplinaTurma.query.filter_by(instrutor_id_1=instrutor.id).update({'instrutor_id_1': None})
-                    DisciplinaTurma.query.filter_by(instrutor_id_2=instrutor.id).update({'instrutor_id_2': None})
-                except Exception as e:
-                    logger.warning(f"Erro ao limpar DisciplinaTurma: {e}")
-
-                # B. Remover Horários (Onde é titular) e Desvincular (Onde é auxiliar)
-                Horario.query.filter_by(instrutor_id=instrutor.id).delete()
-                Horario.query.filter_by(instrutor_id_2=instrutor.id).update({'instrutor_id_2': None})
-                
-                # C. Excluir o perfil de Instrutor
-                db.session.delete(instrutor)
-
-            # ----------------------------------------------------
-            # 2. LIMPEZA DE ALUNO (NOVO)
-            # ----------------------------------------------------
-            aluno = db.session.scalar(select(Aluno).filter_by(user_id=user.id))
-            if aluno:
-                logger.info(f"Removendo perfil de Aluno ID {aluno.id}")
-                # Dependências como Frequencia e Notas geralmente tem cascade no Model.
-                # Se houver erro de integridade aqui, adicionar deleção manual de FrequenciaAluno.
-                db.session.delete(aluno)
-
-            # ----------------------------------------------------
-            # 3. LIMPEZA GERAL
-            # ----------------------------------------------------
-            # Desvincular Diários de Classe (Assinaturas e Responsabilidade)
-            DiarioClasse.query.filter_by(responsavel_id=user.id).update({'responsavel_id': None})
-            DiarioClasse.query.filter_by(instrutor_assinante_id=user.id).update({'instrutor_assinante_id': None})
-
-            # Remover Vínculos com Escolas (UserSchool)
-            # FIX: Usando delete direto via db.session para evitar erro de Join implícito
-            db.session.query(UserSchool).filter(UserSchool.user_id == user.id).delete()
-
-            # ----------------------------------------------------
-            # 4. EXCLUSÃO FINAL
-            # ----------------------------------------------------
-            db.session.delete(user)
-            db.session.commit()
-            logger.info(f"Usuário {user_id} excluído com sucesso.")
-            return True, "Usuário excluído com sucesso."
-
-        except IntegrityError as e:
-            db.session.rollback()
-            logger.error(f"Erro de integridade ao excluir usuário {user_id}: {str(e)}")
-            return False, f"Erro de integridade: {str(e)}"
-        except Exception as e:
-            db.session.rollback()
-            logger.error(f"Erro genérico ao excluir usuário {user_id}: {str(e)}")
-            return False, f"Erro ao excluir: {str(e)}"
-    
-    @staticmethod
-    def get_by_id(user_id):
-        return db.session.get(User, user_id)
-    
-    @staticmethod
-    def get_user_by_id(user_id):
-        return db.session.get(User, user_id)
-
-    @staticmethod
-    def get_user_by_username(username):
-        return User.query.filter_by(username=username).first()
-
-    @staticmethod
-    def create_user(data, school_id=None):
-        if not isinstance(data, dict):
-             pass
-
-        try:
-            # Verifica duplicidade
-            existing = db.session.scalar(
-                select(User).where(or_(User.email == data['email'], User.matricula == data['matricula']))
-            )
-            if existing: return False, "E-mail ou matrícula já cadastrados."
-
-            # Cria o usuário
-            password = data.get('password')
-            if not password:
-                 password = 'mudar123' 
-
-            user = User(
-                email=data['email'], 
-                matricula=data['matricula'], 
-                nome_completo=data['nome_completo'],
-                nome_de_guerra=data.get('nome_de_guerra'), 
-                role=data.get('role', 'aluno'),
-                posto_graduacao=data.get('posto_graduacao')
-            )
-            user.set_password(password)
-            
-            db.session.add(user)
-            db.session.flush() # Gera o ID do usuário
-            
-            # --- CORREÇÃO DO BUG DO ALUNO ÓRFÃO ---
-            if not school_id:
-                school_id = UserService.get_current_school_id()
-            
-            if school_id:
-                link_role = data.get('role', 'aluno')
-                if link_role not in ['programador', 'super_admin']:
-                    user_school = UserSchool(
-                        user_id=user.id, 
-                        school_id=school_id, 
-                        role=link_role
-                    )
-                    db.session.add(user_school)
-                    
-                    if link_role == 'instrutor':
-                        UserService._ensure_instrutor_profile(user.id, school_id)
-            # --------------------------------------
-
-            db.session.commit()
-            return True, user
-        except Exception as e:
-            db.session.rollback()
-            return False, str(e)
-
-    @staticmethod
     def update_user(user_id, data):
-        user = UserService.get_by_id(user_id)
+        user = db.session.get(User, user_id)
         if not user: return False, "Usuário não encontrado."
         try:
             if 'nome_completo' in data: user.nome_completo = data['nome_completo']
@@ -394,14 +315,10 @@ class UserService:
 
     @staticmethod
     def get_users_by_school(school_id):
-        """
-        Retorna todos os usuários vinculados à escola especificada.
-        Utilizado para preencher dropdowns de filtros em logs e relatórios.
-        """
         try:
             return db.session.scalars(
                 select(User)
-                .join(User.user_schools) # Join explícito para evitar ambiguidade
+                .join(User.user_schools)
                 .where(UserSchool.school_id == school_id)
                 .order_by(User.nome_completo)
             ).all()
@@ -412,3 +329,73 @@ class UserService:
     @staticmethod
     def get_all_users():
         return User.query.all()
+
+    @staticmethod
+    def get_by_id(user_id):
+        return db.session.get(User, user_id)
+    
+    @staticmethod
+    def get_user_by_id(user_id):
+        return db.session.get(User, user_id)
+
+    @staticmethod
+    def get_user_by_username(username):
+        return User.query.filter_by(username=username).first()
+
+    @staticmethod
+    def remove_school_role(user_id, school_id):
+        user = db.session.get(User, user_id)
+        if user and user.role in ['super_admin', 'programador']:
+            return False, "Não permitido."
+
+        assignment = db.session.scalar(select(UserSchool).filter_by(user_id=user_id, school_id=school_id))
+        if not assignment:
+            return False, "Vínculo não encontrado."
+
+        db.session.delete(assignment)
+        db.session.commit()
+        return True, "Vínculo removido."
+
+    @staticmethod
+    def delete_user_by_id(user_id):
+        return UserService.delete_user(user_id)
+
+    @staticmethod
+    def delete_user(user_id):
+        """
+        Exclusão profunda de usuário.
+        """
+        try:
+            user = db.session.get(User, user_id)
+            if not user: return False, "Usuário não encontrado."
+            
+            if user.role in ['super_admin', 'programador'] and (not current_user or current_user.role != 'programador'):
+                 return False, "Não é permitido excluir administradores globais."
+
+            # Limpezas profundas
+            # 1. Instrutor
+            instrutores = Instrutor.query.filter_by(user_id=user.id).all()
+            for instrutor in instrutores:
+                DisciplinaTurma.query.filter_by(instrutor_id_1=instrutor.id).update({'instrutor_id_1': None})
+                DisciplinaTurma.query.filter_by(instrutor_id_2=instrutor.id).update({'instrutor_id_2': None})
+                Horario.query.filter_by(instrutor_id=instrutor.id).delete()
+                Horario.query.filter_by(instrutor_id_2=instrutor.id).update({'instrutor_id_2': None})
+                db.session.delete(instrutor)
+
+            # 2. Aluno
+            aluno = db.session.scalar(select(Aluno).filter_by(user_id=user.id))
+            if aluno: db.session.delete(aluno)
+
+            # 3. Vínculos e Diários
+            DiarioClasse.query.filter_by(responsavel_id=user.id).update({'responsavel_id': None})
+            DiarioClasse.query.filter_by(instrutor_assinante_id=user.id).update({'instrutor_assinante_id': None})
+            db.session.query(UserSchool).filter(UserSchool.user_id == user.id).delete()
+
+            db.session.delete(user)
+            db.session.commit()
+            return True, "Usuário excluído com sucesso."
+
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Erro ao excluir usuário {user_id}: {str(e)}")
+            return False, f"Erro ao excluir: {str(e)}"
