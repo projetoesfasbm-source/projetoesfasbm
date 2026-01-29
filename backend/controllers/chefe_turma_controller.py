@@ -50,7 +50,7 @@ def get_variacoes_nome_turma(nome_original):
     return list(variacoes)
 
 def verify_chefe_permission():
-    """Retorna o perfil do aluno ou 'admin' para membros da staff."""
+    """Retorna o perfil do aluno (se for chefe) ou 'admin' para membros da staff."""
     try:
         if not current_user.is_authenticated:
             return None
@@ -61,7 +61,12 @@ def verify_chefe_permission():
 
         if not current_user.aluno_profile:
             return None
-        return current_user.aluno_profile
+            
+        # CORREÇÃO CRÍTICA: Verifica se o aluno tem o cargo de Chefe de Turma
+        if current_user.is_chefe_turma:
+            return current_user.aluno_profile
+            
+        return None
     except Exception:
         return None
 
@@ -93,8 +98,8 @@ def caderno_chamada():
             abort(404, description="Vínculo de turma não identificado.")
         turma = db.session.get(Turma, aluno_chefe.turma_id)
 
-        cargo = TurmaCargo.query.filter_by(turma_id=turma.id, aluno_id=aluno_chefe.id, cargo_nome=TurmaCargo.ROLE_CHEFE).first()
-        if cargo:
+        # Redundância de segurança, embora verify_chefe_permission já garanta
+        if current_user.is_chefe_turma:
             pode_editar = True
 
     if not turma:
@@ -214,8 +219,8 @@ def painel():
         permissao = verify_chefe_permission()
 
         if not permissao:
-            flash("Acesso restrito.", "danger")
-            return redirect(url_for('main.index'))
+            flash("Acesso restrito. Você não possui permissão de Chefe de Turma.", "danger")
+            return redirect(url_for('main.dashboard')) # Redireciona para dashboard em vez de index
 
         active_sid = session.get('active_school_id')
 
@@ -234,7 +239,7 @@ def painel():
 
         if not turma_obj:
             flash("Turma não encontrada.", "danger")
-            return redirect(url_for('main.index'))
+            return redirect(url_for('main.dashboard'))
 
         data_str = request.args.get('data')
         data_hoje = get_data_hoje_brasil()
@@ -247,7 +252,7 @@ def painel():
         ).all()
 
         if not semanas_ativas:
-            return render_template('painel.html', aluno=aluno, turma=turma_obj, aulas_agrupadas=[], data_selecionada=data_selecionada, erro_semana=True, is_admin=(permissao == "admin"))
+            return render_template('chefe/painel.html', aluno=aluno, turma=turma_obj, aulas_agrupadas=[], data_selecionada=data_selecionada, erro_semana=True, is_admin=(permissao == "admin"))
 
         semana_ids = [s.id for s in semanas_ativas]
         dia_str = get_dia_semana_str(data_selecionada)
@@ -341,24 +346,20 @@ def painel():
         import traceback
         traceback.print_exc()
         flash(f"Erro no painel: {str(e)}", "danger")
-        return redirect(url_for('main.index'))
+        return redirect(url_for('main.dashboard'))
 
 @chefe_bp.route('/registrar/<int:primeiro_horario_id>', methods=['GET', 'POST'])
 @login_required
 def registrar_aula(primeiro_horario_id):
     try:
         permissao = verify_chefe_permission()
-        if not permissao: return redirect(url_for('main.index'))
+        if not permissao: return redirect(url_for('main.dashboard'))
 
-        aluno_user = Aluno.query.filter_by(user_id=current_user.id).first()
+        # Verificação dupla, já coberta por verify_chefe_permission
         is_chefe = False
-        horario_base_temp = db.session.get(Horario, primeiro_horario_id)
-
-        if horario_base_temp and aluno_user:
-            turma_id_alvo = horario_base_temp.disciplina.turma_id
-            cargo = TurmaCargo.query.filter_by(turma_id=turma_id_alvo, aluno_id=aluno_user.id, cargo_nome=TurmaCargo.ROLE_CHEFE).first()
-            if cargo:
-                is_chefe = True
+        if permissao != "admin":
+             # Se passou por verify_chefe_permission e não é admin, é chefe
+             is_chefe = True
 
         if request.method == 'POST' and not (permissao == "admin" or is_chefe):
             flash("Apenas o Chefe de Turma pode registrar presenças.", "danger")

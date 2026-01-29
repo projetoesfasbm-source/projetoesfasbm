@@ -285,7 +285,11 @@
                 {% if current_user.role == 'aluno' and current_user.aluno_profile %}
                     <div class="nav-separator">PORTAL DO ALUNO</div>
                     <a href="{{ url_for('historico.index') }}" class="nav-link {% if request.endpoint and 'historico.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📊</div> Meu CTSP</a>
+                    
+                    {# VERIFICAÇÃO DE CHEFE DE TURMA - SÓ APARECE SE TIVER O CARGO #}
+                    {% if current_user.is_chefe_turma %}
                     <a href="{{ url_for('chefe.painel') }}" class="nav-link {% if request.endpoint and 'chefe.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📋</div> Chefe de Turma</a>
+                    {% endif %}
                 {% endif %}
 
                  {% if current_user.role == 'super_admin' %}

@@ -46,36 +46,6 @@
                 <i class="fas fa-info-circle"></i> {{ aula.observacao }}
             </div>
             {% endif %}
-
-            {# --- BARRA DE FERRAMENTAS DE ADMINISTRAÇÃO RÁPIDA --- #}
-            {% set user_role = current_user.get_role_in_school(active_school_id) if current_user.is_authenticated and active_school_id else '' %}
-            {% if current_user.is_programador or user_role in ['admin_escola', 'admin_sens', 'admin_cal'] %}
-            <div class="admin-quick-actions" style="margin-top: auto; padding-top: 5px; border-top: 1px dashed #bbb; display: flex; justify-content: space-between; gap: 2px;">
-                
-                <button type="button" class="btn btn-sm btn-success p-0" 
-                        style="width: 24px; height: 24px; line-height: 24px; font-size: 0.7rem;"
-                        onclick="aprovarRapido('{{ aula.id }}')" 
-                        title="Aprovar Aula (Carga Total)">
-                    <i class="fas fa-check"></i>
-                </button>
-
-                <button type="button" class="btn btn-sm btn-primary p-0" 
-                        style="width: 24px; height: 24px; line-height: 24px; font-size: 0.7rem;"
-                        onclick="abrirModalEdicao('{{ aula.id }}')" 
-                        title="Editar / Aprovação Parcial">
-                    <i class="fas fa-pencil-alt"></i>
-                </button>
-
-                <button type="button" class="btn btn-sm btn-danger p-0" 
-                        style="width: 24px; height: 24px; line-height: 24px; font-size: 0.7rem;"
-                        onclick="removerAgendamento('{{ aula.id }}')" 
-                        title="Remover Agendamento">
-                    <i class="fas fa-trash"></i>
-                </button>
-            </div>
-            {% endif %}
-            {# ---------------------------------------------------- #}
-
         </div>
     </td>
 {% endif %}

