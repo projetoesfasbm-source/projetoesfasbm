@@ -2,7 +2,7 @@
 
 import os
 import uuid
-from flask import current_app, session
+from flask import current_app
 from werkzeug.utils import secure_filename
 from sqlalchemy import select, or_
 from sqlalchemy.exc import IntegrityError
@@ -15,6 +15,7 @@ from backend.models.user_school import UserSchool
 from utils.image_utils import allowed_file, compress_image_to_memory
 from utils.normalizer import normalize_matricula, normalize_name
 
+# Importação para garantir o contexto da sessão e utilitários
 from .user_service import UserService
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
@@ -52,12 +53,88 @@ def _save_profile_picture(file):
 
 
 class InstrutorService:
+    
+    @staticmethod
+    def _repair_missing_profiles(school_id: int):
+        """
+        AUTO-CORREÇÃO (SELF-HEALING) - VERSÃO BLINDADA
+        Identifica usuários que têm ACESSO à escola (UserSchool) mas não têm PERFIL (Instrutor).
+        Corrige um por um para garantir que erros individuais não travem o processo.
+        """
+        if not school_id:
+            return
+
+        try:
+            # 1. Quem DEVERIA estar lá? (Todos vinculados que NÃO são alunos)
+            # Isso pega Instrutores, Admins, Programadores, etc.
+            stmt_staff_users = (
+                select(UserSchool.user_id)
+                .where(
+                    UserSchool.school_id == school_id,
+                    UserSchool.role != 'aluno'
+                )
+            )
+            users_should_have_profile = set(db.session.scalars(stmt_staff_users).all())
+
+            # 2. Quem REALMENTE está lá?
+            stmt_existing_profiles = (
+                select(Instrutor.user_id)
+                .where(Instrutor.school_id == school_id)
+            )
+            users_actually_have_profile = set(db.session.scalars(stmt_existing_profiles).all())
+
+            # 3. Quem está faltando?
+            missing_ids = users_should_have_profile - users_actually_have_profile
+            
+            if missing_ids:
+                current_app.logger.warning(f"[AUTO-REPAIR] Escola {school_id}: Reparando {len(missing_ids)} perfis faltantes...")
+                
+                for uid in missing_ids:
+                    try:
+                        # Verifica novamente para evitar Race Condition
+                        exists = db.session.scalar(
+                            select(Instrutor).where(Instrutor.user_id == uid, Instrutor.school_id == school_id)
+                        )
+                        if not exists:
+                            # Tenta copiar dados (foto/telefone) de outro perfil desse usuário (outra escola)
+                            # para não começar "pelado"
+                            existing_data = db.session.execute(
+                                select(Instrutor)
+                                .where(Instrutor.user_id == uid)
+                                .limit(1)
+                            ).scalar_one_or_none()
+
+                            foto = existing_data.foto_perfil if existing_data else 'default.png'
+                            telefone = existing_data.telefone if existing_data else None
+                            is_rr = existing_data.is_rr if existing_data else False
+
+                            new_prof = Instrutor(
+                                user_id=uid,
+                                school_id=school_id,
+                                foto_perfil=foto,
+                                telefone=telefone,
+                                is_rr=is_rr
+                            )
+                            db.session.add(new_prof)
+                            db.session.commit() # Commit INDIVIDUAL para garantir que salve
+                            current_app.logger.info(f"[AUTO-REPAIR] Perfil criado para User ID {uid} na escola {school_id}.")
+                    except Exception as loop_e:
+                        db.session.rollback()
+                        current_app.logger.error(f"[AUTO-REPAIR] Falha ao corrigir User ID {uid}: {loop_e}")
+
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Erro CRÍTICO no processo de auto-repair: {e}")
+
     @staticmethod
     def get_all_instrutores(user=None, search_term=None, page=1, per_page=15):
         active_school_id = UserService.get_current_school_id()
         
         if not active_school_id:
             return db.paginate(select(Instrutor).where(db.false()), page=page, per_page=per_page)
+
+        # Dispara a correção antes de listar
+        InstrutorService._repair_missing_profiles(active_school_id)
 
         stmt = (
             select(Instrutor)
@@ -87,6 +164,9 @@ class InstrutorService:
         if not active_school_id:
             return []
             
+        # Dispara a correção antes de listar (Essencial para dropdowns de Vinculos)
+        InstrutorService._repair_missing_profiles(active_school_id)
+
         stmt = (
             select(Instrutor)
             .join(User, Instrutor.user_id == User.id)

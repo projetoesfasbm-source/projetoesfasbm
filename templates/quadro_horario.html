@@ -242,6 +242,14 @@
         {% endif %}
     {% endif %}
 </div>
+
+<div class="modal fade" id="horarioModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content" id="horarioModalContent">
+            </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block modals %}
@@ -503,6 +511,78 @@
                 btn.innerHTML = originalText;
                 btn.disabled = false;
             });
+        }
+
+        // --- FUNÇÕES DE ADMINISTRAÇÃO RÁPIDA (ADICIONADAS) ---
+
+        function aprovarRapido(id) {
+            if(!confirm('Confirma a APROVAÇÃO TOTAL desta aula? \nA carga horária cumprida será igual à agendada.')) return;
+
+            fetch(`/horario/aprovar-rapido/${id}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': "{{ csrf_token() if csrf_token else '' }}"
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload(); 
+                } else {
+                    alert('Erro: ' + data.message);
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert('Erro ao processar aprovação.');
+            });
+        }
+
+        function removerAgendamento(id) {
+            if(!confirm('ATENÇÃO: Tem certeza que deseja REMOVER este agendamento?\nEsta ação não pode ser desfeita.')) return;
+
+            fetch(`/horario/excluir/${id}`, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRFToken': "{{ csrf_token() if csrf_token else '' }}"
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('Erro: ' + data.message);
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert('Erro ao remover agendamento.');
+            });
+        }
+
+        function abrirModalEdicao(id) {
+            const url = `/horario/editar/${id}`;
+            carregarModal(url);
+        }
+
+        function carregarModal(url) {
+            const modalContent = document.getElementById('horarioModalContent');
+            modalContent.innerHTML = '<div class="p-5 text-center"><div class="spinner-border text-primary" role="status"></div></div>';
+            
+            const modalEl = document.getElementById('horarioModal');
+            const modal = new bootstrap.Modal(modalEl);
+            modal.show();
+
+            fetch(url)
+                .then(response => response.text())
+                .then(html => {
+                    modalContent.innerHTML = html;
+                })
+                .catch(err => {
+                    modalContent.innerHTML = '<div class="alert alert-danger m-3">Erro ao carregar formulário.</div>';
+                });
         }
     </script>
     <style>
