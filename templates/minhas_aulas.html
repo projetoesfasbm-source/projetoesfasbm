@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+
+{% block title %}Minhas Aulas - Instrutor{% endblock %}
+
+{% block content %}
+<div class="horario-header-container">
+    <div class="page-title-with-controls">
+        <div class="title-group">
+            <h1><i class="fas fa-chalkboard-teacher text-primary me-2"></i>Minhas Aulas</h1>
+            <p>Agenda consolidada para o instrutor: <strong>{{ current_user.nome }}</strong></p>
+        </div>
+        
+        <div class="controls-group d-flex gap-2">
+            <a href="{{ url_for('horario.index') }}" class="btn btn-outline-primary shadow-sm fw-bold">
+                <i class="fas fa-th me-1"></i> Quadro Geral
+            </a>
+            <button onclick="window.print()" class="btn btn-light border shadow-sm">
+                <i class="fas fa-print me-1"></i> Imprimir Agenda
+            </button>
+        </div>
+    </div>
+
+    <div class="filters-bar card p-3 mb-4 shadow-sm border-0 bg-light">
+        <form method="GET" action="{{ url_for('horario.minhas_aulas') }}" class="row g-3 align-items-end">
+            <div class="col-md-9">
+                <label for="semana_id" class="form-label fw-bold text-muted small">SELECIONAR SEMANA</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-white"><i class="fas fa-calendar-alt text-primary"></i></span>
+                    <select name="semana_id" id="semana_id" class="form-select fw-bold" onchange="this.form.submit()">
+                        {% for semana in todas_as_semanas %}
+                        <option value="{{ semana.id }}" {% if semana_selecionada and semana.id == semana_selecionada.id %}selected{% endif %}>
+                            {{ semana.nome }} ({{ semana.data_inicio.strftime('%d/%m') }} a {{ semana.data_fim.strftime('%d/%m') }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <button type="submit" class="btn btn-primary w-100 fw-bold">
+                    <i class="fas fa-filter me-1"></i> Filtrar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="horario-content">
+    {% if not tem_aulas %}
+        <div class="empty-state card shadow-sm p-5 text-center border-0">
+            <div class="empty-icon mb-3" style="font-size: 4rem;">🗓️</div>
+            <h3 class="text-muted">Nenhum agendamento encontrado</h3>
+            <p class="text-secondary">Você não possui aulas vinculadas ao seu nome na semana <strong>{{ semana_selecionada.nome }}</strong>.</p>
+            <div class="mt-3">
+                <a href="{{ url_for('horario.index') }}" class="btn btn-primary">Ir para Agendamentos</a>
+            </div>
+        </div>
+    {% else %}
+        <div class="table-wrapper shadow-sm rounded">
+            <table class="horario-table-new">
+                <thead>
+                    <tr>
+                        <th class="header-tempo bg-dark text-white">Horário</th>
+                        <th class="header-dia">Segunda <br><small class="text-muted">({{ datas_semana.segunda }})</small></th>
+                        <th class="header-dia">Terça <br><small class="text-muted">({{ datas_semana.terca }})</small></th>
+                        <th class="header-dia">Quarta <br><small class="text-muted">({{ datas_semana.quarta }})</small></th>
+                        <th class="header-dia">Quinta <br><small class="text-muted">({{ datas_semana.quinta }})</small></th>
+                        <th class="header-dia">Sexta <br><small class="text-muted">({{ datas_semana.sexta }})</small></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row_idx in range(15) %}
+                        {% set periodo_num = row_idx + 1 %}
+                        {% if (periodo_num <= 12) or 
+                              (periodo_num == 13 and semana_selecionada.mostrar_periodo_13) or
+                              (periodo_num == 14 and semana_selecionada.mostrar_periodo_14) or
+                              (periodo_num == 15 and semana_selecionada.mostrar_periodo_15) %}
+                        
+                        <tr class="periodo-row">
+                            <td class="cell-tempo">
+                                <strong>{{ tempos[row_idx][0] }}</strong>
+                                <span>{{ tempos[row_idx][1] }}</span>
+                            </td>
+                            
+                            {% for col_idx in range(5) %}
+                                {% set aula = matriz_pessoal[row_idx][col_idx] %}
+                                
+                                {% if aula %}
+                                    <td class="schedule-slot has-lesson personal-slot shadow-sm">
+                                        <div class="slot-content">
+                                            <div class="badge bg-primary mb-1">{{ aula.turma.nome }}</div>
+                                            <div class="disciplina-title" style="font-size: 0.9rem; line-height: 1.1;">
+                                                {{ aula.materia.nome }}
+                                            </div>
+                                            <div class="sala-info mt-1">
+                                                <i class="fas fa-map-marker-alt me-1"></i>{{ aula.sala or 'S/ Sala' }}
+                                            </div>
+                                        </div>
+                                    </td>
+                                {% else %}
+                                    <td class="schedule-slot empty-personal-slot"></td>
+                                {% endif %}
+                            {% endfor %}
+                        </tr>
+
+                        {# Divisores de Intervalo baseados no seu código original #}
+                        {% if row_idx == 2 %}
+                            <tr class="divider-row"><td colspan="6" class="bg-light text-center small fw-bold py-1 text-uppercase text-muted">Intervalo Manhã</td></tr>
+                        {% endif %}
+                        {% if row_idx == 5 %}
+                            <tr class="divider-row"><td colspan="6" class="bg-light text-center small fw-bold py-1 text-uppercase text-muted">Almoço</td></tr>
+                        {% endif %}
+                        {% if row_idx == 8 %}
+                            <tr class="divider-row"><td colspan="6" class="bg-light text-center small fw-bold py-1 text-uppercase text-muted">Intervalo Tarde</td></tr>
+                        {% endif %}
+                        
+                        {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+</div>
+
+<style>
+    /* Estilos específicos para a visão do Instrutor */
+    .personal-slot {
+        background-color: #ffffff !important;
+        border-left: 5px solid #0d6efd !important; /* Destaque lateral azul */
+        transition: transform 0.2s;
+        cursor: default;
+    }
+
+    .personal-slot:hover {
+        transform: scale(1.02);
+        z-index: 10;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1) !important;
+    }
+
+    .empty-personal-slot {
+        background-color: #fcfcfc !important;
+        opacity: 0.5;
+    }
+
+    .disciplina-title {
+        font-weight: 700 !important;
+        color: #1e293b;
+    }
+
+    .sala-info {
+        font-size: 0.75rem;
+        color: #64748b;
+        font-style: italic;
+    }
+
+    .divider-row td {
+        letter-spacing: 2px;
+        border: none !important;
+    }
+
+    @media print {
+        .btn, .filters-bar, .horario-header-container p { display: none !important; }
+        .horario-header-container { padding: 0; }
+        .table-wrapper { box-shadow: none; }
+        .personal-slot { border-left: 5px solid #000 !important; }
+    }
+</style>
+{% endblock %}
