@@ -60,14 +60,14 @@
             justify-content: space-between;
             animation: slideDown 0.5s ease-out;
         }
-        
+
         @keyframes slideDown {
             from { transform: translateY(-100%); }
             to { transform: translateY(0); }
         }
 
         #pwa-update-bar p { margin: 0; font-size: 0.9rem; font-weight: 500; }
-        
+
         #btn-refresh-pwa {
             background-color: #10b981;
             color: white;
@@ -194,7 +194,7 @@
                                 {% endif %}
                             {% endfor %}
                         {% endif %}
-                        
+
                         {% if visual_school_name.value %}
                             {% set full_name = visual_school_name.value %}
                         {% elif current_school %}
@@ -307,7 +307,7 @@
                 {% if current_user.is_staff_in_school(active_sid) or current_user.is_instrutor_in_school(active_sid) or current_user.role in ['super_admin', 'aluno'] %}
                     <div class="nav-separator">ACADÊMICO</div>
                     <a href="{{ url_for('horario.index') }}" class="nav-link {% if request.endpoint and ('horario.' in request.endpoint or 'semana.' in request.endpoint) %}active{% endif %}"><div class="nav-icon">📅</div> Quadro Horário</a>
-                    
+
                     {% if current_user.is_instrutor_in_school(active_sid) or current_user.is_sens_in_school(active_sid) or current_user.is_cal_in_school(active_sid) or current_user.role == 'super_admin' %}
                         <a href="{{ url_for('diario.listar_pendentes') }}" class="nav-link {% if request.endpoint and 'diario.' in request.endpoint %}active{% endif %}">
                             <div class="nav-icon">✍️</div> Validar Diários
@@ -342,7 +342,7 @@
                 {% if current_user.role == 'aluno' and current_user.aluno_profile %}
                     <div class="nav-separator">PORTAL DO ALUNO</div>
                     <a href="{{ url_for('historico.index') }}" class="nav-link {% if request.endpoint and 'historico.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📊</div> Meu CTSP</a>
-                    
+
                     {% if current_user.is_chefe_turma %}
                     <a href="{{ url_for('chefe.painel') }}" class="nav-link {% if request.endpoint and 'chefe.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📋</div> Chefe de Turma</a>
                     {% endif %}
