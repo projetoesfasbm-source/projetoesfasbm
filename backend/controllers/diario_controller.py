@@ -1,8 +1,11 @@
 # backend/controllers/diario_controller.py
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
 from flask_login import login_required, current_user
+import os
+
 from ..services.diario_service import DiarioService
 from ..services.user_service import UserService
+from utils.image_utils import compress_image_to_memory, allowed_file
 
 diario_bp = Blueprint('diario', __name__, url_prefix='/diario-classe')
 
@@ -18,7 +21,6 @@ def listar_pendentes():
     turma_id = request.args.get('turma_id', type=int)
     disciplina_id = request.args.get('disciplina_id', type=int)
     
-    # Busca e AGRUPA os diários
     diarios_agrupados = DiarioService.get_diarios_agrupados(
         school_id=school_id,
         user_id=current_user.id, 
@@ -40,8 +42,6 @@ def listar_pendentes():
 @diario_bp.route('/instrutor/assinar/<int:diario_id>', methods=['GET', 'POST'])
 @login_required
 def assinar(diario_id):
-    # Nota: Ao receber o ID de um diário agrupado, a função 'assinar_diario'
-    # no service automaticamente busca e assina todos os irmãos do bloco.
     diario, instrutor = DiarioService.get_diario_para_assinatura(diario_id, current_user.id)
     
     if not diario:
@@ -52,15 +52,31 @@ def assinar(diario_id):
         tipo = request.form.get('tipo_assinatura')
         salvar = request.form.get('salvar_padrao') == 'on'
         
-        # Captura os dados de texto do formulário
         conteudo_ministrado = request.form.get('conteudo_ministrado')
         observacoes = request.form.get('observacoes')
         
         dados = None
 
-        if tipo == 'canvas': dados = request.form.get('assinatura_base64')
-        elif tipo == 'upload': dados = request.files.get('assinatura_upload')
-        elif tipo == 'padrao': dados = True
+        if tipo == 'canvas': 
+            dados = request.form.get('assinatura_base64')
+        elif tipo == 'upload': 
+            arquivo = request.files.get('assinatura_upload')
+            
+            # --- Lógica de Compressão para Assinatura ---
+            if arquivo:
+                if allowed_file(arquivo.filename, arquivo.stream, ['png', 'jpg', 'jpeg']):
+                    # Comprime: 256x256, Qualidade 60
+                    dados = compress_image_to_memory(arquivo, max_size=(256, 256), quality=60)
+                    if not dados:
+                        flash("Erro ao processar imagem da assinatura.", "danger")
+                        return redirect(url_for('diario.listar_pendentes'))
+                else:
+                    flash("Formato de arquivo inválido para assinatura.", "danger")
+                    return redirect(url_for('diario.listar_pendentes'))
+            # ----------------------------------------------
+
+        elif tipo == 'padrao': 
+            dados = True
 
         ok, msg = DiarioService.assinar_diario(
             diario_id=diario.id, 

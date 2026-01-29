@@ -12,33 +12,38 @@ from backend.models.database import db
 from backend.models.instrutor import Instrutor
 from backend.models.user import User
 from backend.models.user_school import UserSchool
-from utils.image_utils import allowed_file
+from utils.image_utils import allowed_file, compress_image_to_memory
 from utils.normalizer import normalize_matricula, normalize_name
 
-# Importação para garantir o contexto da sessão (Correção do Bug)
 from .user_service import UserService
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 
 def _save_profile_picture(file):
-    """Valida e salva a imagem de perfil; retorna o nome do arquivo salvo ou uma mensagem de erro."""
+    """Valida, COMPRIME e salva a imagem de perfil."""
     if not file:
         return None, "Nenhum arquivo enviado."
     
-    file.stream.seek(0)
     if not allowed_file(file.filename, file.stream, ALLOWED_EXTENSIONS):
         return None, "Tipo de arquivo de imagem não permitido."
+
+    # COMPRESSÃO AUTOMÁTICA
+    compressed_file = compress_image_to_memory(file, max_size=(256, 256), quality=60)
     
+    if not compressed_file:
+        return None, "Erro ao processar a imagem. O arquivo pode estar corrompido."
+
     try:
-        filename = secure_filename(file.filename)
-        ext = filename.rsplit('.', 1)[1].lower()
+        filename = secure_filename(compressed_file.filename)
+        ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else 'jpg'
         unique_filename = f"{uuid.uuid4()}.{ext}"
+        
         upload_folder = os.path.join(current_app.static_folder, 'uploads', 'profile_pics')
         os.makedirs(upload_folder, exist_ok=True)
         file_path = os.path.join(upload_folder, unique_filename)
         
-        file.stream.seek(0)
-        file.save(file_path)
+        # Salva o proxy comprimido
+        compressed_file.save(file_path)
         
         return unique_filename, "Arquivo salvo com sucesso"
     except Exception as e:
@@ -49,10 +54,6 @@ def _save_profile_picture(file):
 class InstrutorService:
     @staticmethod
     def get_all_instrutores(user=None, search_term=None, page=1, per_page=15):
-        """
-        Lista instrutores BLINDANDO o perfil pela escola atual (Conceito Matrícula 2).
-        """
-        # Pega a escola da sessão de forma segura
         active_school_id = UserService.get_current_school_id()
         
         if not active_school_id:
@@ -63,8 +64,6 @@ class InstrutorService:
             .join(User, Instrutor.user_id == User.id)
             .where(
                 User.is_active.is_(True),
-                # CORREÇÃO: Removido filtro de role global. 
-                # Se existe na tabela Instrutor para esta escola, é instrutor.
                 Instrutor.school_id == active_school_id
             )
             .options(joinedload(Instrutor.user))
@@ -84,9 +83,6 @@ class InstrutorService:
 
     @staticmethod
     def get_all_instrutores_sem_paginacao(user=None):
-        """
-        Retorna TODOS os instrutores ativos visíveis para a escola atual.
-        """
         active_school_id = UserService.get_current_school_id()
         if not active_school_id:
             return []
@@ -96,8 +92,6 @@ class InstrutorService:
             .join(User, Instrutor.user_id == User.id)
             .where(
                 User.is_active.is_(True),
-                # CORREÇÃO: Removido filtro de role global. 
-                # Garante que lista todos com perfil nesta escola.
                 Instrutor.school_id == active_school_id
             )
             .options(joinedload(Instrutor.user))
@@ -178,7 +172,6 @@ class InstrutorService:
                 if existing_user.email and existing_user.email != email:
                     return False, f"A Matrícula '{matricula}' já existe, mas o e-mail não confere."
 
-                # Verifica se já existe perfil PARA ESTA ESCOLA ESPECÍFICA
                 existing_profile = db.session.scalar(select(Instrutor).where(
                     Instrutor.user_id == existing_user.id,
                     Instrutor.school_id == school_id
@@ -240,9 +233,6 @@ class InstrutorService:
 
     @staticmethod
     def create_profile_for_user(user_id: int, data: dict):
-        """
-        Cria um perfil de instrutor vinculado à ESCOLA ATUAL.
-        """
         school_id = UserService.get_current_school_id()
         if not school_id:
             return False, "Escola não selecionada na sessão."
@@ -251,7 +241,6 @@ class InstrutorService:
         if not user:
             return False, "Usuário não encontrado."
         
-        # Verifica se já existe perfil NESTA escola
         existing = db.session.scalar(select(Instrutor).where(
             Instrutor.user_id == user_id, 
             Instrutor.school_id == school_id
@@ -271,7 +260,7 @@ class InstrutorService:
 
             new_profile = Instrutor(
                 user_id=user_id,
-                school_id=school_id, # VÍNCULO FORTE
+                school_id=school_id,
                 telefone=telefone,
                 is_rr=is_rr
             )
@@ -289,11 +278,9 @@ class InstrutorService:
 
     @staticmethod
     def get_instrutor_by_id(instrutor_id: int):
-        # Segurança: Garante que só retorna se pertencer à escola atual
         active_school = UserService.get_current_school_id()
         instrutor = db.session.get(Instrutor, instrutor_id)
         
-        # Se instrutor existe e pertence à escola ativa, retorna.
         if instrutor and instrutor.school_id == active_school:
             return instrutor
         return None
@@ -304,7 +291,6 @@ class InstrutorService:
         if not instrutor:
             return False, "Instrutor não encontrado."
         
-        # Proteção extra: só edita se for da escola atual
         if instrutor.school_id != UserService.get_current_school_id():
             return False, "Permissão negada: Este instrutor pertence a outra escola."
 
@@ -355,11 +341,8 @@ class InstrutorService:
             return False, "Permissão negada."
 
         try:
-            # Se o usuário tem perfis em OUTRAS escolas, deleta só este perfil (Instrutor)
-            # Se só tem este, poderia deletar o User todo, mas por segurança deletamos apenas o perfil e vínculo
             db.session.delete(instrutor)
             
-            # Remove o vínculo user_school desta escola também
             link = db.session.scalar(select(UserSchool).where(
                 UserSchool.user_id==instrutor.user_id, 
                 UserSchool.school_id==instrutor.school_id

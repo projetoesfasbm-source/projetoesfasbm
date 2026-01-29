@@ -18,7 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from werkzeug.security import generate_password_hash
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField, SelectField, RadioField
-from wtforms.validators import DataRequired, Email, EqualTo, Optional as WTFormsOptional
+from wtforms.validators import DataRequired, Email, EqualTo, Optional as WTFormsOptional, ValidationError
 from flask_wtf.file import FileField, FileAllowed
 
 from backend.models.database import db
@@ -27,13 +27,12 @@ from backend.services.instrutor_service import InstrutorService
 from backend.models.user import User
 from backend.models.turma import Turma
 from backend.models.school import School
-from backend.models.user_school import UserSchool # Necessário para a nova query
+from backend.models.user_school import UserSchool
 from backend.services.user_service import UserService
 from utils.decorators import super_admin_required, admin_required
 
 user_bp = Blueprint("user", __name__, url_prefix="/user")
 
-# ... (Mantenha o dicionário posto_graduacao_structured e as funções utils iguais ao original) ...
 posto_graduacao_structured = {
     'Praças': ['Soldado PM', '2º Sargento PM', '1º Sargento PM'],
     'Oficiais': ['1º Tenente PM', 'Capitão PM', 'Major PM', 'Tenente-Coronel PM', 'Coronel PM'],
@@ -42,11 +41,6 @@ posto_graduacao_structured = {
     'Outros': ['Civil', 'Outro']
 }
 
-# ... (Mantenha MeuPerfilForm e Utils iguais) ...
-# (Para economizar espaço, mantenha o código do form e utils que já existe no seu arquivo)
-
-# ... (Mantenha Meu Perfil e Change Password iguais) ...
-
 class MeuPerfilForm(FlaskForm):
     nome_completo = StringField('Nome Completo', validators=[DataRequired()])
     email = StringField('E-mail', validators=[DataRequired(), Email()])
@@ -54,7 +48,12 @@ class MeuPerfilForm(FlaskForm):
     posto_graduacao = SelectField('Posto/Graduação', choices=[], validators=[DataRequired()]) 
     turma_id = SelectField('Turma', coerce=int, validators=[WTFormsOptional()])
     is_rr = RadioField("Efetivo da Reserva Remunerada (RR)", choices=[('True', 'Sim'), ('False', 'Não')], coerce=lambda x: x == 'True', default=False)
-    foto_perfil = FileField('Alterar Foto de Perfil', validators=[FileAllowed(['jpg', 'jpeg', 'png', 'gif', 'webp'], 'Apenas imagens!')])
+    
+    # Aceita arquivos, sem limite manual de tamanho aqui (o Service vai comprimir)
+    foto_perfil = FileField('Alterar Foto de Perfil', validators=[
+        FileAllowed(['jpg', 'jpeg', 'png', 'gif', 'webp'], 'Apenas imagens!')
+    ])
+    
     current_password = PasswordField('Senha Atual', validators=[WTFormsOptional()])
     new_password = PasswordField('Nova Senha', validators=[WTFormsOptional(), EqualTo('confirm_new_password', message='As senhas não correspondem.')])
     confirm_new_password = PasswordField('Confirmar Nova Senha', validators=[WTFormsOptional()])
@@ -141,12 +140,14 @@ def meu_perfil():
             if current_user.role == 'aluno' and current_user.aluno_profile:
                 current_user.aluno_profile.turma_id = form.turma_id.data
                 if form.foto_perfil.data:
+                    # O serviço agora cuida da compressão
                     success, message = AlunoService.update_profile_picture(current_user.aluno_profile.id, form.foto_perfil.data)
                     flash(message, 'success' if success else 'danger')
 
             if current_user.role == 'instrutor' and hasattr(current_user, 'instrutor_profile') and current_user.instrutor_profile:
                 current_user.instrutor_profile.is_rr = form.is_rr.data
                 if form.foto_perfil.data:
+                    # O serviço agora cuida da compressão
                     success, message = InstrutorService.update_profile_picture(current_user.instrutor_profile.id, form.foto_perfil.data)
                     flash(message, 'success' if success else 'danger')
 
@@ -160,6 +161,7 @@ def meu_perfil():
 
     return render_template("meu_perfil.html", user=current_user, form=form, postos_data=posto_graduacao_structured)
 
+# ... (restante do arquivo inalterado) ...
 @user_bp.route("/change-password-ajax", methods=["POST"])
 @login_required
 def change_password_ajax():
@@ -190,7 +192,6 @@ def change_password_ajax():
 @user_bp.route("/criar-admin", methods=["GET", "POST"])
 @login_required
 def criar_admin_escola():
-    # Verifica permissão via escola atual
     school_id = UserService.get_current_school_id()
     if not (current_user.is_programador or current_user.is_admin_escola_in_school(school_id)):
         flash("Você não tem permissão para criar administradores.", "danger")
@@ -222,7 +223,6 @@ def criar_admin_escola():
 
             temp_pass = secrets.token_urlsafe(8)
             
-            # CRIAÇÃO: Usuário nasce com role global neutro 'aluno'
             user = User(
                 matricula=id_func,
                 username=username,
@@ -237,7 +237,6 @@ def criar_admin_escola():
             db.session.add(user)
             db.session.flush()
             
-            # ATRIBUIÇÃO: Role específico da escola
             UserService.set_user_role_for_school(user.id, school_id, "admin_escola")
             db.session.commit()
 
@@ -255,8 +254,6 @@ def criar_admin_escola():
 
     return render_template("criar_admin_escola.html")
 
-# ===== Rotas de Gestão de Papéis (REFATORADAS) =====
-
 @user_bp.route("/admins", methods=["GET"])
 @login_required
 @admin_required 
@@ -265,13 +262,6 @@ def listar_admins_escola():
     if not school_id:
         flash("Selecione uma escola para gerenciar usuários.", "warning")
         return redirect(url_for('main.dashboard'))
-
-    # ORDENAÇÃO INTELIGENTE:
-    # Prioridade:
-    # 1. Admin Geral (admin_escola)
-    # 2. Chefes SENS/CAL (admin_sens, admin_cal)
-    # 3. Instrutores (instrutor)
-    # 4. Outros/Alunos (aluno, etc)
     
     role_priority = case(
         (UserSchool.role == 'admin_escola', 1),
@@ -281,8 +271,6 @@ def listar_admins_escola():
         else_=4
     )
 
-    # Busca TODOS os usuários vinculados a esta escola (não removemos mais os alunos)
-    # Isso permite que todos apareçam na lista para filtro e gestão.
     results = db.session.execute(
         select(User, UserSchool)
         .join(UserSchool)
@@ -290,7 +278,6 @@ def listar_admins_escola():
         .order_by(role_priority, User.nome_completo)
     ).all()
     
-    # Passa 'usuarios_com_role' para o template
     return render_template("listar_admins_escola.html", usuarios_com_role=results)
 
 
@@ -322,7 +309,6 @@ def alterar_papel_usuario(user_id):
         flash("Papel inválido selecionado.", "danger")
         return redirect(url_for('user.listar_admins_escola'))
 
-    # CORREÇÃO: Usa o serviço para atualizar SOMENTE na escola atual
     success, msg = UserService.set_user_role_for_school(user.id, school_id, novo_role)
     
     if success:

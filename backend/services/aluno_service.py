@@ -17,34 +17,42 @@ from ..models.turma import Turma
 from ..models.disciplina import Disciplina
 from ..models.historico_disciplina import HistoricoDisciplina
 from ..models.user_school import UserSchool
-from utils.image_utils import allowed_file
+from utils.image_utils import allowed_file, compress_image_to_memory
 from utils.normalizer import normalize_name
 
-# Importação para garantir o contexto da sessão (Correção do Bug)
+# Importação para garantir o contexto da sessão
 from .user_service import UserService
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 
 
 def _save_profile_picture(file):
-    """Valida e salva a imagem de perfil; retorna o nome do arquivo salvo ou uma mensagem de erro."""
+    """Valida, COMPRIME e salva a imagem de perfil."""
     if not file:
         return None, "Nenhum arquivo enviado."
     
-    file.stream.seek(0)
+    # Valida extensão básica
     if not allowed_file(file.filename, file.stream, ALLOWED_EXTENSIONS):
         return None, "Tipo de arquivo de imagem não permitido."
     
+    # COMPRESSÃO AUTOMÁTICA (256x256, Qualidade 60, JPEG)
+    compressed_file = compress_image_to_memory(file, max_size=(256, 256), quality=60)
+    
+    if not compressed_file:
+        return None, "Erro ao processar a imagem. O arquivo pode estar corrompido."
+
     try:
-        filename = secure_filename(file.filename)
-        ext = filename.rsplit('.', 1)[1].lower()
+        # Gera nome único
+        filename = secure_filename(compressed_file.filename)
+        ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else 'jpg'
         unique_filename = f"{uuid.uuid4()}.{ext}"
+        
         upload_folder = os.path.join(current_app.static_folder, 'uploads', 'profile_pics')
         os.makedirs(upload_folder, exist_ok=True)
         file_path = os.path.join(upload_folder, unique_filename)
         
-        file.stream.seek(0)
-        file.save(file_path)
+        # Salva o arquivo COMPRIMIDO
+        compressed_file.save(file_path)
         
         return unique_filename, "Arquivo salvo com sucesso"
     except Exception as e:
@@ -55,21 +63,18 @@ def _save_profile_picture(file):
 class AlunoService:
     @staticmethod
     def get_all_alunos(user, nome_turma=None, search_term=None, page=1, per_page=15):
-        # Pega a escola ativa
         active_school_id = UserService.get_current_school_id()
 
         if not active_school_id:
-            # Retorna lista vazia se não houver escola selecionada
             return db.paginate(select(Aluno).where(db.false()), page=page, per_page=per_page)
 
         stmt = (
             select(Aluno)
             .join(User, Aluno.user_id == User.id)
-            .join(Turma, Aluno.turma_id == Turma.id) # JOIN CRUCIAL
+            .join(Turma, Aluno.turma_id == Turma.id) 
             .where(
                 User.is_active.is_(True),
                 User.role == 'aluno',
-                # CORREÇÃO "MATRÍCULA 2": Filtra pela escola da TURMA do aluno
                 Turma.school_id == active_school_id
             )
             .options(
@@ -99,7 +104,6 @@ class AlunoService:
         active_school = UserService.get_current_school_id()
         aluno = db.session.get(Aluno, aluno_id)
         
-        # Segurança: só retorna se a turma do aluno pertencer à escola atual
         if aluno and aluno.turma and aluno.turma.school_id == active_school:
             return aluno
         return None
@@ -111,7 +115,7 @@ class AlunoService:
             return False, "Aluno não encontrado ou pertence a outra escola."
 
         if file:
-            # Remove a foto antiga se não for a padrão
+            # Remove a foto antiga
             if aluno.foto_perfil and aluno.foto_perfil != 'default.png':
                 old_path = os.path.join(current_app.static_folder, 'uploads', 'profile_pics', aluno.foto_perfil)
                 if os.path.exists(old_path):
@@ -120,7 +124,7 @@ class AlunoService:
                     except Exception as e:
                         current_app.logger.error(f"Não foi possível remover a foto antiga: {e}")
 
-            # Salva a nova foto
+            # Salva a nova foto já comprimida
             filename, msg = _save_profile_picture(file)
             if filename:
                 aluno.foto_perfil = filename
@@ -144,7 +148,6 @@ class AlunoService:
             return False, "Todos os campos de dados básicos são obrigatórios."
 
         try:
-            # Verifica se a nova turma pertence à escola atual
             new_turma = db.session.get(Turma, turma_id_val)
             if not new_turma or new_turma.school_id != UserService.get_current_school_id():
                 return False, "Turma inválida ou de outra escola."
