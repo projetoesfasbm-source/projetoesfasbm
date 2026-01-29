@@ -384,51 +384,6 @@ width: 100%; transition: all 0.2s ease-in-out; font-size: 1rem !important; font-
 .answer-option input[type="radio"]:checked+label { background-color: var(--color-primary); color: var(--color-white); border-color: var(--color-primary); font-weight: 600 !important;
 }
 
-/* ==========================================================================
-   15. Layout Adaptativo e Correções Mobile
-   ========================================================================== */
-
-.btn-group { display: flex; gap: 0.5rem;
-align-items: center; justify-content: flex-end; }
-.sidebar-toggle { display: none; background: none; border: none; font-size: 1.75rem; color: var(--color-text); cursor: pointer;
-}
-.sidebar-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); z-index: 1999;
-opacity: 0; visibility: hidden; transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out; }
-.sidebar-overlay.active { opacity: 1; visibility: visible;
-}
-
-@media (max-width: 991.98px) {
-    .main-content { margin-left: 0; }
-    .sidebar { transform: translateX(-100%);
-z-index: 2000; box-shadow: 5px 0 15px rgba(0,0,0,0.2); top: 0; height: 100vh; }
-    .sidebar.open { transform: translateX(0);
-}
-    .top-navbar { left: 0; }
-    .top-navbar-left-items { flex-grow: 0;
-} /* Permite que os itens da direita tenham espaço */
-    .top-navbar .sidebar-toggle { display: block;
-}
-    .user-info { display: none; }
-    .content-wrapper, .table-container { padding: 1rem;
-}
-    .content-header h1 { font-size: 1.5rem; }
-    .top-navbar-title { display: none;
-}
-
-    .table-styled thead { display: none; }
-    .table-styled tr { display: block;
-border: 1px solid var(--color-border); border-radius: 8px; margin-bottom: 1rem; background-color: var(--color-white); box-shadow: var(--shadow-soft);
-}
-    .table-styled td { display: flex; justify-content: space-between; align-items: center; text-align: right; border-bottom: 1px solid #f1f5f9;
-border-right: none; }
-    .table-styled td:before { content: attr(data-label); font-weight: 600; text-align: left; padding-right: 1rem; color: var(--color-secondary);
-}
-    .table-styled td:last-child { border-bottom: none; }
-    .btn-group { flex-wrap: wrap; justify-content: flex-end;
-}
-    .navbar { min-height: 120px; background-size: contain; background-color: var(--color-secondary); }
-}
-
 .slot-observacao { font-style: italic; font-size: 0.75rem; color: #4b5563;
 margin-top: 4px; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .module-card-link { text-decoration: none; color: inherit; display: flex; flex-direction: column;
@@ -490,21 +445,148 @@ body.no-sidebar .content-wrapper {
 }
 
 /* ==========================================================================
-   18. Correções de Modais e Ajustes Mobile (IPHONE FIX - V2)
+   15. Layout Adaptativo e Correções Mobile (PROFESSIONAL FIX)
    ========================================================================== */
 
-/* 1. Correção do iPhone (Notch/Safe Area):
-   Garante que a barra não fique escondida atrás do relógio/bateria.
-*/
-.top-navbar {
-    padding-top: env(safe-area-inset-top);
-    height: calc(var(--top-navbar-height) + env(safe-area-inset-top));
-    z-index: 1030 !important; /* Acima do conteúdo, abaixo do menu */
+.btn-group { display: flex; gap: 0.5rem; align-items: center; justify-content: flex-end; }
+.sidebar-toggle { display: none; background: none; border: none; font-size: 1.5rem; color: var(--color-text); cursor: pointer; padding: 0; margin-right: 0.5rem;}
+.sidebar-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); z-index: 1999; opacity: 0; visibility: hidden; transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out; }
+.sidebar-overlay.active { opacity: 1; visibility: visible; }
+
+@media (max-width: 991.98px) {
+    /* 1. Reset e Layout da Barra */
+    .top-navbar {
+        left: 0;
+        height: auto !important; /* Deixa altura flexível se precisar */
+        min-height: 60px;
+        padding: 0.5rem 1rem !important;
+        padding-top: max(0.5rem, env(safe-area-inset-top)) !important; /* Proteção Notch iPhone */
+        background-color: #ffffff !important; /* Fundo Sólido */
+        backdrop-filter: none !important;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05) !important;
+        display: flex;
+        align-items: center;
+    }
+
+    .top-navbar-content {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px; /* Espaço mínimo entre Esquerda e Direita */
+    }
+
+    /* 2. Área Esquerda (Menu + Título) */
+    .top-navbar-left-items {
+        flex: 1; /* Ocupa o espaço restante */
+        min-width: 0; /* ESSENCIAL para o texto cortar (...) */
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        justify-content: flex-start;
+    }
+
+    .sidebar-toggle {
+        display: block !important;
+        font-size: 1.4rem;
+        padding: 0;
+        border: none;
+        background: transparent;
+        color: var(--color-text);
+        flex-shrink: 0;
+    }
+
+    /* Nome da Escola - Com Truncagem (...) */
+    .top-navbar-title {
+        display: block !important; /* Forçar exibição */
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: var(--color-primary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis; /* Adiciona ... */
+        margin: 0;
+        line-height: 1.2;
+    }
+    
+    .school-name-display {
+        font-size: inherit; /* Herda do pai */
+    }
+
+    /* 3. Área Direita (Ícones) */
+    .top-navbar-right-items {
+        flex-shrink: 0; /* Impede que os botões espremam */
+        display: flex;
+        align-items: center;
+        gap: 12px; /* Espaçamento confortável para dedo */
+    }
+
+    /* Sino */
+    .notification-bell {
+        font-size: 1.3rem;
+    }
+
+    /* Avatar */
+    .user-avatar {
+        width: 32px;
+        height: 32px;
+        font-size: 0.8rem;
+        margin: 0;
+        border: 2px solid #e2e8f0;
+    }
+    
+    .user-info { display: none !important; }
+
+    /* Botão Sair (Transformação em Ícone) */
+    .top-navbar-right-items .btn-outline-danger {
+        font-size: 0 !important; /* Esconde texto "Sair" */
+        width: 34px;
+        height: 34px;
+        padding: 0 !important;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        border-color: #fee2e2;
+        background-color: #fff1f2;
+    }
+
+    /* Ícone Sair (FontAwesome) */
+    .top-navbar-right-items .btn-outline-danger::before {
+        content: "\f2f5"; /* Icon Sign Out */
+        font-family: "Font Awesome 6 Free";
+        font-weight: 900;
+        font-size: 14px;
+        color: var(--color-danger);
+    }
+
+    /* Ajuste Conteúdo Principal */
+    .main-content {
+        margin-left: 0;
+        padding-top: calc(60px + env(safe-area-inset-top)); /* Espaço para navbar */
+    }
+
+    /* Sidebar Off-canvas */
+    .sidebar {
+        transform: translateX(-100%);
+        z-index: 2000 !important;
+        top: 0;
+        height: 100vh;
+    }
+    .sidebar.open {
+        transform: translateX(0);
+    }
+    
+    /* Tabelas Responsivas em Card */
+    .table-styled thead { display: none; }
+    .table-styled tr { display: block; border: 1px solid var(--color-border); border-radius: 8px; margin-bottom: 1rem; background: #fff; }
+    .table-styled td { display: flex; justify-content: space-between; border-bottom: 1px solid #f1f5f9; padding: 0.75rem; text-align: right; }
+    .table-styled td::before { content: attr(data-label); font-weight: 600; text-align: left; margin-right: auto; }
 }
 
-.main-content {
-    padding-top: calc(var(--top-navbar-height) + env(safe-area-inset-top) + 1rem);
-}
+/* ==========================================================================
+   18. Correções de Modais e Ajustes Mobile (IPHONE FIX - V2)
+   ========================================================================== */
 
 /* 2. Correção do Menu (Sidebar)
    O z-index precisa ser MAIOR que o overlay (que é 1999) para não ficar "escuro/bloqueado".
