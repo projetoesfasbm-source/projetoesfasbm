@@ -3,6 +3,9 @@
 {% block title %}Justiça e Disciplina{% endblock %}
 
 {% block content %}
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
+
 {% set school_type = 'ctsp' %}
 {% if g.active_school and g.active_school.npccal_type %}
     {% set school_type = g.active_school.npccal_type|lower %}
@@ -112,11 +115,11 @@
                                     </div>
 
                                     <div class="mb-2" id="box_regras_npccal">
-                                        <label class="small">Selecione a Regra</label>
-                                        <select id="regraSelect" name="regra_id" class="form-select" onchange="atualizarTextoInteligente()">
+                                        <label class="small">Pesquisar Falta (Código ou Descrição)</label>
+                                        <select id="regraSelect" name="regra_id" class="form-select" onchange="atualizarTextoInteligente()" placeholder="Digite para pesquisar a regra...">
                                             <option value="">-- Selecione a Falta --</option>
                                             {% for regra in fatos_predefinidos %}
-                                            <option value="{{ regra.id }}" data-desc="no item {{ regra.codigo }} '{{ regra.descricao }}'">{{ regra.codigo }} - {{ regra.descricao[:60] }}...</option>
+                                            <option value="{{ regra.id }}" data-desc="no item {{ regra.codigo }} '{{ regra.descricao }}'">{{ regra.codigo }} - {{ regra.descricao }}</option>
                                             {% endfor %}
                                         </select>
                                     </div>
@@ -191,6 +194,8 @@
     .justice-options { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
     .justice-content { display: none; }
     .justice-content.active { display: block; }
+    /* Ajuste para o Tom Select não ficar cortado */
+    .ts-control { min-height: 38px; border-radius: 0.375rem; }
 </style>
 
 <div class="modal fade" id="modalAnalise" tabindex="-1" aria-hidden="true">
@@ -235,6 +240,14 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
 
+    // --- INICIALIZAÇÃO DO BUSCADOR (Tom Select) ---
+    var controlRegra = new TomSelect("#regraSelect", {
+        create: false,
+        sortField: { field: "text", direction: "asc" },
+        allowEmptyOption: true,
+        maxOptions: 1000
+    });
+
     // --- LÓGICA DAS ABAS (TABS) ---
     document.querySelectorAll('.justice-option-btn').forEach(btn => {
         btn.addEventListener('click', function(e) {
@@ -242,21 +255,18 @@ document.addEventListener('DOMContentLoaded', function() {
             document.querySelectorAll('.justice-option-btn').forEach(b => b.classList.remove('active'));
             document.querySelectorAll('.justice-content').forEach(c => c.classList.remove('active'));
             this.classList.add('active');
-            document.getElementById(this.dataset.target).classList.add('active');
+            const target = document.getElementById(this.dataset.target);
+            if(target) target.classList.add('active');
         });
     });
 
     // --- LÓGICA CORRETA PARA EXPANDIR O FORMULÁRIO DE ANÁLISE (INLINE) ---
     document.body.addEventListener('click', function(event) {
-        // Verifica se clicou no botão ou no ícone/texto dentro dele
         const btn = event.target.closest('.js-toggle-analise-form');
-
         if (btn) {
             const targetId = btn.getAttribute('data-target-form');
             const formContainer = document.querySelector(targetId);
-
             if (formContainer) {
-                // Alterna a visibilidade
                 if (formContainer.style.display === 'none' || formContainer.style.display === '') {
                     formContainer.style.display = 'block';
                     btn.querySelector('.js-toggle-text').textContent = 'Ocultar';
@@ -270,12 +280,10 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Toggle do campo Pontos no Modal
     window.togglePontos = function(val) {
         document.getElementById('divPontos').style.display = (val === 'punir') ? 'block' : 'none';
     };
 
-    // --- LÓGICA DA NOVA INFRAÇÃO (Scripts existentes mantidos) ---
     window.toggleTiposInfracao = function() {
         const isNPCCAL = document.getElementById('rad_npccal').checked;
         const isRDBM = document.getElementById('rad_rdbm').checked;
@@ -290,7 +298,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (isNPCCAL) {
             boxRegras.style.display = 'block';
             boxManual.style.display = 'none';
-            selectRegra.setAttribute('required', 'required');
+            // Para Tom Select, habilitar o elemento original
+            if (controlRegra) controlRegra.enable();
             inputManual.removeAttribute('required');
             inputManual.value = '';
             hiddenOrigem.value = 'NPCCAL';
@@ -298,8 +307,10 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
             boxRegras.style.display = 'none';
             boxManual.style.display = 'block';
-            selectRegra.removeAttribute('required');
-            selectRegra.value = "";
+            if (controlRegra) {
+                controlRegra.clear();
+                controlRegra.disable();
+            }
             inputManual.setAttribute('required', 'required');
             if (isRDBM) { hiddenOrigem.value = 'RDBM'; hiddenCrime.value = 'false'; }
             else { hiddenOrigem.value = 'NPCCAL'; hiddenCrime.value = 'true'; }
