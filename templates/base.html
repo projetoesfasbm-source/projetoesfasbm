@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
 
-    <link rel="manifest" href="{{ url_for('static', filename='manifest.json', v='6.0') }}">
+    {# ATUALIZADO: v7.3 #}
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json', v='7.3') }}">
 
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
@@ -13,10 +14,10 @@
 
     <meta name="theme-color" content="{{ site_config.primary_color or '#3b82f6' }}">
 
-    <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/brasaoappcel.png', v='6.0') }}">
-    <link rel="apple-touch-icon" sizes="152x152" href="{{ url_for('static', filename='img/brasaoappcel.png', v='6.0') }}">
-    <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='img/brasaoappcel.png', v='6.0') }}">
-    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/brasaoappcel.png', v='6.0') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/brasaoappcel.png', v='7.3') }}">
+    <link rel="apple-touch-icon" sizes="152x152" href="{{ url_for('static', filename='img/brasaoappcel.png', v='7.3') }}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='img/brasaoappcel.png', v='7.3') }}">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/brasaoappcel.png', v='7.3') }}">
 
     <title>{% block title %}SisGEn{% endblock %}</title>
     <meta name="csrf-token" content="{{ csrf_token() }}">
@@ -32,7 +33,8 @@
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
 
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='6.0') }}">
+    {# ATUALIZADO: v7.3 #}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='7.3') }}">
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
@@ -42,7 +44,44 @@
             --secondary-color: {{ site_config.secondary_color or '#1a232c' }};
         }
 
-        /* Botão de instalar */
+        /* --- BARRA DE ATUALIZAÇÃO DO PWA (Mantida) --- */
+        #pwa-update-bar {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background-color: #1e3a8a;
+            color: white;
+            z-index: 100000;
+            padding: 12px 16px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            align-items: center;
+            justify-content: space-between;
+            animation: slideDown 0.5s ease-out;
+        }
+        
+        @keyframes slideDown {
+            from { transform: translateY(-100%); }
+            to { transform: translateY(0); }
+        }
+
+        #pwa-update-bar p { margin: 0; font-size: 0.9rem; font-weight: 500; }
+        
+        #btn-refresh-pwa {
+            background-color: #10b981;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            cursor: pointer;
+            text-transform: uppercase;
+            margin-left: 10px;
+        }
+
+        /* Botão de instalar original */
         #btnInstalar {
             display: none;
             position: fixed;
@@ -127,6 +166,11 @@
 </head>
 <body class="{% if not current_user.is_authenticated %}no-sidebar{% endif %}">
 
+    <div id="pwa-update-bar">
+        <p><i class="fas fa-sync-alt fa-spin me-2"></i> Nova versão disponível!</p>
+        <button id="btn-refresh-pwa">Atualizar</button>
+    </div>
+
     {% if current_user.is_authenticated %}
     <header class="top-navbar">
         <div class="top-navbar-content">
@@ -134,34 +178,49 @@
                 <button class="sidebar-toggle" id="sidebarToggle">☰</button>
 
                 <div class="top-navbar-title">
-                    <span class="school-name-display">
-                        {% if session.get('view_as_school_name') %}
-                            {{ session.get('view_as_school_name') }}
-                        {% elif current_user.role == 'super_admin' %}
-                            Sistema de Gerenciamento de Ensino - Departamento de Educação e Cultura
+                    {# --- LÓGICA DE NOME DA ESCOLA (CORREÇÃO MOBILE) --- #}
+                    {% set full_name = '' %}
+                    {% if session.get('view_as_school_name') %}
+                        {% set full_name = session.get('view_as_school_name') %}
+                    {% elif current_user.role == 'super_admin' %}
+                        {% set full_name = "Sistema de Gerenciamento de Ensino - DEC" %}
+                    {% else %}
+                        {% set session_active_id = session.get('active_school_id') %}
+                        {% set visual_school_name = namespace(value=None) %}
+                        {% if session_active_id and current_user.user_schools %}
+                            {% for vinculo in current_user.user_schools %}
+                                {% if vinculo.school_id|string == session_active_id|string %}
+                                    {% set visual_school_name.value = vinculo.school.nome %}
+                                {% endif %}
+                            {% endfor %}
+                        {% endif %}
+                        
+                        {% if visual_school_name.value %}
+                            {% set full_name = visual_school_name.value %}
+                        {% elif current_school %}
+                            {% set full_name = current_school.nome %}
+                        {% elif active_school %}
+                            {% set full_name = active_school.nome %}
                         {% else %}
-                            {% set session_active_id = session.get('active_school_id') %}
-                            {% set visual_school_name = namespace(value=None) %}
-                            {% if session_active_id and current_user.user_schools %}
-                                {% for vinculo in current_user.user_schools %}
-                                    {% if vinculo.school_id|string == session_active_id|string %}
-                                        {% set visual_school_name.value = vinculo.school.nome %}
-                                    {% endif %}
-                                {% endfor %}
-                            {% endif %}
-                            {% if visual_school_name.value %}
-                                {{ visual_school_name.value }}
-                            {% elif current_school %}
-                                {{ current_school.nome }}
-                            {% elif active_school %}
-                                {{ active_school.nome }}
-                            {% else %}
-                                Sistema de Gerenciamento de Ensino
-                            {% endif %}
+                            {% set full_name = "SisGEn" %}
+                        {% endif %}
+                    {% endif %}
+
+                    {# 1. Desktop: Mostra tudo #}
+                    <span class="school-name-display d-none d-lg-block">
+                        {{ full_name }}
+                    </span>
+
+                    {# 2. Mobile: Mostra só a sigla (depois do " - ") #}
+                    <span class="school-name-display d-lg-none">
+                        {% if ' - ' in full_name %}
+                            {{ full_name.split(' - ', 1)[1] }}
+                        {% else %}
+                            {{ full_name }}
                         {% endif %}
                     </span>
                 </div>
-                </div>
+            </div>
 
             <div class="top-navbar-right-items">
                 <div class="dropdown">
@@ -249,8 +308,6 @@
                     <div class="nav-separator">ACADÊMICO</div>
                     <a href="{{ url_for('horario.index') }}" class="nav-link {% if request.endpoint and ('horario.' in request.endpoint or 'semana.' in request.endpoint) %}active{% endif %}"><div class="nav-icon">📅</div> Quadro Horário</a>
                     
-                    {# LINK EXCLUSIVO PARA INSTRUTOR: ASSINAR DIÁRIOS #}
-                    {# CORREÇÃO: SENS, CAL e ADMIN também podem ser instrutores e precisam ver este link #}
                     {% if current_user.is_instrutor_in_school(active_sid) or current_user.is_sens_in_school(active_sid) or current_user.is_cal_in_school(active_sid) or current_user.role == 'super_admin' %}
                         <a href="{{ url_for('diario.listar_pendentes') }}" class="nav-link {% if request.endpoint and 'diario.' in request.endpoint %}active{% endif %}">
                             <div class="nav-icon">✍️</div> Validar Diários
@@ -263,7 +320,7 @@
                     <a href="{{ url_for('admin_escola.espelho_diarios') }}" class="nav-link {% if request.endpoint == 'admin_escola.espelho_diarios' %}active{% endif %}"><div class="nav-icon">📖</div> Diários de Classe (Adm)</a>
                 {% endif %}
 
-                {# --- JUSTIÇA E DISCIPLINA: VISÍVEL PARA CAL, ADMIN E ALUNOS --- #}
+                {# JUSTIÇA E DISCIPLINA #}
                 {% if current_user.is_cal_in_school(active_sid) or current_user.role == 'aluno' or current_user.role == 'super_admin' or current_user.is_programador %}
                     <div class="nav-separator">JUSTIÇA E DISCIPLINA</div>
                     <a href="{{ url_for('justica.index') }}" class="nav-link {% if request.endpoint and 'justica.' in request.endpoint %}active{% endif %}"><div class="nav-icon">⚖️</div> Justiça e Disciplina</a>
@@ -286,7 +343,6 @@
                     <div class="nav-separator">PORTAL DO ALUNO</div>
                     <a href="{{ url_for('historico.index') }}" class="nav-link {% if request.endpoint and 'historico.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📊</div> Meu CTSP</a>
                     
-                    {# VERIFICAÇÃO DE CHEFE DE TURMA - SÓ APARECE SE TIVER O CARGO #}
                     {% if current_user.is_chefe_turma %}
                     <a href="{{ url_for('chefe.painel') }}" class="nav-link {% if request.endpoint and 'chefe.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📋</div> Chefe de Turma</a>
                     {% endif %}
@@ -297,7 +353,6 @@
                     <a href="{{ url_for('super_admin.dashboard') }}" class="nav-link {% if request.endpoint and 'super_admin.' in request.endpoint %}active{% endif %}"><div class="nav-icon">👑</div> Painel Super Admin</a>
                  {% endif %}
 
-                 {# ADMIN GERAL DA ESCOLA OU PROGRAMADOR #}
                  {% if current_user.is_admin_escola_in_school(active_sid) or current_user.is_programador %}
                     <div class="nav-separator">ADMINISTRAÇÃO</div>
                     <a href="{{ url_for('tools.index') }}" class="nav-link {% if request.endpoint and ('tools.' in request.endpoint or 'assets.' in request.endpoint or 'customizer.' in request.endpoint) %}active{% endif %}"><div class="nav-icon">🛠️</div> Ferramentas Admin</a>
@@ -335,6 +390,7 @@
         </main>
     </div>
 
+    {# MANTIDO: Modais de senha #}
     {% if current_user.is_authenticated %}
     <div class="modal fade" id="changePasswordModal" tabindex="-1" aria-labelledby="changePasswordModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
@@ -399,13 +455,47 @@
         }
 
         if ('serviceWorker' in navigator) {
-            window.addEventListener('load', function() {
-                navigator.serviceWorker.register('/sw.js?v=4.0').then(function(registration) {
-                    console.log('ServiceWorker registration successful with scope: ', registration.scope);
-                }, function(err) {
-                    console.log('ServiceWorker registration failed: ', err);
+            window.addEventListener('load', () => {
+                // ATUALIZADO: v7.3 para forçar nova versão
+                navigator.serviceWorker.register('/sw.js?v=7.3').then(reg => {
+                    console.log('SW Registrado:', reg);
+
+                    if (reg.waiting) {
+                        showUpdateBar(reg.waiting);
+                        return;
+                    }
+
+                    reg.addEventListener('updatefound', () => {
+                        const newWorker = reg.installing;
+                        newWorker.addEventListener('statechange', () => {
+                            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                showUpdateBar(newWorker);
+                            }
+                        });
+                    });
                 });
             });
+
+            let refreshing;
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                if (refreshing) return;
+                window.location.reload();
+                refreshing = true;
+            });
+        }
+
+        function showUpdateBar(worker) {
+            const bar = document.getElementById('pwa-update-bar');
+            if (bar) {
+                bar.style.display = 'flex';
+                const btn = document.getElementById('btn-refresh-pwa');
+                if (btn) {
+                    btn.onclick = () => {
+                        worker.postMessage({ type: 'SKIP_WAITING' });
+                        bar.innerHTML = '<p>Atualizando...</p>';
+                    };
+                }
+            }
         }
 
         document.addEventListener('DOMContentLoaded', function() {

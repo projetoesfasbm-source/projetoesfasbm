@@ -1,17 +1,16 @@
-// ATUALIZADO: v6.0 para forçar o celular a baixar o novo ícone
-const CACHE_NAME = 'esfas-app-v6.0';
+// ATUALIZADO: v7.3 - Força atualização da lógica de nome de escola
+const CACHE_NAME = 'esfas-app-v7.4';
 
 const urlsToCache = [
   '/',
   '/static/css/style.css',
   '/static/manifest.json',
-  '/static/img/brasaoappcel.png', // <--- NOVO ÍCONE AQUI
-  '/static/img/brasao.png',       // Mantive o brasão normal caso seja usado dentro do site
+  '/static/img/brasaoappcel.png',
+  '/static/img/brasao.png',
   '/offline.html'
 ];
 
 self.addEventListener('install', event => {
-  self.skipWaiting(); // Força o novo Service Worker a assumir imediatamente
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
@@ -29,6 +28,12 @@ self.addEventListener('fetch', event => {
   );
 });
 
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
 self.addEventListener('activate', event => {
   const cacheWhitelist = [CACHE_NAME];
   event.waitUntil(
@@ -40,6 +45,8 @@ self.addEventListener('activate', event => {
           }
         })
       );
+    }).then(() => {
+      return self.clients.claim();
     })
   );
 });
