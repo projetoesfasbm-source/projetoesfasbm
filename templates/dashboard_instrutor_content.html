@@ -1,0 +1,128 @@
+<div class="container-fluid p-0">
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card bg-primary text-white h-100">
+                <div class="card-body text-center">
+                    <h6 class="text-uppercase text-white-50 small fw-bold mb-2">Aulas Ministradas (Histórico)</h6>
+                    <div class="display-4 fw-bold">{{ total_ministrados }}</div>
+                    <div class="small">Períodos/Tempos</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-success text-white h-100">
+                <div class="card-body text-center">
+                    <h6 class="text-uppercase text-white-50 small fw-bold mb-2">Aulas Programadas (Futuro)</h6>
+                    <div class="display-4 fw-bold">{{ total_futuros }}</div>
+                    <div class="small">Períodos/Tempos</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-light border h-100">
+                <div class="card-body">
+                    <h6 class="text-uppercase text-muted small fw-bold mb-2">Por Disciplina (Total)</h6>
+                    <ul class="list-unstyled mb-0 small" style="max-height: 80px; overflow-y: auto;">
+                        {% for disc, qtd in stats_disciplinas.items() %}
+                        <li class="d-flex justify-content-between border-bottom py-1">
+                            <span class="text-truncate me-2">{{ disc }}</span>
+                            <span class="fw-bold">{{ qtd }}h/a</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <ul class="nav nav-tabs nav-fill mb-3" id="dashInstrutorTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active fw-bold" id="futuras-tab" data-bs-toggle="tab" data-bs-target="#futuras" type="button" role="tab">
+                📅 O que vem por aí ({{ aulas_futuras|length }})
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link fw-bold text-secondary" id="passadas-tab" data-bs-toggle="tab" data-bs-target="#passadas" type="button" role="tab">
+                🕒 Histórico Realizado ({{ aulas_passadas|length }})
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="dashInstrutorTabsContent">
+
+        <div class="tab-pane fade show active" id="futuras" role="tabpanel">
+            {% if aulas_futuras %}
+            <div class="table-responsive">
+                <table class="table table-hover table-striped align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Data</th>
+                            <th>Dia</th>
+                            <th>Tempos</th>
+                            <th>Turma</th>
+                            <th>Disciplina</th>
+                            <th>Local</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for aula in aulas_futuras %}
+                        <tr>
+                            <td class="fw-bold text-primary">{{ aula.data.strftime('%d/%m/%Y') }}</td>
+                            <td>{{ aula.dia_semana }}</td>
+                            <td><span class="badge bg-secondary">{{ aula.tempos }}</span></td>
+                            <td><strong>{{ aula.turma }}</strong></td>
+                            <td>
+                                {{ aula.disciplina }}
+                                {% if aula.is_auxiliar %}
+                                    <span class="badge bg-info text-dark ms-1">Auxiliar</span>
+                                {% endif %}
+                            </td>
+                            <td class="small text-muted">{{ aula.sala or '-' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+                <div class="alert alert-info text-center py-4">
+                    <h5>Nenhuma aula futura agendada.</h5>
+                    <p>Você está com a agenda livre por enquanto.</p>
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="tab-pane fade" id="passadas" role="tabpanel">
+            {% if aulas_passadas %}
+            <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle" style="font-size: 0.9rem;">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Data</th>
+                            <th>Tempos</th>
+                            <th>Turma</th>
+                            <th>Disciplina</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for aula in aulas_passadas %}
+                        <tr>
+                            <td>{{ aula.data.strftime('%d/%m/%Y') }}</td>
+                            <td>{{ aula.tempos }}</td>
+                            <td>{{ aula.turma }}</td>
+                            <td>{{ aula.disciplina }}</td>
+                            <td><span class="badge bg-success">Ministrada</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+                <div class="text-center text-muted py-4">
+                    Nenhum histórico de aulas encontrado nesta escola.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>

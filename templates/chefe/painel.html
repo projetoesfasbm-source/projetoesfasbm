@@ -7,26 +7,12 @@
         <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-center p-4">
             <div>
                 <h2 class="fw-bold mb-0 text-dark"><i class="fas fa-clipboard-list text-primary"></i> Diário de Classe</h2>
-                <span class="text-muted">
-                    {# PROTEÇÃO TOTAL: Verifica múltiplas fontes para o nome da turma #}
-                    Turma: <strong>{% if turma %}{{ turma.nome }}{% elif aluno and aluno.turma %}{{ aluno.turma.nome }}{% else %}Não Selecionada{% endif %}</strong> | 
-                    {% if is_admin %}
-                        Acesso: <strong>Administrador</strong>
-                    {% else %}
-                        {# PROTEÇÃO: Só tenta acessar o nome se o objeto aluno e user existirem #}
-                        Chefe: <strong>{{ aluno.user.nome_de_guerra if (aluno and aluno.user) else "N/A" }}</strong>
-                    {% endif %}
-                </span>
+                <span class="text-muted">Turma: <strong>{{ aluno.turma.nome }}</strong> | Chefe: <strong>{{ aluno.user.nome_de_guerra }}</strong></span>
             </div>
             <div class="mt-3 mt-md-0">
                 <form action="{{ url_for('chefe.painel') }}" method="GET" class="d-flex align-items-center bg-light p-2 rounded border">
-                    {# AJUSTE: Garante que o ID da turma seja enviado na busca por data quando for admin #}
-                    {% if is_admin and turma %}
-                        <input type="hidden" name="turma_id" value="{{ turma.id }}">
-                    {% endif %}
-                    
                     <input type="date" name="data" class="form-control border-0 bg-transparent fw-bold text-dark" 
-                           value="{{ data_selecionada.strftime('%Y-%m-%d') if data_selecionada else '' }}" 
+                           value="{{ data_selecionada.strftime('%Y-%m-%d') }}" 
                            onchange="this.form.submit()"
                            style="min-width: 150px;">
                     
@@ -43,7 +29,7 @@
         <i class="fas fa-exclamation-triangle fa-2x me-3"></i>
         <div>
             <h5 class="alert-heading fw-bold">Sem Quadro Horário Definido</h5>
-            <p class="mb-0">Não existe uma <strong>Semana</strong> cadastrada no sistema para esta data. Contate a administração.</p>
+            <p class="mb-0">Não existe uma <strong>Semana</strong> cadastrada no sistema para a data {{ data_selecionada.strftime('%d/%m/%Y') }}. Contate a administração.</p>
         </div>
     </div>
     {% else %}
@@ -65,7 +51,7 @@
                         {% endif %}
                     </div>
 
-                    <h3 class="card-title fw-bold text-dark mb-1">{{ grupo.disciplina.nome if grupo.disciplina else "Disciplina" }}</h3>
+                    <h3 class="card-title fw-bold text-dark mb-1">{{ grupo.disciplina.nome }}</h3>
                     
                     <div class="d-flex align-items-center text-secondary mb-4">
                         <div class="bg-light rounded-circle p-2 me-2 d-flex align-items-center justify-content-center border" style="width: 40px; height: 40px;">
@@ -73,13 +59,12 @@
                         </div>
                         <div>
                             <small class="d-block text-uppercase fw-bold text-muted" style="font-size: 0.7rem;">Instrutor</small>
-                            <span class="fw-bold text-dark">{{ grupo.nome_instrutor if grupo.nome_instrutor else "Não definido" }}</span>
+                            <span class="fw-bold text-dark">{{ grupo.nome_instrutor }}</span>
                         </div>
                     </div>
 
                     {% if grupo.status != 'concluido' %}
-                        {# AJUSTE: Link dinâmico para garantir que o admin leve o ID da turma para a tela de registro #}
-                        <a href="{{ url_for('chefe.registrar_aula', primeiro_horario_id=grupo.primeiro_horario_id, data=data_selecionada, turma_id=turma.id if is_admin else (aluno.turma_id if aluno else None)) }}" 
+                        <a href="{{ url_for('chefe.registrar_aula', primeiro_horario_id=grupo.primeiro_horario_id, data=data_selecionada) }}" 
                            class="btn btn-primary w-100 py-2 fw-bold text-uppercase stretched-link shadow-sm">
                             <i class="fas fa-edit me-2"></i> Realizar Chamada
                         </a>
@@ -97,7 +82,7 @@
                 <i class="fas fa-calendar-day fa-4x"></i>
             </div>
             <h4 class="text-secondary fw-bold">Dia Livre</h4>
-            <p class="text-muted">Nenhuma aula encontrada para esta data.</p>
+            <p class="text-muted">Nenhuma aula encontrada para {{ data_selecionada.strftime('%d/%m/%Y') }} ({{ data_selecionada.strftime('%A') }}).</p>
         </div>
         {% endfor %}
     </div>

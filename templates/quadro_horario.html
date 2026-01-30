@@ -1,130 +1,150 @@
-{% extends "base.html" %}{% block title %}Quadro Horário{% endblock %}{% block content %}<div class="horario-header-container">{% if priority_active %}
-<div class="alert alert-danger d-flex flex-column mb-3 shadow-sm border-danger" role="alert">
-    <div class="d-flex align-items-center mb-2">
-        <div class="me-3 bg-danger text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 50px; height: 50px;">
-            <i class="fas fa-lock fa-lg"></i>
+{% extends "base.html" %}
+{% block title %}Quadro Horário{% endblock %}
+
+{% block content %}
+<div class="horario-header-container">
+    {% if priority_active %}
+    <div class="alert alert-danger d-flex flex-column mb-3 shadow-sm border-danger" role="alert">
+        <div class="d-flex align-items-center mb-2">
+            <div class="me-3 bg-danger text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 50px; height: 50px;">
+                <i class="fas fa-lock fa-lg"></i>
+            </div>
+            <div>
+                <h5 class="alert-heading mb-0 fw-bold">Modo de Agendamento Prioritário Ativo</h5>
+                <small>O quadro desta semana está <strong>bloqueado</strong>. Apenas as disciplinas selecionadas abaixo podem realizar agendamentos (em qualquer turma).</small>
+            </div>
         </div>
-        <div>
-            <h5 class="alert-heading mb-0 fw-bold">Modo de Agendamento Prioritário Ativo</h5>
-            <small>O quadro desta semana está <strong>bloqueado</strong>. Apenas as disciplinas selecionadas abaixo podem realizar agendamentos (em qualquer turma).</small>
+        
+        {% if priority_allowed_names %}
+        <div class="mt-2 ms-5 ps-2">
+            <strong>Disciplinas Permitidas:</strong>
+            <ul class="mb-0 mt-1">
+                {% for nome in priority_allowed_names %}
+                    <li>{{ nome }}</li>
+                {% else %}
+                    <li><em>Nenhuma disciplina selecionada.</em></li>
+                {% endfor %}
+            </ul>
         </div>
-    </div>
-    
-    {% if priority_allowed_names %}
-    <div class="mt-2 ms-5 ps-2">
-        <strong>Disciplinas Permitidas:</strong>
-        <ul class="mb-0 mt-1">
-            {% for nome in priority_allowed_names %}
-                <li>{{ nome }}</li>
-            {% else %}
-                <li><em>Nenhuma disciplina selecionada.</em></li>
-            {% endfor %}
-        </ul>
+        {% endif %}
     </div>
     {% endif %}
-</div>
-{% endif %}
 
-<div class="page-title-with-controls">
-    <div class="title-group">
-        <h1>Quadro Horário</h1>
-        <p>Selecione um pelotão, ciclo e semana para visualizar o horário correspondente.</p>
-    </div>
-    
-    <div class="controls-group d-flex gap-2 flex-wrap justify-content-end align-items-center">
+    <div class="page-title-with-controls">
+        <div class="title-group">
+            <h1>Quadro Horário</h1>
+            <p>Selecione um pelotão, ciclo e semana para visualizar o horário correspondente.</p>
+        </div>
         
-        {# 1. BOTÃO DATA DE FORMATURA (NOVO) #}
-        {% if turma_atual and current_user.is_sens %}
-            <button type="button" class="btn btn-info text-white shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#modalDataFormatura">
-                <i class="fas fa-graduation-cap me-1"></i> 
-                {% if turma_atual.data_formatura %}
-                    Formatura: {{ turma_atual.data_formatura.strftime('%d/%m/%Y') }}
-                {% else %}
-                    Definir Data Formatura
-                {% endif %}
-            </button>
-        {% endif %}
-
-        {# 2. BOTÃO DE GERENCIAR SEMANAS #}
-        {% if current_user.is_sens %}
-            <a href="{{ url_for('semana.gerenciar_semanas') }}" class="btn btn-dark shadow-sm fw-bold">
-                <i class="fas fa-calendar-plus me-1"></i> Gerenciar Semanas / Ciclos
-            </a>
-        {% endif %}
-
-        {# 3. BOTÕES QUE DEPENDEM DE UMA SEMANA JÁ EXISTIR #}
-        {% if semana_selecionada %}
+        <div class="controls-group d-flex gap-2 flex-wrap justify-content-end align-items-center">
             
-            {# BOTÕES ADMINISTRATIVOS #}
-            {% if current_user.is_sens %}
-                <button type="button" class="btn {% if priority_active %}btn-danger text-white{% else %}btn-warning{% endif %} fw-bold shadow-sm" 
-                        data-bs-toggle="modal" data-bs-target="#priorityModal">
-                    <i class="fas fa-star me-1"></i> 
-                    {% if priority_active %}Prioridade ATIVA{% else %}Configurar Prioridade{% endif %}
-                </button>
+            {# --- NOVO BOTÃO: DASHBOARD DO INSTRUTOR (DESTAQUE MÁXIMO) --- #}
+            {% if current_user.is_instrutor_in_school(session.get('active_school_id')|int) %}
+            <button type="button" class="btn btn-warning btn-lg shadow fw-bold border border-dark text-dark" onclick="abrirDashboardInstrutor()">
+                <i class="fas fa-chart-pie me-2"></i> PAINEL DO INSTRUTOR
+            </button>
+            {% endif %}
+            {# ------------------------------------------------------------- #}
 
-                <a href="{{ url_for('horario.exportar_pdf', pelotao=pelotao_selecionado, semana_id=semana_selecionada.id) }}" class="btn btn-danger" target="_blank">
-                    <i class="fas fa-file-pdf me-1"></i> PDF
+            {# 1. BOTÃO DATA DE FORMATURA #}
+            {% if turma_atual and current_user.is_sens %}
+                <button type="button" class="btn btn-info text-white shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#modalDataFormatura">
+                    <i class="fas fa-graduation-cap me-1"></i> 
+                    {% if turma_atual.data_formatura %}
+                        Formatura: {{ turma_atual.data_formatura.strftime('%d/%m/%Y') }}
+                    {% else %}
+                        Definir Data Formatura
+                    {% endif %}
+                </button>
+            {% endif %}
+
+            {# 2. BOTÃO DE GERENCIAR SEMANAS #}
+            {% if current_user.is_sens %}
+                <a href="{{ url_for('semana.gerenciar_semanas') }}" class="btn btn-dark shadow-sm fw-bold">
+                    <i class="fas fa-calendar-plus me-1"></i> Gerenciar Semanas / Ciclos
                 </a>
             {% endif %}
-            
-            {# CORREÇÃO: Admin/Sens tem acesso total, Instrutor depende de permissão #}
-            {% if can_schedule_in_this_turma or current_user.is_sens %}
-                <button type="button" class="btn btn-primary" onclick="openConfirmationModal()">
-                    Agendar/Desmarcar Aulas
-                </button>
-            {% else %}
-                {% if current_user.role == 'instrutor' %}
-                    <button class="btn btn-secondary" disabled title="Você não tem permissão nesta turma ou o modo prioridade está ativo para outras disciplinas.">
-                        <i class="fas fa-lock"></i> Agendamento Bloqueado
-                    </button>
-                {% endif %}
-            {% endif %}
 
-        {% endif %}
+            {# 3. BOTÕES QUE DEPENDEM DE UMA SEMANA JÁ EXISTIR #}
+            {% if semana_selecionada %}
+                
+                {# BOTÕES ADMINISTRATIVOS #}
+                {% if current_user.is_sens %}
+                    <button type="button" class="btn {% if priority_active %}btn-danger text-white{% else %}btn-warning{% endif %} fw-bold shadow-sm" 
+                            data-bs-toggle="modal" data-bs-target="#priorityModal">
+                        <i class="fas fa-star me-1"></i> 
+                        {% if priority_active %}Prioridade ATIVA{% else %}Configurar Prioridade{% endif %}
+                    </button>
+
+                    <a href="{{ url_for('horario.exportar_pdf', pelotao=pelotao_selecionado, semana_id=semana_selecionada.id) }}" class="btn btn-danger" target="_blank">
+                        <i class="fas fa-file-pdf me-1"></i> PDF
+                    </a>
+                {% endif %}
+                
+                {# CORREÇÃO: Admin/Sens tem acesso total, Instrutor depende de permissão #}
+                {% if can_schedule_in_this_turma or current_user.is_sens %}
+                    <button type="button" class="btn btn-primary" onclick="openConfirmationModal()">
+                        Agendar/Desmarcar Aulas
+                    </button>
+                {% else %}
+                    {% if current_user.role == 'instrutor' %}
+                        <button class="btn btn-secondary" disabled title="Você não tem permissão nesta turma ou o modo prioridade está ativo para outras disciplinas.">
+                            <i class="fas fa-lock"></i> Agendamento Bloqueado
+                        </button>
+                    {% endif %}
+                {% endif %}
+
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="filters-bar card p-3 mb-4 shadow-sm">
+        <form method="GET" action="{{ url_for('horario.index') }}" class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label for="ciclo_id" class="form-label fw-bold">Ciclo</label>
+                <select name="ciclo" id="ciclo_id" class="form-select" onchange="this.form.submit()">
+                    {% for ciclo in ciclos %}
+                    <option value="{{ ciclo.id }}" {% if ciclo.id == ciclo_selecionado %}selected{% endif %}>{{ ciclo.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-md-4">
+                <label for="semana_id" class="form-label fw-bold">Semana</label>
+                <select name="semana_id" id="semana_id" class="form-select" onchange="this.form.submit()">
+                    {% for semana in todas_as_semanas %}
+                    <option value="{{ semana.id }}" {% if semana_selecionada and semana.id == semana_selecionada.id %}selected{% endif %}>
+                        {{ semana.nome }} ({{ semana.data_inicio.strftime('%d/%m') }} a {{ semana.data_fim.strftime('%d/%m') }})
+                        {% if semana.priority_active %} 🔒 {% endif %}
+                    </option>
+                    {% else %}
+                        <option value="">Nenhuma semana disponível</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-md-3">
+                <label for="pelotao" class="form-label fw-bold">Pelotão</label>
+                <select name="pelotao" id="pelotao" class="form-select" onchange="this.form.submit()">
+                    {% for turma in todas_as_turmas %}
+                    <option value="{{ turma.nome }}" {% if turma.nome == pelotao_selecionado %}selected{% endif %}>{{ turma.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="col-md-2">
+               <button type="submit" class="btn btn-primary w-100"><i class="fas fa-sync-alt"></i> Atualizar</button>
+            </div>
+        </form>
     </div>
 </div>
 
-<div class="filters-bar card p-3 mb-4 shadow-sm">
-    <form method="GET" action="{{ url_for('horario.index') }}" class="row g-3 align-items-end">
-        <div class="col-md-3">
-            <label for="ciclo_id" class="form-label fw-bold">Ciclo</label>
-            <select name="ciclo" id="ciclo_id" class="form-select" onchange="this.form.submit()">
-                {% for ciclo in ciclos %}
-                <option value="{{ ciclo.id }}" {% if ciclo.id == ciclo_selecionado %}selected{% endif %}>{{ ciclo.nome }}</option>
-                {% endfor %}
-            </select>
-        </div>
-
-        <div class="col-md-4">
-            <label for="semana_id" class="form-label fw-bold">Semana</label>
-            <select name="semana_id" id="semana_id" class="form-select" onchange="this.form.submit()">
-                {% for semana in todas_as_semanas %}
-                <option value="{{ semana.id }}" {% if semana_selecionada and semana.id == semana_selecionada.id %}selected{% endif %}>
-                    {{ semana.nome }} ({{ semana.data_inicio.strftime('%d/%m') }} a {{ semana.data_fim.strftime('%d/%m') }})
-                    {% if semana.priority_active %} 🔒 {% endif %}
-                </option>
-                {% else %}
-                    <option value="">Nenhuma semana disponível</option>
-                {% endfor %}
-            </select>
-        </div>
-
-        <div class="col-md-3">
-            <label for="pelotao" class="form-label fw-bold">Pelotão</label>
-            <select name="pelotao" id="pelotao" class="form-select" onchange="this.form.submit()">
-                {% for turma in todas_as_turmas %}
-                <option value="{{ turma.nome }}" {% if turma.nome == pelotao_selecionado %}selected{% endif %}>{{ turma.nome }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        
-        <div class="col-md-2">
-           <button type="submit" class="btn btn-primary w-100"><i class="fas fa-sync-alt"></i> Atualizar</button>
-        </div>
-    </form>
-</div>
-</div><div class="horario-content">{% if not horario_matrix %}<div class="empty-state"><div class="empty-icon">📅</div><h3>Nenhum horário para exibir</h3>        {% if current_user.is_sens and not todas_as_semanas %}
+<div class="horario-content">
+{% if not horario_matrix %}
+    <div class="empty-state">
+        <div class="empty-icon">📅</div>
+        <h3>Nenhum horário para exibir</h3>
+        {% if current_user.is_sens and not todas_as_semanas %}
             <p class="text-danger">Não há semanas cadastradas neste ciclo.</p>
             <a href="{{ url_for('semana.gerenciar_semanas') }}" class="btn btn-primary mt-3 btn-lg">
                 <i class="fas fa-plus-circle"></i> Criar Primeira Semana
@@ -226,7 +246,11 @@
     </div>
     {% endif %}
 {% endif %}
-</div>{% endblock %}{% block modals %}{# MODAL DATA FORMATURA (NOVO) #}
+</div>
+{% endblock %}
+
+{% block modals %}
+{# MODAL DATA FORMATURA (NOVO) #}
 {% if turma_atual %}
 <div class="modal fade" id="modalDataFormatura" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
@@ -381,7 +405,68 @@
 </div>
 {% endif %}
 
+{# --- NOVO MODAL: DASHBOARD INSTRUTOR --- #}
+<div class="modal fade" id="dashboardInstrutorModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title fw-bold">
+                    <i class="fas fa-user-tie me-2 text-primary"></i> Painel de Controle do Instrutor
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="dashboardInstrutorBody">
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <p class="mt-2 text-muted">Carregando suas informações...</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{# -------------------------------------- #}
+
 <script>
+    function abrirDashboardInstrutor() {
+        const modalEl = document.getElementById('dashboardInstrutorModal');
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+
+        const contentDiv = document.getElementById('dashboardInstrutorBody');
+        contentDiv.innerHTML = `
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status"></div>
+                <p class="mt-2 text-muted">Carregando suas informações...</p>
+            </div>
+        `;
+
+        fetch("{{ url_for('horario.dashboard_instrutor') }}")
+            .then(async response => {
+                if (!response.ok) {
+                    // Pega o erro real do servidor para exibir
+                    const text = await response.text();
+                    throw new Error(`Erro ${response.status}: ${text.substring(0, 200)}...`); 
+                }
+                return response.text();
+            })
+            .then(html => {
+                contentDiv.innerHTML = html;
+            })
+            .catch(err => {
+                // Exibe o erro de forma legível dentro do modal
+                contentDiv.innerHTML = `
+                    <div class="alert alert-danger text-center">
+                        <h4 class="alert-heading"><i class="fas fa-exclamation-triangle"></i> Ops! Algo deu errado.</h4>
+                        <p class="mb-0 fw-bold">${err.message}</p>
+                        <hr>
+                        <p class="mb-0 small text-muted">Verifique se o arquivo: <strong>templates/horario/dashboard_instrutor_content.html</strong> existe na pasta correta.</p>
+                    </div>`;
+            });
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
         const semanaSelector = document.getElementById('semana_selector');
         if (semanaSelector) {

@@ -19,10 +19,9 @@ class AdminToolsService:
         """
         try:
             # Busca os objetos User completos
-            # ANEXADO: User.id == UserSchool.user_id no join para resolver ambiguidade Mapper
             students = db.session.scalars(
                 select(User)
-                .join(UserSchool, User.id == UserSchool.user_id)
+                .join(UserSchool)
                 .where(
                     User.role == 'aluno',
                     UserSchool.school_id == school_id
@@ -51,10 +50,9 @@ class AdminToolsService:
         associados a uma escola específica.
         """
         try:
-            # ANEXADO: User.id == UserSchool.user_id no join para resolver ambiguidade Mapper
             instructors = db.session.scalars(
                 select(User)
-                .join(UserSchool, User.id == UserSchool.user_id)
+                .join(UserSchool)
                 .where(
                     User.role == 'instrutor',
                     UserSchool.school_id == school_id
@@ -84,10 +82,9 @@ class AdminToolsService:
         try:
             # Busca disciplinas através das turmas da escola
             # Também usamos o ORM aqui para garantir que Horários e Históricos sejam limpos
-            # ANEXADO: Disciplina.turma_id == Turma.id no join para segurança
             disciplines = db.session.scalars(
                 select(Disciplina)
-                .join(Turma, Disciplina.turma_id == Turma.id)
+                .join(Turma)
                 .where(Turma.school_id == school_id)
             ).all()
 

@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 from flask_login import login_required, current_user
 from sqlalchemy import select, or_
 from sqlalchemy.orm import joinedload
@@ -70,7 +70,10 @@ def listar_alunos():
         flash('Nenhuma escola associada ou selecionada.', 'danger')
         return redirect(url_for('main.dashboard'))
 
-    # 2. QUERY BLINDADA
+    # 2. QUERY BLINDADA (Substitui AlunoService.get_all_alunos para garantir visibilidade)
+    # Explicação: Fazemos JOIN com UserSchool para garantir que o aluno pertence à escola.
+    # Usamos LEFT JOIN com Turma para que alunos "sem turma" não sumam da lista.
+
     query = db.session.query(Aluno).join(User).join(UserSchool).outerjoin(Turma).options(
         joinedload(Aluno.turma),
         joinedload(Aluno.user)
@@ -91,6 +94,7 @@ def listar_alunos():
         )
 
     if turma_filtrada:
+        # Se o filtro for numérico (ID), filtra por ID. Se for texto, tenta filtrar por nome.
         if turma_filtrada.isdigit():
              query = query.filter(Aluno.turma_id == int(turma_filtrada))
         else:
@@ -134,6 +138,7 @@ def editar_aluno(aluno_id):
 
     # Carrega turmas apenas da escola atual
     turmas = TurmaService.get_turmas_by_school(school_id)
+    # Adiciona opção "Sem Turma"
     turma_choices = [(0, '-- Selecione --')] + [(t.id, t.nome) for t in turmas]
     form.turma_id.choices = turma_choices
 
@@ -164,16 +169,20 @@ def editar_aluno(aluno_id):
         form.opm.data = aluno.opm
         form.turma_id.data = aluno.turma_id if aluno.turma_id else 0
 
+    # Atualização dinâmica de choices no POST
     if form.is_submitted():
          categoria_selecionada = form.posto_categoria.data
          if categoria_selecionada in posto_graduacao_structured:
              form.posto_graduacao.choices = [(p, p) for p in posto_graduacao_structured[categoria_selecionada]]
 
     if form.validate_on_submit():
+        # Lógica de Salvamento Manual para garantir controle
         try:
+            # User Info
             aluno.user.nome_completo = form.nome_completo.data
             aluno.user.email = form.email.data
 
+            # Posto
             cat = form.posto_categoria.data
             grad = form.posto_graduacao.data
             if cat == 'Outros' and grad == 'Outro':
@@ -181,9 +190,14 @@ def editar_aluno(aluno_id):
             else:
                 aluno.user.posto_graduacao = grad
 
+            # Aluno Info
             aluno.opm = form.opm.data
             t_id = form.turma_id.data
             aluno.turma_id = t_id if t_id and t_id != 0 else None
+
+            if form.funcao_atual.data:
+                 # Se houver lógica específica para função, implemente aqui ou chame service
+                 pass
 
             db.session.commit()
             flash('Aluno atualizado com sucesso!', 'success')
@@ -202,47 +216,36 @@ def editar_funcao_aluno(aluno_id):
     flash(message, 'success' if success else 'danger')
     return redirect(url_for('aluno.editar_aluno', aluno_id=aluno_id))
 
-# =========================================================================
-# FUNÇÃO EXCLUIR: ANEXADA COM CORREÇÃO DE AMBIGUIDADE (SQLAlchemy Mapper)
-# =========================================================================
 @aluno_bp.route('/excluir/<int:aluno_id>', methods=['POST'])
 @login_required
 @school_admin_or_programmer_required
 def excluir_aluno(aluno_id):
     form = DeleteForm()
     if form.validate_on_submit():
+        # Remove apenas o vínculo da escola atual para segurança
         school_id = session.get('active_school_id') or UserService.get_current_school_id()
         if not school_id:
              flash('Erro de escola.', 'danger')
              return redirect(url_for('aluno.listar_alunos'))
 
         try:
-            # 1. Buscamos o Aluno de forma isolada via GET para evitar o join ambíguo
-            aluno = db.session.get(Aluno, aluno_id)
-
-            if not aluno:
-                flash('Aluno não encontrado.', 'danger')
-                return redirect(url_for('aluno.listar_alunos'))
-
-            # 2. Verificamos se ele pertence à escola ativa consultando o vínculo separadamente
-            vinculo = db.session.query(UserSchool).filter(
-                UserSchool.user_id == aluno.user_id,
+            aluno = db.session.query(Aluno).join(UserSchool).filter(
+                Aluno.id == aluno_id,
                 UserSchool.school_id == school_id
             ).first()
 
-            if vinculo:
-                # 3. Deletamos o perfil e o vínculo individualmente
-                # Isso dispara os relacionamentos de cascata definidos no Model
+            if aluno:
+                # Remove Aluno Profile
                 db.session.delete(aluno)
-                db.session.delete(vinculo)
+                # Remove Vínculo UserSchool
+                db.session.query(UserSchool).filter_by(user_id=aluno.user_id, school_id=school_id).delete()
                 db.session.commit()
                 flash('Aluno removido da escola.', 'success')
             else:
-                flash('Aluno não encontrado nesta escola.', 'danger')
+                flash('Aluno não encontrado.', 'danger')
 
         except Exception as e:
             db.session.rollback()
-            current_app.logger.error(f"Erro ao excluir: {str(e)}")
             flash(f'Erro ao excluir: {str(e)}', 'danger')
     else:
         flash('Falha CSRF.', 'danger')

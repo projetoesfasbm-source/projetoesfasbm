@@ -180,11 +180,9 @@
     }
 
     function marcarTodos(estado) {
-        // Seleciona todos os master-switches e aplica o estado, disparando a atualização visual
         document.querySelectorAll('[id^="master-"]').forEach(m => {
-            const alunoId = m.id.replace('master-', '');
             m.checked = estado;
-            toggleMaster(alunoId);
+            m.dispatchEvent(new Event('change'));
         });
     }
 </script>
