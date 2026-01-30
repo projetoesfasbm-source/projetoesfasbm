@@ -1,15 +1,15 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session, Response, current_app
 from flask_login import login_required, current_user
-from sqlalchemy import select, or_, desc
+from sqlalchemy import select, or_, desc, and_
 from sqlalchemy.orm import joinedload
-from datetime import date, datetime
+from datetime import date, datetime, timedelta # Adicionado timedelta
 from flask_wtf import FlaskForm
 from wtforms import HiddenField, SubmitField
 from wtforms.validators import DataRequired
 from weasyprint import HTML
 from urllib.parse import quote
 import json
-import traceback  # Importante para ver o erro real no modal
+import traceback
 
 from ..models.database import db
 from ..models.horario import Horario
@@ -71,14 +71,17 @@ def index():
         
         todas_as_turmas = TurmaService.get_turmas_by_school(school_id)
         
-        # --- LÓGICA DE FILTRO PARA INSTRUTOR ---
+        # --- LÓGICA DE FILTRO PARA INSTRUTOR (BASEADO EM VÍNCULO MÚLTIPLO) ---
+        # Se NÃO for Admin/SENS na escola atual
         if not current_user.is_sens and not current_user.is_admin_escola and not current_user.is_programador:
+            # Busca TODOS os IDs de instrutor deste usuário (para cobrir múltiplos vínculos/escolas)
             my_instrutor_ids = db.session.scalars(
                 select(Instrutor.id).where(Instrutor.user_id == current_user.id)
             ).all()
 
             if my_instrutor_ids:
                 try:
+                    # CORREÇÃO CRÍTICA: Join via relacionamentos (IDs) e não por String (nome == pelotao)
                     turmas_vinculadas = db.session.scalars(
                         select(Turma)
                         .join(Disciplina, Disciplina.turma_id == Turma.id)
@@ -99,6 +102,7 @@ def index():
                 except Exception as e:
                     current_app.logger.error(f"Erro ao filtrar turmas do instrutor: {e}")
                     pass
+        # -------------------------------------------------------------
 
         turma_selecionada_nome = request.args.get('pelotao', session.get('ultima_turma_visualizada'))
         
@@ -107,25 +111,35 @@ def index():
         elif turma_selecionada_nome and turma_selecionada_nome not in [t.nome for t in todas_as_turmas]:
              turma_selecionada_nome = todas_as_turmas[0].nome if todas_as_turmas else None
 
+    # RECUPERAR OBJETO TURMA
     turma_atual_obj = None
     if turma_selecionada_nome:
         turma_atual_obj = db.session.scalar(select(Turma).where(Turma.nome == turma_selecionada_nome, Turma.school_id == school_id))
 
-    # 2. Ciclo e Semanas
+    # 2. Identificar Ciclo e Semanas
     ciclo_selecionado_id = request.args.get('ciclo', session.get('ultimo_ciclo_horario'), type=int)
-    ciclos = db.session.scalars(select(Ciclo).where(Ciclo.school_id == school_id).order_by(Ciclo.nome)).all()
+    
+    ciclos = db.session.scalars(
+        select(Ciclo).where(Ciclo.school_id == school_id).order_by(Ciclo.nome)
+    ).all()
+    
     if not ciclo_selecionado_id or ciclo_selecionado_id not in [c.id for c in ciclos]:
         ciclo_selecionado_id = ciclos[0].id if ciclos else None
+
     session['ultimo_ciclo_horario'] = ciclo_selecionado_id
     
     todas_as_semanas = []
     if ciclo_selecionado_id:
-        todas_as_semanas = db.session.scalars(select(Semana).where(Semana.ciclo_id == ciclo_selecionado_id).order_by(Semana.data_inicio.desc())).all()
+        todas_as_semanas = db.session.scalars(
+            select(Semana)
+            .where(Semana.ciclo_id == ciclo_selecionado_id)
+            .order_by(Semana.data_inicio.desc())
+        ).all()
     
     semana_id = request.args.get('semana_id')
     semana_selecionada = SemanaService.get_semana_selecionada(semana_id, ciclo_selecionado_id)
     
-    # 3. Grade Horária
+    # 3. Construir Grade Horária
     horario_matrix = None
     datas_semana = {}
     if turma_selecionada_nome and semana_selecionada:
@@ -133,7 +147,7 @@ def index():
         horario_matrix = HorarioService.construir_matriz_horario(turma_selecionada_nome, semana_selecionada.id, current_user)
         datas_semana = HorarioService.get_datas_da_semana(semana_selecionada)
 
-    # 4. Permissões
+    # 4. Lógica de Permissão de Agendamento (VÍNCULO MANDA)
     can_schedule_in_this_turma = False
     instrutor_turmas_vinculadas = []
     priority_active = False
@@ -142,31 +156,71 @@ def index():
 
     if school_id:
         try:
-            all_materias_names = db.session.scalars(select(Disciplina.materia).join(Turma).where(Turma.school_id == school_id).distinct().order_by(Disciplina.materia)).all()
-        except: all_materias_names = []
+            all_materias_names = db.session.scalars(
+                select(Disciplina.materia)
+                .join(Turma)
+                .where(Turma.school_id == school_id)
+                .distinct()
+                .order_by(Disciplina.materia)
+            ).all()
+        except Exception:
+            all_materias_names = []
 
     if semana_selecionada:
         priority_active = getattr(semana_selecionada, 'priority_active', False)
-        try: priority_allowed_names = json.loads(getattr(semana_selecionada, 'priority_disciplines', '[]') or '[]')
-        except: priority_allowed_names = []
+        try:
+            priority_allowed_names = json.loads(getattr(semana_selecionada, 'priority_disciplines', '[]') or '[]')
+        except:
+            priority_allowed_names = []
 
+        # REGRA 1: Admin/SENS da escola atual tem acesso irrestrito
         if current_user.is_sens or current_user.is_admin_escola or current_user.is_programador:
             can_schedule_in_this_turma = True
+            
+        # REGRA 2: VÍNCULO - Se tem perfil de instrutor, verifica se está vinculado à turma
         else:
-            my_instrutor_ids = db.session.scalars(select(Instrutor.id).where(Instrutor.user_id == current_user.id)).all()
+            # Busca TODOS os IDs de instrutor do usuário
+            my_instrutor_ids = db.session.scalars(
+                select(Instrutor.id).where(Instrutor.user_id == current_user.id)
+            ).all()
+            
             if my_instrutor_ids:
+                # CORREÇÃO CRÍTICA: Mesmo Fix do filtro inicial (Join por IDs)
                 instrutor_turmas_vinculadas = db.session.scalars(
-                    select(Turma).join(Disciplina, Disciplina.turma_id == Turma.id).join(DisciplinaTurma, DisciplinaTurma.disciplina_id == Disciplina.id)
-                    .where(Turma.school_id == school_id, or_(DisciplinaTurma.instrutor_id_1.in_(my_instrutor_ids), DisciplinaTurma.instrutor_id_2.in_(my_instrutor_ids)))
-                    .distinct().order_by(Turma.nome)
+                    select(Turma)
+                    .join(Disciplina, Disciplina.turma_id == Turma.id)
+                    .join(DisciplinaTurma, DisciplinaTurma.disciplina_id == Disciplina.id)
+                    .where(
+                        Turma.school_id == school_id,
+                        or_(
+                            DisciplinaTurma.instrutor_id_1.in_(my_instrutor_ids), 
+                            DisciplinaTurma.instrutor_id_2.in_(my_instrutor_ids)
+                        )
+                    )
+                    .distinct()
+                    .order_by(Turma.nome)
                 ).all()
                 
+                # Se a turma selecionada está na lista de vinculadas
                 if any(t.nome == turma_selecionada_nome for t in instrutor_turmas_vinculadas):
-                    if not priority_active: can_schedule_in_this_turma = True
+                    if not priority_active:
+                        can_schedule_in_this_turma = True
                     else:
                         if priority_allowed_names:
-                            query_match = select(DisciplinaTurma).join(Disciplina, DisciplinaTurma.disciplina_id == Disciplina.id).join(Turma, Disciplina.turma_id == Turma.id).where(Turma.nome == turma_selecionada_nome, Disciplina.materia.in_(priority_allowed_names), or_(DisciplinaTurma.instrutor_id_1.in_(my_instrutor_ids), DisciplinaTurma.instrutor_id_2.in_(my_instrutor_ids)))
-                            if db.session.execute(query_match).first(): can_schedule_in_this_turma = True
+                            # CORREÇÃO CRÍTICA: Join por IDs para validar prioridade
+                            query_match = select(DisciplinaTurma)\
+                                .join(Disciplina, DisciplinaTurma.disciplina_id == Disciplina.id)\
+                                .join(Turma, Disciplina.turma_id == Turma.id)\
+                                .where(
+                                    Turma.nome == turma_selecionada_nome,
+                                    Disciplina.materia.in_(priority_allowed_names),
+                                    or_(
+                                        DisciplinaTurma.instrutor_id_1.in_(my_instrutor_ids), 
+                                        DisciplinaTurma.instrutor_id_2.in_(my_instrutor_ids)
+                                    )
+                                )
+                            if db.session.execute(query_match).first():
+                                can_schedule_in_this_turma = True
 
     tempos, intervalos = _get_horario_context_data()
     all_disciplinas = [] 
@@ -190,7 +244,7 @@ def index():
                            priority_allowed_names=priority_allowed_names,
                            all_materias_names=all_materias_names)
 
-# --- NOVA ROTA DASHBOARD (COM TRATAMENTO DE ERRO E CAMINHO CORRIGIDO) ---
+# --- ROTA DO DASHBOARD (TOTALMENTE REESCRITA E CORRIGIDA) ---
 @horario_bp.route('/dashboard-instrutor', methods=['GET'])
 @login_required
 def dashboard_instrutor():
@@ -206,15 +260,18 @@ def dashboard_instrutor():
         if not instrutor:
             return "Perfil de instrutor não encontrado.", 404
 
-        # Busca TODAS as aulas deste instrutor nesta escola
+        # 1. BUSCA OTIMIZADA
+        # Trazemos Horario, Disciplina, Semana e Turma
         todas_aulas = db.session.scalars(
             select(Horario)
             .join(Disciplina)
+            .join(Semana) # Necessário para calcular a data
+            .join(Turma, Turma.nome == Horario.pelotao) # Join por STRING (pelotao == Turma.nome)
             .where(
-                Horario.school_id == school_id,
+                Turma.school_id == school_id,
                 or_(Horario.instrutor_id == instrutor.id, Horario.instrutor_id_2 == instrutor.id)
             )
-            .order_by(desc(Horario.data_aula), Horario.tempos)
+            .order_by(desc(Semana.data_inicio), Horario.dia_semana, Horario.periodo)
         ).all()
 
         hoje = date.today()
@@ -225,40 +282,60 @@ def dashboard_instrutor():
         total_futuros = 0
         stats_disciplinas = {}
 
+        # Mapa para converter dia da semana (string) em números para somar na data
+        mapa_dias = {
+            'Segunda-feira': 0, 'Terça-feira': 1, 'Quarta-feira': 2, 
+            'Quinta-feira': 3, 'Sexta-feira': 4, 'Sábado': 5, 'Domingo': 6
+        }
+
         for aula in todas_aulas:
-            # Conta períodos
-            qtd = len(aula.tempos.split(',')) if aula.tempos else 0
-            
+            # 2. CÁLCULO DA DATA REAL (Semana + Dia)
+            try:
+                delta_dias = mapa_dias.get(aula.dia_semana, 0)
+                if aula.semana and aula.semana.data_inicio:
+                    data_real = aula.semana.data_inicio + timedelta(days=delta_dias)
+                else:
+                    data_real = hoje # Fallback seguro
+            except:
+                data_real = hoje
+
+            # 3. CÁLCULO DOS TEMPOS E DISCIPLINA
+            lista_tempos = [str(p) for p in range(aula.periodo, aula.periodo + aula.duracao)]
+            tempos_str = ", ".join(lista_tempos)
+            qtd = aula.duracao
+
+            # CORREÇÃO: Usar .materia (conforme seu código original)
+            nome_materia = getattr(aula.disciplina, 'materia', 'Disciplina sem nome')
+
             info = {
                 'id': aula.id,
-                'data': aula.data_aula,
+                'data': data_real,
                 'dia_semana': aula.dia_semana,
-                'tempos': aula.tempos,
-                'disciplina': aula.disciplina.nome,
-                'turma': aula.turma.nome,
-                'sala': aula.sala_aula,
+                'tempos': tempos_str,
+                'disciplina': nome_materia,
+                'turma': aula.pelotao,
+                'sala': 'Sala de Aula', # Valor padrão
                 'qtd': qtd,
                 'is_auxiliar': (aula.instrutor_id_2 == instrutor.id)
             }
 
             # Estatística
-            disc_nome = aula.disciplina.nome
-            if disc_nome not in stats_disciplinas:
-                stats_disciplinas[disc_nome] = 0
-            stats_disciplinas[disc_nome] += qtd
+            if nome_materia not in stats_disciplinas:
+                stats_disciplinas[nome_materia] = 0
+            stats_disciplinas[nome_materia] += qtd
 
-            # Separação
-            if aula.data_aula < hoje:
+            # Separação Temporal
+            if data_real < hoje:
                 aulas_passadas.append(info)
                 total_ministrados += qtd
             else:
                 aulas_futuras.append(info)
                 total_futuros += qtd
 
+        # Ordenar futuras
         aulas_futuras.sort(key=lambda x: x['data'])
 
-        # CAMINHO CORRIGIDO: Deve bater com onde você salvou o arquivo HTML
-        # Se você salvou em 'templates/horario/', o caminho é este:
+        # RENDERIZA O TEMPLATE (NA PASTA HORARIO)
         return render_template(
             'horario/dashboard_instrutor_content.html', 
             instrutor=instrutor,
@@ -271,10 +348,9 @@ def dashboard_instrutor():
         )
 
     except Exception as e:
-        # Se der erro, mostra no modal
-        error_msg = f"ERRO INTERNO: {str(e)}\n\n{traceback.format_exc()}"
-        print(error_msg) # Loga no servidor
-        return error_msg, 500
+        # Debug no Console + Mensagem de Erro na Tela
+        print(traceback.format_exc())
+        return f"ERRO INTERNO: {str(e)}", 500
 
 @horario_bp.route('/save-priority-config', methods=['POST'])
 @login_required
@@ -371,6 +447,9 @@ def get_aula_details(horario_id):
 @horario_bp.route('/api/instrutores-vinculados/<pelotao>/<int:disciplina_id>')
 @login_required
 def get_instrutores_vinculados(pelotao, disciplina_id):
+    # CORREÇÃO CRÍTICA: Removido filtro por 'pelotao' string que causava o erro.
+    # O disciplina_id já é único e pertence a uma turma específica.
+    # Filtrar por disciplina_id é o suficiente e mais seguro.
     vinculo = db.session.scalar(
         select(DisciplinaTurma).options(
             joinedload(DisciplinaTurma.instrutor_1).joinedload(Instrutor.user), 
