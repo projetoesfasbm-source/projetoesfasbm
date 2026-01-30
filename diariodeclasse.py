@@ -7,17 +7,23 @@ from sqlalchemy import select
 
 app = create_app()
 with app.app_context():
-    # Localiza a turma pelo ID ou nome real para evitar erro de string
-    t = db.session.execute(select(Turma).where(Turma.nome.like('%9%'))).scalars().first()
-    if t:
-        print(f"Verificando Turma ID: {t.id} - Nome: {t.nome}")
-        
-        print("\n--- REGISTROS NO DIÁRIO (O que o aluno enviou) ---")
-        diarios = db.session.execute(select(DiarioClasse).filter_by(turma_id=t.id)).scalars().all()
-        for d in diarios:
-            print(f"Data: {d.data_aula} | Período: {d.periodo} | Disciplina ID: {d.disciplina_id} | Status: {d.status}")
+    # Buscando a Turma 9 pelo ID 45 que você confirmou
+    t_id = 45
+    print(f"--- ANALISANDO VÍNCULOS DA TURMA ID: {t_id} ---")
 
-        print("\n--- REGISTROS NO QUADRO DE HORÁRIOS (NPCCAL) ---")
-        horarios = db.session.execute(select(Horario).filter_by(pelotao=t.nome)).scalars().all()
-        for h in horarios:
-            print(f"Dia: {h.dia_semana} | Período: {h.periodo} | Disciplina ID: {h.disciplina_id} | Inst1: {h.instrutor_id} | Inst2: {h.instrutor_id_2}")
+    # 1. Ver o que está gravado nos Diários (enviados pelo aluno)
+    print("\n[TABELA DIARIO_CLASSE] - O que o aluno enviou:")
+    diarios = db.session.execute(
+        select(DiarioClasse).filter_by(turma_id=t_id).order_by(DiarioClasse.data_aula.desc())
+    ).scalars().all()
+    for d in diarios:
+        print(f"Data: {d.data_aula} | ID Disciplina: {d.disciplina_id} | Período: {d.periodo} | Status: {d.status}")
+
+    # 2. Ver o que está no Quadro de Horários para essa mesma turma
+    print("\n[TABELA HORARIOS] - O que está no Quadro Horário:")
+    turma = db.session.get(Turma, t_id)
+    horarios = db.session.execute(
+        select(Horario).filter_by(pelotao=turma.nome)
+    ).scalars().all()
+    for h in horarios:
+        print(f"Dia: {h.dia_semana} | ID Disciplina: {h.disciplina_id} | Período: {h.periodo} | Inst1 (ID): {h.instrutor_id} | Inst2 (ID): {h.instrutor_id_2}")
