@@ -1,3 +1,5 @@
+# backend/controllers/horario_controller.py
+
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session, Response, current_app
 from flask_login import login_required, current_user
 from sqlalchemy import select, or_
@@ -53,6 +55,7 @@ def _get_horario_context_data():
 @horario_bp.route('/')
 @login_required
 def index():
+    # 1. Identificar Turma e Escola
     if current_user.role == 'aluno' and not current_user.is_staff:
         if not current_user.aluno_profile or not current_user.aluno_profile.turma:
             flash("Você não está matriculado em nenhuma turma.", 'warning')
@@ -69,13 +72,17 @@ def index():
         
         todas_as_turmas = TurmaService.get_turmas_by_school(school_id)
         
+        # --- LÓGICA DE FILTRO PARA INSTRUTOR (BASEADO EM VÍNCULO MÚLTIPLO) ---
+        # Se NÃO for Admin/SENS na escola atual
         if not current_user.is_sens and not current_user.is_admin_escola and not current_user.is_programador:
+            # Busca TODOS os IDs de instrutor deste usuário (para cobrir múltiplos vínculos/escolas)
             my_instrutor_ids = db.session.scalars(
                 select(Instrutor.id).where(Instrutor.user_id == current_user.id)
             ).all()
 
             if my_instrutor_ids:
                 try:
+                    # CORREÇÃO CRÍTICA: Join via relacionamentos (IDs) e não por String (nome == pelotao)
                     turmas_vinculadas = db.session.scalars(
                         select(Turma)
                         .join(Disciplina, Disciplina.turma_id == Turma.id)
@@ -96,6 +103,7 @@ def index():
                 except Exception as e:
                     current_app.logger.error(f"Erro ao filtrar turmas do instrutor: {e}")
                     pass
+        # -------------------------------------------------------------
 
         turma_selecionada_nome = request.args.get('pelotao', session.get('ultima_turma_visualizada'))
         
@@ -104,11 +112,14 @@ def index():
         elif turma_selecionada_nome and turma_selecionada_nome not in [t.nome for t in todas_as_turmas]:
              turma_selecionada_nome = todas_as_turmas[0].nome if todas_as_turmas else None
 
+    # RECUPERAR OBJETO TURMA
     turma_atual_obj = None
     if turma_selecionada_nome:
         turma_atual_obj = db.session.scalar(select(Turma).where(Turma.nome == turma_selecionada_nome, Turma.school_id == school_id))
 
+    # 2. Identificar Ciclo e Semanas
     ciclo_selecionado_id = request.args.get('ciclo', session.get('ultimo_ciclo_horario'), type=int)
+    
     ciclos = db.session.scalars(
         select(Ciclo).where(Ciclo.school_id == school_id).order_by(Ciclo.nome)
     ).all()
@@ -129,6 +140,7 @@ def index():
     semana_id = request.args.get('semana_id')
     semana_selecionada = SemanaService.get_semana_selecionada(semana_id, ciclo_selecionado_id)
     
+    # 3. Construir Grade Horária
     horario_matrix = None
     datas_semana = {}
     if turma_selecionada_nome and semana_selecionada:
@@ -136,6 +148,7 @@ def index():
         horario_matrix = HorarioService.construir_matriz_horario(turma_selecionada_nome, semana_selecionada.id, current_user)
         datas_semana = HorarioService.get_datas_da_semana(semana_selecionada)
 
+    # 4. Lógica de Permissão de Agendamento (VÍNCULO MANDA)
     can_schedule_in_this_turma = False
     instrutor_turmas_vinculadas = []
     priority_active = False
@@ -161,14 +174,19 @@ def index():
         except:
             priority_allowed_names = []
 
+        # REGRA 1: Admin/SENS da escola atual tem acesso irrestrito
         if current_user.is_sens or current_user.is_admin_escola or current_user.is_programador:
             can_schedule_in_this_turma = True
+            
+        # REGRA 2: VÍNCULO - Se tem perfil de instrutor, verifica se está vinculado à turma
         else:
+            # Busca TODOS os IDs de instrutor do usuário
             my_instrutor_ids = db.session.scalars(
                 select(Instrutor.id).where(Instrutor.user_id == current_user.id)
             ).all()
             
             if my_instrutor_ids:
+                # CORREÇÃO CRÍTICA: Mesmo Fix do filtro inicial (Join por IDs)
                 instrutor_turmas_vinculadas = db.session.scalars(
                     select(Turma)
                     .join(Disciplina, Disciplina.turma_id == Turma.id)
@@ -184,11 +202,13 @@ def index():
                     .order_by(Turma.nome)
                 ).all()
                 
+                # Se a turma selecionada está na lista de vinculadas
                 if any(t.nome == turma_selecionada_nome for t in instrutor_turmas_vinculadas):
                     if not priority_active:
                         can_schedule_in_this_turma = True
                     else:
                         if priority_allowed_names:
+                            # CORREÇÃO CRÍTICA: Join por IDs para validar prioridade
                             query_match = select(DisciplinaTurma)\
                                 .join(Disciplina, DisciplinaTurma.disciplina_id == Disciplina.id)\
                                 .join(Turma, Disciplina.turma_id == Turma.id)\
@@ -225,68 +245,11 @@ def index():
                            priority_allowed_names=priority_allowed_names,
                            all_materias_names=all_materias_names)
 
-
-@horario_bp.route('/minhas-aulas')
-@login_required
-def minhas_aulas():
-    school_id = UserService.get_current_school_id()
-    
-    my_instrutor_ids = db.session.scalars(
-        select(Instrutor.id).where(Instrutor.user_id == current_user.id)
-    ).all()
-    
-    if not my_instrutor_ids and not current_user.is_programador:
-        flash("Você não possui um perfil de instrutor vinculado para ver aulas individuais.", "warning")
-        return redirect(url_for('horario.index'))
-        
-    ciclo_selecionado_id = request.args.get('ciclo', session.get('ultimo_ciclo_horario'), type=int)
-    ciclos = db.session.scalars(
-        select(Ciclo).where(Ciclo.school_id == school_id).order_by(Ciclo.nome)
-    ).all()
-    
-    if not ciclo_selecionado_id or ciclo_selecionado_id not in [c.id for c in ciclos]:
-        ciclo_selecionado_id = ciclos[0].id if ciclos else None
-    
-    session['ultimo_ciclo_horario'] = ciclo_selecionado_id
-    
-    todas_as_semanas = db.session.scalars(
-        select(Semana)
-        .where(Semana.ciclo_id == ciclo_selecionado_id)
-        .order_by(Semana.data_inicio.desc())
-    ).all() if ciclo_selecionado_id else []
-    
-    semana_id = request.args.get('semana_id')
-    semana_selecionada = SemanaService.get_semana_selecionada(semana_id, ciclo_selecionado_id)
-    
-    horario_matrix = None
-    datas_semana = {}
-    if semana_selecionada:
-        if hasattr(HorarioService, 'construir_matriz_instrutor'):
-            horario_matrix = HorarioService.construir_matriz_instrutor(my_instrutor_ids, semana_selecionada.id)
-        else:
-            horario_matrix = HorarioService.construir_matriz_horario(None, semana_selecionada.id, current_user)
-            
-        datas_semana = HorarioService.get_datas_da_semana(semana_selecionada)
-        
-    tempos, intervalos = _get_horario_context_data()
-    
-    return render_template('minhas_aulas.html', 
-                           horario_matrix=horario_matrix,
-                           semana_selecionada=semana_selecionada,
-                           todas_as_semanas=todas_as_semanas,
-                           ciclos=ciclos,
-                           ciclo_selecionado=ciclo_selecionado_id,
-                           datas_semana=datas_semana,
-                           tempos=tempos,
-                           intervalos=intervalos)
-
-
 @horario_bp.route('/save-priority-config', methods=['POST'])
 @login_required
 @admin_or_programmer_required
 def save_priority_config():
     return jsonify({'success': False, 'message': 'Use a rota /semana/<id>/salvar-prioridade'}), 404
-
 
 @horario_bp.route('/salvar-data-formatura', methods=['POST'])
 @login_required
@@ -319,7 +282,6 @@ def salvar_data_formatura():
         
     return redirect(url_for('horario.index', pelotao=turma.nome))
 
-
 @horario_bp.route('/exportar-pdf')
 @login_required
 @admin_or_programmer_required
@@ -348,7 +310,6 @@ def exportar_pdf():
         flash(f'Erro ao gerar PDF: {e}', 'danger')
         return redirect(url_for('horario.index', pelotao=pelotao, semana_id=semana_id))
 
-
 @horario_bp.route('/editar/<pelotao>/<int:semana_id>/<int:ciclo_id>')
 @login_required
 @can_schedule_classes_required
@@ -368,7 +329,6 @@ def editar_horario_grid(pelotao, semana_id, ciclo_id):
     context_data['intervalos'] = intervalos
     return render_template('editar_quadro_horario.html', **context_data)
 
-
 @horario_bp.route('/get-aula/<int:horario_id>')
 @login_required
 def get_aula_details(horario_id):
@@ -377,10 +337,12 @@ def get_aula_details(horario_id):
         return jsonify({'success': False, 'message': 'Aula não encontrada.'}), 404
     return jsonify({'success': True, **aula_details})
 
-
 @horario_bp.route('/api/instrutores-vinculados/<pelotao>/<int:disciplina_id>')
 @login_required
 def get_instrutores_vinculados(pelotao, disciplina_id):
+    # CORREÇÃO CRÍTICA: Removido filtro por 'pelotao' string que causava o erro.
+    # O disciplina_id já é único e pertence a uma turma específica.
+    # Filtrar por disciplina_id é o suficiente e mais seguro.
     vinculo = db.session.scalar(
         select(DisciplinaTurma).options(
             joinedload(DisciplinaTurma.instrutor_1).joinedload(Instrutor.user), 
@@ -407,14 +369,12 @@ def get_instrutores_vinculados(pelotao, disciplina_id):
         
     return jsonify(opcoes)
 
-
 @horario_bp.route('/salvar-aula', methods=['POST'])
 @login_required
 def salvar_aula():
     data = request.json
     success, message, status_code = HorarioService.save_aula(data, current_user)
     return jsonify({'success': success, 'message': message}), status_code
-
 
 @horario_bp.route('/remover-aula', methods=['POST'])
 @login_required
@@ -424,7 +384,6 @@ def remover_aula():
     success, message = HorarioService.remove_aula(horario_id, current_user)
     if success: return jsonify({'success': True, 'message': message})
     else: return jsonify({'success': False, 'message': message}), 403
-
 
 @horario_bp.route('/aprovar', methods=['GET', 'POST'])
 @login_required
