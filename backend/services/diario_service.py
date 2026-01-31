@@ -29,8 +29,8 @@ class DiarioService:
     @staticmethod
     def get_diarios_pendentes(school_id, user_id=None, turma_id=None, disciplina_id=None, status=None):
         """
-        Busca diários baseando-se nos vínculos diretos e segurança de ID.
-        Remove a dependência de JOIN com Horario para evitar AttributeError.
+        Busca os diários usando apenas a lógica de vínculos existente.
+        Corrigido para garantir que instrutores vinculados vejam as aulas lançadas pelos alunos.
         """
         stmt = (
             select(DiarioClasse)
@@ -48,7 +48,8 @@ class DiarioService:
         if user_id:
             instrutor = DiarioService.get_current_instrutor(user_id)
             if instrutor:
-                # Subquery para encontrar as disciplinas onde este instrutor possui vínculo oficial
+                # A SOLUÇÃO REAL: Buscamos no diário aulas cuja disciplina 
+                # possua vínculo com este instrutor na tabela DisciplinaTurma
                 subquery_vinculos = select(DisciplinaTurma.disciplina_id).where(
                     or_(
                         DisciplinaTurma.instrutor_id_1 == instrutor.id,
@@ -56,16 +57,8 @@ class DiarioService:
                     )
                 )
                 
-                # O instrutor vê a aula se:
-                # 1. O ID dele está gravado nas novas colunas do Diário (se existirem)
-                # 2. OU se ele possui vínculo oficial com aquela disciplina (Garante Pacheco e Start)
-                stmt = stmt.where(
-                    or_(
-                        getattr(DiarioClasse, 'instrutor_id_1', -1) == instrutor.id,
-                        getattr(DiarioClasse, 'instrutor_id_2', -1) == instrutor.id,
-                        DiarioClasse.disciplina_id.in_(subquery_vinculos)
-                    )
-                )
+                # Filtra os diários onde a disciplina faz parte dos vínculos do instrutor
+                stmt = stmt.where(DiarioClasse.disciplina_id.in_(subquery_vinculos))
             else:
                 return []
 
@@ -103,16 +96,11 @@ class DiarioService:
 
     @staticmethod
     def _criar_representante_grupo(group_items):
-        try:
-            group_items.sort(key=lambda x: int(x.periodo) if str(x.periodo).isdigit() else 0)
-        except:
-            pass
-            
         rep = group_items[0] 
         first_p = group_items[0].periodo
         last_p = group_items[-1].periodo
         
-        if first_p is None: rep.periodo_resumo = "Período N/D"
+        if first_p is None: rep.periodo_resumo = "N/D"
         elif first_p == last_p: rep.periodo_resumo = f"{first_p}º Período"
         else: rep.periodo_resumo = f"{first_p}º a {last_p}º Período"
             
@@ -131,11 +119,11 @@ class DiarioService:
             stmt_disc = stmt_disc.where(Disciplina.turma_id == turma_selected_id)
             
         if instrutor:
-            subquery_v = select(DisciplinaTurma.disciplina_id).where(
+            vinculos = select(DisciplinaTurma.disciplina_id).where(
                 or_(DisciplinaTurma.instrutor_id_1 == instrutor.id, 
                     DisciplinaTurma.instrutor_id_2 == instrutor.id)
             )
-            stmt_disc = stmt_disc.where(Disciplina.id.in_(subquery_v))
+            stmt_disc = stmt_disc.where(Disciplina.id.in_(vinculos))
 
         disciplinas = db.session.scalars(stmt_disc.distinct()).all()
         unique_disciplinas = sorted({d.materia: d for d in disciplinas}.values(), key=lambda x: x.materia)
@@ -150,6 +138,7 @@ class DiarioService:
         diario = db.session.get(DiarioClasse, diario_id)
         if not diario: return None, None
 
+        # Validação simples baseada na tabela de vínculos
         vinculo = db.session.scalars(
             select(DisciplinaTurma).where(
                 DisciplinaTurma.disciplina_id == diario.disciplina_id,
@@ -158,7 +147,7 @@ class DiarioService:
             )
         ).first()
 
-        if vinculo or getattr(diario, 'instrutor_id_1', None) == instrutor.id or getattr(diario, 'instrutor_id_2', None) == instrutor.id:
+        if vinculo:
             return diario, instrutor
             
         return None, None
@@ -167,7 +156,7 @@ class DiarioService:
     def assinar_diario(diario_id, user_id, tipo_assinatura, dados_assinatura=None, salvar_padrao=False, conteudo_atualizado=None, observacoes_atualizadas=None):
         diario_pai, instrutor = DiarioService.get_diario_para_assinatura(diario_id, user_id)
         if not diario_pai:
-            return False, "Permissão negada ou aula não encontrada."
+            return False, "Permissão negada."
 
         base_path = os.path.join(current_app.root_path, '..', 'static')
         upload_folder = os.path.join(base_path, 'uploads', 'signatures')
@@ -179,10 +168,8 @@ class DiarioService:
 
         try:
             if tipo_assinatura == 'padrao':
-                if not instrutor.assinatura_padrao_path: return False, "Assinatura padrão não encontrada."
-                src = os.path.join(base_path, instrutor.assinatura_padrao_path)
-                if not os.path.exists(src): return False, "Arquivo padrão inexistente."
-                shutil.copy2(src, filepath)
+                if not instrutor.assinatura_padrao_path: return False, "Sem assinatura padrão."
+                shutil.copy2(os.path.join(base_path, instrutor.assinatura_padrao_path), filepath)
             elif tipo_assinatura == 'canvas':
                 header, encoded = dados_assinatura.split(',', 1) if ',' in dados_assinatura else (None, dados_assinatura)
                 with open(filepath, 'wb') as f: f.write(base64.b64decode(encoded))
@@ -207,12 +194,6 @@ class DiarioService:
                 if conteudo_atualizado: d.conteudo_ministrado = conteudo_atualizado
                 if observacoes_atualizadas is not None: d.observacoes = observacoes_atualizadas
 
-            if salvar_padrao and tipo_assinatura in ['canvas', 'upload']:
-                def_name = f"default_{instrutor.id}.png"
-                def_path = os.path.join(upload_folder, def_name)
-                shutil.copy2(filepath, def_path)
-                instrutor.assinatura_padrao_path = f"uploads/signatures/{def_name}"
-
             db.session.commit()
             return True, f"Sucesso! {len(siblings)} aulas assinadas."
         except Exception as e:
@@ -222,23 +203,20 @@ class DiarioService:
     @staticmethod
     def retornar_diario_admin(diario_id, admin_user, motivo_devolucao):
         diario = db.session.get(DiarioClasse, diario_id)
-        if not diario: return False, "Diário não encontrado."
+        if not diario: return False, "Não encontrado."
         try:
             siblings = db.session.scalars(select(DiarioClasse).where(
                 DiarioClasse.data_aula == diario.data_aula,
                 DiarioClasse.turma_id == diario.turma_id,
                 DiarioClasse.disciplina_id == diario.disciplina_id
             )).all()
-            timestamp_str = datetime.now().strftime('%d/%m/%Y às %H:%M')
-            nota = f"\n[DEVOLVIDO EM {timestamp_str}]: {motivo_devolucao}"
             for d in siblings:
                 d.status = 'pendente'
                 d.assinatura_path = None
-                d.instrutor_assinante_id = None
                 d.data_assinatura = None
-                d.observacoes = (d.observacoes or "") + nota
+                d.observacoes = (d.observacoes or "") + f"\n[DEVOLVIDO]: {motivo_devolucao}"
             db.session.commit()
-            return True, f"Aulas devolvidas."
+            return True, "Aulas devolvidas."
         except Exception as e:
             db.session.rollback()
             return False, str(e)
@@ -246,7 +224,7 @@ class DiarioService:
     @staticmethod
     def atualizar_conteudo_admin(diario_id, novo_conteudo, novas_obs):
         diario = db.session.get(DiarioClasse, diario_id)
-        if not diario: return False, "Diário não encontrado."
+        if not diario: return False, "Não encontrado."
         try:
             siblings = db.session.scalars(select(DiarioClasse).where(
                 DiarioClasse.data_aula == diario.data_aula,
@@ -257,7 +235,7 @@ class DiarioService:
                 d.conteudo_ministrado = novo_conteudo
                 d.observacoes = novas_obs
             db.session.commit()
-            return True, "Conteúdo atualizado."
+            return True, "Atualizado."
         except Exception as e:
             db.session.rollback()
             return False, str(e)
