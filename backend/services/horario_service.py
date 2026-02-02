@@ -30,14 +30,14 @@ class HorarioService:
         """Regras de edição de um horário por perfil."""
         if not horario or not user:
             return False
-        
+
         if user.is_sens or user.is_admin_escola or user.is_programador:
             return True
 
         my_instrutor_ids = db.session.scalars(
             select(Instrutor.id).where(Instrutor.user_id == user.id)
         ).all()
-        
+
         if my_instrutor_ids:
             return (
                 horario.instrutor_id in my_instrutor_ids or
@@ -53,10 +53,10 @@ class HorarioService:
         aula = db.session.get(Horario, int(horario_id))
         if not aula:
             return None
-        
+
         # Verifica permissão (opcional, mas recomendado para segurança)
         if not HorarioService.can_edit_horario(aula, user):
-            pass 
+            pass
 
         instrutor_val = str(aula.instrutor_id)
         if aula.instrutor_id_2:
@@ -90,10 +90,9 @@ class HorarioService:
             'is_disposicao': True,
             'id': None,
             'status': 'confirmado',
-            'blocked': False,
-            'data_exibicao': ''
+            'blocked': False
         }
-        
+
         horario_matrix = [[dict(a_disposicao) for _ in range(7)] for _ in range(15)]
         dias = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo']
 
@@ -115,8 +114,9 @@ class HorarioService:
                 periodo_idx = aula.periodo - 1
 
                 can_see_pending_details = HorarioService.can_edit_horario(aula, user)
-                
+
                 # CORREÇÃO DO BUG DE VISUALIZAÇÃO:
+                # Se não é pendente, é aprovado/confirmado, logo deve ser exibido.
                 show_details = aula.status != 'pendente' or can_see_pending_details
 
                 instrutores_display_list = []
@@ -125,18 +125,14 @@ class HorarioService:
                     nome = aula.instrutor.user.nome_de_guerra or aula.instrutor.user.username
                     nome_completo = f"{posto} {nome}".strip()
                     instrutores_display_list.append(nome_completo)
-                
+
                 if aula.instrutor_2 and aula.instrutor_2.user:
                     posto = aula.instrutor_2.user.posto_graduacao or ''
                     nome = aula.instrutor_2.user.nome_de_guerra or aula.instrutor_2.user.username
                     nome_completo = f"{posto} {nome}".strip()
                     instrutores_display_list.append(nome_completo)
-                
-                instrutor_display = " / ".join(instrutores_display_list) if instrutores_display_list else "N/D"
 
-                # CALCULO DA DATA REAL DA AULA PARA EXIBIÇÃO
-                data_aula = semana.data_inicio + timedelta(days=dia_idx)
-                data_formatada = data_aula.strftime('%d/%m')
+                instrutor_display = " / ".join(instrutores_display_list) if instrutores_display_list else "N/D"
 
                 aula_info = {
                     'id': aula.id,
@@ -150,9 +146,9 @@ class HorarioService:
                     'is_continuation': False,
                     'group_id': aula.group_id,
                     'blocked': False,
+                    # --- NOVOS CAMPOS PARA DESTAQUE VISUAL ---
                     'raw_instrutor_id': aula.instrutor_id,
-                    'raw_instrutor_id_2': aula.instrutor_id_2,
-                    'data_exibicao': data_formatada
+                    'raw_instrutor_id_2': aula.instrutor_id_2
                 }
 
                 if 0 <= periodo_idx < 15:
@@ -200,7 +196,7 @@ class HorarioService:
     def get_edit_grid_context(pelotao, semana_id, ciclo_id, user):
         horario_matrix = HorarioService.construir_matriz_horario(pelotao, semana_id, user)
         semana = db.session.get(Semana, semana_id)
-        
+
         is_admin = user.is_sens or user.is_admin_escola or user.is_programador
 
         def get_horas_agendadas(disciplina_id, pelotao_nome):
@@ -234,7 +230,7 @@ class HorarioService:
             my_instrutor_ids = db.session.scalars(
                 select(Instrutor.id).where(Instrutor.user_id == user.id)
             ).all()
-            
+
             if my_instrutor_ids:
                 disciplinas_do_instrutor = db.session.scalars(
                     select(Disciplina)
@@ -256,10 +252,10 @@ class HorarioService:
 
         instrutores_paginados = InstrutorService.get_all_instrutores_sem_paginacao(user)
         todos_instrutores = []
-        
+
         lista_instrutores = (
-            instrutores_paginados 
-            if isinstance(instrutores_paginados, list) 
+            instrutores_paginados
+            if isinstance(instrutores_paginados, list)
             else instrutores_paginados.items
         )
 
@@ -301,7 +297,7 @@ class HorarioService:
             duracao = int(data.get('duracao', 1))
             periodo_fim = periodo_inicio + duracao - 1
             observacao = data.get('observacao', '').strip() or None
-            
+
             horario_id_raw = data.get('horario_id')
             horario_id = int(horario_id_raw) if horario_id_raw else None
 
@@ -313,7 +309,7 @@ class HorarioService:
             if not is_admin:
                 if dia == 'sabado' and not semana.mostrar_sabado:
                     return False, "⚠️ AGENDAMENTO BLOQUEADO: O Sábado não está habilitado nesta semana.", 403
-                
+
                 if dia == 'domingo' and not semana.mostrar_domingo:
                     return False, "⚠️ AGENDAMENTO BLOQUEADO: O Domingo não está habilitado nesta semana.", 403
 
@@ -324,22 +320,22 @@ class HorarioService:
                         return False, "⚠️ AGENDAMENTO BLOQUEADO: O 14º tempo não está habilitado.", 403
                     if p == 15 and not semana.mostrar_periodo_15:
                         return False, "⚠️ AGENDAMENTO BLOQUEADO: O 15º tempo não está habilitado.", 403
-                    
+
                     if dia == 'sabado' and semana.periodos_sabado > 0 and p > semana.periodos_sabado:
                         return False, f"⚠️ AGENDAMENTO BLOQUEADO: Sábado vai apenas até o {semana.periodos_sabado}º tempo.", 403
-                    
+
                     if dia == 'domingo' and semana.periodos_domingo > 0 and p > semana.periodos_domingo:
                         return False, f"⚠️ AGENDAMENTO BLOQUEADO: Domingo vai apenas até o {semana.periodos_domingo}º tempo.", 403
 
             disciplina = db.session.get(Disciplina, disciplina_id)
 
             # ---------- LIMITE DE CARGA HORÁRIA ----------
-            if disciplina and not is_admin: 
+            if disciplina and not is_admin:
                 total_agendado = db.session.scalar(
                     select(func.sum(Horario.duracao))
                     .where(Horario.disciplina_id == disciplina_id, Horario.pelotao == pelotao)
                 ) or 0
-                
+
                 if horario_id:
                     aula_atual_editando = db.session.get(Horario, horario_id)
                     if aula_atual_editando:
@@ -404,7 +400,7 @@ class HorarioService:
 
                 if not my_instrutor_ids:
                     return False, 'Perfil de instrutor não encontrado.', 403
-                
+
                 vinculo = db.session.scalar(
                     select(DisciplinaTurma).where(
                         DisciplinaTurma.disciplina_id == disciplina_id,
@@ -415,10 +411,10 @@ class HorarioService:
                         )
                     )
                 )
-                
+
                 if not vinculo:
                     return False, 'Você não tem vínculo com esta disciplina nesta turma.', 403
-                
+
                 if vinculo.instrutor_id_1 in my_instrutor_ids:
                     instrutor_id_1 = vinculo.instrutor_id_1
                 elif vinculo.instrutor_id_2 in my_instrutor_ids:
@@ -436,7 +432,7 @@ class HorarioService:
                         DisciplinaTurma.pelotao == pelotao
                     )
                 )
-                
+
                 if vinculo_dt:
                     if vinculo_dt.instrutor_id_1 == instrutor_id_1 and vinculo_dt.instrutor_id_2:
                         instrutor_id_2 = vinculo_dt.instrutor_id_2
@@ -445,12 +441,12 @@ class HorarioService:
 
             # ---------- CONFLITO CROSS-TURMA ----------
             instructors_to_check = [i for i in [instrutor_id_1, instrutor_id_2] if i is not None]
-            
+
             if instructors_to_check:
                 conflict_query = select(Horario).where(
                     Horario.semana_id == semana_id,
                     Horario.dia_semana == dia,
-                    Horario.pelotao != pelotao, 
+                    Horario.pelotao != pelotao,
                     Horario.periodo <= periodo_fim,
                     (Horario.periodo + Horario.duracao - 1) >= periodo_inicio,
                     or_(
@@ -458,7 +454,7 @@ class HorarioService:
                         Horario.instrutor_id_2.in_(instructors_to_check)
                     )
                 )
-                
+
                 conflict_aula = db.session.scalar(conflict_query)
                 if conflict_aula:
                     return False, (
@@ -536,7 +532,7 @@ class HorarioService:
             # ---------- NOTIFICAÇÃO ----------
             if not is_admin:
                 turma = db.session.scalar(select(Turma).where(Turma.nome == pelotao))
-                
+
                 if turma and turma.school_id:
                     message = (
                         f"O instrutor {user.nome_de_guerra} agendou uma nova aula de "
@@ -552,7 +548,7 @@ class HorarioService:
                         notification_url,
                     )
 
-            db.session.flush() 
+            db.session.flush()
             HorarioService._consolidar_aulas_adjacentes(pelotao, semana_id, dia)
             db.session.commit()
             return True, 'Aula salva com sucesso!', 200
@@ -565,7 +561,7 @@ class HorarioService:
     @staticmethod
     def _consolidar_aulas_adjacentes(pelotao, semana_id, dia):
         """Método auxiliar para tentar unir aulas iguais que ficaram fragmentadas."""
-        pass 
+        pass
 
     @staticmethod
     def remove_aula(horario_id, user):
@@ -583,7 +579,7 @@ class HorarioService:
     @staticmethod
     def get_aulas_pendentes():
         school_id = UserService.get_current_school_id()
-        
+
         query = select(Horario).options(
             joinedload(Horario.disciplina).joinedload(Disciplina.ciclo),
             joinedload(Horario.instrutor).joinedload(Instrutor.user),
@@ -718,7 +714,7 @@ class HorarioService:
 
         db.session.commit()
         return True, message
-    
+
     @staticmethod
     def aprovar_horario_parcialmente(horario_id, periodos_aprovados):
         return False, "Funcionalidade não implementada neste contexto."

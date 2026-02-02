@@ -15,7 +15,7 @@ from ..models.processo_disciplina import ProcessoDisciplina
 class DashboardService:
     @staticmethod
     def get_dashboard_data(school_id=None):
-        
+
         # --- Contagens Básicas ---
         # CORREÇÃO: Filtra explicitamente pelo role 'aluno' na tabela UserSchool para não contar admins
         alunos_query = select(func.count(Aluno.id)).join(User, Aluno.user_id == User.id).where(User.is_active == True)
@@ -25,7 +25,7 @@ class DashboardService:
                 UserSchool.role == 'aluno'  # <--- Filtro Adicionado
             )
         total_alunos = db.session.scalar(alunos_query) or 0
-        
+
         # CORREÇÃO: Mesma lógica para instrutores, garantindo que só conta quem tem role 'instrutor'
         instrutores_query = select(func.count(Instrutor.id)).join(User, Instrutor.user_id == User.id).where(User.is_active == True)
         if school_id:
@@ -34,7 +34,7 @@ class DashboardService:
                 UserSchool.role == 'instrutor' # <--- Filtro Adicionado
             )
         total_instrutores = db.session.scalar(instrutores_query) or 0
-        
+
         disciplinas_query = select(func.count(func.distinct(Disciplina.materia)))
         if school_id:
             disciplinas_query = disciplinas_query.join(Turma).where(Turma.school_id == school_id)
@@ -44,7 +44,7 @@ class DashboardService:
         aulas_pendentes_query = select(Horario).where(Horario.status == 'pendente')
         if school_id:
             aulas_pendentes_query = aulas_pendentes_query.join(Turma, Horario.pelotao == Turma.nome).where(Turma.school_id == school_id)
-        
+
         lista_aulas_pendentes = db.session.scalars(aulas_pendentes_query).all()
         total_aulas_pendentes = len(lista_aulas_pendentes)
 
@@ -59,7 +59,7 @@ class DashboardService:
         if school_id:
             usuarios_recentes_query = usuarios_recentes_query.where(UserSchool.school_id == school_id)
         usuarios_recentes = db.session.scalars(usuarios_recentes_query).unique().all()
-        
+
         proximas_aulas_query = select(Horario).join(Turma, Horario.pelotao == Turma.nome).order_by(Horario.id.desc()).limit(5)
         if school_id:
             proximas_aulas_query = proximas_aulas_query.where(Turma.school_id == school_id)
@@ -69,7 +69,7 @@ class DashboardService:
             'total_alunos': total_alunos,
             'total_instrutores': total_instrutores,
             'total_disciplinas': total_disciplinas,
-            'aulas_pendentes': total_aulas_pendentes, 
+            'aulas_pendentes': total_aulas_pendentes,
             'lista_aulas_pendentes': lista_aulas_pendentes,
             'lista_processos_pendentes': lista_processos_pendentes,
             'usuarios_recentes': usuarios_recentes,

@@ -4,7 +4,7 @@
     .modal-xl {
         max-width: 95vw !important; /* Ocupa 95% da largura da tela */
     }
-    
+
     .dash-container {
         font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
     }
@@ -25,7 +25,7 @@
     .stat-card:hover {
         transform: translateY(-3px);
     }
-    
+
     .stat-icon-large {
         position: absolute;
         right: -20px;
@@ -115,14 +115,14 @@
     }
     .db-day { font-size: 1.8rem; font-weight: 800; line-height: 1; color: #2c3e50; }
     .db-month { font-size: 0.9rem; font-weight: 700; text-transform: uppercase; color: #7f8c8d; }
-    
+
     .badge-tag { font-size: 0.9rem; padding: 6px 12px; border-radius: 6px; font-weight: 600; }
     .bg-soft-yellow { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
     .bg-soft-green { background-color: #d1e7dd; color: #0f5132; border: 1px solid #badbcc; }
 </style>
 
 <div class="dash-container">
-    
+
     <div class="d-flex justify-content-between align-items-end mb-4 px-2">
         <div>
             <h2 class="fw-bold text-dark mb-0">Painel do Instrutor</h2>
@@ -135,7 +135,7 @@
     </div>
 
     <div class="row g-4 mb-5">
-        
+
         <div class="col-lg-5 d-flex flex-column gap-3">
             <div class="stat-card card-green p-4 flex-grow-1">
                 <div class="d-flex justify-content-between align-items-center position-relative z-1">
@@ -202,7 +202,7 @@
     </ul>
 
     <div class="tab-content bg-light p-3 rounded-3 border" id="dashInstrutorTabsContent">
-        
+
         <div class="tab-pane fade show active" id="futuras" role="tabpanel">
             {% if aulas_futuras %}
             <div class="table-responsive">
@@ -221,12 +221,11 @@
                         <tr>
                             <td>
                                 <div class="date-badge">
-                                    {# CORREÇÃO AQUI: Forçando a leitura do dia calculado no controller #}
-                                    <div class="db-day">{{ aula.data.day if aula.data.day > 9 else '0' ~ aula.data.day }}</div>
+                                    <div class="db-day">{{ aula.data.strftime('%d') }}</div>
                                     <div class="db-month">{{ aula.data.strftime('%b') }}</div>
                                 </div>
                             </td>
-                            
+
                             <td>
                                 <div class="fw-bold text-dark fs-5">{{ aula.dia_semana.split('-')[0] }}</div>
                                 <div class="text-muted small">Tempos: <strong class="text-dark">{{ aula.tempos }}</strong></div>
