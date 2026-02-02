@@ -64,13 +64,11 @@
         {% endif %}
     </div>
 
-    {# Grade principal de Módulos e Informações #}
     <div class="dashboard-grid">
         <div class="modules-grid-main">
-            {# ... Cards de Módulos (Alunos, Instrutores, etc.) ... #}
+            {# ... Seus cards de módulos ... #}
         </div>
 
-        {# Painel Lateral de Informações #}
         <div class="dashboard-sidebar">
             <div class="info-panel">
                 <div class="panel-header">
@@ -81,7 +79,13 @@
                         <ul class="info-list">
                         {% for aula in dashboard_data.proximas_aulas %}
                             <li>
-                                <div class="info-icon class-date">{{ aula.semana.data_inicio.strftime('%d/%m') }}</div>
+                                {# BLOCO DE DATA CORRIGIDO #}
+                                <div class="info-icon class-date" 
+                                     data-base-date="{{ aula.semana.data_inicio.strftime('%Y-%m-%d') if aula.semana.data_inicio.strftime else aula.semana.data_inicio }}" 
+                                     data-offset="{{ aula.dia_semana|int - 1 }}">
+                                    <strong class="js-day-display">--</strong>
+                                    <span class="js-month-display">{{ aula.semana.data_inicio.strftime('%b') if aula.semana.data_inicio.strftime else 'FEV' }}</span>
+                                </div>
                                 <div class="info-details">
                                     <strong>{{ aula.disciplina.materia }}</strong>
                                     <span>{{ aula.pelotao }} - {{ aula.instrutor.user.nome_de_guerra }}</span>
@@ -95,7 +99,6 @@
                 </div>
             </div>
 
-            {# --- CORREÇÃO APLICADA AQUI --- #}
             {% if current_user.role in ['super_admin', 'programador', 'admin_escola'] %}
             <div class="info-panel">
                 <div class="panel-header">
@@ -122,12 +125,41 @@
                 </div>
             </div>
             {% endif %}
-            {# --- FIM DA CORREÇÃO --- #}
         </div>
     </div>
 </div>
 
-{# Estilos para os novos componentes do Dashboard #}
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    // Função para formatar e corrigir as datas das aulas
+    function fixClassDates() {
+        document.querySelectorAll('.class-date').forEach(function(el) {
+            const rawBase = el.getAttribute('data-base-date');
+            const offset = parseInt(el.getAttribute('data-offset')) || 0;
+            
+            if (rawBase) {
+                // Força a interpretação correta da data ignorando fuso horário local
+                let dateParts = rawBase.split('-');
+                let date = new Date(dateParts[0], dateParts[1] - 1, dateParts[2], 12, 0, 0);
+                
+                // Soma o deslocamento do dia da semana
+                date.setDate(date.getDate() + offset);
+                
+                // Atualiza o dia com zero à esquerda
+                const day = String(date.getDate()).padStart(2, '0');
+                el.querySelector('.js-day-display').innerText = day;
+
+                // Atualiza o mês (Abreviado)
+                const months = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"];
+                el.querySelector('.js-month-display').innerText = months[date.getMonth()];
+            }
+        });
+    }
+
+    fixClassDates();
+});
+</script>
+
 <style>
     .stat-compact.stat-warning { background-color: #fffbeb; border: 1px solid #fde68a; text-decoration: none; color: inherit; transition: all 0.2s ease; }
     .stat-compact.stat-warning:hover { background-color: #fefce8; transform: translateY(-2px); box-shadow: var(--shadow-medium); }
@@ -142,7 +174,8 @@
     .info-list { list-style: none; padding: 0; margin: 0; }
     .info-list li { display: flex; align-items: center; gap: 1rem; padding-bottom: 1rem; margin-bottom: 1rem; border-bottom: 1px solid #f1f5f9; }
     .info-list li:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
-    .info-icon { flex-shrink: 0; width: 50px; height: 50px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .info-icon { flex-shrink: 0; width: 50px; height: 50px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; color: #475569; }
+    .info-icon strong { font-size: 1.2rem; line-height: 1; }
+    .info-icon span { font-size: 0.7rem; text-transform: uppercase; font-weight: 700; }
 </style>
-
 {% endblock %}
