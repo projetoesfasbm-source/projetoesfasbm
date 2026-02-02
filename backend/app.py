@@ -47,7 +47,7 @@ from backend.models.frequencia import FrequenciaAluno
 # ### NOVO MODELO ###
 from backend.models.elogio import Elogio
 # ------------------------------------------------------------
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta # <-- ALTERAÇÃO: Adicionado timedelta aqui
 try:
     from zoneinfo import ZoneInfo
 except ImportError:
@@ -140,6 +140,9 @@ def create_app(config_class=Config):
             if sid:
                 current_user.temp_active_school_id = int(sid)
     # =========================================================
+
+    # ALTERAÇÃO: Injetando timedelta globalmente para uso nos templates
+    app.jinja_env.globals.update(timedelta=timedelta)
 
     with app.app_context():
         AssetService.initialize_upload_folder(app)
