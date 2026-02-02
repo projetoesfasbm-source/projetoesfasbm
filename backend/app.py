@@ -174,7 +174,7 @@ def register_blueprints(app):
     from backend.controllers.user_controller import user_bp
     from backend.controllers.vinculo_controller import vinculo_bp
     from backend.controllers.chefe_turma_controller import chefe_bp
-    
+
     # ### NOVOS CONTROLLERS ###
     from backend.controllers.elogio_controller import elogio_bp
     from backend.controllers.regras_controller import regras_bp
@@ -203,7 +203,7 @@ def register_blueprints(app):
     app.register_blueprint(user_bp)
     app.register_blueprint(vinculo_bp)
     app.register_blueprint(chefe_bp)
-    
+
     # ### REGISTRO DE NOVOS BLUEPRINTS ###
     app.register_blueprint(elogio_bp)
     app.register_blueprint(regras_bp)
@@ -231,7 +231,7 @@ def register_handlers_and_processors(app):
 
             if school_id_to_load is None:
                  school_id_to_load = session.get('active_school_id')
-            
+
             if school_id_to_load is None and hasattr(current_user, 'user_schools') and current_user.user_schools:
                 school_id_to_load = current_user.user_schools[0].school_id
 
