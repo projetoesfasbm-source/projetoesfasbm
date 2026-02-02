@@ -1,7 +1,8 @@
 <style>
     /* --- FORÇAR LARGURA TOTAL DO MODAL --- */
+    /* Isso sobrescreve o padrão do Bootstrap para este modal específico */
     .modal-xl {
-        max-width: 95vw !important;
+        max-width: 95vw !important; /* Ocupa 95% da largura da tela */
     }
 
     .dash-container {
@@ -40,7 +41,7 @@
     .card-green { background: linear-gradient(135deg, #134E5E 0%, #71B280 100%); color: white; }
     .card-white { background: #fff; border: 1px solid #e0e0e0; }
 
-    /* Lista de Disciplinas */
+    /* Lista de Disciplinas (Agora mais larga) */
     .discipline-list-item {
         padding: 12px 15px;
         border-bottom: 1px solid #f0f0f0;
@@ -53,7 +54,7 @@
         font-weight: 600;
         color: #444;
         font-size: 0.95rem;
-        white-space: normal;
+        white-space: normal; /* Permite quebrar linha se for muito longo */
         line-height: 1.4;
     }
 
@@ -78,7 +79,7 @@
     /* Tabela Otimizada */
     .table-modern {
         border-collapse: separate;
-        border-spacing: 0 10px;
+        border-spacing: 0 10px; /* Espaço entre linhas */
         width: 100%;
     }
     .table-modern thead th {
@@ -134,6 +135,7 @@
     </div>
 
     <div class="row g-4 mb-5">
+
         <div class="col-lg-5 d-flex flex-column gap-3">
             <div class="stat-card card-green p-4 flex-grow-1">
                 <div class="d-flex justify-content-between align-items-center position-relative z-1">
@@ -200,6 +202,7 @@
     </ul>
 
     <div class="tab-content bg-light p-3 rounded-3 border" id="dashInstrutorTabsContent">
+
         <div class="tab-pane fade show active" id="futuras" role="tabpanel">
             {% if aulas_futuras %}
             <div class="table-responsive">
@@ -218,27 +221,13 @@
                         <tr>
                             <td>
                                 <div class="date-badge">
-                                    {% if aula.semana and aula.semana.data_inicio %}
-                                        {% set d_desc = (aula.dia_semana or '')|lower %}
-                                        {% if 'segunda' in d_desc %}{% set offset = 0 %}
-                                        {% elif 'terça' in d_desc %}{% set offset = 1 %}
-                                        {% elif 'quarta' in d_desc %}{% set offset = 2 %}
-                                        {% elif 'quinta' in d_desc %}{% set offset = 3 %}
-                                        {% elif 'sexta' in d_desc %}{% set offset = 4 %}
-                                        {% else %}{% set offset = 0 %}{% endif %}
-                                        
-                                        {% set data_calculada = aula.semana.data_inicio + timedelta(days=offset) %}
-                                        <div class="db-day">{{ data_calculada.strftime('%d') }}</div>
-                                        <div class="db-month">{{ data_calculada.strftime('%b') }}</div>
-                                    {% else %}
-                                        <div class="db-day">--</div>
-                                        <div class="db-month">DATA</div>
-                                    {% endif %}
+                                    <div class="db-day">{{ aula.data.strftime('%d') }}</div>
+                                    <div class="db-month">{{ aula.data.strftime('%b') }}</div>
                                 </div>
                             </td>
 
                             <td>
-                                <div class="fw-bold text-dark fs-5">{{ aula.dia_semana }}</div>
+                                <div class="fw-bold text-dark fs-5">{{ aula.dia_semana.split('-')[0] }}</div>
                                 <div class="text-muted small">Tempos: <strong class="text-dark">{{ aula.tempos }}</strong></div>
                             </td>
 
@@ -288,20 +277,7 @@
                     <tbody>
                         {% for aula in aulas_passadas %}
                         <tr>
-                            <td class="ps-4 fw-bold">
-                                {% if aula.semana and aula.semana.data_inicio %}
-                                    {% set d_desc = (aula.dia_semana or '')|lower %}
-                                    {% if 'segunda' in d_desc %}{% set offset = 0 %}
-                                    {% elif 'terça' in d_desc %}{% set offset = 1 %}
-                                    {% elif 'quarta' in d_desc %}{% set offset = 2 %}
-                                    {% elif 'quinta' in d_desc %}{% set offset = 3 %}
-                                    {% elif 'sexta' in d_desc %}{% set offset = 4 %}
-                                    {% else %}{% set offset = 0 %}{% endif %}
-                                    {{ (aula.semana.data_inicio + timedelta(days=offset)).strftime('%d/%m/%Y') }}
-                                {% else %}
-                                    {{ aula.data.strftime('%d/%m/%Y') if aula.data else 'N/A' }}
-                                {% endif %}
-                            </td>
+                            <td class="ps-4 fw-bold">{{ aula.data.strftime('%d/%m/%Y') }}</td>
                             <td>{{ aula.turma }}</td>
                             <td class="text-wrap" style="max-width: 400px;">{{ aula.disciplina }}</td>
                             <td class="text-center"><span class="badge bg-secondary">{{ aula.tempos }}</span></td>
@@ -313,6 +289,10 @@
                     </tbody>
                 </table>
             </div>
+            {% else %}
+                <div class="text-center py-5">
+                    <p class="text-muted">Nenhum histórico encontrado.</p>
+                </div>
             {% endif %}
         </div>
     </div>
