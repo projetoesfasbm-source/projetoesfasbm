@@ -221,7 +221,8 @@
                         <tr>
                             <td>
                                 <div class="date-badge">
-                                    <div class="db-day">{{ aula.data.strftime('%d') }}</div>
+                                    {# CORREÇÃO AQUI: Forçando a leitura do dia calculado no controller #}
+                                    <div class="db-day">{{ aula.data.day if aula.data.day > 9 else '0' ~ aula.data.day }}</div>
                                     <div class="db-month">{{ aula.data.strftime('%b') }}</div>
                                 </div>
                             </td>

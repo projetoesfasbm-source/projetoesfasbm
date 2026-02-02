@@ -90,7 +90,8 @@ class HorarioService:
             'is_disposicao': True,
             'id': None,
             'status': 'confirmado',
-            'blocked': False
+            'blocked': False,
+            'data_exibicao': ''
         }
         
         horario_matrix = [[dict(a_disposicao) for _ in range(7)] for _ in range(15)]
@@ -116,7 +117,6 @@ class HorarioService:
                 can_see_pending_details = HorarioService.can_edit_horario(aula, user)
                 
                 # CORREÇÃO DO BUG DE VISUALIZAÇÃO:
-                # Se não é pendente, é aprovado/confirmado, logo deve ser exibido.
                 show_details = aula.status != 'pendente' or can_see_pending_details
 
                 instrutores_display_list = []
@@ -134,6 +134,10 @@ class HorarioService:
                 
                 instrutor_display = " / ".join(instrutores_display_list) if instrutores_display_list else "N/D"
 
+                # CALCULO DA DATA REAL DA AULA PARA EXIBIÇÃO
+                data_aula = semana.data_inicio + timedelta(days=dia_idx)
+                data_formatada = data_aula.strftime('%d/%m')
+
                 aula_info = {
                     'id': aula.id,
                     'materia': aula.disciplina.materia if show_details else 'Aguardando Aprovação',
@@ -146,9 +150,9 @@ class HorarioService:
                     'is_continuation': False,
                     'group_id': aula.group_id,
                     'blocked': False,
-                    # --- NOVOS CAMPOS PARA DESTAQUE VISUAL ---
                     'raw_instrutor_id': aula.instrutor_id,
-                    'raw_instrutor_id_2': aula.instrutor_id_2
+                    'raw_instrutor_id_2': aula.instrutor_id_2,
+                    'data_exibicao': data_formatada
                 }
 
                 if 0 <= periodo_idx < 15:
