@@ -6,7 +6,7 @@ import json
 from io import BytesIO
 from typing import Any, Dict, List, Tuple
 from datetime import date, timedelta
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from sqlalchemy.orm import aliased
 
 # Importações seguras
@@ -64,12 +64,16 @@ class RelatorioService:
     def get_horas_aula_por_instrutor(
         data_inicio: date,
         data_fim: date,
-        mode_rr: str | None, # Alterado de bool para str/None ('exclude_rr', 'only_rr', None)
+        mode_rr: str | None, 
         instrutor_ids_filter: List[int] | None
     ) -> List[Dict[str, Any]]:
         """
-        Busca e formata os dados de horas-aula por instrutor, filtrando pela ESCOLA SELECIONADA.
-        mode_rr: 'exclude_rr' (Mensal), 'only_rr' (RR) ou None (Todos).
+        Busca e formata os dados de horas-aula por instrutor.
+        REGRAS:
+        1. Soma CH prevista por cada turma (Ex: 10 per. x 4 turmas = 40h).
+        2. Ordenação por Matrícula (Crescente).
+        3. Filtro de status: apenas 'concluido' e 'confirmado'.
+        4. Filtro rigoroso de data para cada dia de aula.
         """
         from ..models import db, Horario, User, Instrutor, Disciplina, Semana, Ciclo
         from ..services.user_service import UserService
@@ -83,6 +87,7 @@ class RelatorioService:
         Instrutor2 = aliased(Instrutor)
         User2 = aliased(User)
 
+        # QUERY CORRIGIDA: Agora inclui 'concluido' e filtra por status validados
         query = (
             select(
                 Horario,
@@ -101,7 +106,8 @@ class RelatorioService:
             .filter(
                 Semana.data_inicio <= data_fim,
                 Semana.data_fim >= data_inicio,
-                Ciclo.school_id == school_id
+                Ciclo.school_id == school_id,
+                or_(Horario.status == 'confirmado', Horario.status == 'concluido')
             )
         )
 
@@ -114,12 +120,15 @@ class RelatorioService:
             if not user_obj or not instrutor_obj:
                 return
 
-            # Filtros de Relatório (Lógica RR corrigida)
+            # FILTRO RIGOROSO DE DATA: A aula deve estar EXATAMENTE no intervalo solicitado
+            if not (data_inicio <= data_aula <= data_fim):
+                return
+
             if mode_rr == 'only_rr' and not instrutor_obj.is_rr:
-                return # Pedia RR, mas este não é. Ignora.
+                return 
 
             if mode_rr == 'exclude_rr' and instrutor_obj.is_rr:
-                return # Pedia SEM RR, mas este é RR. Ignora.
+                return 
 
             if instrutor_ids_filter and instrutor_obj.id not in instrutor_ids_filter:
                 return
@@ -130,7 +139,7 @@ class RelatorioService:
 
             slots_pagos.add(chave_slot)
 
-            chave_agrupamento = user_obj.matricula
+            chave_agrupamento = user_obj.matricula or f"TEMP_{user_obj.id}"
 
             if chave_agrupamento not in dados_agrupados:
                 dados_agrupados[chave_agrupamento] = {
@@ -156,6 +165,7 @@ class RelatorioService:
             item_disciplina = dados_agrupados[chave_agrupamento]["disciplinas_map"][nome_disc]
             pelotao_clean = pelotao_str.strip() if pelotao_str else "PADRAO"
 
+            # REGRA: Multiplicação da CH prevista pelo número de pelotões (Turmas)
             if pelotao_clean not in item_disciplina["_pelotoes_contabilizados"]:
                 item_disciplina["ch_total"] += (disciplina_obj.carga_horaria_prevista or 0)
                 item_disciplina["_pelotoes_contabilizados"].add(pelotao_clean)
@@ -186,6 +196,7 @@ class RelatorioService:
                     processar_instrutor(usr2, inst2, disciplina, data_aula, periodo, duracao, pelotao)
 
         lista_final = []
+        # ORDENAÇÃO: Ordem crescente por número de matrícula (Regra Obrigatória)
         chaves_ordenadas = sorted(dados_agrupados.keys())
 
         for chave in chaves_ordenadas:
