@@ -117,7 +117,7 @@ class RelatorioService:
             # Filtros de Relatório (Lógica RR corrigida)
             if mode_rr == 'only_rr' and not instrutor_obj.is_rr:
                 return # Pedia RR, mas este não é. Ignora.
-            
+
             if mode_rr == 'exclude_rr' and instrutor_obj.is_rr:
                 return # Pedia SEM RR, mas este é RR. Ignora.
 
@@ -131,7 +131,7 @@ class RelatorioService:
             slots_pagos.add(chave_slot)
 
             chave_agrupamento = user_obj.matricula
-            
+
             if chave_agrupamento not in dados_agrupados:
                 dados_agrupados[chave_agrupamento] = {
                     "info": {
@@ -141,7 +141,7 @@ class RelatorioService:
                             "nome_completo": user_obj.nome_completo,
                         }
                     },
-                    "disciplinas_map": {} 
+                    "disciplinas_map": {}
                 }
 
             nome_disc = disciplina_obj.materia
@@ -191,7 +191,7 @@ class RelatorioService:
         for chave in chaves_ordenadas:
             item = dados_agrupados[chave]
             lista_disciplinas = list(item["disciplinas_map"].values())
-            
+
             for d in lista_disciplinas:
                 if "_pelotoes_contabilizados" in d:
                     del d["_pelotoes_contabilizados"]
@@ -206,7 +206,7 @@ class RelatorioService:
     @staticmethod
     def export_to_google_sheets(contexto: Dict[str, Any]) -> Tuple[bool, str]:
         from .xlsx_service import gerar_mapa_gratificacao_xlsx
-        
+
         try:
             xlsx_bytes = gerar_mapa_gratificacao_xlsx(
                 dados=contexto.get("dados"),
@@ -228,7 +228,7 @@ class RelatorioService:
 
             nome_arquivo = f'Relatório Horas-Aula - {contexto.get("nome_mes_ano", "geral")}'
             sheet_url = _upload_xlsx_and_convert_to_sheet(nome_arquivo, xlsx_bytes)
-            
+
             if sheet_url:
                 return True, sheet_url
             else:

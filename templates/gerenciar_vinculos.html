@@ -11,7 +11,7 @@
 <div class="table-container">
     <div class="table-header">
         <h3>Vínculos Existentes</h3>
-        
+
         {# Se o usuário tem permissão (verificado no controller), mostra botão de adicionar #}
         {% if can_manage_vinculos %}
         <a href="{{ url_for('vinculo.adicionar_vinculo') }}" class="btn btn-primary">
@@ -30,7 +30,7 @@
                 {% endfor %}
             </select>
         </div>
-        
+
         {% if turma_filtrada_id %}
         <a href="{{ url_for('vinculo.gerenciar_vinculos') }}" class="btn btn-sm btn-danger">Limpar Filtros</a>
         {% endif %}
@@ -67,7 +67,7 @@
                         </td>
                         <td data-label="Ações" class="text-right">
                             <div class="btn-group">
-                                
+
                                 {% if can_manage_vinculos %}
                                     {# Botão Editar foi removido daqui #}
                                     <form method="POST" action="{{ url_for('vinculo.excluir_vinculo', vinculo_id=vinculo.id) }}" onsubmit="return confirm('Tem certeza que deseja deletar este vínculo?');" style="display: inline;">
@@ -77,7 +77,7 @@
                                 {% else %}
                                     <span class="text-muted"><i class="fas fa-lock"></i> Bloqueado</span>
                                 {% endif %}
-                                
+
                             </div>
                         </td>
                     </tr>
