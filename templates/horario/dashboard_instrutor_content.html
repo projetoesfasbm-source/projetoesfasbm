@@ -221,8 +221,8 @@
                         <tr>
                             <td>
                                 <div class="date-badge">
-                                    <div class="db-day">{{ aula.data_aula.strftime('%d') }}</div>
-                                    <div class="db-month">{{ aula.data_aula.strftime('%b') }}</div>
+                                    <div class="db-day">{{ aula.data.strftime('%d') }}</div>
+                                    <div class="db-month">{{ aula.data.strftime('%b') }}</div>
                                 </div>
                             </td>
 
@@ -277,7 +277,7 @@
                     <tbody>
                         {% for aula in aulas_passadas %}
                         <tr>
-                            <td class="ps-4 fw-bold">{{ aula.data_aula.strftime('%d/%m/%Y') }}</td>
+                            <td class="ps-4 fw-bold">{{ aula.data.strftime('%d/%m/%Y') }}</td>
                             <td>{{ aula.turma }}</td>
                             <td class="text-wrap" style="max-width: 400px;">{{ aula.disciplina }}</td>
                             <td class="text-center"><span class="badge bg-secondary">{{ aula.tempos }}</span></td>

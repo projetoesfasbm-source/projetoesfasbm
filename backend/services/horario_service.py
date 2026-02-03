@@ -304,6 +304,18 @@ class HorarioService:
             semana = db.session.get(Semana, semana_id)
             if not semana:
                 return False, "Semana não encontrada.", 404
+            
+            # --- CÁLCULO DA DATA REAL DA AULA ---
+            # Define o mapeamento de dias para offsets
+            mapa_dias = {
+                'segunda': 0, 'terca': 1, 'quarta': 2, 'quinta': 3,
+                'sexta': 4, 'sabado': 5, 'domingo': 6
+            }
+            # Pega o offset (ex: terca = 1)
+            offset = mapa_dias.get(dia, 0)
+            # Calcula a data real somando o offset à data de início da semana
+            data_aula_real = semana.data_inicio + timedelta(days=offset)
+            # ------------------------------------
 
             # ---------- VALIDAÇÕES DE CALENDÁRIO ----------
             if not is_admin:
@@ -516,6 +528,7 @@ class HorarioService:
                     pelotao=pelotao,
                     semana_id=semana_id,
                     dia_semana=dia,
+                    data_aula=data_aula_real, # <--- AQUI A MÁGICA: SALVANDO A DATA REAL
                     periodo=periodo_bloco_inicio,
                     duracao=duracao_bloco,
                     disciplina_id=disciplina_id,
