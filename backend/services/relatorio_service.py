@@ -69,11 +69,11 @@ class RelatorioService:
     ) -> List[Dict[str, Any]]:
         """
         Busca e formata os dados de horas-aula por instrutor.
-        REGRAS:
+        REGRAS MANTIDAS:
         1. Soma CH prevista por cada turma (Ex: 10 per. x 4 turmas = 40h).
         2. Ordenação por Matrícula (Crescente).
-        3. Filtro de status: apenas 'concluido' e 'confirmado'.
-        4. Filtro rigoroso de data para cada dia de aula.
+        3. Separação rigorosa de Reserva Remunerada (RR).
+        4. Filtro por status 'confirmado' e 'concluido'.
         """
         from ..models import db, Horario, User, Instrutor, Disciplina, Semana, Ciclo
         from ..services.user_service import UserService
@@ -87,7 +87,6 @@ class RelatorioService:
         Instrutor2 = aliased(Instrutor)
         User2 = aliased(User)
 
-        # QUERY CORRIGIDA: Agora inclui 'concluido' e filtra por status validados
         query = (
             select(
                 Horario,
@@ -120,10 +119,12 @@ class RelatorioService:
             if not user_obj or not instrutor_obj:
                 return
 
-            # FILTRO RIGOROSO DE DATA: A aula deve estar EXATAMENTE no intervalo solicitado
+            # Filtro rigoroso de data (Dia a Dia)
             if not (data_inicio <= data_aula <= data_fim):
                 return
 
+            # SEPARAÇÃO RR: Se estiver no modo 'exclude_rr' (Geral), pula se for RR. 
+            # Se estiver no modo 'only_rr', pula se NÃO for RR.
             if mode_rr == 'only_rr' and not instrutor_obj.is_rr:
                 return 
 
@@ -165,7 +166,6 @@ class RelatorioService:
             item_disciplina = dados_agrupados[chave_agrupamento]["disciplinas_map"][nome_disc]
             pelotao_clean = pelotao_str.strip() if pelotao_str else "PADRAO"
 
-            # REGRA: Multiplicação da CH prevista pelo número de pelotões (Turmas)
             if pelotao_clean not in item_disciplina["_pelotoes_contabilizados"]:
                 item_disciplina["ch_total"] += (disciplina_obj.carga_horaria_prevista or 0)
                 item_disciplina["_pelotoes_contabilizados"].add(pelotao_clean)
@@ -196,7 +196,6 @@ class RelatorioService:
                     processar_instrutor(usr2, inst2, disciplina, data_aula, periodo, duracao, pelotao)
 
         lista_final = []
-        # ORDENAÇÃO: Ordem crescente por número de matrícula (Regra Obrigatória)
         chaves_ordenadas = sorted(dados_agrupados.keys())
 
         for chave in chaves_ordenadas:
