@@ -1,20 +1,22 @@
-# backend/controllers/instrutor_controller.py
-
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
 from flask_login import login_required, current_user
-from wtforms import StringField, SelectField, BooleanField, PasswordField, SubmitField
+from wtforms import StringField, SelectField, PasswordField, SubmitField
 from wtforms.validators import DataRequired, Optional, Email, EqualTo
 from flask_wtf import FlaskForm
-import json
+from datetime import datetime, timedelta, timezone
+from sqlalchemy.orm import joinedload
 
 from ..services.instrutor_service import InstrutorService
 from ..services.user_service import UserService
-from ..models.user import User
-from ..models.database import db  # Importante para o commit manual
+from ..models.instrutor import Instrutor
+from ..models.horario import Horario
+from ..models.database import db
+
+# Mantendo seus imports de decorators originais
 from utils.decorators import (
     admin_or_programmer_required,
     school_admin_or_programmer_required,
-    can_view_management_pages_required,
+    can_view_management_pages_required
 )
 
 instrutor_bp = Blueprint("instrutor", __name__, url_prefix="/instrutor")
@@ -40,7 +42,6 @@ class InstrutorForm(FlaskForm):
     posto_graduacao_outro = StringField("Outro (especifique)", validators=[Optional()])
 
     telefone = StringField("Telefone", validators=[Optional()])
-    # Alterado para SelectField para maior estabilidade
     is_rr = SelectField("Efetivo da Reserva Remunerada (RR)", choices=[('0', 'Não'), ('1', 'Sim')], default='0')
     submit = SubmitField("Salvar")
 
@@ -56,7 +57,6 @@ class EditInstrutorForm(FlaskForm):
     posto_graduacao_outro = StringField("Outro (especifique)", validators=[Optional()])
 
     telefone = StringField("Telefone", validators=[Optional()])
-    # CORREÇÃO: SelectField com valores string '0' e '1'
     is_rr = SelectField("Efetivo da Reserva Remunerada (RR)", choices=[('0', 'Não'), ('1', 'Sim')], default='0')
     submit = SubmitField("Salvar Alterações")
 
@@ -100,7 +100,6 @@ def cadastrar_instrutor():
             flash("Não foi possível identificar a escola para associar o instrutor.", "danger")
             return redirect(url_for("instrutor.listar_instrutores"))
 
-        # Ajuste manual para garantir envio correto do boleano no create
         form_data = form.data.copy()
         form_data['is_rr'] = True if form.is_rr.data == '1' else False
 
@@ -126,16 +125,12 @@ def editar_instrutor(instrutor_id):
     form = EditInstrutorForm(obj=instrutor)
     
     if request.method == 'GET':
-        # Preenche os dados do Usuário
         form.nome_completo.data = instrutor.user.nome_completo
         form.nome_de_guerra.data = instrutor.user.nome_de_guerra
         form.matricula.data = instrutor.user.matricula
         form.email.data = instrutor.user.email
-        
-        # CORREÇÃO: Preenche o RR corretamente convertendo booleano para string
         form.is_rr.data = '1' if instrutor.is_rr else '0'
 
-        # Lógica de Posto/Graduação
         posto_atual = instrutor.user.posto_graduacao
         categoria_encontrada = None
         for categoria, postos in posto_graduacao_structured.items():
@@ -160,8 +155,6 @@ def editar_instrutor(instrutor_id):
 
     if form.validate_on_submit():
         try:
-            # --- ATUALIZAÇÃO MANUAL E SEGURA ---
-            # 1. Atualiza dados do Usuário
             instrutor.user.nome_completo = form.nome_completo.data
             instrutor.user.nome_de_guerra = form.nome_de_guerra.data
             instrutor.user.email = form.email.data
@@ -171,10 +164,7 @@ def editar_instrutor(instrutor_id):
             else:
                 instrutor.user.posto_graduacao = form.posto_graduacao.data
 
-            # 2. Atualiza dados do Instrutor
             instrutor.telefone = form.telefone.data
-            
-            # CORREÇÃO CRÍTICA: Converte '1'/'0' para True/False explicitamente
             instrutor.is_rr = (form.is_rr.data == '1')
 
             db.session.commit()
@@ -202,3 +192,132 @@ def excluir_instrutor(instrutor_id):
     else:
         flash("Falha na validação do formulário de exclusão.", "danger")
     return redirect(url_for("instrutor.listar_instrutores"))
+
+
+@instrutor_bp.route('/dashboard/content')
+@login_required
+def dashboard_content():
+    # --- Verificação Manual de Permissão (Mantida) ---
+    is_authorized = False
+    
+    if hasattr(current_user, 'has_role') and current_user.has_role('instrutor'):
+        is_authorized = True
+    elif hasattr(current_user, 'role') and str(current_user.role) == 'instrutor':
+        is_authorized = True
+    
+    if not is_authorized:
+        user_role = str(getattr(current_user, 'role', ''))
+        if getattr(current_user, 'is_admin', False) or user_role in ['admin', 'programmer', 'school_admin']:
+            is_authorized = True
+
+    if not is_authorized:
+        flash("Acesso restrito a instrutores.", "danger")
+        return redirect(url_for('main.index'))
+
+    try:
+        instrutor = Instrutor.query.filter_by(user_id=current_user.id).first()
+        
+        # --- DEFINIÇÃO DO MOMENTO ATUAL (BRASIL) ---
+        # 1. Pega UTC e converte para Brasil (UTC-3)
+        agora_brasil = datetime.now(timezone.utc) - timedelta(hours=3)
+        # 2. Cria versão naive para comparar com DB
+        agora_comparacao = agora_brasil.replace(tzinfo=None)
+        
+        hoje = agora_brasil.date()
+
+        if not instrutor:
+            return render_template('horario/dashboard_instrutor_content.html', 
+                                   error="Instrutor não encontrado.",
+                                   aulas_futuras=[], aulas_passadas=[],
+                                   total_futuros=0, total_ministrados=0,
+                                   stats_disciplinas={}, hoje=hoje)
+
+        # Busca todas as aulas
+        aulas = Horario.query.filter_by(instrutor_id=instrutor.id)\
+            .options(joinedload(Horario.turma), joinedload(Horario.disciplina), joinedload(Horario.escola))\
+            .order_by(Horario.data_aula.desc(), Horario.hora_inicio.asc())\
+            .all()
+
+        aulas_futuras = []
+        aulas_passadas = []
+        stats_disciplinas = {}
+
+        # --- MAPA DE DIAS PARA CORREÇÃO ---
+        # Como o banco salva a data da Segunda-Feira, somamos dias conforme a string "dia_semana"
+        mapa_dias = {
+            'segunda': 0, 'segunda-feira': 0, '2ª feira': 0,
+            'terça': 1, 'terca': 1, 'terça-feira': 1, '3ª feira': 1,
+            'quarta': 2, 'quarta-feira': 2, '4ª feira': 2,
+            'quinta': 3, 'quinta-feira': 3, '5ª feira': 3,
+            'sexta': 4, 'sexta-feira': 4, '6ª feira': 4,
+            'sábado': 5, 'sabado': 5, 'sáb': 5,
+            'domingo': 6, 'dom': 6
+        }
+
+        for aula in aulas:
+            if aula.disciplina:
+                nome_disc = aula.disciplina.nome
+                stats_disciplinas[nome_disc] = stats_disciplinas.get(nome_disc, 0) + 1
+
+            # --- CORREÇÃO DE DATA ---
+            # Assume data original (que pode estar como segunda-feira)
+            data_calculada = aula.data_aula
+            
+            if aula.data_aula and aula.dia_semana:
+                try:
+                    # Limpa a string (ex: "Terça-feira" -> "terça")
+                    dia_limpo = aula.dia_semana.split('-')[0].strip().lower()
+                    
+                    # Pega o offset (ex: terça = +1 dia)
+                    dias_para_somar = mapa_dias.get(dia_limpo, 0)
+                    
+                    # Calcula a data REAL
+                    data_calculada = aula.data_aula + timedelta(days=dias_para_somar)
+                    
+                    # IMPORTANTE: Atualiza o objeto na memória para o HTML exibir a data certa
+                    aula.data_aula = data_calculada
+                    
+                except Exception:
+                    pass # Se der erro, usa a data original
+
+            # --- SEPARAÇÃO FUTURO vs PASSADO ---
+            try:
+                if data_calculada and aula.hora_inicio:
+                    # Compara Data Real + Hora
+                    dt_aula = datetime.combine(data_calculada, aula.hora_inicio)
+                    
+                    if dt_aula > agora_comparacao:
+                        aulas_futuras.append(aula)
+                    else:
+                        aulas_passadas.append(aula)
+                elif data_calculada:
+                    # Compara só Data Real
+                    if data_calculada > hoje:
+                        aulas_futuras.append(aula)
+                    else:
+                        aulas_passadas.append(aula)
+                else:
+                    aulas_passadas.append(aula)
+
+            except Exception:
+                aulas_passadas.append(aula)
+
+        # Ordenação
+        aulas_futuras.sort(key=lambda x: (x.data_aula, x.hora_inicio))
+
+        return render_template('horario/dashboard_instrutor_content.html',
+                               instrutor=instrutor,
+                               aulas_futuras=aulas_futuras,
+                               aulas_passadas=aulas_passadas,
+                               total_futuros=len(aulas_futuras),
+                               total_ministrados=len(aulas_passadas),
+                               stats_disciplinas=stats_disciplinas,
+                               hoje=hoje)
+
+    except Exception as e:
+        current_app.logger.error(f"Erro no dashboard: {str(e)}")
+        # Em caso de erro, renderiza vazio para não quebrar a página
+        return render_template('horario/dashboard_instrutor_content.html', 
+                               error="Erro ao processar dados.",
+                               aulas_futuras=[], aulas_passadas=[],
+                               hoje=datetime.now().date())
