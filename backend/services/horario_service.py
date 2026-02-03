@@ -512,12 +512,10 @@ class HorarioService:
                         f'no período {periodo_bloco_inicio}.'
                     ), 409
 
-                # --- VOLTANDO AO ORIGINAL: SEM CAMPO DE DATA ---
                 nova_aula_bloco = Horario(
                     pelotao=pelotao,
                     semana_id=semana_id,
                     dia_semana=dia,
-                    # REMOVIDO: data=..., POIS NÃO EXISTE NO BANCO
                     periodo=periodo_bloco_inicio,
                     duracao=duracao_bloco,
                     disciplina_id=disciplina_id,
