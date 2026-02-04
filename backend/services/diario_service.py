@@ -11,6 +11,8 @@ from ..models.instrutor import Instrutor
 from ..models.turma import Turma
 from ..models.disciplina import Disciplina
 from ..models.disciplina_turma import DisciplinaTurma
+from ..models.frequencia import Frequencia
+from ..models.aluno import Aluno
 from sqlalchemy import select, and_, or_, distinct
 
 class DiarioService:
@@ -239,3 +241,28 @@ class DiarioService:
         except Exception as e:
             db.session.rollback()
             return False, str(e)
+
+    @staticmethod
+    def get_faltas_report_data(school_id, data_inicio, data_fim, turma_id=None):
+        """
+        Busca consolidada de faltas para o relatório administrativo.
+        """
+        stmt = (
+            select(Frequencia, Aluno, DiarioClasse, Turma, Disciplina)
+            .join(Aluno, Frequencia.aluno_id == Aluno.id)
+            .join(DiarioClasse, Frequencia.diario_classe_id == DiarioClasse.id)
+            .join(Turma, DiarioClasse.turma_id == Turma.id)
+            .join(Disciplina, DiarioClasse.disciplina_id == Disciplina.id)
+            .where(
+                DiarioClasse.school_id == school_id,
+                Frequencia.status == 'F',
+                DiarioClasse.data_aula >= data_inicio,
+                DiarioClasse.data_aula <= data_fim
+            )
+        )
+
+        if turma_id:
+            stmt = stmt.where(Turma.id == turma_id)
+
+        stmt = stmt.order_by(DiarioClasse.data_aula.asc(), Aluno.nome.asc())
+        return db.session.execute(stmt).all()
