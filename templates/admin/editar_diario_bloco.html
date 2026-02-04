@@ -16,7 +16,19 @@
             <div class="row">
                 <div class="col-md-6">
                     <h5 class="text-primary fw-bold">{{ ref.disciplina.materia }}</h5>
-                    <p class="mb-1"><i class="fas fa-chalkboard-teacher text-muted me-2"></i> <strong>Instrutor:</strong> {{ ref.instrutor_assinante.nome_de_guerra or ref.instrutor_assinante.nome_completo or 'Não informado' }}</p>
+                    
+                    <p class="mb-1">
+                        <i class="fas fa-chalkboard-teacher text-muted me-2"></i> 
+                        <strong>Instrutor:</strong> 
+                        {% for assoc in ref.disciplina.associacoes_turmas %}
+                            {% if assoc.disciplina_id == ref.disciplina_id and ref.turma.nome in assoc.pelotao %}
+                                {{ assoc.instrutor_1.user.nome_de_guerra or assoc.instrutor_1.user.nome_completo if assoc.instrutor_1 else "" }}
+                                {{ " / " if assoc.instrutor_1 and assoc.instrutor_2 else "" }}
+                                {{ assoc.instrutor_2.user.nome_de_guerra or assoc.instrutor_2.user.nome_completo if assoc.instrutor_2 else "" }}
+                            {% endif %}
+                        {% endfor %}
+                    </p>
+
                     <p class="mb-1"><i class="fas fa-users text-muted me-2"></i> <strong>Turma:</strong> {{ ref.turma.nome }}</p>
                     <p class="mb-1"><i class="far fa-calendar-alt text-muted me-2"></i> <strong>Data:</strong> {{ ref.data_aula.strftime('%d/%m/%Y') }}</p>
                 </div>
@@ -90,7 +102,7 @@
                                 {% endif %}
                             </td>
                             
-                            {% for diario in diaries %}
+                            {% for diario in diarios %}
                                 {% set ns = namespace(presente=true) %}
                                 {% for freq in diario.frequencias %}
                                     {% if freq.aluno_id == aluno.id %}
