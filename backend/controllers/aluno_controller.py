@@ -23,7 +23,7 @@ aluno_bp = Blueprint('aluno', __name__, url_prefix='/aluno')
 # DICIONÁRIO ESTRUTURADO PARA POSTOS E GRADUAÇÕES
 posto_graduacao_structured = {
     'Praças': ['Soldado PM', '2º Sargento PM', '1º Sargento PM'],
-    'Oficiais': ['1º Tenente PM', 'Capitão PM', 'Major PM', 'Tenente-Coronel PM', 'Coronel PM'],
+    'Oficiais': ['Aluno Oficial', '1º Tenente PM', 'Capitão PM', 'Major PM', 'Tenente-Coronel PM', 'Coronel PM'],
     'Saúde - Enfermagem': ['Ten Enf', 'Cap Enf', 'Maj Enf', 'Ten Cel Enf', 'Cel Enf'],
     'Saúde - Médicos': ['Ten Med', 'Cap Med', 'Maj Med', 'Ten Cel Med', 'Cel Med'],
     'Outros': ['Civil', 'Outro']

@@ -21,7 +21,7 @@ instrutor_bp = Blueprint("instrutor", __name__, url_prefix="/instrutor")
 
 posto_graduacao_structured = {
     'Praças': ['Soldado PM', '2º Sargento PM', '1º Sargento PM'],
-    'Oficiais': ['1º Tenente PM', 'Capitão PM', 'Major PM', 'Tenente-Coronel PM', 'Coronel PM'],
+    'Oficiais': ['Aluno Oficial', '1º Tenente PM', 'Capitão PM', 'Major PM', 'Tenente-Coronel PM', 'Coronel PM'],
     'Saúde - Enfermagem': ['Ten Enf', 'Cap Enf', 'Maj Enf', 'Ten Cel Enf', 'Cel Enf'],
     'Saúde - Médicos': ['Ten Med', 'Cap Med', 'Maj Med', 'Ten Cel Med', 'Cel Med'],
     'Outros': ['Civil', 'Outro']
@@ -34,7 +34,7 @@ class InstrutorForm(FlaskForm):
     email = StringField("E-mail", validators=[DataRequired(), Email()])
     password = PasswordField("Senha", validators=[DataRequired(), EqualTo("password2", message="As senhas devem corresponder.")])
     password2 = PasswordField("Confirmar Senha", validators=[DataRequired()])
-    
+
     posto_categoria = SelectField("Categoria", choices=list(posto_graduacao_structured.keys()), validators=[DataRequired()])
     posto_graduacao = SelectField("Posto/Graduação", validators=[DataRequired()])
     posto_graduacao_outro = StringField("Outro (especifique)", validators=[Optional()])
@@ -50,7 +50,7 @@ class EditInstrutorForm(FlaskForm):
     nome_de_guerra = StringField("Nome de Guerra", validators=[DataRequired()])
     matricula = StringField("Matrícula", render_kw={"readonly": True})
     email = StringField("E-mail", validators=[DataRequired(), Email()])
-    
+
     posto_categoria = SelectField("Categoria", choices=list(posto_graduacao_structured.keys()), validators=[DataRequired()])
     posto_graduacao = SelectField("Posto/Graduação", validators=[DataRequired()])
     posto_graduacao_outro = StringField("Outro (especifique)", validators=[Optional()])
@@ -71,13 +71,13 @@ class DeleteForm(FlaskForm):
 def listar_instrutores():
     page = request.args.get('page', 1, type=int)
     search_term = request.args.get('q', None)
-    
+
     instrutores_paginados = InstrutorService.get_all_instrutores(current_user, search_term=search_term, page=page, per_page=15)
     delete_form = DeleteForm()
 
     return render_template(
-        "listar_instrutores.html", 
-        instrutores_paginados=instrutores_paginados, 
+        "listar_instrutores.html",
+        instrutores_paginados=instrutores_paginados,
         delete_form=delete_form,
         search_term=search_term
     )
@@ -88,7 +88,7 @@ def listar_instrutores():
 @school_admin_or_programmer_required
 def cadastrar_instrutor():
     form = InstrutorForm()
-    
+
     if form.is_submitted():
          categoria_selecionada = form.posto_categoria.data
          if categoria_selecionada in posto_graduacao_structured:
@@ -124,14 +124,14 @@ def editar_instrutor(instrutor_id):
         return redirect(url_for("instrutor.listar_instrutores"))
 
     form = EditInstrutorForm(obj=instrutor)
-    
+
     if request.method == 'GET':
         # Preenche os dados do Usuário
         form.nome_completo.data = instrutor.user.nome_completo
         form.nome_de_guerra.data = instrutor.user.nome_de_guerra
         form.matricula.data = instrutor.user.matricula
         form.email.data = instrutor.user.email
-        
+
         # CORREÇÃO: Preenche o RR corretamente convertendo booleano para string
         form.is_rr.data = '1' if instrutor.is_rr else '0'
 
@@ -142,7 +142,7 @@ def editar_instrutor(instrutor_id):
             if posto_atual in postos:
                 categoria_encontrada = categoria
                 break
-        
+
         if categoria_encontrada:
             form.posto_categoria.data = categoria_encontrada
             form.posto_graduacao.choices = [(p, p) for p in posto_graduacao_structured[categoria_encontrada]]
@@ -152,7 +152,7 @@ def editar_instrutor(instrutor_id):
             form.posto_graduacao.choices = [(p, p) for p in posto_graduacao_structured['Outros']]
             form.posto_graduacao.data = 'Outro'
             form.posto_graduacao_outro.data = posto_atual
-    
+
     if form.is_submitted():
          categoria_selecionada = form.posto_categoria.data
          if categoria_selecionada in posto_graduacao_structured:
@@ -165,7 +165,7 @@ def editar_instrutor(instrutor_id):
             instrutor.user.nome_completo = form.nome_completo.data
             instrutor.user.nome_de_guerra = form.nome_de_guerra.data
             instrutor.user.email = form.email.data
-            
+
             if form.posto_graduacao.data == 'Outro':
                 instrutor.user.posto_graduacao = form.posto_graduacao_outro.data
             else:
@@ -173,14 +173,14 @@ def editar_instrutor(instrutor_id):
 
             # 2. Atualiza dados do Instrutor
             instrutor.telefone = form.telefone.data
-            
+
             # CORREÇÃO CRÍTICA: Converte '1'/'0' para True/False explicitamente
             instrutor.is_rr = (form.is_rr.data == '1')
 
             db.session.commit()
             flash("Instrutor atualizado com sucesso.", "success")
             return redirect(url_for("instrutor.listar_instrutores"))
-            
+
         except Exception as e:
             db.session.rollback()
             flash(f"Erro ao atualizar: {str(e)}", "danger")

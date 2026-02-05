@@ -35,7 +35,7 @@ user_bp = Blueprint("user", __name__, url_prefix="/user")
 
 posto_graduacao_structured = {
     'Praças': ['Soldado PM', '2º Sargento PM', '1º Sargento PM'],
-    'Oficiais': ['1º Tenente PM', 'Capitão PM', 'Major PM', 'Tenente-Coronel PM', 'Coronel PM'],
+    'Oficiais': ['Aluno Oficial', '1º Tenente PM', 'Capitão PM', 'Major PM', 'Tenente-Coronel PM', 'Coronel PM'],
     'Saúde - Enfermagem': ['Ten Enf', 'Cap Enf', 'Maj Enf', 'Ten Cel Enf', 'Cel Enf'],
     'Saúde - Médicos': ['Ten Med', 'Cap Med', 'Maj Med', 'Ten Cel Med', 'Cel Med'],
     'Outros': ['Civil', 'Outro']
@@ -45,15 +45,15 @@ class MeuPerfilForm(FlaskForm):
     nome_completo = StringField('Nome Completo', validators=[DataRequired()])
     email = StringField('E-mail', validators=[DataRequired(), Email()])
     posto_categoria = SelectField("Categoria", choices=list(posto_graduacao_structured.keys()), validators=[DataRequired()])
-    posto_graduacao = SelectField('Posto/Graduação', choices=[], validators=[DataRequired()]) 
+    posto_graduacao = SelectField('Posto/Graduação', choices=[], validators=[DataRequired()])
     turma_id = SelectField('Turma', coerce=int, validators=[WTFormsOptional()])
     is_rr = RadioField("Efetivo da Reserva Remunerada (RR)", choices=[('True', 'Sim'), ('False', 'Não')], coerce=lambda x: x == 'True', default=False)
-    
+
     # Aceita arquivos, sem limite manual de tamanho aqui (o Service vai comprimir)
     foto_perfil = FileField('Alterar Foto de Perfil', validators=[
         FileAllowed(['jpg', 'jpeg', 'png', 'gif', 'webp'], 'Apenas imagens!')
     ])
-    
+
     current_password = PasswordField('Senha Atual', validators=[WTFormsOptional()])
     new_password = PasswordField('Nova Senha', validators=[WTFormsOptional(), EqualTo('confirm_new_password', message='As senhas não correspondem.')])
     confirm_new_password = PasswordField('Confirmar Nova Senha', validators=[WTFormsOptional()])
@@ -91,7 +91,7 @@ def generate_unique_username(base: str, max_tries: int = 50) -> str:
 def meu_perfil():
     form = MeuPerfilForm(obj=current_user)
     form.turma_id.choices = []
-    
+
     if request.method == 'GET':
         posto_atual = current_user.posto_graduacao
         categoria_encontrada = 'Outros'
@@ -100,7 +100,7 @@ def meu_perfil():
                 categoria_encontrada = categoria
                 break
         form.posto_categoria.data = categoria_encontrada
-    
+
     categoria_selecionada = form.posto_categoria.data or 'Praças'
     form.posto_graduacao.choices = [(p, p) for p in posto_graduacao_structured.get(categoria_selecionada, [])]
     if request.method == 'GET':
@@ -116,14 +116,14 @@ def meu_perfil():
     elif current_user.role == 'instrutor' and hasattr(current_user, 'instrutor_profile') and current_user.instrutor_profile:
         if request.method == 'GET':
             form.is_rr.data = current_user.instrutor_profile.is_rr
-    
+
     if form.validate_on_submit():
         try:
             current_user.nome_completo = form.nome_completo.data
             current_user.posto_graduacao = form.posto_graduacao.data
             nome_de_guerra = request.form.get('nome_de_guerra')
             if nome_de_guerra: current_user.nome_de_guerra = nome_de_guerra
-            
+
             if form.email.data != current_user.email and exists_in_users_by("email", form.email.data):
                 flash("Este e-mail já está em uso por outro usuário.", "warning")
             else:
@@ -136,7 +136,7 @@ def meu_perfil():
                     set_password_hash_on_user(current_user, form.new_password.data)
                     current_user.must_change_password = False
                     flash("Senha alterada com sucesso.", "success")
-            
+
             if current_user.role == 'aluno' and current_user.aluno_profile:
                 current_user.aluno_profile.turma_id = form.turma_id.data
                 if form.foto_perfil.data:
@@ -178,7 +178,7 @@ def change_password_ajax():
         return jsonify({'success': False, 'message': 'As novas senhas não correspondem.'}), 400
     if len(new_password) < 8:
         return jsonify({'success': False, 'message': 'A nova senha deve ter pelo menos 8 caracteres.'}), 400
-        
+
     try:
         set_password_hash_on_user(current_user, new_password)
         current_user.must_change_password = False
@@ -206,7 +206,7 @@ def criar_admin_escola():
             nome = (request.form.get("nome") or "").strip()
             email = norm_email(request.form.get("email"))
             id_func = norm_idfunc(request.form.get("id_func"))
-            
+
             if not all([nome, email, id_func]):
                  flash("Todos os campos são obrigatórios.", "warning")
                  return redirect(url_for("user.criar_admin_escola"))
@@ -222,13 +222,13 @@ def criar_admin_escola():
                 return redirect(url_for("user.criar_admin_escola"))
 
             temp_pass = secrets.token_urlsafe(8)
-            
+
             user = User(
                 matricula=id_func,
                 username=username,
                 email=email,
                 nome_completo=nome,
-                role="aluno", 
+                role="aluno",
                 is_active=True,
                 must_change_password=True
             )
@@ -236,7 +236,7 @@ def criar_admin_escola():
 
             db.session.add(user)
             db.session.flush()
-            
+
             UserService.set_user_role_for_school(user.id, school_id, "admin_escola")
             db.session.commit()
 
@@ -256,13 +256,13 @@ def criar_admin_escola():
 
 @user_bp.route("/admins", methods=["GET"])
 @login_required
-@admin_required 
+@admin_required
 def listar_admins_escola():
     school_id = UserService.get_current_school_id()
     if not school_id:
         flash("Selecione uma escola para gerenciar usuários.", "warning")
         return redirect(url_for('main.dashboard'))
-    
+
     role_priority = case(
         (UserSchool.role == 'admin_escola', 1),
         (UserSchool.role == 'admin_sens', 2),
@@ -277,7 +277,7 @@ def listar_admins_escola():
         .where(UserSchool.school_id == school_id)
         .order_by(role_priority, User.nome_completo)
     ).all()
-    
+
     return render_template("listar_admins_escola.html", usuarios_com_role=results)
 
 
@@ -297,20 +297,20 @@ def alterar_papel_usuario(user_id):
     if user.id == current_user.id:
         flash("Você não pode alterar seu próprio papel por aqui.", "warning")
         return redirect(url_for('user.listar_admins_escola'))
-    
+
     if user.role == 'programador':
         flash("Não é permitido alterar o papel de um Programador.", "danger")
         return redirect(url_for('user.listar_admins_escola'))
 
     novo_role = request.form.get('novo_role')
     papeis_validos = ['admin_cal', 'admin_sens', 'admin_escola', 'instrutor', 'aluno']
-    
+
     if novo_role not in papeis_validos:
         flash("Papel inválido selecionado.", "danger")
         return redirect(url_for('user.listar_admins_escola'))
 
     success, msg = UserService.set_user_role_for_school(user.id, school_id, novo_role)
-    
+
     if success:
         flash(f"Permissões de {user.nome_completo} atualizadas para: {novo_role.upper()}", "success")
     else:

@@ -42,7 +42,7 @@
                        placeholder="Digite seu nome de guerra"
                        value="{{ form_data.get('nome_de_guerra', '') }}" required>
             </div>
-            
+
             <div class="form-group">
                 <label for="posto_graduacao">Seu Posto/Graduação:</label>
                 <select id="posto_graduacao" name="posto_graduacao" class="form-control" required>
@@ -53,6 +53,7 @@
                         <option value="1º Sargento PM">1º Sargento PM</option>
                     </optgroup>
                     <optgroup label="Oficiais">
+                        <option value="Aluno Oficial">Aluno Oficial</option>
                         <option value="1º Tenente PM">1º Tenente PM</option>
                         <option value="Capitão PM">Capitão PM</option>
                         <option value="Major PM">Major PM</option>
@@ -78,7 +79,7 @@
                     </optgroup>
                 </select>
             </div>
-            
+
             <div id="aluno-fields">
                 <div class="form-group">
                     <label for="opm">Sua OPM (Unidade):</label>
