@@ -1,96 +1,97 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file
+# backend/controllers/diario_controller.py
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
 from flask_login import login_required, current_user
-from backend.services.diario_service import DiarioService
-from backend.services.turma_service import TurmaService
-from backend.services.relatorio_service import RelatorioService
-from utils.decorators import admin_required
-from datetime import datetime
-import io
+import os
 
-diario_bp = Blueprint('diario', __name__)
+from ..services.diario_service import DiarioService
+from ..services.user_service import UserService
+from utils.image_utils import compress_image_to_memory, allowed_file
 
-@diario_bp.route('/diario/instrutor')
+diario_bp = Blueprint('diario', __name__, url_prefix='/diario-classe')
+
+@diario_bp.route('/instrutor/pendentes')
 @login_required
-def instrutor_listar():
-    diarios = DiarioService.get_diarios_by_instrutor(current_user.id)
-    return render_template('diario/instrutor_listar.html', diarios=diarios)
+def listar_pendentes():
+    school_id = UserService.get_current_school_id()
+    if not school_id:
+        flash("Escola não selecionada.", "warning")
+        return redirect(url_for('main.dashboard'))
 
-@diario_bp.route('/diario/assinar/<int:diario_id>', methods=['GET', 'POST'])
+    status = request.args.get('status', 'pendente')
+    turma_id = request.args.get('turma_id', type=int)
+    disciplina_id = request.args.get('disciplina_id', type=int)
+    
+    diarios_agrupados = DiarioService.get_diarios_agrupados(
+        school_id=school_id,
+        user_id=current_user.id, 
+        turma_id=turma_id,
+        disciplina_id=disciplina_id,
+        status=status
+    )
+    
+    turmas, disciplinas = DiarioService.get_filtros_disponiveis(school_id, current_user.id, turma_id)
+    
+    return render_template('diario/instrutor_listar.html', 
+                           diarios=diarios_agrupados, 
+                           turmas=turmas,
+                           disciplinas=disciplinas,
+                           sel_status=status,
+                           sel_turma=turma_id,
+                           sel_disciplina=disciplina_id)
+
+@diario_bp.route('/instrutor/assinar/<int:diario_id>', methods=['GET', 'POST'])
 @login_required
-def instrutor_assinar(diario_id):
-    diario = DiarioService.get_diario_by_id(diario_id)
-    if not diario or diario.instrutor_id != current_user.id:
-        flash('Diário não encontrado ou acesso negado.', 'danger')
-        return redirect(url_for('diario.instrutor_listar'))
+def assinar(diario_id):
+    diario, instrutor = DiarioService.get_diario_para_assinatura(diario_id, current_user.id)
+    
+    if not diario:
+        flash("Diário não encontrado.", "danger")
+        return redirect(url_for('diario.listar_pendentes'))
 
     if request.method == 'POST':
-        assinatura_data = request.form.get('assinatura_data')
-        frequencias = []
+        tipo = request.form.get('tipo_assinatura')
+        salvar = request.form.get('salvar_padrao') == 'on'
         
-        for key, value in request.form.items():
-            if key.startswith('presenca_'):
-                aluno_id = int(key.split('_')[1])
-                frequencias.append({
-                    'aluno_id': aluno_id,
-                    'status': value
-                })
+        conteudo_ministrado = request.form.get('conteudo_ministrado')
+        observacoes = request.form.get('observacoes')
         
-        if DiarioService.assinar_diario(diario_id, assinatura_data, frequencias):
-            flash('Diário assinado com sucesso!', 'success')
-            return redirect(url_for('diario.instrutor_listar'))
-        else:
-            flash('Erro ao assinar diário.', 'danger')
+        dados = None
 
-    alunos = DiarioService.get_alunos_by_turma(diario.turma_id)
-    return render_template('diario/instrutor_assinar.html', diario=diario, alunos=alunos)
+        if tipo == 'canvas': 
+            dados = request.form.get('assinatura_base64')
+        elif tipo == 'upload': 
+            arquivo = request.files.get('assinatura_upload')
+            
+            # --- Lógica de Compressão para Assinatura ---
+            if arquivo:
+                if allowed_file(arquivo.filename, arquivo.stream, ['png', 'jpg', 'jpeg']):
+                    # Comprime: 256x256, Qualidade 60
+                    dados = compress_image_to_memory(arquivo, max_size=(256, 256), quality=60)
+                    if not dados:
+                        flash("Erro ao processar imagem da assinatura.", "danger")
+                        return redirect(url_for('diario.listar_pendentes'))
+                else:
+                    flash("Formato de arquivo inválido para assinatura.", "danger")
+                    return redirect(url_for('diario.listar_pendentes'))
+            # ----------------------------------------------
 
-@diario_bp.route('/admin/faltas')
-@login_required
-@admin_required
-def admin_faltas():
-    data_inicio_str = request.args.get('data_inicio')
-    data_fim_str = request.args.get('data_fim')
-    turma_id = request.args.get('turma_id', type=int)
-    export_pdf = request.args.get('export_pdf') == 'true'
+        elif tipo == 'padrao': 
+            dados = True
 
-    hoje = datetime.now().date()
-    
-    if data_inicio_str:
-        try:
-            data_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d').date()
-        except ValueError:
-            data_inicio = hoje
-    else:
-        data_inicio = hoje
-
-    if data_fim_str:
-        try:
-            data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date()
-        except ValueError:
-            data_fim = hoje
-    else:
-        data_fim = hoje
-
-    faltas = DiarioService.get_faltas_report(
-        school_id=current_user.school_id,
-        data_inicio=data_inicio,
-        data_fim=data_fim,
-        turma_id=turma_id
-    )
-
-    if export_pdf:
-        pdf_data = RelatorioService.gerar_pdf_faltas(faltas, data_inicio, data_fim)
-        return send_file(
-            io.BytesIO(pdf_data),
-            mimetype='application/pdf',
-            as_attachment=True,
-            download_name=f"relatorio_faltas_{data_inicio}_a_{data_fim}.pdf"
+        ok, msg = DiarioService.assinar_diario(
+            diario_id=diario.id, 
+            user_id=current_user.id, 
+            tipo_assinatura=tipo, 
+            dados_assinatura=dados, 
+            salvar_padrao=salvar,
+            conteudo_atualizado=conteudo_ministrado,
+            observacoes_atualizadas=observacoes
         )
+        
+        if ok:
+            flash(msg, "success")
+            return redirect(url_for('diario.listar_pendentes', status='assinado'))
+        else:
+            flash(msg, "danger")
 
-    turmas = TurmaService.get_turmas_by_school(current_user.school_id)
-    return render_template('diario/admin_faltas.html', 
-                           faltas=faltas, 
-                           turmas=turmas, 
-                           data_inicio=data_inicio, 
-                           data_fim=data_fim, 
-                           turma_id_sel=turma_id)
+    return render_template('diario/instrutor_assinar.html', diario=diario, instrutor=instrutor)
