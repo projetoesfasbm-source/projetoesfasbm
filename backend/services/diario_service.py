@@ -236,8 +236,10 @@ class DiarioService:
     @staticmethod
     def get_faltas_report_data(school_id, data_inicio, data_fim, turma_id=None):
         """
-        Busca consolidada de faltas.
-        Retorna uma lista de dicionários para evitar erros de mapeamento de tupla no template.
+        Busca faltas baseada estritamente nos models:
+        FrequenciaAluno (diario_id, aluno_id, presente)
+        Aluno (nome_completo, idfunc)
+        Disciplina (nome)
         """
         stmt = (
             select(FrequenciaAluno, Aluno, DiarioClasse, Turma, Disciplina)
@@ -256,16 +258,15 @@ class DiarioService:
         if turma_id:
             stmt = stmt.where(Turma.id == turma_id)
 
-        stmt = stmt.order_by(DiarioClasse.data_aula.asc(), Aluno.nome.asc())
+        stmt = stmt.order_by(DiarioClasse.data_aula.asc(), Aluno.nome_completo.asc())
         results = db.session.execute(stmt).all()
         
-        # Converte para formato amigável ao template
         report = []
         for row in results:
             report.append({
                 'data': row.DiarioClasse.data_aula,
                 'matricula': row.Aluno.idfunc,
-                'aluno_nome': row.Aluno.nome,
+                'aluno_nome': row.Aluno.nome_completo,
                 'turma_nome': row.Turma.nome,
                 'disciplina_nome': row.Disciplina.nome
             })

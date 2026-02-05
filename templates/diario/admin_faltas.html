@@ -56,13 +56,13 @@
                 </tr>
             </thead>
             <tbody>
-                {% for f, aluno, diario, turma, disc in faltas %}
+                {% for f in faltas %}
                 <tr>
-                    <td style="color: white !important;">{{ diario.data_aula.strftime('%d/%m/%Y') }}</td>
-                    <td><span class="badge bg-secondary" style="color: white !important;">{{ aluno.idfunc or '-' }}</span></td>
-                    <td style="color: white !important;"><strong>{{ aluno.nome }}</strong></td>
-                    <td style="color: white !important;">{{ turma.nome }}</td>
-                    <td style="color: white !important;">{{ disc.nome }}</td>
+                    <td style="color: white !important;">{{ f.data.strftime('%d/%m/%Y') }}</td>
+                    <td><span class="badge bg-secondary" style="color: white !important;">{{ f.matricula or '-' }}</span></td>
+                    <td style="color: white !important;"><strong>{{ f.aluno_nome }}</strong></td>
+                    <td style="color: white !important;">{{ f.turma_nome }}</td>
+                    <td style="color: white !important;">{{ f.disciplina_nome }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
