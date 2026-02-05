@@ -162,28 +162,6 @@
             color: inherit !important;
             white-space: nowrap;
         }
-
-        /* Dropdown Estilizado Sidebar */
-        .sidebar-dropdown {
-            position: relative;
-        }
-        .sidebar-dropdown .dropdown-menu {
-            position: static !important;
-            transform: none !important;
-            background-color: rgba(0,0,0,0.05);
-            border: none;
-            width: 100%;
-            padding: 0;
-            box-shadow: none;
-        }
-        .sidebar-dropdown .dropdown-item {
-            padding: 10px 15px 10px 45px;
-            font-size: 0.9rem;
-            color: var(--secondary-color);
-        }
-        .sidebar-dropdown .dropdown-item:hover {
-            background-color: rgba(0,0,0,0.1);
-        }
     </style>
 </head>
 <body class="{% if not current_user.is_authenticated %}no-sidebar{% endif %}">
@@ -320,7 +298,7 @@
                     <a href="{{ url_for('disciplina.listar_disciplinas') }}" class="nav-link {% if request.endpoint and 'disciplina.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📚</div> Disciplinas</a>
                 {% endif %}
 
-                {# APENAS SENS ENVOLVIDO COM VINCULOS #}
+                {# APENAS SENS NA ESCOLA ATUAL #}
                 {% if current_user.is_sens_in_school(active_sid) %}
                     <a href="{{ url_for('vinculo.gerenciar_vinculos') }}" class="nav-link {% if request.endpoint and 'vinculo.' in request.endpoint %}active{% endif %}"><div class="nav-icon">🔗</div> Vínculos</a>
                 {% endif %}
@@ -337,27 +315,9 @@
                     {% endif %}
                 {% endif %}
 
-                {# DIÁRIOS DE CLASSE ADM - DROPDOWN #}
+                {# APENAS SENS #}
                 {% if current_user.is_sens_in_school(active_sid) %}
-                    <div class="dropdown sidebar-dropdown">
-                        <a href="#" class="nav-link dropdown-toggle {% if request.endpoint and ('admin_escola.espelho_diarios' in request.endpoint or 'diario.admin_faltas' in request.endpoint) %}active{% endif %}" 
-                           data-bs-toggle="dropdown" aria-expanded="false" style="color: white !important;">
-                            <div class="nav-icon">📖</div> <span style="color: white !important;">Diários de Classe (Adm)</span>
-                        </a>
-                        <ul class="dropdown-menu shadow border-0 bg-dark">
-                            <li>
-                                <a class="dropdown-item py-2" href="{{ url_for('admin_escola.espelho_diarios') }}" style="color: white !important;">
-                                    <i class="fas fa-list-alt me-2 text-primary"></i> Espelho Diários
-                                </a>
-                            </li>
-                            <li><hr class="dropdown-divider" style="border-color: rgba(255,255,255,0.2);"></li>
-                            <li>
-                                <a class="dropdown-item py-2" href="{{ url_for('diario.admin_faltas') }}" style="color: white !important;">
-                                    <i class="fas fa-user-times me-2 text-danger"></i> Relatório de Faltas
-                                </a>
-                            </li>
-                        </ul>
-                    </div>
+                    <a href="{{ url_for('admin_escola.espelho_diarios') }}" class="nav-link {% if request.endpoint == 'admin_escola.espelho_diarios' %}active{% endif %}"><div class="nav-icon">📖</div> Diários de Classe (Adm)</a>
                 {% endif %}
 
                 {# JUSTIÇA E DISCIPLINA #}
@@ -367,12 +327,15 @@
                     <a href="{{ url_for('questionario.index') }}" class="nav-link {% if request.endpoint and 'questionario.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📝</div> Questionários</a>
                 {% endif %}
 
-                {# SENS - APROVAÇÃO E RELATÓRIOS #}
+                {# SENS #}
                 {% if current_user.is_sens_in_school(active_sid) %}
                     <div class="nav-separator">GESTÃO DE AULAS</div>
                     <a href="{{ url_for('horario.aprovar_horarios') }}" class="nav-link {% if request.endpoint == 'horario.aprovar_horarios' %}active{% endif %}"><div class="nav-icon">👍</div> Aprovar Aulas</a>
-                    
-                    <div class="nav-separator">RELATÓRIOS</div>
+                {% endif %}
+
+                {# SENS #}
+                {% if current_user.is_sens_in_school(active_sid) %}
+                     <div class="nav-separator">RELATÓRIOS</div>
                     <a href="{{ url_for('relatorios.index') }}" class="nav-link {% if request.endpoint and 'relatorios.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📊</div> Relatórios</a>
                 {% endif %}
 
@@ -427,7 +390,7 @@
         </main>
     </div>
 
-    {# Modais de senha #}
+    {# MANTIDO: Modais de senha #}
     {% if current_user.is_authenticated %}
     <div class="modal fade" id="changePasswordModal" tabindex="-1" aria-labelledby="changePasswordModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
