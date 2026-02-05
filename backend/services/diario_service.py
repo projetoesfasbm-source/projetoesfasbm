@@ -11,7 +11,7 @@ from ..models.instrutor import Instrutor
 from ..models.turma import Turma
 from ..models.disciplina import Disciplina
 from ..models.disciplina_turma import DisciplinaTurma
-from ..models.frequencia import Frequencia
+from ..models.frequencia import FrequenciaAluno
 from ..models.aluno import Aluno
 from sqlalchemy import select, and_, or_, distinct
 
@@ -30,10 +30,6 @@ class DiarioService:
 
     @staticmethod
     def get_diarios_pendentes(school_id, user_id=None, turma_id=None, disciplina_id=None, status=None):
-        """
-        Busca os diários usando apenas a lógica de vínculos existente.
-        Corrigido para garantir que instrutores vinculados vejam as aulas lançadas pelos alunos.
-        """
         stmt = (
             select(DiarioClasse)
             .join(Turma, DiarioClasse.turma_id == Turma.id)
@@ -50,16 +46,12 @@ class DiarioService:
         if user_id:
             instrutor = DiarioService.get_current_instrutor(user_id)
             if instrutor:
-                # A SOLUÇÃO REAL: Buscamos no diário aulas cuja disciplina 
-                # possua vínculo com este instrutor na tabela DisciplinaTurma
                 subquery_vinculos = select(DisciplinaTurma.disciplina_id).where(
                     or_(
                         DisciplinaTurma.instrutor_id_1 == instrutor.id,
                         DisciplinaTurma.instrutor_id_2 == instrutor.id
                     )
                 )
-                
-                # Filtra os diários onde a disciplina faz parte dos vínculos do instrutor
                 stmt = stmt.where(DiarioClasse.disciplina_id.in_(subquery_vinculos))
             else:
                 return []
@@ -140,7 +132,6 @@ class DiarioService:
         diario = db.session.get(DiarioClasse, diario_id)
         if not diario: return None, None
 
-        # Validação simples baseada na tabela de vínculos
         vinculo = db.session.scalars(
             select(DisciplinaTurma).where(
                 DisciplinaTurma.disciplina_id == diario.disciplina_id,
@@ -245,17 +236,18 @@ class DiarioService:
     @staticmethod
     def get_faltas_report_data(school_id, data_inicio, data_fim, turma_id=None):
         """
-        Busca consolidada de faltas para o relatório administrativo.
+        Busca consolidada de faltas.
+        Retorna uma lista de dicionários para evitar erros de mapeamento de tupla no template.
         """
         stmt = (
-            select(Frequencia, Aluno, DiarioClasse, Turma, Disciplina)
-            .join(Aluno, Frequencia.aluno_id == Aluno.id)
-            .join(DiarioClasse, Frequencia.diario_classe_id == DiarioClasse.id)
+            select(FrequenciaAluno, Aluno, DiarioClasse, Turma, Disciplina)
+            .join(Aluno, FrequenciaAluno.aluno_id == Aluno.id)
+            .join(DiarioClasse, FrequenciaAluno.diario_id == DiarioClasse.id)
             .join(Turma, DiarioClasse.turma_id == Turma.id)
             .join(Disciplina, DiarioClasse.disciplina_id == Disciplina.id)
             .where(
-                DiarioClasse.school_id == school_id,
-                Frequencia.status == 'F',
+                Turma.school_id == school_id,
+                FrequenciaAluno.presente == False,
                 DiarioClasse.data_aula >= data_inicio,
                 DiarioClasse.data_aula <= data_fim
             )
@@ -265,4 +257,16 @@ class DiarioService:
             stmt = stmt.where(Turma.id == turma_id)
 
         stmt = stmt.order_by(DiarioClasse.data_aula.asc(), Aluno.nome.asc())
-        return db.session.execute(stmt).all()
+        results = db.session.execute(stmt).all()
+        
+        # Converte para formato amigável ao template
+        report = []
+        for row in results:
+            report.append({
+                'data': row.DiarioClasse.data_aula,
+                'matricula': row.Aluno.idfunc,
+                'aluno_nome': row.Aluno.nome,
+                'turma_nome': row.Turma.nome,
+                'disciplina_nome': row.Disciplina.nome
+            })
+        return report
