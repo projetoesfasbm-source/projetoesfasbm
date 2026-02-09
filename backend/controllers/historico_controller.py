@@ -4,13 +4,12 @@ from flask_wtf import FlaskForm
 from sqlalchemy import select
 from wtforms import StringField, TextAreaField, DateTimeLocalField, SubmitField, SelectField
 from wtforms.validators import DataRequired
-import sys
 
 from ..models.database import db
 from ..models.historico_disciplina import HistoricoDisciplina
 from ..models.disciplina import Disciplina
 from ..models.turma import Turma
-from ..models.elogio import Elogio  # Importação confirmada
+from ..models.elogio import Elogio  # <--- IMPORTAÇÃO ADICIONADA
 from ..services.historico_service import HistoricoService
 from ..services.aluno_service import AlunoService
 from utils.decorators import admin_or_programmer_required, aluno_profile_required, can_view_management_pages_required
@@ -53,8 +52,14 @@ def historico_funcional(aluno_id):
         return redirect(url_for('main.dashboard'))
 
     historico_unificado = HistoricoService.get_unified_historico_for_aluno(aluno_id)
+    
+    # --- ADIÇÃO: Buscar Elogios para o Histórico Funcional ---
+    elogios_lista = Elogio.query.filter_by(aluno_id=aluno.id).all()
 
-    return render_template('historico_funcional.html', aluno=aluno, historico=historico_unificado)
+    return render_template('historico_funcional.html', 
+                           aluno=aluno, 
+                           historico=historico_unificado,
+                           elogios=elogios_lista) # <--- PASSANDO A VARIÁVEL
 
 
 @historico_bp.route('/minhas-notas')
@@ -91,21 +96,14 @@ def minhas_notas():
     notas_finais = [h.nota for h in historico_disciplinas if h.nota is not None]
     media_final_curso = sum(notas_finais) / len(notas_finais) if notas_finais else 0.0
 
-    # --- INÍCIO DO DEBUG ---
-    print(f"!!! DIAGNÓSTICO: Buscando elogios para Aluno ID {aluno.id} !!!", file=sys.stderr)
-    try:
-        elogios_lista = Elogio.query.filter_by(aluno_id=aluno.id).all()
-        print(f"!!! DIAGNÓSTICO: Encontrados {len(elogios_lista)} elogios !!!", file=sys.stderr)
-    except Exception as e:
-        print(f"!!! DIAGNÓSTICO ERRO: {str(e)} !!!", file=sys.stderr)
-        elogios_lista = []
-    # --- FIM DO DEBUG ---
+    # --- ADIÇÃO: Buscar Elogios para o Boletim ---
+    elogios_lista = Elogio.query.filter_by(aluno_id=aluno.id).all()
 
     return render_template('historico_aluno.html',
                            aluno=aluno,
                            historico_disciplinas=historico_disciplinas,
                            media_final_curso=media_final_curso,
-                           elogios=elogios_lista,  # Passando a lista
+                           elogios=elogios_lista,  # <--- PASSANDO A VARIÁVEL
                            is_own_profile=True)
 
 @historico_bp.route('/ver/<int:aluno_id>')
@@ -125,21 +123,14 @@ def ver_historico_aluno(aluno_id):
     notas_finais = [h.nota for h in historico_disciplinas if h.nota is not None]
     media_final_curso = sum(notas_finais) / len(notas_finais) if notas_finais else 0.0
 
-    # --- INÍCIO DO DEBUG ---
-    print(f"!!! DIAGNÓSTICO ADMIN: Buscando elogios para Aluno ID {aluno.id} !!!", file=sys.stderr)
-    try:
-        elogios_lista = Elogio.query.filter_by(aluno_id=aluno.id).all()
-        print(f"!!! DIAGNÓSTICO ADMIN: Encontrados {len(elogios_lista)} elogios !!!", file=sys.stderr)
-    except Exception as e:
-        print(f"!!! DIAGNÓSTICO ADMIN ERRO: {str(e)} !!!", file=sys.stderr)
-        elogios_lista = []
-    # --- FIM DO DEBUG ---
+    # --- ADIÇÃO: Buscar Elogios para visualização do Admin ---
+    elogios_lista = Elogio.query.filter_by(aluno_id=aluno.id).all()
 
     return render_template('historico_aluno.html',
                            aluno=aluno,
                            historico_disciplinas=historico_disciplinas,
                            media_final_curso=media_final_curso,
-                           elogios=elogios_lista, # Passando a lista
+                           elogios=elogios_lista,  # <--- PASSANDO A VARIÁVEL
                            is_own_profile=False)
 
 

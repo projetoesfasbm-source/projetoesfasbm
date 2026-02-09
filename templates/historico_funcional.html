@@ -8,6 +8,29 @@
     <p>Registros de atividades, funções e processos para <strong>{{ aluno.user.nome_completo }}</strong>.</p>
 </div>
 
+{% if elogios %}
+<div class="elogios-section" style="margin-bottom: 2rem;">
+    <div class="section-header">
+        <h3><span style="font-size: 1.5rem;">🎖️</span> Elogios e Referências Elogiosas</h3>
+    </div>
+    <div class="elogios-grid">
+        {% for elogio in elogios %}
+        <div class="elogio-card">
+            <div class="elogio-date">{{ elogio.data_elogio.strftime('%d/%m/%Y') }}</div>
+            <div class="elogio-content">
+                <p>{{ elogio.descricao }}</p>
+                <span class="elogio-points">+{{ "%.2f"|format(elogio.pontos) }} pontos na FADA</span>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<div class="content-header" style="margin-top: 1rem;">
+    <h2>Linha do Tempo (Funções e Punições)</h2>
+</div>
+
 <div class="table-container">
     {% if historico %}
         <div class="timeline">
@@ -40,8 +63,8 @@
     {% else %}
         <div class="empty-state">
             <div class="empty-icon">📋</div>
-            <h2>Nenhum Histórico Registrado</h2>
-            <p>Não há atividades registradas para este aluno no momento.</p>
+            <h2>Nenhum Evento Funcional</h2>
+            <p>Não há registros de punições ou funções de chefia para este aluno.</p>
         </div>
     {% endif %}
 
@@ -51,56 +74,42 @@
 </div>
 
 <style>
-.timeline {
-    position: relative;
-    padding: 1rem 0;
+/* Estilos da Timeline (Mantidos) */
+.timeline { position: relative; padding: 1rem 0; }
+.timeline-item { display: flex; gap: 1.5rem; position: relative; padding-bottom: 2rem; }
+.timeline-item:not(:last-child)::before { content: ''; position: absolute; left: 24px; top: 50px; bottom: -1rem; width: 2px; background-color: var(--color-border); }
+.timeline-icon { width: 50px; height: 50px; border-radius: 50%; background-color: var(--color-background); border: 2px solid var(--color-border); display: flex; align-items: center; justify-content: center; font-size: 1.5rem; z-index: 1; }
+.timeline-content { flex: 1; }
+.timeline-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.5rem; }
+.timeline-title { font-weight: bold; font-size: 1.1rem; }
+.timeline-date { font-size: 0.85rem; color: var(--color-text-muted); }
+.timeline-description { margin: 0; }
+
+/* Novos Estilos para Elogios */
+.elogios-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
+.elogio-card { 
+    background-color: #f0fdf4; 
+    border: 1px solid #bbf7d0; 
+    border-radius: 8px; 
+    padding: 1rem; 
+    display: flex; 
+    gap: 1rem;
+    align-items: flex-start;
 }
-.timeline-item {
-    display: flex;
-    gap: 1.5rem;
-    position: relative;
-    padding-bottom: 2rem;
+.elogio-date { 
+    font-weight: bold; 
+    color: #15803d; 
+    min-width: 90px;
 }
-.timeline-item:not(:last-child)::before {
-    content: '';
-    position: absolute;
-    left: 24px;
-    top: 50px;
-    bottom: -1rem;
-    width: 2px;
-    background-color: var(--color-border);
-}
-.timeline-icon {
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
-    background-color: var(--color-background);
-    border: 2px solid var(--color-border);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.5rem;
-    z-index: 1;
-}
-.timeline-content {
-    flex: 1;
-}
-.timeline-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    margin-bottom: 0.5rem;
-}
-.timeline-title {
-    font-weight: bold;
-    font-size: 1.1rem;
-}
-.timeline-date {
-    font-size: 0.85rem;
-    color: var(--color-text-muted);
-}
-.timeline-description {
-    margin: 0;
+.elogio-points {
+    display: inline-block;
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    background-color: #dcfce7;
+    color: #166534;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-weight: 600;
 }
 </style>
 {% endblock %}

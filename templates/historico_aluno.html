@@ -3,26 +3,6 @@
 {% block title %}Minhas Notas - Meu CTSP{% endblock %}
 
 {% block content %}
-
-<div style="background-color: #ffebee; border: 2px solid #ef5350; color: #c62828; padding: 15px; margin: 20px 0; border-radius: 8px; font-weight: bold;">
-    <h3>🕵️ PAINEL DE DIAGNÓSTICO</h3>
-    <p>1. O HTML atualizou? SIM (Se você lê isso, o HTML está novo)</p>
-    <p>2. A variável 'elogios' chegou? 
-        {% if elogios is defined %}
-            <span style="background: green; color: white; padding: 2px 5px;">DEFINIDA</span>
-        {% else %}
-            <span style="background: black; color: white; padding: 2px 5px;">NÃO DEFINIDA (Erro no Controller)</span>
-        {% endif %}
-    </p>
-    <p>3. Quantos elogios tem na lista? 
-        {% if elogios %}
-            {{ elogios|length }}
-        {% else %}
-            ZERO (Lista vazia ou Nula)
-        {% endif %}
-    </p>
-    <p>4. Debug bruto: {{ elogios }}</p>
-</div>
 <div class="content-header">
     <h1>Minhas Notas</h1>
     <p>Acompanhe suas notas e médias das disciplinas do Curso Técnico em Segurança Pública.</p>
@@ -37,11 +17,10 @@
     <p class="stat-description">Esta é a média de todas as disciplinas com notas já lançadas e salvas.</p>
 </div>
 
+{% if elogios %}
 <div class="content-header" style="margin-top: 2rem;">
     <h2>Ficha Atitudinal (Elogios/Punições)</h2>
 </div>
-
-{% if elogios %}
 <div class="elogios-container">
     <table class="elogios-table">
         <thead>
@@ -67,10 +46,7 @@
     </table>
     <p class="small-info">* Estes pontos são somados à base da sua Avaliação FADA.</p>
 </div>
-{% else %}
-    <p style="color: var(--color-text-muted);">Nenhum registro de elogio ou fato observado positivo encontrado na lista enviada pelo servidor.</p>
 {% endif %}
-
 
 <div class="content-header" style="margin-top: 2rem;">
     <h2>Notas por Disciplina</h2>
@@ -133,7 +109,7 @@
 </div>
 
 <style>
-/* Mantive os estilos anteriores */
+/* Estilos para o novo card de média final */
 .media-final-curso-container {
     background: linear-gradient(135deg, var(--color-secondary), #3c4a5c);
     color: white;
