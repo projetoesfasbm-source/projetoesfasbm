@@ -3,6 +3,26 @@
 {% block title %}Minhas Notas - Meu CTSP{% endblock %}
 
 {% block content %}
+
+<div style="background-color: #ffebee; border: 2px solid #ef5350; color: #c62828; padding: 15px; margin: 20px 0; border-radius: 8px; font-weight: bold;">
+    <h3>🕵️ PAINEL DE DIAGNÓSTICO</h3>
+    <p>1. O HTML atualizou? SIM (Se você lê isso, o HTML está novo)</p>
+    <p>2. A variável 'elogios' chegou? 
+        {% if elogios is defined %}
+            <span style="background: green; color: white; padding: 2px 5px;">DEFINIDA</span>
+        {% else %}
+            <span style="background: black; color: white; padding: 2px 5px;">NÃO DEFINIDA (Erro no Controller)</span>
+        {% endif %}
+    </p>
+    <p>3. Quantos elogios tem na lista? 
+        {% if elogios %}
+            {{ elogios|length }}
+        {% else %}
+            ZERO (Lista vazia ou Nula)
+        {% endif %}
+    </p>
+    <p>4. Debug bruto: {{ elogios }}</p>
+</div>
 <div class="content-header">
     <h1>Minhas Notas</h1>
     <p>Acompanhe suas notas e médias das disciplinas do Curso Técnico em Segurança Pública.</p>
@@ -16,6 +36,41 @@
     </div>
     <p class="stat-description">Esta é a média de todas as disciplinas com notas já lançadas e salvas.</p>
 </div>
+
+<div class="content-header" style="margin-top: 2rem;">
+    <h2>Ficha Atitudinal (Elogios/Punições)</h2>
+</div>
+
+{% if elogios %}
+<div class="elogios-container">
+    <table class="elogios-table">
+        <thead>
+            <tr>
+                <th width="15%">Data</th>
+                <th width="70%">Descrição</th>
+                <th width="15%">Pontos</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in elogios %}
+            <tr>
+                <td>{{ item.data_elogio.strftime('%d/%m/%Y') if item.data_elogio else '-' }}</td>
+                <td style="text-align: left;">{{ item.descricao }}</td>
+                <td>
+                    <span class="badge-pontos" style="background-color: #dcfce7; color: #166534;">
+                        +{{ "%.2f"|format(item.pontos) }}
+                    </span>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <p class="small-info">* Estes pontos são somados à base da sua Avaliação FADA.</p>
+</div>
+{% else %}
+    <p style="color: var(--color-text-muted);">Nenhum registro de elogio ou fato observado positivo encontrado na lista enviada pelo servidor.</p>
+{% endif %}
+
 
 <div class="content-header" style="margin-top: 2rem;">
     <h2>Notas por Disciplina</h2>
@@ -78,7 +133,7 @@
 </div>
 
 <style>
-/* Estilos para o novo card de média final */
+/* Mantive os estilos anteriores */
 .media-final-curso-container {
     background: linear-gradient(135deg, var(--color-secondary), #3c4a5c);
     color: white;
@@ -94,8 +149,22 @@
 .media-final-curso-container .stat-label { font-size: 1.1rem; opacity: 0.9; }
 .media-final-curso-container .stat-description { margin: 0 0 0 auto; text-align: right; font-size: 0.9rem; opacity: 0.7; max-width: 250px; }
 
+/* Estilos para Tabela de Elogios */
+.elogios-container {
+    background-color: var(--color-white);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-soft);
+    padding: 1.5rem;
+    border: 1px solid var(--color-border);
+    margin-bottom: 2rem;
+}
+.elogios-table { width: 100%; border-collapse: collapse; }
+.elogios-table th { text-align: left; padding: 0.75rem; border-bottom: 2px solid var(--color-border); color: var(--color-text-muted); font-size: 0.85rem; text-transform: uppercase; }
+.elogios-table td { padding: 1rem 0.75rem; border-bottom: 1px solid #f1f5f9; vertical-align: top; color: var(--color-text); }
+.badge-pontos { padding: 4px 8px; border-radius: 12px; font-weight: 700; font-size: 0.85rem; }
+.small-info { font-size: 0.8rem; color: var(--color-text-muted); margin-top: 1rem; font-style: italic; }
 
-/* Estilos para a grelha de disciplinas */
+/* Estilos da Grelha */
 .disciplinas-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem; }
 .disciplina-card {
     background-color: var(--color-white);
@@ -104,7 +173,7 @@
     box-shadow: var(--shadow-soft);
     display: flex;
     flex-direction: column;
-    border-left: 5px solid var(--color-info); /* Cor padrão para 'cursando' */
+    border-left: 5px solid var(--color-info);
 }
 .disciplina-card.status-aprovado { border-left-color: var(--color-success); }
 .disciplina-card.status-reprovado { border-left-color: var(--color-danger); }
@@ -140,7 +209,6 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    // Função para calcular a média de uma disciplina em tempo real
     function calcularMediaDisciplina(card) {
         const notaP1Input = card.querySelector('input[name="nota_p1"]');
         const notaP2Input = card.querySelector('input[name="nota_p2"]');
@@ -157,7 +225,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // Adiciona o listener de evento para cada input de nota
     document.querySelectorAll('.nota-input').forEach(input => {
         input.addEventListener('input', function() {
             const card = this.closest('.disciplina-card');

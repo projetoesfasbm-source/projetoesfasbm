@@ -1,16 +1,16 @@
-# backend/controllers/historico_controller.py
-
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required, current_user
 from flask_wtf import FlaskForm
 from sqlalchemy import select
 from wtforms import StringField, TextAreaField, DateTimeLocalField, SubmitField, SelectField
 from wtforms.validators import DataRequired
+import sys
 
 from ..models.database import db
 from ..models.historico_disciplina import HistoricoDisciplina
 from ..models.disciplina import Disciplina
 from ..models.turma import Turma
+from ..models.elogio import Elogio  # Importação confirmada
 from ..services.historico_service import HistoricoService
 from ..services.aluno_service import AlunoService
 from utils.decorators import admin_or_programmer_required, aluno_profile_required, can_view_management_pages_required
@@ -70,18 +70,15 @@ def minhas_notas():
     if aluno.turma and aluno.turma.school:
         school_id = aluno.turma.school.id
         
-        # --- CORREÇÃO APLICADA AQUI ---
-        # A query agora junta com a tabela Turma para filtrar pelo school_id.
+        # Filtra disciplinas da escola correta
         disciplinas_da_escola = db.session.scalars(
             select(Disciplina).join(Turma).where(Turma.school_id == school_id)
         ).all()
-        # --- FIM DA CORREÇÃO ---
 
         matriculas_existentes_ids = {h.disciplina_id for h in aluno.historico_disciplinas}
         
         novas_matriculas = False
         for disciplina in disciplinas_da_escola:
-            # Garante que a disciplina pertence à mesma turma do aluno
             if disciplina.turma_id == aluno.turma_id and disciplina.id not in matriculas_existentes_ids:
                 nova_matricula = HistoricoDisciplina(aluno_id=aluno.id, disciplina_id=disciplina.id)
                 db.session.add(nova_matricula)
@@ -94,10 +91,21 @@ def minhas_notas():
     notas_finais = [h.nota for h in historico_disciplinas if h.nota is not None]
     media_final_curso = sum(notas_finais) / len(notas_finais) if notas_finais else 0.0
 
+    # --- INÍCIO DO DEBUG ---
+    print(f"!!! DIAGNÓSTICO: Buscando elogios para Aluno ID {aluno.id} !!!", file=sys.stderr)
+    try:
+        elogios_lista = Elogio.query.filter_by(aluno_id=aluno.id).all()
+        print(f"!!! DIAGNÓSTICO: Encontrados {len(elogios_lista)} elogios !!!", file=sys.stderr)
+    except Exception as e:
+        print(f"!!! DIAGNÓSTICO ERRO: {str(e)} !!!", file=sys.stderr)
+        elogios_lista = []
+    # --- FIM DO DEBUG ---
+
     return render_template('historico_aluno.html',
                            aluno=aluno,
                            historico_disciplinas=historico_disciplinas,
                            media_final_curso=media_final_curso,
+                           elogios=elogios_lista,  # Passando a lista
                            is_own_profile=True)
 
 @historico_bp.route('/ver/<int:aluno_id>')
@@ -117,10 +125,21 @@ def ver_historico_aluno(aluno_id):
     notas_finais = [h.nota for h in historico_disciplinas if h.nota is not None]
     media_final_curso = sum(notas_finais) / len(notas_finais) if notas_finais else 0.0
 
+    # --- INÍCIO DO DEBUG ---
+    print(f"!!! DIAGNÓSTICO ADMIN: Buscando elogios para Aluno ID {aluno.id} !!!", file=sys.stderr)
+    try:
+        elogios_lista = Elogio.query.filter_by(aluno_id=aluno.id).all()
+        print(f"!!! DIAGNÓSTICO ADMIN: Encontrados {len(elogios_lista)} elogios !!!", file=sys.stderr)
+    except Exception as e:
+        print(f"!!! DIAGNÓSTICO ADMIN ERRO: {str(e)} !!!", file=sys.stderr)
+        elogios_lista = []
+    # --- FIM DO DEBUG ---
+
     return render_template('historico_aluno.html',
                            aluno=aluno,
                            historico_disciplinas=historico_disciplinas,
                            media_final_curso=media_final_curso,
+                           elogios=elogios_lista, # Passando a lista
                            is_own_profile=False)
 
 
