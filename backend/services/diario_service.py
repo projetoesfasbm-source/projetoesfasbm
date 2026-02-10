@@ -28,6 +28,10 @@ class DiarioService:
 
     @staticmethod
     def get_diarios_pendentes(school_id, user_id=None, turma_id=None, disciplina_id=None, status=None):
+        """
+        Busca os diários usando apenas a lógica de vínculos existente.
+        Corrigido para garantir que instrutores vinculados vejam as aulas lançadas pelos alunos.
+        """
         stmt = (
             select(DiarioClasse)
             .join(Turma, DiarioClasse.turma_id == Turma.id)
@@ -44,12 +48,16 @@ class DiarioService:
         if user_id:
             instrutor = DiarioService.get_current_instrutor(user_id)
             if instrutor:
+                # A SOLUÇÃO REAL: Buscamos no diário aulas cuja disciplina 
+                # possua vínculo com este instrutor na tabela DisciplinaTurma
                 subquery_vinculos = select(DisciplinaTurma.disciplina_id).where(
                     or_(
                         DisciplinaTurma.instrutor_id_1 == instrutor.id,
                         DisciplinaTurma.instrutor_id_2 == instrutor.id
                     )
                 )
+                
+                # Filtra os diários onde a disciplina faz parte dos vínculos do instrutor
                 stmt = stmt.where(DiarioClasse.disciplina_id.in_(subquery_vinculos))
             else:
                 return []
@@ -58,7 +66,7 @@ class DiarioService:
         if disciplina_id: stmt = stmt.where(DiarioClasse.disciplina_id == disciplina_id)
 
         stmt = stmt.order_by(DiarioClasse.data_aula.desc(), DiarioClasse.periodo)
-        return db.session.scalars(stmt).all()
+        return db.session.scalars(stmt.distinct()).all()
 
     @staticmethod
     def get_diarios_agrupados(school_id, user_id=None, turma_id=None, disciplina_id=None, status=None):
@@ -89,23 +97,14 @@ class DiarioService:
     @staticmethod
     def _criar_representante_grupo(group_items):
         rep = group_items[0] 
-        # CORREÇÃO CRÍTICA PARA TURMA 6: Usar 'set' para garantir períodos únicos antes de contar
-        periodos_unicos = sorted(list(set(item.periodo for item in group_items if item.periodo is not None)))
+        first_p = group_items[0].periodo
+        last_p = group_items[-1].periodo
         
-        if not periodos_unicos: 
-            rep.periodo_resumo = "N/D"
-            rep.total_aulas_bloco = 1
-        else:
-            first_p = periodos_unicos[0]
-            last_p = periodos_unicos[-1]
-            if len(periodos_unicos) == 1: 
-                rep.periodo_resumo = f"{first_p}º Período"
-            else: 
-                rep.periodo_resumo = f"{first_p}º a {last_p}º Período"
+        if first_p is None: rep.periodo_resumo = "N/D"
+        elif first_p == last_p: rep.periodo_resumo = f"{first_p}º Período"
+        else: rep.periodo_resumo = f"{first_p}º a {last_p}º Período"
             
-            # A quantidade total de aulas no bloco deve ser a contagem de períodos distintos
-            rep.total_aulas_bloco = len(periodos_unicos)
-            
+        rep.total_aulas_bloco = len(group_items)
         return rep
 
     @staticmethod
@@ -139,6 +138,7 @@ class DiarioService:
         diario = db.session.get(DiarioClasse, diario_id)
         if not diario: return None, None
 
+        # Validação simples baseada na tabela de vínculos
         vinculo = db.session.scalars(
             select(DisciplinaTurma).where(
                 DisciplinaTurma.disciplina_id == diario.disciplina_id,
@@ -176,7 +176,6 @@ class DiarioService:
             elif tipo_assinatura == 'upload':
                 dados_assinatura.save(filepath)
 
-            # Busca todos os registros do bloco (mesmo dia, turma e disciplina)
             siblings = db.session.scalars(
                 select(DiarioClasse).where(
                     DiarioClasse.data_aula == diario_pai.data_aula,
@@ -196,7 +195,7 @@ class DiarioService:
                 if observacoes_atualizadas is not None: d.observacoes = observacoes_atualizadas
 
             db.session.commit()
-            return True, f"Sucesso! Bloco validado com sucesso."
+            return True, f"Sucesso! {len(siblings)} aulas assinadas."
         except Exception as e:
             db.session.rollback()
             return False, str(e)
