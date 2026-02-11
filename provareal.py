@@ -6,31 +6,55 @@ from backend.models.database import db
 from backend.models.horario import Horario
 from backend.models.semana import Semana
 from backend.models.ciclo import Ciclo
-from sqlalchemy import select
+from backend.models.school import School
+from backend.models.disciplina import Disciplina
 
 app = create_app()
 with app.app_context():
-    print("=== LOCALIZADOR DE AULAS INVISÍVEIS ===\n")
+    print("Gerando Relatório de Conferência Organizado e Sequencial...")
     
-    # Vamos pegar o Pelotão 9 como exemplo real
-    pelotao_alvo = '09° Pelotão - CBFPM 2026'
-    
-    aulas = db.session.execute(
-        select(Horario.semana_id, Semana.ciclo_id, Ciclo.nome, Ciclo.school_id)
+    # Busca os dados cruzados e ordena temporalmente
+    query = (
+        db.session.query(Horario, Semana, Ciclo, School)
         .join(Semana, Horario.semana_id == Semana.id)
         .join(Ciclo, Semana.ciclo_id == Ciclo.id)
-        .where(Horario.pelotao == pelotao_alvo)
-        .distinct()
+        .join(School, Ciclo.school_id == School.id)
+        .order_by(
+            School.nome, 
+            Ciclo.nome, 
+            Semana.id, 
+            Horario.pelotao, 
+            Horario.dia_semana, 
+            Horario.periodo
+        )
     ).all()
-
-    if not aulas:
-        print(f"Nenhuma aula encontrada para {pelotao_alvo}")
-    else:
-        print(f"As aulas do {pelotao_alvo} estão distribuídas assim:")
-        for sem_id, cic_id, cic_nome, sch_id in aulas:
-            print(f" -> Na Semana ID {sem_id}, que pertence ao CICLO ID {cic_id} ('{cic_nome}') na ESCOLA ID {sch_id}")
-
-    print("\n---")
-    print("O MOTIVO DO VAZIO:")
-    print("Verifique se o Ciclo e a Escola que aparecem acima são os mesmos que você selecionou na tela.")
-    print("Se forem diferentes, o sistema nunca mostrará as aulas, mesmo elas existindo.")
+    
+    with open('RESTAURACAO_ORGANIZADA.txt', 'w', encoding='utf-8') as f:
+        # Cabeçalho estruturado
+        header = (f"{'ESCOLA':<25} | {'CICLO':<15} | {'SEMANA':<12} | "
+                  f"{'TURMA':<25} | {'DIA':<8} | {'PER':<3} | {'MATÉRIA'}\n")
+        f.write(header)
+        f.write("-" * len(header) + "\n")
+        
+        for h, sem, cic, sch in query:
+            # Busca a disciplina (tentando 'nome' ou 'materia')
+            disc = db.session.get(Disciplina, h.disciplina_id)
+            if disc:
+                # Tenta pegar o nome da matéria independente de como a coluna se chama
+                nome_materia = getattr(disc, 'nome', getattr(disc, 'materia', 'Sem Nome'))
+            else:
+                nome_materia = "N/A"
+            
+            linha = (
+                f"{sch.nome[:25]:<25} | "
+                f"{cic.nome[:15]:<15} | "
+                f"{sem.nome[:12]:<12} | "
+                f"{h.pelotao[:25]:<25} | "
+                f"{h.dia_semana[:8]:<8} | "
+                f"{h.periodo:<3} | "
+                f"{nome_materia}\n"
+            )
+            f.write(linha)
+            
+    print(f"\n[SUCESSO] Relatório gerado: 'RESTAURACAO_ORGANIZADA.txt'")
+    print(f"Total de {len(query)} períodos organizados em sequência.")
