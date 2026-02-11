@@ -12,6 +12,12 @@ if os.path.exists(backend_path) and backend_path not in sys.path:
 
 try:
     from app import create_app
+    # Tenta importar o parser de URL do SQLAlchemy (compatível com várias versões)
+    try:
+        from sqlalchemy.engine import make_url
+    except ImportError:
+        from sqlalchemy.engine.url import make_url
+        
     app = create_app()
 except Exception as e:
     print(f"Erro ao carregar app Flask: {e}")
@@ -19,24 +25,24 @@ except Exception as e:
 
 def listar_backups():
     print("\n" + "="*60)
-    print("GERENCIADOR DE RESTAURAÇÃO DE BACKUP")
+    print("GERENCIADOR DE RESTAURAÇÃO DE BACKUP (CORRIGIDO)")
     print("="*60)
     print("Procurando arquivos .sql na pasta atual...\n")
 
-    # Busca arquivos .sql
     arquivos = glob.glob(os.path.join(basedir, "*.sql"))
     
     if not arquivos:
         print(">> NENHUM ARQUIVO .sql ENCONTRADO!")
-        print("Sem um arquivo de backup, não é possível restaurar o estado anterior.")
         return None
 
     backups = []
     print(f"{'Índice':<6} | {'Data/Hora Criação':<20} | {'Nome do Arquivo'}")
     print("-" * 60)
     
+    # Ordena por data de modificação (mais recente primeiro)
+    arquivos.sort(key=os.path.getmtime, reverse=True)
+    
     for i, arq in enumerate(arquivos):
-        # Pega data de modificação
         timestamp = os.path.getmtime(arq)
         data_hora = datetime.fromtimestamp(timestamp).strftime('%d/%m/%Y %H:%M:%S')
         nome = os.path.basename(arq)
@@ -48,70 +54,60 @@ def listar_backups():
 
 def restaurar_backup(arquivo_path):
     print(f"\nPREPARANDO PARA RESTAURAR: {os.path.basename(arquivo_path)}")
-    print("Isso vai SOBRESCREVER o banco de dados atual com os dados deste arquivo.")
+    print("⚠️  ATENÇÃO: Isso vai apagar TUDO que foi feito após essa data.")
     
     confirm = input("Digite 'RESTAURAR' para confirmar (ou Enter para cancelar): ")
     if confirm != 'RESTAURAR':
         print("Cancelado.")
         return
 
-    # Extrair credenciais do Flask App
     db_uri = app.config.get('SQLALCHEMY_DATABASE_URI')
     
-    if not db_uri or 'mysql' not in db_uri:
-        print("Erro: Não foi possível detectar configuração MySQL válida no app.")
+    if not db_uri:
+        print("Erro: URI do banco não encontrada.")
         return
 
-    # Parse simples da URI: mysql://user:pass@host/db
     try:
-        # Remove prefixo
-        clean = db_uri.replace('mysql://', '').replace('mysql+pymysql://', '')
+        # USA O PARSER OFICIAL (Resolve o problema da senha com @)
+        url = make_url(db_uri)
         
-        # Separa user:pass e host/db
-        creds, server = clean.split('@')
-        user, password = creds.split(':')
-        
-        # Separa host e db
-        if '/' in server:
-            host, db_name = server.split('/')
-        else:
-            host = server
-            db_name = "" # Tenta pegar sem
-            
-        # Remove parâmetros extras se houver (?charset=utf8 etc)
-        if '?' in db_name:
-            db_name = db_name.split('?')[0]
+        # Extrai os dados de forma segura
+        host = url.host
+        user = url.username
+        password = url.password
+        db_name = url.database
+        port = url.port or 3306
 
         print(f"\nConectando ao banco '{db_name}' no host '{host}'...")
 
-        # Monta comando do sistema (mysql client)
-        # É mais seguro e rápido usar o comando nativo do que ler linha a linha em Python
+        # Monta comando do mysql
         cmd = [
             'mysql',
             f'-h{host}',
+            f'-P{port}',
             f'-u{user}',
             f'-p{password}',
             db_name
         ]
 
-        print(">> Executando restauração... (Isso pode levar alguns segundos)")
+        print(">> Executando restauração... Aguarde...")
         
-        # Executa o comando redirecionando a entrada do arquivo
         with open(arquivo_path, 'r') as f:
+            # Executa o comando e captura erros se houver
             process = subprocess.Popen(cmd, stdin=f, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             stdout, stderr = process.communicate()
 
         if process.returncode == 0:
             print("\n" + "="*60)
-            print("SUCESSO! O BANCO DE DADOS FOI RESTAURADO.")
+            print("✅ SUCESSO! O BANCO DE DADOS FOI RESTAURADO.")
             print("="*60)
-            print("Verifique o site agora. Tudo deve estar como na data do arquivo.")
+            print("O sistema voltou exatamente para o estado do arquivo escolhido.")
         else:
-            print("\n[ERRO NA RESTAURAÇÃO]")
-            print(stderr.decode('utf-8'))
+            print("\n❌ ERRO NA RESTAURAÇÃO:")
+            print(stderr.decode('utf-8', errors='ignore'))
 
     except Exception as e:
-        print(f"Erro ao processar credenciais ou executar: {e}")
+        print(f"Erro ao processar a conexão: {e}")
 
 if __name__ == "__main__":
     lista = listar_backups()
