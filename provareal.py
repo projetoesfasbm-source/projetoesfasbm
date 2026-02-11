@@ -4,19 +4,33 @@ sys.path.append(os.getcwd())
 from backend.app import create_app
 from backend.models.database import db
 from backend.models.horario import Horario
+from backend.models.semana import Semana
+from backend.models.ciclo import Ciclo
+from sqlalchemy import select
 
 app = create_app()
 with app.app_context():
-    print("Gerando arquivo de restauração completa...")
-    horarios = Horario.query.all()
+    print("=== LOCALIZADOR DE AULAS INVISÍVEIS ===\n")
     
-    with open('RESTAURACAO_MASTER.txt', 'w', encoding='utf-8') as f:
-        # Cabeçalho com as colunas vitais
-        f.write("PELOTAO|SEMANA_ID|DIA_SEMANA|PERIODO|DURACAO|DISCIPLINA_ID|INSTRUTOR_ID|INSTRUTOR_ID_2|STATUS|OBS\n")
-        
-        for h in horarios:
-            # Extraímos os dados técnicos puros para não haver erro de nome
-            linha = f"{h.pelotao}|{h.semana_id}|{h.dia_semana}|{h.periodo}|{h.duracao}|{h.disciplina_id}|{h.instrutor_id}|{h.instrutor_id_2}|{h.status}|{h.observacao}\n"
-            f.write(linha)
+    # Vamos pegar o Pelotão 9 como exemplo real
+    pelotao_alvo = '09° Pelotão - CBFPM 2026'
     
-    print(f"Sucesso! {len(horarios)} registros exportados para RESTAURACAO_MASTER.txt")
+    aulas = db.session.execute(
+        select(Horario.semana_id, Semana.ciclo_id, Ciclo.nome, Ciclo.school_id)
+        .join(Semana, Horario.semana_id == Semana.id)
+        .join(Ciclo, Semana.ciclo_id == Ciclo.id)
+        .where(Horario.pelotao == pelotao_alvo)
+        .distinct()
+    ).all()
+
+    if not aulas:
+        print(f"Nenhuma aula encontrada para {pelotao_alvo}")
+    else:
+        print(f"As aulas do {pelotao_alvo} estão distribuídas assim:")
+        for sem_id, cic_id, cic_nome, sch_id in aulas:
+            print(f" -> Na Semana ID {sem_id}, que pertence ao CICLO ID {cic_id} ('{cic_nome}') na ESCOLA ID {sch_id}")
+
+    print("\n---")
+    print("O MOTIVO DO VAZIO:")
+    print("Verifique se o Ciclo e a Escola que aparecem acima são os mesmos que você selecionou na tela.")
+    print("Se forem diferentes, o sistema nunca mostrará as aulas, mesmo elas existindo.")
