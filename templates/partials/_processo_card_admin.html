@@ -12,7 +12,8 @@
             </div>
 
             <div class="btn-group">
-                {% if (processo.status | string | upper) == 'AGUARDANDO_CIENCIA' %}
+                {# BOTÃO EXCLUIR - Ajustado para aparecer em todos os status de andamento #}
+                {% if (processo.status | string | upper) in ['AGUARDANDO_CIENCIA', 'ALUNO_NOTIFICADO', 'DEFESA_ENVIADA', 'EM_ANALISE'] %}
                 <form action="{{ url_for('justica.deletar_processo', pid=processo.id) }}" method="POST" onsubmit="return confirm('Tem certeza que deseja excluir este processo? Esta ação não pode ser desfeita.');" class="ms-2">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir Processo">
@@ -21,7 +22,8 @@
                 </form>
                 {% endif %}
 
-                {% if (processo.status | string | upper) in ['ALUNO_NOTIFICADO', 'DEFESA_ENVIADA', 'EM_ANALISE'] %}
+                {# BOTÃO ANALISAR - Ajustado para incluir AGUARDANDO_CIENCIA #}
+                {% if (processo.status | string | upper) in ['AGUARDANDO_CIENCIA', 'ALUNO_NOTIFICADO', 'DEFESA_ENVIADA', 'EM_ANALISE'] %}
                 <button class="btn btn-sm btn-success js-toggle-analise-form"
                         data-target-form="#analise-form-{{ processo.id }}">
                     <i class="fas fa-gavel me-1"></i>
@@ -43,8 +45,8 @@
             <small class="text-muted">Registrado por {{ processo.relator.nome_completo }} em {{ processo.data_ocorrencia.strftime('%d/%m/%Y às %H:%M') }}</small>
         </div>
 
-        {# Exibe a defesa no cartão (Removida do form abaixo para não duplicar) #}
-        {% if (processo.status | string | upper) in ['ALUNO_NOTIFICADO', 'DEFESA_ENVIADA', 'EM_ANALISE'] %}
+        {# Exibe a defesa no cartão - Ajustado para incluir AGUARDANDO_CIENCIA #}
+        {% if (processo.status | string | upper) in ['AGUARDANDO_CIENCIA', 'ALUNO_NOTIFICADO', 'DEFESA_ENVIADA', 'EM_ANALISE'] %}
             <div class="process-detail bg-light p-3 rounded border mt-3">
                 <span class="detail-label">Defesa do Aluno:</span>
                 {% if processo.defesa %}
@@ -80,8 +82,8 @@
             </div>
         {% endif %}
 
-        {# Formulário de Análise #}
-        {% if (processo.status | string | upper) in ['ALUNO_NOTIFICADO', 'DEFESA_ENVIADA', 'EM_ANALISE'] %}
+        {# Formulário de Análise - Ajustado para incluir AGUARDANDO_CIENCIA #}
+        {% if (processo.status | string | upper) in ['AGUARDANDO_CIENCIA', 'ALUNO_NOTIFICADO', 'DEFESA_ENVIADA', 'EM_ANALISE'] %}
         <div class="analise-form-container border p-3 mt-3 rounded bg-light" id="analise-form-{{ processo.id }}" style="display: none;">
 
             <h5 class="mb-3">Finalizar Processo de {{ processo.aluno.user.nome_completo }}</h5>
