@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError # <--- Adicionado
 from datetime import datetime
 from flask_wtf import FlaskForm
 from wtforms import StringField, DateField, SubmitField, SelectField, BooleanField, IntegerField
@@ -183,13 +184,17 @@ def adicionar_ciclo():
             select(Ciclo).where(Ciclo.nome == nome_ciclo, Ciclo.school_id == school_id)
         )
         if not exists:
-            # CRIA O CICLO VINCULADO À ESCOLA
-            novo_ciclo = Ciclo(nome=nome_ciclo, school_id=school_id)
-            db.session.add(novo_ciclo)
-            db.session.commit()
-            flash(f"Ciclo '{nome_ciclo}' criado com sucesso!", "success")
-            # Redireciona para o novo ciclo criado
-            return redirect(url_for('semana.gerenciar_semanas', ciclo_id=novo_ciclo.id))
+            # Tenta criar, tratando erro de integridade (duplicate entry)
+            try:
+                novo_ciclo = Ciclo(nome=nome_ciclo, school_id=school_id)
+                db.session.add(novo_ciclo)
+                db.session.commit()
+                flash(f"Ciclo '{nome_ciclo}' criado com sucesso!", "success")
+                # Redireciona para o novo ciclo criado
+                return redirect(url_for('semana.gerenciar_semanas', ciclo_id=novo_ciclo.id))
+            except IntegrityError:
+                db.session.rollback()
+                flash(f"Erro: Já existe um ciclo com o nome '{nome_ciclo}'.", "danger")
         else:
             flash(f"Já existe um ciclo com o nome '{nome_ciclo}' nesta escola.", "danger")
     else:
