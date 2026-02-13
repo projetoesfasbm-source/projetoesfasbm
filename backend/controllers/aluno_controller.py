@@ -74,7 +74,10 @@ def listar_alunos():
     # Explicação: Fazemos JOIN com UserSchool para garantir que o aluno pertence à escola.
     # Usamos LEFT JOIN com Turma para que alunos "sem turma" não sumam da lista.
 
-    query = db.session.query(Aluno).join(User).join(UserSchool).outerjoin(Turma).options(
+    # AJUSTE PARA EVITAR AMBIGUIDADE
+    query = db.session.query(Aluno).select_from(Aluno).join(User).join(
+        UserSchool, Aluno.user_id == UserSchool.user_id
+    ).outerjoin(Turma).options(
         joinedload(Aluno.turma),
         joinedload(Aluno.user)
     ).filter(
@@ -124,8 +127,10 @@ def editar_aluno(aluno_id):
         flash('Nenhuma escola associada.', 'danger')
         return redirect(url_for('aluno.listar_alunos'))
 
-    # Busca segura garantindo escola
-    aluno = db.session.query(Aluno).join(User).join(UserSchool).filter(
+    # Busca segura garantindo escola - AJUSTE PARA EVITAR AMBIGUIDADE
+    aluno = db.session.query(Aluno).select_from(Aluno).join(User).join(
+        UserSchool, Aluno.user_id == UserSchool.user_id
+    ).filter(
         Aluno.id == aluno_id,
         UserSchool.school_id == school_id
     ).first()
@@ -229,16 +234,24 @@ def excluir_aluno(aluno_id):
              return redirect(url_for('aluno.listar_alunos'))
 
         try:
-            aluno = db.session.query(Aluno).join(UserSchool).filter(
+            # AJUSTE PARA EVITAR AMBIGUIDADE (ON CLAUSE EXPLICITA)
+            aluno = db.session.query(Aluno).select_from(Aluno).join(
+                UserSchool, Aluno.user_id == UserSchool.user_id
+            ).filter(
                 Aluno.id == aluno_id,
                 UserSchool.school_id == school_id
             ).first()
 
             if aluno:
+                # Armazena o ID do usuário antes de remover o perfil do aluno
+                current_user_id = aluno.user_id
+                
                 # Remove Aluno Profile
                 db.session.delete(aluno)
-                # Remove Vínculo UserSchool
-                db.session.query(UserSchool).filter_by(user_id=aluno.user_id, school_id=school_id).delete()
+                
+                # Remove Vínculo UserSchool usando o ID armazenado
+                db.session.query(UserSchool).filter_by(user_id=current_user_id, school_id=school_id).delete()
+                
                 db.session.commit()
                 flash('Aluno removido da escola.', 'success')
             else:
