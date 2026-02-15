@@ -1,3 +1,4 @@
+# backend/controllers/justica_controller.py
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, g
 from flask_login import login_required, current_user
 from sqlalchemy import select, or_
@@ -16,7 +17,6 @@ from ..models.turma import Turma
 from ..models.discipline_rule import DisciplineRule
 from ..models.fada_avaliacao import FadaAvaliacao
 
-# IMPORTAÇÃO DOS SERVIÇOS
 from ..services.justica_service import JusticaService
 from ..services.user_service import UserService
 from ..services.turma_service import TurmaService
@@ -27,24 +27,6 @@ from utils.decorators import admin_or_programmer_required, can_manage_justice_re
 
 justica_bp = Blueprint('justica', __name__, url_prefix='/justica-e-disciplina')
 logger = logging.getLogger(__name__)
-
-# --- HELPER DE HIERARQUIA ---
-def get_rank_value(posto):
-    if not posto: return 0
-    p = posto.lower().strip()
-    if 'cel' in p: return 100
-    if 'maj' in p: return 80
-    if 'cap' in p: return 70
-    if '1º ten' in p or '1 ten' in p: return 60
-    if '2º ten' in p or '2 ten' in p or 'tenente' in p: return 50
-    if 'asp' in p: return 45
-    if 'sub' in p: return 40
-    if '1º sgt' in p or '1 sgt' in p: return 30
-    if '2º sgt' in p or '2 sgt' in p: return 20
-    if '3º sgt' in p or '3 sgt' in p: return 10
-    if 'cb' in p: return 5
-    if 'sd' in p: return 1
-    return 0
 
 @justica_bp.route('/')
 @login_required
@@ -281,7 +263,6 @@ def enviar_defesa(processo_id):
 def finalizar_processo(pid):
     """
     Julga e finaliza o processo disciplinar.
-    Opções: Justificado, Advertência, Repreensão, Sustação da Dispensa.
     """
     processo = db.session.get(ProcessoDisciplina, pid)
     if not processo:
@@ -289,15 +270,16 @@ def finalizar_processo(pid):
         return redirect(url_for('justica.index'))
 
     decisao = request.form.get('decisao') 
-    
-    # Captura a fundamentação do campo correto
     fundamentacao_texto = request.form.get('fundamentacao')
-    
     turnos_sustacao = request.form.get('turnos_sustacao')
-    pontos_finais = request.form.get('pontos_finais', type=float)
+    
+    # Tratamento seguro para pontos float
+    try:
+        pontos_finais = float(request.form.get('pontos_finais', 0.0))
+    except ValueError:
+        pontos_finais = 0.0
 
     if not decisao:
-        logger.error(f"FALHA JULGAMENTO: Campo 'decisao' vazio. Form: {request.form}")
         flash("Selecione uma decisão válida.", "warning")
         return redirect(url_for('justica.index'))
 
@@ -305,8 +287,9 @@ def finalizar_processo(pid):
     processo.decisao_final = decisao
     processo.data_decisao = datetime.now().astimezone()
     processo.status = StatusProcesso.FINALIZADO
+    processo.relator_id = current_user.id # Registra quem julgou
     
-    # SALVA O TEXTO NOS DOIS CAMPOS (Compatibilidade)
+    # SALVA O TEXTO NOS DOIS CAMPOS (Compatibilidade com Frontend e Backend)
     processo.fundamentacao = fundamentacao_texto
     processo.observacao_decisao = fundamentacao_texto
 
@@ -315,20 +298,22 @@ def finalizar_processo(pid):
         processo.tipo_sancao = decisao
         processo.dias_sancao = 0 
         processo.detalhes_sancao = None
-        if pontos_finais is not None:
+        # Garante que pontos não sumam
+        if pontos_finais > 0:
              processo.pontos = pontos_finais
     
     elif decisao == 'Sustação da Dispensa':
         processo.tipo_sancao = "Sustação da Dispensa"
         processo.detalhes_sancao = turnos_sustacao if turnos_sustacao else "Quantidade não informada"
         processo.dias_sancao = 0
-        processo.pontos = pontos_finais if pontos_finais else 0.0
+        if pontos_finais > 0:
+            processo.pontos = pontos_finais
         
     elif decisao == 'Justificado':
         processo.tipo_sancao = None
         processo.dias_sancao = 0
         processo.detalhes_sancao = None
-        processo.pontos = 0.0
+        processo.pontos = 0.0 # Anula os pontos se justificado
 
     try:
         db.session.commit()
@@ -337,10 +322,8 @@ def finalizar_processo(pid):
         try:
             aluno = db.session.get(Aluno, processo.aluno_id)
             if aluno and aluno.user:
-                # E-mail
                 EmailService.send_justice_verdict_email(aluno.user, processo)
                 
-                # Sistema
                 link_processo = url_for('justica.index', _external=True)
                 NotificationService.create_notification(
                     user_id=aluno.user.id,
@@ -350,7 +333,7 @@ def finalizar_processo(pid):
         except Exception as e:
             logger.error(f"Erro ao enviar notificações de veredito {pid}: {e}")
 
-        flash("Processo finalizado com sucesso.", "success")
+        flash("Processo finalizado com sucesso!", "success")
         
     except Exception as e:
         db.session.rollback()
