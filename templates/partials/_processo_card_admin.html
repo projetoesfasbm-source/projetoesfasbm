@@ -1,119 +1,125 @@
-<div class="card process-card mb-3 status-{{ (processo.status or 'AGUARDANDO_CIENCIA') | string | lower | replace(' ', '-') | replace('ç', 'c') | replace('ã', 'a') }}">
+<div class="card process-card mb-3 status-{{ (processo.status or 'AGUARDANDO_CIENCIA') | string | lower | replace(' ', '-') }}">
     <div class="card-body">
         <div class="d-flex justify-content-between align-items-start mb-3">
             <div>
-                <span class="status-badge status-{{ (processo.status or 'AGUARDANDO_CIENCIA') | string | lower | replace(' ', '-') | replace('ç', 'c') | replace('ã', 'a') }}">
+                <span class="status-badge bg-secondary text-white">
                     {{ (processo.status or 'AGUARDANDO CIÊNCIA') | string | replace('_', ' ') }}
                 </span>
                 <h5 class="process-title mt-2 mb-1">
                     {{ processo.aluno.user.posto_graduacao }} {{ processo.aluno.user.nome_completo }}
                 </h5>
-                <span class="process-id">ID Processo: {{ processo.id }} | Matrícula: {{ processo.aluno.user.matricula }}</span>
+                <span class="process-id">ID: {{ processo.id }} | Turma: {{ processo.aluno.turma.nome }}</span>
             </div>
 
             <div class="btn-group">
-                {% set status_str = (processo.status or 'AGUARDANDO_CIENCIA') | string | upper %}
-                
-                {% if status_str == 'AGUARDANDO_CIENCIA' %}
-                <form action="{{ url_for('justica.deletar_processo', pid=processo.id) }}" method="POST" onsubmit="return confirm('Tem certeza que deseja excluir este processo? Esta ação não pode ser desfeita.');" class="ms-2">
+                {# Botão Excluir (Só se aguardando) #}
+                {% if (processo.status or 'AGUARDANDO_CIENCIA') == 'AGUARDANDO_CIENCIA' %}
+                <form action="{{ url_for('justica.deletar_processo', pid=processo.id) }}" method="POST" onsubmit="return confirm('Excluir este processo?');" class="ms-2">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir Processo">
-                        <i class="fas fa-trash me-1"></i> Excluir
-                    </button>
+                    <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fas fa-trash"></i></button>
                 </form>
                 {% endif %}
 
-                {% if status_str in ['ALUNO_NOTIFICADO', 'DEFESA_ENVIADA', 'EM_ANALISE', 'AGUARDANDO_CIENCIA'] or processo.status is none %}
-                <button class="btn btn-sm btn-success js-toggle-analise-form"
-                        data-target-form="#analise-form-{{ processo.id }}">
-                    <i class="fas fa-gavel me-1"></i>
-                    <span class="js-toggle-text">Analisar / Julgar</span>
+                {# Botão Analisar (Para Chefe CAL) #}
+                {% if processo.status in ['ALUNO_NOTIFICADO', 'DEFESA_ENVIADA', 'EM_ANALISE', 'AGUARDANDO_CIENCIA'] or processo.status is none %}
+                <button class="btn btn-sm btn-success js-toggle-analise-form" data-target-form="#analise-form-{{ processo.id }}">
+                    <i class="fas fa-gavel me-1"></i> Analisar/Decidir
                 </button>
                 {% endif %}
             </div>
         </div>
 
-        <hr>
+        {# ALERTA DE PRAZOS EXPIRADOS (ADMIN) #}
+        {% if processo.status == 'AGUARDANDO_CIENCIA' %}
+             {% set horas_passadas = ((agora - processo.data_registro).total_seconds() / 3600) | int %}
+             {% if horas_passadas > 24 %}
+                <div class="alert alert-danger py-1 px-2 mb-2 small">
+                    <i class="fas fa-clock"></i> <strong>ATENÇÃO CHEFE:</strong> O aluno não deu ciência em 24h. ({{ horas_passadas }}h decorridas).
+                </div>
+             {% endif %}
+        {% endif %}
 
-        <div class="process-detail">
-            <span class="detail-label">Fato Constatado:</span>
-            <p class="preserve-whitespace">{{ processo.fato_constatado }}</p>
-        </div>
-        <div class="process-detail">
-            <span class="detail-label">Relator (Termo de Justificação):</span>
-            <p class="preserve-whitespace">{{ processo.observacao or "N/A" }}</p>
-            <small class="text-muted">Registrado por {{ processo.relator.nome_completo }} em {{ processo.data_ocorrencia.strftime('%d/%m/%Y às %H:%M') }}</small>
-        </div>
+        <hr class="my-1">
 
-        {# Exibe a defesa no cartão #}
+        <p class="mb-1"><strong>Fato:</strong> {{ processo.fato_constatado }}</p>
+        <p class="text-muted small mb-2">Relator: {{ processo.relator.nome_completo }} | Data: {{ processo.data_ocorrencia.strftime('%d/%m/%Y') }}</p>
+
+        {# Defesa do Aluno #}
         {% if processo.defesa %}
-            <div class="process-detail bg-light p-3 rounded border mt-3">
-                <span class="detail-label">Defesa do Aluno:</span>
-                <p class="preserve-whitespace">{{ processo.defesa }}</p>
-                <small class="text-muted">Enviada em {{ processo.data_defesa.strftime('%d/%m/%Y às %H:%M') if processo.data_defesa else 'Data N/A' }}</small>
+            <div class="bg-light p-2 rounded border mb-2">
+                <strong>Defesa:</strong> <em class="text-muted">{{ processo.defesa }}</em>
             </div>
         {% endif %}
 
-        {# Visualização após finalizado #}
-        {% if status_str == 'FINALIZADO' %}
-            <div class="process-detail bg-light p-3 rounded border border-2 mt-3">
-                <span class="detail-label text-success">Decisão Final ({{ processo.decisao_final }}):</span>
-
-                <p class="mb-1"><strong>Enquadramento:</strong> {{ processo.origem_punicao }} {{ ('- ' + processo.codigo_infracao) if processo.codigo_infracao else '' }}</p>
-
-                {% if processo.tipo_sancao %}
-                    <p class="fw-bold text-dark">
-                        Sanção: {{ processo.tipo_sancao }}
-                    </p>
-                {% endif %}
-                
-                {% if processo.detalhes_sancao %}
-                     <p class="fw-bold text-dark text-uppercase small">Detalhes: {{ processo.detalhes_sancao }}</p>
-                {% endif %}
-
-                <hr class="my-2">
-                <span class="detail-label">Fundamentação:</span>
-                <p class="preserve-whitespace">{{ processo.fundamentacao or processo.observacao_decisao or "Sem fundamentação registrada." }}</p>
-                <small class="text-muted">Decisão em {{ processo.data_decisao.strftime('%d/%m/%Y às %H:%M') if processo.data_decisao else 'Data N/A' }}</small>
+        {# Decisão do Chefe #}
+        {% if processo.decisao_final %}
+            <div class="alert alert-secondary py-2 mb-2">
+                <strong>Decisão Chefe:</strong> {{ processo.decisao_final }} 
+                {% if processo.tipo_sancao %}({{ processo.tipo_sancao }}){% endif %}
+                <br><small>{{ processo.fundamentacao }}</small>
             </div>
         {% endif %}
 
-        {# Formulário de Análise (Aparece escondido) #}
-        {% if status_str != 'FINALIZADO' and status_str != 'ARQUIVADO' %}
+        {# ÁREA DO RECURSO (COMANDANTE) #}
+        {% if processo.status == 'EM_RECURSO' %}
+            <div class="alert alert-warning border-warning mt-2">
+                <h6><i class="fas fa-envelope-open-text"></i> Recurso Interposto</h6>
+                <p class="bg-white p-2 border rounded mb-2"><em>"{{ processo.texto_recurso }}"</em></p>
+                <small class="text-muted">Data: {{ processo.data_recurso.strftime('%d/%m %H:%M') if processo.data_recurso else '' }}</small>
+
+                {% if current_user.role == 'super_admin' or current_user.is_programador %}
+                    <hr>
+                    <h6 class="text-danger">Decisão do Comandante:</h6>
+                    <form action="{{ url_for('justica.julgar_recurso', pid=processo.id) }}" method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        
+                        <div class="mb-2">
+                            <textarea name="fundamentacao_recurso" class="form-control" placeholder="Parecer do Comandante..." required></textarea>
+                        </div>
+                        
+                        <div class="d-flex gap-2">
+                            <button type="submit" name="decisao_recurso" value="DEFERIDO" class="btn btn-success flex-grow-1">
+                                Deferir (Anular Punição)
+                            </button>
+                            <button type="submit" name="decisao_recurso" value="INDEFERIDO" class="btn btn-danger flex-grow-1">
+                                Indeferir (Manter Punição)
+                            </button>
+                        </div>
+                    </form>
+                {% else %}
+                    <div class="mt-2 text-center text-muted border-top pt-2">
+                        <i class="fas fa-lock"></i> Aguardando decisão do Comandante.
+                    </div>
+                {% endif %}
+            </div>
+        {% elif processo.decisao_recurso %}
+            <div class="alert alert-dark mt-2">
+                <strong>Recurso Julgado:</strong> {{ processo.decisao_recurso }}
+                <br><small>Parecer: {{ processo.fundamentacao_recurso }}</small>
+            </div>
+        {% endif %}
+
+        {# Formulário de Análise do Chefe (Oculto) #}
         <div class="analise-form-container border p-3 mt-3 rounded bg-light" id="analise-form-{{ processo.id }}" style="display: none;">
-
-            <h5 class="mb-3">Finalizar Processo de {{ processo.aluno.user.nome_completo }}</h5>
-
+            <h5 class="mb-3">Decisão do Chefe CAL</h5>
             <form action="{{ url_for('justica.finalizar_processo', pid=processo.id) }}" method="POST">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-                <div class="mb-3">
-                    <label class="form-label d-block"><strong>Fato:</strong> {{ processo.fato_constatado }}</label>
-                    {% if processo.pontos and processo.pontos > 0 %}
-                        <label class="form-label d-block text-danger"><strong>Pontuação Original:</strong> {{ processo.pontos }} pontos</label>
-                    {% endif %}
-                </div>
                 
-                <hr>
-
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label for="decisao-{{ processo.id }}" class="form-label">Decisão Final</label>
-                        <select name="decisao" id="decisao-{{ processo.id }}" class="form-select" onchange="toggleFormularioSancao('{{ processo.id }}')" required>
-                            <option value="" disabled selected>Selecione a decisão...</option>
-                            <option value="Justificado">Justificado (Sem Sanção)</option>
-                            <option value="Advertência">Advertência (Com Sanção)</option>
-                            <option value="Repreensão">Repreensão (Com Sanção)</option>
-                            <option value="Sustação da Dispensa">Sustação da Dispensa (Com Sanção)</option>
-                        </select>
-                    </div>
+                <div class="mb-2">
+                    <label>Decisão:</label>
+                    <select name="decisao" id="decisao-{{ processo.id }}" class="form-select" onchange="toggleFormularioSancao('{{ processo.id }}')" required>
+                        <option value="" disabled selected>Selecione...</option>
+                        <option value="Justificado">Justificado</option>
+                        <option value="Advertência">Advertência</option>
+                        <option value="Repreensão">Repreensão</option>
+                        <option value="Sustação da Dispensa">Sustação da Dispensa</option>
+                    </select>
                 </div>
 
-                {# Campo de Turnos (Aparece APENAS para Sustação da Dispensa) #}
-                <div class="mb-3" id="div-turnos-{{ processo.id }}" style="display: none;">
-                    <label for="turnos_sustacao-{{ processo.id }}" class="form-label fw-bold text-danger">Quantidade de Turnos de Sustação</label>
+                <div class="mb-2" id="div-turnos-{{ processo.id }}" style="display: none;">
+                    <label class="text-danger">Turnos:</label>
                     <select name="turnos_sustacao" id="turnos_sustacao-{{ processo.id }}" class="form-select">
-                        <option value="" disabled selected>Selecione a quantidade...</option>
+                        <option value="">Selecione...</option>
                         <option value="01 turno (6H)">01 turno (6H)</option>
                         <option value="02 turnos (12H)">02 turnos (12H)</option>
                         <option value="03 turnos (18H)">03 turnos (18H)</option>
@@ -125,38 +131,29 @@
                     </select>
                 </div>
 
-                <div class="mb-3">
-                    <label for="fundamentacao-{{ processo.id }}" class="form-label">Fundamentação da Decisão</label>
-                    <textarea name="fundamentacao" id="fundamentacao-{{ processo.id }}" class="form-control" rows="5" placeholder="Descreva a fundamentação..." required></textarea>
+                <div class="mb-2">
+                    <label>Fundamentação:</label>
+                    <textarea name="fundamentacao" class="form-control" rows="3" required></textarea>
                 </div>
                 
                 <input type="hidden" name="pontos_finais" value="{{ processo.pontos }}">
 
-                <div class="d-flex justify-content-end gap-2 mt-3">
+                <div class="d-flex justify-content-end gap-2">
                     <button type="button" class="btn btn-secondary js-toggle-analise-form" data-target-form="#analise-form-{{ processo.id }}">Cancelar</button>
-                    <button type="submit" class="btn btn-success">Salvar Decisão</button>
+                    <button type="submit" class="btn btn-success">Emitir Decisão</button>
                 </div>
             </form>
         </div>
-        {% endif %}
     </div>
 </div>
 
 <script>
     function toggleFormularioSancao(pid) {
-        var decisaoSelect = document.getElementById('decisao-' + pid);
-        if (!decisaoSelect) return;
+        var decisao = document.getElementById('decisao-' + pid).value;
+        var div = document.getElementById('div-turnos-' + pid);
+        var select = document.getElementById('turnos_sustacao-' + pid);
         
-        var decisao = decisaoSelect.value;
-        var divTurnos = document.getElementById('div-turnos-' + pid);
-        var selectTurnos = document.getElementById('turnos_sustacao-' + pid);
-
-        if (divTurnos) divTurnos.style.display = 'none';
-        if (selectTurnos) selectTurnos.required = false;
-
-        if (decisao === 'Sustação da Dispensa') {
-            if (divTurnos) divTurnos.style.display = 'block';
-            if (selectTurnos) selectTurnos.required = true;
-        }
+        if (div) div.style.display = (decisao === 'Sustação da Dispensa') ? 'block' : 'none';
+        if (select) select.required = (decisao === 'Sustação da Dispensa');
     }
 </script>

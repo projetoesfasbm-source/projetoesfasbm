@@ -19,8 +19,10 @@ class StatusProcesso(str, enum.Enum):
     AGUARDANDO_CIENCIA = "AGUARDANDO_CIENCIA"
     ALUNO_NOTIFICADO = "ALUNO_NOTIFICADO"
     DEFESA_ENVIADA = "DEFESA_ENVIADA"
-    EM_ANALISE = "EM_ANALISE"
-    FINALIZADO = "FINALIZADO"
+    EM_ANALISE = "EM_ANALISE"         # Analise do Chefe CAL
+    DECISAO_EMITIDA = "DECISAO_EMITIDA" # Chefe decidiu, aguardando ciencia do aluno
+    EM_RECURSO = "EM_RECURSO"         # Aluno recorreu ao Comandante
+    FINALIZADO = "FINALIZADO"         # Encerrado
     ARQUIVADO = "ARQUIVADO"
 
 class ProcessoDisciplina(db.Model):
@@ -45,12 +47,12 @@ class ProcessoDisciplina(db.Model):
         nullable=False
     )
 
-    # DATAS
+    # DATAS FLUXO
     data_ocorrencia: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
     data_registro: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
     data_ciente: Mapped[t.Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     
-    # Campo auxiliar para compatibilidade com controllers que chamam data_ciencia
+    # Propriedade auxiliar para compatibilidade
     @property
     def data_ciencia(self):
         return self.data_ciente
@@ -62,27 +64,37 @@ class ProcessoDisciplina(db.Model):
     data_defesa: Mapped[t.Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     data_decisao: Mapped[t.Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    # CAMPOS DE TEXTO E DECISÃO
+    # FLUXO RECURSAL (NOVOS CAMPOS)
+    data_notificacao_decisao: Mapped[t.Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    data_recurso: Mapped[t.Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    data_julgamento_recurso: Mapped[t.Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # TEXTOS
     defesa: Mapped[t.Optional[str]] = mapped_column(Text, nullable=True)
     decisao_final: Mapped[t.Optional[str]] = mapped_column(String(50), nullable=True)
     fundamentacao: Mapped[t.Optional[str]] = mapped_column(Text, nullable=True)
-    
-    # ADICIONADO: Campo legado/backup essencial para evitar o erro AttributeError
     observacao_decisao: Mapped[t.Optional[str]] = mapped_column(Text, nullable=True)
-    
     detalhes_sancao: Mapped[t.Optional[str]] = mapped_column(Text, nullable=True)
 
-    # OUTROS DADOS
+    # RECURSO
+    texto_recurso: Mapped[t.Optional[str]] = mapped_column(Text, nullable=True)
+    decisao_recurso: Mapped[t.Optional[str]] = mapped_column(String(50), nullable=True)
+    fundamentacao_recurso: Mapped[t.Optional[str]] = mapped_column(Text, nullable=True)
+    autoridade_recurso_id: Mapped[t.Optional[int]] = mapped_column(ForeignKey('users.id'), nullable=True)
+
+    # OUTROS
     is_crime: Mapped[bool] = mapped_column(Boolean, default=False)
     tipo_sancao: Mapped[t.Optional[str]] = mapped_column(String(50), nullable=True)
     dias_sancao: Mapped[int] = mapped_column(Integer, default=0)
     origem_punicao: Mapped[str] = mapped_column(String(20), default='NPCCAL')
+    
+    # Campo corrigido (apenas UM agora)
     ciente_aluno: Mapped[bool] = mapped_column(Boolean, default=False)
 
-    # RELACIONAMENTOS (Mantidos conforme original para evitar quebras)
+    # RELACIONAMENTOS
     aluno = relationship("Aluno", backref=db.backref("processos_novos", overlaps="processos_disciplinares"))
-
     relator: Mapped["User"] = relationship(foreign_keys=[relator_id])
+    autoridade_recurso: Mapped[t.Optional["User"]] = relationship(foreign_keys=[autoridade_recurso_id])
     regra: Mapped[t.Optional["DisciplineRule"]] = relationship()
 
     def __repr__(self):
@@ -98,6 +110,5 @@ class ProcessoDisciplina(db.Model):
             'status': self.status,
             'pontos': self.pontos,
             'decisao': self.decisao_final,
-            # Garante que retorna algum texto se existir
             'fundamentacao': self.fundamentacao or self.observacao_decisao
         }
