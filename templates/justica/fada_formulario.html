@@ -178,18 +178,15 @@
 </style>
 
 <script>
-// Obtém o ID do usuário logado do template pai
 const currentUserId = {{ current_user.id }}; 
 
 window.abrirFadaModalInterno = function(alunoId, nomeAluno, fadaId, etapa, dadosFada) {
-    // Reset
     document.getElementById('formFada').reset();
     document.getElementById('fada_aluno_id').value = alunoId;
     document.getElementById('fada_id_atual').value = fadaId || '';
     document.getElementById('fada_nome_aluno_display').innerText = nomeAluno;
     document.getElementById('fada_data_display').innerText = new Date().toLocaleDateString('pt-BR');
     
-    // Configura Visual
     const pControl = document.getElementById('painel-controle');
     const pComissao = document.getElementById('area-selecao-comissao');
     const badge = document.getElementById('badge-etapa');
@@ -198,32 +195,24 @@ window.abrirFadaModalInterno = function(alunoId, nomeAluno, fadaId, etapa, dados
     pControl.style.display = 'block';
     badge.innerText = etapa || 'RASCUNHO';
     
-    // Preenche Selects da Comissão
     popularSelectsComissao(dadosFada);
     
-    // Renderiza Assinaturas (Hashes)
     renderHash('box_ass_pres', dadosFada?.hash_pres);
     renderHash('box_ass_m1', dadosFada?.hash_m1);
     renderHash('box_ass_m2', dadosFada?.hash_m2);
 
-    // LÓGICA DE STATUS
     if (etapa === 'RASCUNHO' || !etapa) {
-        // Modo Edição (Chefe CAL)
         pComissao.style.display = 'block';
         btnSalvar.style.display = 'inline-block';
         document.getElementById('btn-enviar-comissao').style.display = fadaId ? 'inline-block' : 'none';
-        
-        // Ativa inputs
         document.querySelectorAll('.fada-input, .fada-select, textarea').forEach(el => el.disabled = false);
     } else {
-        // Modo Leitura / Assinatura
         bloquearEdicao();
         pComissao.style.display = 'none';
         btnSalvar.style.display = 'none';
         document.getElementById('btn-enviar-comissao').style.display = 'none';
         
         if (etapa === 'COMISSAO') {
-            // Verifica se o usuário atual é membro E se ainda não assinou
             const souPres = (dadosFada?.presidente_id == currentUserId && !dadosFada?.hash_pres);
             const souM1 = (dadosFada?.membro1_id == currentUserId && !dadosFada?.hash_m1);
             const souM2 = (dadosFada?.membro2_id == currentUserId && !dadosFada?.hash_m2);
@@ -275,7 +264,6 @@ function atualizarNomes() {
     const m1 = document.getElementById('sel_membro1');
     const m2 = document.getElementById('sel_membro2');
     
-    // Atualiza os nomes na área de assinatura (parte inferior do A4)
     document.getElementById('lbl_presidente').innerText = p.options[p.selectedIndex]?.text.replace('Selecione...', 'Presidente') || "Presidente";
     document.getElementById('lbl_membro1').innerText = m1.options[m1.selectedIndex]?.text.replace('Selecione...', 'Membro 1') || "Membro 1";
     document.getElementById('lbl_membro2').innerText = m2.options[m2.selectedIndex]?.text.replace('Selecione...', 'Membro 2') || "Membro 2";
