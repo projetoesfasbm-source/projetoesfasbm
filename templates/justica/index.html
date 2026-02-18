@@ -42,7 +42,7 @@
                 <h3 class="justice-content-title">Processos em Andamento</h3>
                 {% if em_andamento %}
                     {% for p in em_andamento %}
-                        <div class="card mb-3 shadow-sm border-start border-4 {{ 'border-warning' if p.status == 'AGUARDANDO_CIENCIA' else 'border-primary' }}">
+                        <div class="card mb-3 shadow-sm border-start border-4 border-primary">
                             <div class="card-body">
                                 <div class="row align-items-center">
                                     <div class="col-md-2">
@@ -62,28 +62,68 @@
                                         {% endif %}
                                     </div>
                                     <div class="col-md-3 text-end">
-                                        <div class="btn-group">
+                                        <div class="d-flex justify-content-end gap-2">
+                                            
                                             {% if current_user.role != 'aluno' %}
-                                                <button type="button" class="btn btn-sm btn-info text-white" onclick="toggleAnalise('{{ p.id }}')">
+                                                <button type="button" class="btn btn-sm btn-info text-white" onclick="toggleAnalise('{{ p.id }}')" title="Analisar/Decidir">
                                                     <i class="fas fa-gavel"></i> Analisar
                                                 </button>
                                                 
-                                                <form action="{{ url_for('justica.deletar_processo', pid=p.id) }}" method="POST" class="d-inline" onsubmit="return confirm('ATENÇÃO: Excluir este processo?');">
+                                                <form action="{{ url_for('justica.deletar_processo', pid=p.id) }}" method="POST" onsubmit="return confirm('ATENÇÃO: Tem certeza que deseja EXCLUIR este processo?');">
                                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                                    <button type="submit" class="btn btn-sm btn-outline-danger ms-1" title="Excluir">
-                                                        <i class="fas fa-trash"></i>
+                                                    <button type="submit" class="btn btn-sm btn-danger fw-bold" title="Excluir Processo">
+                                                        <i class="fas fa-trash"></i> EXCLUIR
                                                     </button>
                                                 </form>
                                             {% endif %}
 
-                                            {% if p.status == 'AGUARDANDO_CIENCIA' %}
-                                            <form action="{{ url_for('justica.dar_ciente', processo_id=p.id) }}" method="POST" class="d-inline ms-1">
-                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                                <button type="submit" class="btn btn-sm btn-warning fw-bold">
-                                                    <i class="fas fa-check"></i> Dar Ciente
+                                            {% if current_user.role == 'aluno' %}
+                                                <button type="button" class="btn btn-sm btn-warning fw-bold text-dark" onclick="toggleDefesa('{{ p.id }}')">
+                                                    <i class="fas fa-file-signature"></i> DAR CIENTE / DEFESA
                                                 </button>
-                                            </form>
                                             {% endif %}
+                                            
+                                            {% if current_user.role != 'aluno' and (p.status or '') == 'AGUARDANDO_CIENCIA' %}
+                                                <form action="{{ url_for('justica.dar_ciente', processo_id=p.id) }}" method="POST">
+                                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                    <button type="submit" class="btn btn-sm btn-outline-warning text-dark" title="Forçar Ciência (Admin)">
+                                                        <i class="fas fa-check-double"></i>
+                                                    </button>
+                                                </form>
+                                            {% endif %}
+
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div id="collapseDefesa{{ p.id }}" class="mt-3 pt-3 border-top bg-light p-3 rounded" style="display: none;">
+                                    <div class="row">
+                                        <div class="col-md-12">
+                                            <h5 class="text-warning fw-bold"><i class="fas fa-shield-alt me-2"></i>Registrar Defesa e Ciência</h5>
+                                            <p class="small text-muted mb-2">
+                                                Ao clicar em "Confirmar", você declara estar ciente do fato imputado e submete a justificativa abaixo.
+                                            </p>
+                                            
+                                            <form action="{{ url_for('justica.dar_ciente', processo_id=p.id) }}" method="POST">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                
+                                                <div class="mb-3">
+                                                    <label class="form-label fw-bold small">Fato Constatado:</label>
+                                                    <div class="p-2 bg-white border rounded text-muted fst-italic">{{ p.fato_constatado }}</div>
+                                                </div>
+
+                                                <div class="mb-3">
+                                                    <label class="form-label fw-bold">Sua Justificativa / Defesa:</label>
+                                                    <textarea name="defesa" class="form-control" rows="6" placeholder="Escreva aqui sua defesa ou justificativa detalhada sobre o ocorrido..." required></textarea>
+                                                </div>
+
+                                                <div class="text-end">
+                                                    <button type="button" class="btn btn-secondary btn-sm" onclick="toggleDefesa('{{ p.id }}')">Cancelar</button>
+                                                    <button type="submit" class="btn btn-warning fw-bold text-dark">
+                                                        <i class="fas fa-paper-plane me-1"></i> Enviar Defesa
+                                                    </button>
+                                                </div>
+                                            </form>
                                         </div>
                                     </div>
                                 </div>
@@ -163,7 +203,7 @@
                                         </div>
                                     </form>
                                 </div>
-                                </div>
+                            </div>
                         </div>
                     {% endfor %}
                 {% else %}
@@ -332,9 +372,19 @@
 </style>
 
 <script>
-// FUNÇÃO: MOSTRA/ESCONDE O FORMULÁRIO DE ANÁLISE DO PROCESSO
+// FUNÇÃO: MOSTRA/ESCONDE O FORMULÁRIO DE ANÁLISE DO PROCESSO (ADMIN)
 function toggleAnalise(id) {
     const el = document.getElementById('collapseProcesso' + id);
+    if (el.style.display === 'none') {
+        el.style.display = 'block';
+    } else {
+        el.style.display = 'none';
+    }
+}
+
+// FUNÇÃO: MOSTRA/ESCONDE O FORMULÁRIO DE DEFESA (ALUNO)
+function toggleDefesa(id) {
+    const el = document.getElementById('collapseDefesa' + id);
     if (el.style.display === 'none') {
         el.style.display = 'block';
     } else {
