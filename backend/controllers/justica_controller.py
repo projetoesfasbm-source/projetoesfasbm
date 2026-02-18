@@ -30,25 +30,23 @@ logger = logging.getLogger(__name__)
 
 # --- FUNÇÃO AUXILIAR DE VERIFICAÇÃO DE PRAZOS ---
 def verificar_prazos_automaticos(processos):
-    """
-    Verifica se o prazo de recurso (48h) expirou e finaliza automaticamente.
-    """
     agora = datetime.now().astimezone()
     alterado = False
     
     for proc in processos:
-        # Regra: Se o chefe decidiu, aluno foi notificado da decisão, e passaram 48h sem recurso
         if proc.status == StatusProcesso.DECISAO_EMITIDA.value and proc.data_notificacao_decisao:
-            horas_passadas = (agora - proc.data_notificacao_decisao).total_seconds() / 3600
-            
-            if horas_passadas > 48:
-                proc.status = StatusProcesso.FINALIZADO.value
-                msg = " | TRÂNSITO EM JULGADO: Prazo de recurso de 48h expirou."
-                if proc.observacao_decisao:
-                    proc.observacao_decisao += msg
-                else:
-                    proc.observacao_decisao = msg
-                alterado = True
+            if proc.data_notificacao_decisao.tzinfo is None:
+                 pass
+            else:
+                horas_passadas = (agora - proc.data_notificacao_decisao).total_seconds() / 3600
+                if horas_passadas > 48:
+                    proc.status = StatusProcesso.FINALIZADO.value
+                    msg = " | TRÂNSITO EM JULGADO: Prazo de recurso de 48h expirou."
+                    if proc.observacao_decisao:
+                        proc.observacao_decisao += msg
+                    else:
+                        proc.observacao_decisao = msg
+                    alterado = True
 
     if alterado:
         try:
@@ -61,6 +59,17 @@ def verificar_prazos_automaticos(processos):
 @login_required
 def index():
     school_id = UserService.get_current_school_id()
+    
+    # --- FILTRO DE REGRAS ---
+    tipo_npccal = 'ctsp' 
+    if g.active_school and hasattr(g.active_school, 'npccal_type') and g.active_school.npccal_type:
+        tipo_npccal = g.active_school.npccal_type.lower()
+    
+    fatos_predefinidos = db.session.scalars(
+        select(DisciplineRule)
+        .where(DisciplineRule.npccal_type == tipo_npccal)
+        .order_by(DisciplineRule.codigo)
+    ).all()
     
     if current_user.role == 'aluno':
         if not current_user.aluno_profile or not current_user.aluno_profile.turma:
@@ -110,18 +119,14 @@ def index():
         ).order_by(ProcessoDisciplina.data_decisao.desc()).limit(50)
 
     em_andamento = db.session.scalars(stmt_andamento).unique().all()
-    
-    # Roda a verificação de prazos nos processos em andamento
     verificar_prazos_automaticos(em_andamento)
     
-    # Recarrega se houve mudança (opcional, mas garante consistência)
     if any(p.status == StatusProcesso.FINALIZADO.value for p in em_andamento):
          em_andamento = db.session.scalars(stmt_andamento).unique().all()
 
     finalizados = db.session.scalars(stmt_finalizados).unique().all()
     
     turmas = TurmaService.get_turmas_by_school(school_id) if school_id else []
-    fatos_predefinidos = db.session.scalars(select(DisciplineRule).order_by(DisciplineRule.codigo)).all()
     
     agora_hora = datetime.now().strftime('%H:%M')
     hoje = datetime.now().strftime('%Y-%m-%d')
@@ -223,8 +228,10 @@ def registrar_em_massa():
                     aluno = db.session.get(Aluno, proc.aluno_id)
                     if aluno and aluno.user:
                         link_processo = url_for('justica.index', _external=True)
-                        
-                        EmailService.send_justice_notification_email(aluno.user, proc, link_processo)
+                        try:
+                            EmailService.send_justice_notification_email(aluno.user, proc, link_processo)
+                        except:
+                            pass
                         
                         NotificationService.create_notification(
                             user_id=aluno.user.id,
@@ -256,14 +263,12 @@ def dar_ciente(processo_id):
         flash("Permissão negada.", "error")
         return redirect(url_for('justica.index'))
 
-    # FLUXO 1: Ciência Inicial
     if processo.status == StatusProcesso.AGUARDANDO_CIENCIA.value:
         processo.data_ciencia = datetime.now().astimezone()
         processo.status = StatusProcesso.ALUNO_NOTIFICADO
         processo.ciente_aluno = True
         flash("Ciência do processo registrada. Você pode enviar sua defesa.", "success")
     
-    # FLUXO 2: Ciência da Decisão do Chefe (Abre prazo para Recurso)
     elif processo.status == StatusProcesso.DECISAO_EMITIDA.value:
         processo.data_notificacao_decisao = datetime.now().astimezone()
         flash("Ciência da decisão registrada. Prazo de 48h para recurso iniciado.", "info")
@@ -285,8 +290,6 @@ def enviar_defesa(processo_id):
         flash("Permissão negada. Apenas o aluno autuado pode enviar a defesa.", "error")
         return redirect(url_for('justica.index'))
     
-    # Verificar prazo de defesa (se necessário no futuro, incluir logica de 48h/24h aqui)
-
     texto_defesa = request.form.get('defesa')
     if not texto_defesa or not texto_defesa.strip():
         flash("A justificativa não pode estar vazia.", "warning")
@@ -309,28 +312,23 @@ def enviar_defesa(processo_id):
 @justica_bp.route('/enviar-recurso/<int:pid>', methods=['POST'])
 @login_required
 def enviar_recurso(pid):
-    """
-    Aluno interpõe recurso ao Comandante
-    """
     processo = db.session.get(ProcessoDisciplina, pid)
     
-    # Verifica dono
     is_aluno_dono = (current_user.role == 'aluno' and current_user.aluno_profile and current_user.aluno_profile.id == processo.aluno_id)
     if not is_aluno_dono:
         flash("Apenas o aluno pode interpor recurso.", "error"); return redirect(url_for('justica.index'))
 
-    # Verifica status e prazo
     if processo.status != StatusProcesso.DECISAO_EMITIDA.value:
         flash("Status inválido para recurso.", "error"); return redirect(url_for('justica.index'))
     
     if not processo.data_notificacao_decisao:
         flash("Você precisa dar ciência da decisão antes.", "warning"); return redirect(url_for('justica.index'))
 
-    # Verifica 48h
     agora = datetime.now().astimezone()
-    horas_passadas = (agora - processo.data_notificacao_decisao).total_seconds() / 3600
-    if horas_passadas > 48:
-        flash("Prazo de 48h para recurso expirado.", "error"); return redirect(url_for('justica.index'))
+    if processo.data_notificacao_decisao.tzinfo:
+        horas_passadas = (agora - processo.data_notificacao_decisao).total_seconds() / 3600
+        if horas_passadas > 48:
+            flash("Prazo de 48h para recurso expirado.", "error"); return redirect(url_for('justica.index'))
 
     texto = request.form.get('texto_recurso')
     if not texto:
@@ -349,7 +347,7 @@ def enviar_recurso(pid):
 @can_manage_justice_required
 def finalizar_processo(pid):
     """
-    Chefe CAL analisa e emite DECISÃO. (Não finaliza ainda, abre prazo recurso).
+    Chefe CAL analisa e emite DECISÃO. (Lógica Restaurada)
     """
     processo = db.session.get(ProcessoDisciplina, pid)
     if not processo:
@@ -370,15 +368,12 @@ def finalizar_processo(pid):
     # Registra a decisão do Chefe
     processo.decisao_final = decisao
     processo.data_decisao = datetime.now().astimezone()
-    
-    # ATENÇÃO: Mudança de fluxo. Não finaliza, vai para DECISAO_EMITIDA
     processo.status = StatusProcesso.DECISAO_EMITIDA.value
-    
     processo.relator_id = current_user.id 
     processo.fundamentacao = fundamentacao_texto
     processo.observacao_decisao = fundamentacao_texto
 
-    # Lógica de Sanção
+    # Lógica de Sanção (RESTAURADA conforme original)
     if decisao in ['Advertência', 'Repreensão']:
         processo.tipo_sancao = decisao
         processo.dias_sancao = 0 
@@ -402,7 +397,6 @@ def finalizar_processo(pid):
     try:
         db.session.commit()
         
-        # Notificar aluno sobre a decisão
         aluno = db.session.get(Aluno, processo.aluno_id)
         if aluno and aluno.user:
             link = url_for('justica.index', _external=True)
@@ -425,15 +419,17 @@ def finalizar_processo(pid):
 @login_required
 def julgar_recurso(pid):
     """
-    Comandante (Super Admin) julga o recurso.
+    Comandante (admin_escola) julga o recurso.
     """
-    # Apenas Super Admin ou Programador (Comandante)
-    if not (current_user.is_programador or current_user.role == 'super_admin'):
-        flash("Apenas o Comandante pode julgar recursos.", "error")
+    school_id = UserService.get_current_school_id()
+    is_comandante = current_user.is_admin_escola_in_school(school_id)
+    
+    if not (current_user.is_programador or is_comandante):
+        flash("Apenas o Comandante (Admin Escola) pode julgar recursos.", "error")
         return redirect(url_for('justica.index'))
 
     processo = db.session.get(ProcessoDisciplina, pid)
-    decisao = request.form.get('decisao_recurso') # DEFERIDO / INDEFERIDO
+    decisao = request.form.get('decisao_recurso')
     parecer = request.form.get('fundamentacao_recurso')
 
     processo.decisao_recurso = decisao
@@ -441,7 +437,6 @@ def julgar_recurso(pid):
     processo.autoridade_recurso_id = current_user.id
     processo.data_julgamento_recurso = datetime.now().astimezone()
     
-    # Se DEFERIDO, anula a punição. Se INDEFERIDO, mantém a decisão do Chefe.
     if decisao == 'DEFERIDO':
         processo.tipo_sancao = "ANULADO (Recurso Deferido)"
         processo.pontos = 0.0
@@ -477,15 +472,16 @@ def deletar_processo(pid):
         flash("Processo não encontrado.", "danger"); return redirect(url_for('justica.index'))
     
     school_id = UserService.get_current_school_id()
-    if not processo.aluno or not processo.aluno.turma or processo.aluno.turma.school_id != school_id:
-        if not (current_user.is_programador or getattr(current_user, 'role', '') == 'super_admin'):
-            flash("Permissão negada.", "danger"); return redirect(url_for('justica.index'))
+    if processo.aluno and processo.aluno.turma and processo.aluno.turma.school_id != school_id:
+         if not (current_user.is_programador or current_user.is_admin_escola_in_school(school_id)):
+             flash("Este processo pertence a outra escola.", "danger")
+             return redirect(url_for('justica.index'))
 
     success, message = JusticaService.deletar_processo(pid)
     flash(message, 'success' if success else 'danger')
     return redirect(url_for('justica.index'))
 
-# --- ROTAS FADA (MANTIDAS IGUAIS) ---
+# --- ROTAS FADA (MANTIDAS) ---
 @justica_bp.route('/fada/boletim')
 @login_required
 def fada_boletim():

@@ -6,12 +6,6 @@
 <link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
 
-{% set school_type = 'ctsp' %}
-{% if g.active_school and g.active_school.npccal_type %}
-    {% set school_type = g.active_school.npccal_type|lower %}
-{% endif %}
-{% set show_fada = (school_type in ['cbfpm', 'cspm']) %}
-
 <div class="content-header">
     <h1>Justiça e Disciplina</h1>
     <p>Gestão de processos disciplinares e avaliação atitudinal.</p>
@@ -32,12 +26,9 @@
                     <button class="btn btn-success justice-option-btn" data-target="newElogioContent">
                         <i class="fas fa-star me-1"></i>Novo Elogio
                     </button>
-
-                    {% if show_fada %}
                     <a href="{{ url_for('justica.fada_boletim') }}" class="btn btn-info text-white justice-option-btn">
                         <i class="fas fa-clipboard-list me-1"></i> Boletim / Avaliar (FADA)
                     </a>
-                    {% endif %}
                 {% endif %}
             </div>
 
@@ -64,12 +55,11 @@
                                     <div class="col-md-3 text-end">
                                         <div class="btn-group">
                                             {% if current_user.role != 'aluno' %}
-                                                <button type="button" class="btn btn-sm btn-info text-white" 
-                                                        onclick='abrirModalAnalise({{ p.id }}, "{{ p.aluno.user.nome_completo }}", `{{ p.fato_constatado | replace("`", "") }}`)'>
+                                                <button type="button" class="btn btn-sm btn-info text-white" onclick="toggleAnalise('{{ p.id }}')">
                                                     <i class="fas fa-gavel"></i> Analisar
                                                 </button>
                                                 
-                                                <form action="{{ url_for('justica.deletar_processo', pid=p.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Tem certeza que deseja EXCLUIR este processo?');">
+                                                <form action="{{ url_for('justica.deletar_processo', pid=p.id) }}" method="POST" class="d-inline" onsubmit="return confirm('ATENÇÃO: Excluir este processo?');">
                                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                                     <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir">
                                                         <i class="fas fa-trash"></i>
@@ -88,7 +78,74 @@
                                         </div>
                                     </div>
                                 </div>
-                            </div>
+
+                                <div id="collapseProcesso{{ p.id }}" class="mt-3 pt-3 border-top bg-light p-3 rounded" style="display: none;">
+                                    <form action="{{ url_for('justica.finalizar_processo', pid=p.id) }}" method="POST">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        
+                                        <div class="row">
+                                            <div class="col-md-6 border-end">
+                                                <h6 class="fw-bold text-muted"><i class="fas fa-file-alt me-1"></i>Descrição do Fato:</h6>
+                                                <div class="p-2 bg-white border rounded text-dark fst-italic mb-3" style="white-space: pre-wrap; max-height: 200px; overflow-y: auto;">
+                                                    {{ p.fato_constatado }}
+                                                </div>
+                                                
+                                                {% if p.observacao %}
+                                                <h6 class="fw-bold text-muted mt-2">Termo/Observação Original:</h6>
+                                                <div class="small text-muted mb-3">{{ p.observacao }}</div>
+                                                {% endif %}
+
+                                                {% if p.defesa %}
+                                                <div class="alert alert-secondary border-secondary">
+                                                    <h6 class="fw-bold text-dark mb-1"><i class="fas fa-shield-alt me-1"></i>Defesa / Justificativa do Aluno:</h6>
+                                                    <p class="mb-0" style="white-space: pre-wrap;">{{ p.defesa }}</p>
+                                                    <small class="text-muted d-block mt-1">Enviada em: {{ p.data_defesa.strftime('%d/%m/%Y %H:%M') if p.data_defesa else '-' }}</small>
+                                                </div>
+                                                {% else %}
+                                                <div class="alert alert-warning py-2 small">
+                                                    <i class="fas fa-exclamation-circle me-1"></i> O aluno ainda não enviou defesa.
+                                                </div>
+                                                {% endif %}
+                                            </div>
+
+                                            <div class="col-md-6">
+                                                <h6 class="fw-bold text-primary"><i class="fas fa-gavel me-1"></i>Decisão do Chefe</h6>
+                                                
+                                                <div class="mb-3">
+                                                    <label class="form-label small fw-bold">Veredito</label>
+                                                    <select name="decisao" class="form-select" required onchange="toggleInputsInline(this, '{{ p.id }}')">
+                                                        <option value="">-- Selecione --</option>
+                                                        <option value="Justificado">Justificado</option>
+                                                        <option value="Advertência">Advertência</option>
+                                                        <option value="Repreensão">Repreensão</option>
+                                                        <option value="Sustação da Dispensa">Sustação da Dispensa</option>
+                                                    </select>
+                                                </div>
+
+                                                <div class="mb-3" id="divTurnos{{ p.id }}" style="display:none;">
+                                                    <label class="form-label small text-danger fw-bold">Quantidade de Turnos (Sustação)</label>
+                                                    <input type="number" name="turnos_sustacao" class="form-control" placeholder="Ex: 1, 2...">
+                                                </div>
+
+                                                <div class="mb-3" id="divPontos{{ p.id }}" style="display:none;">
+                                                    <label class="form-label small">Pontos Perdidos (Opcional)</label>
+                                                    <input type="number" step="0.1" name="pontos_finais" class="form-control" placeholder="Ex: 0.5">
+                                                </div>
+
+                                                <div class="mb-3">
+                                                    <label class="form-label small">Fundamentação / Observação</label>
+                                                    <textarea name="fundamentacao" class="form-control" rows="4" placeholder="Justifique a decisão..."></textarea>
+                                                </div>
+
+                                                <div class="text-end">
+                                                    <button type="button" class="btn btn-secondary btn-sm" onclick="toggleAnalise('{{ p.id }}')">Cancelar</button>
+                                                    <button type="submit" class="btn btn-primary btn-sm fw-bold">Confirmar Decisão</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </form>
+                                </div>
+                                </div>
                         </div>
                     {% endfor %}
                 {% else %}
@@ -104,7 +161,6 @@
                         </a>
                     {% endif %}
                 </div>
-
                 {% if finalizados %}
                     {% for p in finalizados %}
                         <div class="card mb-2 bg-light border-success">
@@ -127,59 +183,119 @@
             </div>
 
             <div class="justice-content" id="newInfracaoContent">
-               {% include 'templates/justica/partials_form_infracao_stub.html' ignore missing %}
-                <div class="alert alert-warning">Utilize o formulário de registro original aqui (código preservado no controller).</div>
+                <div class="card border-danger shadow-sm">
+                    <div class="card-header bg-danger text-white"><h4 class="mb-0">Registrar Infração</h4></div>
+                    <div class="card-body">
+                         <form method="POST" action="{{ url_for('justica.registrar_em_massa') }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="tipo_registro" value="infracao">
+                            <input type="hidden" name="origem_punicao" id="hidden_origem_punicao" value="NPCCAL">
+                            <input type="hidden" name="is_crime" id="hidden_is_crime" value="false">
+
+                             <div class="row">
+                                <div class="col-md-5 mb-3 border-end">
+                                    <label class="form-label fw-bold">1. Turma</label>
+                                    <select class="form-select mb-2" onchange="carregarAlunos(this.value, 'listaAlunosInfracao')">
+                                        <option value="">-- Escolha --</option>
+                                        {% for turma in turmas %}
+                                        <option value="{{ turma.id }}">{{ turma.nome }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <a href="#" onclick="toggleTodos('listaAlunosInfracao'); return false;" class="small text-danger">Marcar Todos</a>
+                                    <div id="listaAlunosInfracao" class="border rounded bg-light p-2" style="max-height: 350px; overflow-y: auto;">
+                                        <div class="text-center text-muted small py-3">Selecione uma turma.</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-7 mb-3">
+                                    <label class="form-label fw-bold">2. Detalhes</label>
+                                    <div class="mb-3 p-2 border rounded bg-white">
+                                        <label class="small fw-bold d-block mb-1">Tipo de Enquadramento</label>
+                                        <div class="form-check form-check-inline">
+                                            <input class="form-check-input" type="radio" name="tipo_visual" id="rad_npccal" value="NPCCAL" checked onchange="toggleTiposInfracao()">
+                                            <label class="form-check-label small" for="rad_npccal">Falta NPCCAL</label>
+                                        </div>
+                                        <div class="form-check form-check-inline">
+                                            <input class="form-check-input" type="radio" name="tipo_visual" id="rad_rdbm" value="RDBM" onchange="toggleTiposInfracao()">
+                                            <label class="form-check-label small text-warning fw-bold" for="rad_rdbm">Transgressão RDBM</label>
+                                        </div>
+                                        <div class="form-check form-check-inline">
+                                            <input class="form-check-input" type="radio" name="tipo_visual" id="rad_crime" value="CRIME" onchange="toggleTiposInfracao()">
+                                            <label class="form-check-label small text-danger fw-bold" for="rad_crime">Crime Militar/Comum</label>
+                                        </div>
+                                    </div>
+
+                                    <div class="mb-2" id="box_regras_npccal">
+                                        <label class="small">Pesquisar Falta (Código ou Descrição)</label>
+                                        <select id="regraSelect" name="regra_id" class="form-select" onchange="atualizarTextoInteligente()" placeholder="Digite para pesquisar a regra...">
+                                            <option value="">-- Selecione a Falta --</option>
+                                            {% for regra in fatos_predefinidos %}
+                                            <option value="{{ regra.id }}" data-desc="no item {{ regra.codigo }} '{{ regra.descricao }}'">{{ regra.codigo }} - {{ regra.descricao }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+
+                                    <div class="mb-2" id="box_regras_manual" style="display: none;">
+                                        <label class="small">Descrição da Transgressão / Crime</label>
+                                        <input type="text" id="inputManualDesc" name="codigo_infracao" class="form-control" placeholder="Ex: Art. 15 do RDBM ou Art. 290 do CPM..." oninput="atualizarTextoInteligente()">
+                                    </div>
+
+                                    <div class="row mb-2">
+                                        <div class="col-md-7">
+                                            <label class="small">Data do Fato</label>
+                                            <input type="date" name="data_fato" id="dataFatoInput" class="form-control" value="{{ hoje }}" onchange="atualizarTextoInteligente()">
+                                        </div>
+                                        <div class="col-md-5">
+                                            <label class="small">Hora</label>
+                                            <input type="time" name="hora_fato" class="form-control" value="{{ agora_hora or '12:00' }}">
+                                        </div>
+                                    </div>
+                                    <div class="mb-2">
+                                        <label class="small">Fato Constatado (Descrição detalhada da conduta)</label>
+                                        <textarea name="descricao" id="descricaoFatoInput" class="form-control" rows="2" placeholder="Ex: deixou a parte de cima do seu armário fora dos padrões exigidos." required oninput="atualizarTextoInteligente()"></textarea>
+                                    </div>
+                                    <div class="mb-2">
+                                        <label class="small">Termo de Justificação (Gerado Automaticamente)</label>
+                                        <textarea id="campoObservacao" name="observacao" class="form-control" rows="15"></textarea>
+                                    </div>
+                                    <div class="text-end"><button type="submit" class="btn btn-danger">Registrar</button></div>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
                 </div>
+            </div>
 
             <div class="justice-content" id="newElogioContent">
-                <div class="alert alert-success">Utilize o formulário de elogio original aqui.</div>
+                <div class="card border-success shadow-sm">
+                    <div class="card-header bg-success text-white"><h4 class="mb-0">Registrar Elogio</h4></div>
+                    <div class="card-body">
+                         <form method="POST" action="{{ url_for('justica.registrar_em_massa') }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="tipo_registro" value="elogio">
+                            <div class="row">
+                                <div class="col-md-5 border-end">
+                                    <label class="form-label">Turma</label>
+                                    <select class="form-select mb-2" onchange="carregarAlunos(this.value, 'listaAlunosElogio')">
+                                        <option value="">-- Escolha --</option>
+                                        {% for turma in turmas %}
+                                        <option value="{{ turma.id }}">{{ turma.nome }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <div id="listaAlunosElogio" class="border rounded p-2" style="max-height:300px; overflow-y:auto;"></div>
+                                </div>
+                                <div class="col-md-7">
+                                    <label class="form-label">Motivo</label>
+                                    <textarea name="descricao" class="form-control" rows="5" required></textarea>
+                                    <div class="text-end mt-3"><button type="submit" class="btn btn-success">Registrar Elogio</button></div>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
             </div>
 
         </div>
     </div>
-</div>
-
-<div class="modal fade" id="modalAnalise" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <form id="formAnaliseProcesso" method="POST" action="">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <div class="modal-header bg-primary text-white">
-            <h5 class="modal-title"><i class="fas fa-gavel me-2"></i>Analisar / Julgar Processo</h5>
-            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-          </div>
-          <div class="modal-body">
-            <div class="mb-3 p-2 bg-light rounded border">
-                <p class="mb-1"><strong>Aluno:</strong> <span id="modalAlunoNome" class="text-primary"></span></p>
-                <label class="small fw-bold text-muted">Descrição do Fato:</label>
-                <p id="modalFatoDesc" class="fst-italic border p-2 bg-white rounded" style="white-space: pre-wrap;"></p>
-            </div>
-            <hr>
-            <div class="mb-3">
-                <label class="form-label fw-bold">Decisão do Chefe</label>
-                <select name="decisao" class="form-select" required onchange="togglePontos(this.value)">
-                    <option value="">-- Selecione --</option>
-                    <option value="justificar">Justificar (Sem punição)</option>
-                    <option value="punir">Punir (Com perda de pontos)</option>
-                    <option value="absolver">Absolver (Arquivar)</option>
-                </select>
-            </div>
-            <div class="mb-3" id="divPontos" style="display:none;">
-                <label class="form-label">Pontos Perdidos</label>
-                <input type="number" step="0.1" name="pontos_finais" class="form-control" placeholder="0.0">
-            </div>
-            <div class="mb-3">
-                <label class="form-label">Fundamentação / Observação</label>
-                <textarea name="observacao_decisao" class="form-control" rows="3" placeholder="Digite a fundamentação da decisão..."></textarea>
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-            <button type="submit" class="btn btn-primary fw-bold">Salvar Decisão</button>
-          </div>
-      </form>
-    </div>
-  </div>
 </div>
 
 <style>
@@ -192,8 +308,35 @@
 </style>
 
 <script>
+// --- FUNÇÃO SIMPLES PARA EXPANDIR INLINE ---
+function toggleAnalise(id) {
+    const el = document.getElementById('collapseProcesso' + id);
+    if (el.style.display === 'none') {
+        el.style.display = 'block';
+    } else {
+        el.style.display = 'none';
+    }
+}
+
+// Ajusta a visibilidade dos campos dependendo da decisão escolhida
+function toggleInputsInline(selectEl, id) {
+    const divTurnos = document.getElementById('divTurnos' + id);
+    const divPontos = document.getElementById('divPontos' + id);
+    const val = selectEl.value;
+
+    // Reset
+    divTurnos.style.display = 'none';
+    divPontos.style.display = 'none';
+
+    if (val === 'Sustação da Dispensa') {
+        divTurnos.style.display = 'block';
+        divPontos.style.display = 'block'; // Pontos também podem ser aplicados
+    } else if (val === 'Advertência' || val === 'Repreensão') {
+        divPontos.style.display = 'block';
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function() {
-    
     // Inicialização do Select (Mantido)
     if(document.getElementById("regraSelect")) {
         var controlRegra = new TomSelect("#regraSelect", {
@@ -216,55 +359,26 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // --- FUNÇÃO NOVA PARA ABRIR O MODAL E CORRIGIR O TEXTO ---
-    window.abrirModalAnalise = function(idProcesso, nomeAluno, textoFato) {
-        // Preenche os campos visuais
-        document.getElementById('modalAlunoNome').innerText = nomeAluno;
-        document.getElementById('modalFatoDesc').innerText = textoFato || "Sem descrição disponível.";
-        
-        // Define a ação do formulário para a rota correta
-        const form = document.getElementById('formAnaliseProcesso');
-        form.action = `/justica-e-disciplina/finalizar-processo/${idProcesso}`;
-        
-        // Abre o modal usando Bootstrap 5
-        var myModal = new bootstrap.Modal(document.getElementById('modalAnalise'));
-        myModal.show();
-    };
-
-    window.togglePontos = function(val) {
-        document.getElementById('divPontos').style.display = (val === 'punir') ? 'block' : 'none';
-    };
-
+    // Funções auxiliares do formulário de registro (Mantidas do original)
     window.toggleTiposInfracao = function() {
         const isNPCCAL = document.getElementById('rad_npccal').checked;
         const isRDBM = document.getElementById('rad_rdbm').checked;
-        const isCrime = document.getElementById('rad_crime').checked;
         const boxRegras = document.getElementById('box_regras_npccal');
         const boxManual = document.getElementById('box_regras_manual');
-        const selectRegra = document.getElementById('regraSelect');
-        const inputManual = document.getElementById('inputManualDesc');
         const hiddenOrigem = document.getElementById('hidden_origem_punicao');
         const hiddenCrime = document.getElementById('hidden_is_crime');
 
         if (isNPCCAL) {
             boxRegras.style.display = 'block';
             boxManual.style.display = 'none';
-            // Para Tom Select, habilitar o elemento original
-            if (controlRegra) controlRegra.enable();
-            inputManual.removeAttribute('required');
-            inputManual.value = '';
+            if (window.controlRegra) window.controlRegra.enable(); // Ajuste se TomSelect estiver global
             hiddenOrigem.value = 'NPCCAL';
             hiddenCrime.value = 'false';
         } else {
             boxRegras.style.display = 'none';
             boxManual.style.display = 'block';
-            if (controlRegra) {
-                controlRegra.clear();
-                controlRegra.disable();
-            }
-            inputManual.setAttribute('required', 'required');
-            if (isRDBM) { hiddenOrigem.value = 'RDBM'; hiddenCrime.value = 'false'; }
-            else { hiddenOrigem.value = 'NPCCAL'; hiddenCrime.value = 'true'; }
+            hiddenOrigem.value = isRDBM ? 'RDBM' : 'NPCCAL'; 
+            hiddenCrime.value = !isRDBM ? 'true' : 'false';
         }
         atualizarTextoInteligente();
     };
@@ -276,22 +390,14 @@ document.addEventListener('DOMContentLoaded', function() {
         fetch(`/justica-e-disciplina/api/alunos-por-turma/${turmaId}`)
             .then(r => r.json())
             .then(data => {
-                if (container.tagName === 'SELECT') {
-                    let html = '<option value="">-- Selecione o Aluno --</option>';
-                    data.forEach(a => {
-                        html += `<option value="${a.id}">${a.numero ? a.numero + ' - ' : ''}${a.graduacao} ${a.nome}</option>`;
-                    });
-                    container.innerHTML = html;
-                } else {
-                    container.innerHTML = data.map(a => `
-                        <div class="form-check border-bottom py-1">
-                            <input class="form-check-input aluno-check-${containerId}" type="checkbox" name="alunos_selecionados" value="${a.id}" id="chk_${containerId}_${a.id}" onchange="if('${containerId}'=='listaAlunosInfracao') atualizarTextoInteligente()">
-                            <label class="form-check-label" for="chk_${containerId}_${a.id}">
-                                ${a.numero ? a.numero + ' - ' : ''}${a.nome}
-                            </label>
-                        </div>
-                    `).join('');
-                }
+                container.innerHTML = data.map(a => `
+                    <div class="form-check border-bottom py-1">
+                        <input class="form-check-input aluno-check-${containerId}" type="checkbox" name="alunos_selecionados" value="${a.id}" id="chk_${containerId}_${a.id}" onchange="if('${containerId}'=='listaAlunosInfracao') atualizarTextoInteligente()">
+                        <label class="form-check-label" for="chk_${containerId}_${a.id}">
+                            ${a.numero ? a.numero + ' - ' : ''}${a.nome}
+                        </label>
+                    </div>
+                `).join('');
             });
     };
 
@@ -307,41 +413,24 @@ document.addEventListener('DOMContentLoaded', function() {
         const parts = dateString.split('-');
         if (parts.length !== 3) return dateString;
         const meses = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
-        const dia = parts[2];
-        const mes = meses[parseInt(parts[1]) - 1];
-        const ano = parts[0];
-        return `${dia} de ${mes} de ${ano}`;
+        return `${parts[2]} de ${meses[parseInt(parts[1]) - 1]} de ${parts[0]}`;
     }
 
     window.atualizarTextoInteligente = function() {
         const checks = document.querySelectorAll('.aluno-check-listaAlunosInfracao:checked');
         const regSel = document.getElementById('regraSelect');
         const isNPCCAL = document.getElementById('rad_npccal').checked;
-        const isRDBM = document.getElementById('rad_rdbm').checked;
-        const isCrime = document.getElementById('rad_crime').checked;
-
-        let regraDesc = "";
-        if (isNPCCAL) {
-            if (regSel.selectedIndex >= 0) {
-                 regraDesc = regSel.options[regSel.selectedIndex].getAttribute('data-desc') || "";
-            }
-        } else {
-            const manualText = document.getElementById('inputManualDesc').value.trim();
-            if (manualText) {
-                if (isRDBM) regraDesc = "em transgressão disciplinar: " + manualText;
-                if (isCrime) regraDesc = "em fato tipificado como crime: " + manualText;
-            } else {
-                regraDesc = isRDBM ? "em transgressão disciplinar (descrever)" : "em crime (descrever)";
-            }
-        }
-
         const box = document.getElementById('campoObservacao');
+        
         let descFato = document.getElementById('descricaoFatoInput').value.trim();
         if (!descFato) descFato = "[DESCREVER A CONDUTA AQUI]";
-        if (descFato.endsWith('.')) descFato = descFato.slice(0, -1);
+        
+        let regraDesc = "";
+        if (isNPCCAL && regSel.selectedIndex >= 0) {
+             regraDesc = regSel.options[regSel.selectedIndex].getAttribute('data-desc') || "";
+        }
 
-        const dataInput = document.getElementById('dataFatoInput').value;
-        const dataExtenso = getDataPorExtenso(dataInput);
+        const dataExtenso = getDataPorExtenso(document.getElementById('dataFatoInput').value);
         const anoAtual = new Date().getFullYear();
 
         if(checks.length === 1) {
@@ -349,14 +438,11 @@ document.addEventListener('DOMContentLoaded', function() {
             fetch(`/justica-e-disciplina/api/aluno-details/${checks[0].value}`)
                 .then(r => r.json())
                 .then(d => {
-                    const idFunc = `Id Func. ${d.matricula}`;
-                    const nomeCompleto = `${d.posto_graduacao} ${d.nome_completo}, ${idFunc}`;
-                    const termo = `Termo de Justificação:\nTendo em vista as informações constantes na Parte Nº ___/___Pel/CAl/EsFAS/${anoAtual}, evidenciando a existência, em tese, de infração das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação:\n\n1. Justificante: ${nomeCompleto}.\n\n2. Descrição da conduta infracional: O ${nomeCompleto}, no dia ${dataExtenso}, ${descFato}. Com isso, incorreu ${regraDesc}.\n\n3. Cientifico-lhe que a contar do recebimento da presente, abre-se o prazo de 24 horas, para que, querendo, apresente resposta escrita com as provas que entender cabíveis. Fica advertido o acusado que a não entrega da justificação dentro do prazo estipulado, implicará em reconhecimento como verdadeiros os fatos imputados.\n\n[NOME, POSTO/GRADUAÇÃO E FUNÇÃO DO RESPONSÁVEL]`;
-                    box.value = termo;
+                    const nomeCompleto = `${d.posto_graduacao} ${d.nome_completo}, Id Func. ${d.matricula}`;
+                    box.value = `Termo de Justificação:\n\nTendo em vista as informações constantes na Parte Nº ___/___Pel/CAl/EsFAS/${anoAtual}, evidenciando a existência, em tese, de infração das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação:\n\n1. Justificante: ${nomeCompleto}.\n\n2. Descrição da conduta infracional: O ${nomeCompleto}, no dia ${dataExtenso}, ${descFato}. ${regraDesc}\n\n3. Cientifico-lhe que a contar do recebimento da presente, abre-se o prazo de 24 horas, para que, querendo, apresente resposta escrita com as provas que entender cabíveis.\n\n[NOME, POSTO/GRADUAÇÃO E FUNÇÃO DO RESPONSÁVEL]`;
                 });
         } else if(checks.length > 1) {
-             const templateBase = `Termo de Justificação:\nTendo em vista as informações constantes na Parte Nº ___/___Pel/CAl/EsFAS/${anoAtual}, evidenciando a existência, em tese, de infração das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação:\n\n1. Justificantes: Conforme lista de ${checks.length} alunos selecionados.\n\n2. Descrição da conduta infracional: Os militares selecionados, no dia ${dataExtenso}, ${descFato}. Com isso, incorreram ${regraDesc}.\n\n3. Cientifico-lhes que a contar do recebimento da presente, abre-se o prazo de 24 horas, para que, querendo, apresentem resposta escrita com as provas que entenderem cabíveis.\n\n[NOME, POSTO/GRADUAÇÃO E FUNÇÃO DO RESPONSÁVEL]`;
-            box.value = templateBase;
+            box.value = `Termo Coletivo para ${checks.length} alunos.\nFato: ${descFato}`;
         }
     };
 });
