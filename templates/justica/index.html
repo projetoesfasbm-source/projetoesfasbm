@@ -71,7 +71,7 @@
                                                 <form action="{{ url_for('justica.deletar_processo', pid=p.id) }}" method="POST" class="d-inline" onsubmit="return confirm('ATENÇÃO: Excluir este processo?');">
                                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                                     <button type="submit" class="btn btn-sm btn-outline-danger ms-1" title="Excluir">
-                                                        <i class="fas fa-trash"></i> Excluir
+                                                        <i class="fas fa-trash"></i>
                                                     </button>
                                                 </form>
                                             {% endif %}
