@@ -39,7 +39,7 @@
         {# CASO 1: AGUARDANDO CIÊNCIA #}
         {% if 'AGUARDANDO' in (processo.status | string | upper) %}
             {% set horas_passadas = ((agora - processo.data_registro).total_seconds() / 3600) | int %}
-            
+
             {% if horas_passadas > 24 %}
                 <div class="alert alert-danger mt-3 fw-bold">
                     <i class="fas fa-clock"></i> PRAZO DE CIÊNCIA EXPIRADO! ({{ horas_passadas }}h passadas)
@@ -59,19 +59,23 @@
             </form>
         {% endif %}
 
-        {# CASO 2: ALUNO NOTIFICADO (Defesa) #}
+        {# CASO 2: ALUNO NOTIFICADO (Defesa - 1ª Instância para o Chefe CAL) #}
         {% if 'NOTIFICADO' in (processo.status | string | upper) %}
             <div class="alert alert-info mt-3 border-info">
                 <strong>Escreva sua Defesa:</strong><br>
                 Digite sua justificativa abaixo e clique em enviar.
             </div>
 
-            <form action="{{ url_for('justica.enviar_defesa', processo_id=processo.id) }}" method="POST">
+            <form action="{{ url_for('justica.enviar_defesa', processo_id=processo.id, pid=processo.id) }}" method="POST" onsubmit="this.querySelector('button[type=submit]').disabled = true; this.querySelector('button[type=submit]').innerHTML = '<i class=\'fas fa-spinner fa-spin me-2\'></i> Enviando...';">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                <input type="hidden" name="processo_id" value="{{ processo.id }}">
+                <input type="hidden" name="pid" value="{{ processo.id }}">
+
                 <div class="form-group mb-3">
                     <textarea name="defesa" class="form-control" rows="6" placeholder="Exmo. Sr. Comandante, venho respeitosamente informar que..." required></textarea>
                 </div>
-                <button type="submit" class="btn btn-primary w-100 fw-bold">
+                <button type="submit" class="btn btn-primary w-100 fw-bold rounded shadow-sm">
                     <i class="fas fa-paper-plane me-2"></i> ENVIAR DEFESA
                 </button>
             </form>
@@ -90,28 +94,29 @@
 
         {# CASO 3: DECISÃO DO CHEFE (Permite Recurso) #}
         {% if processo.status == 'DECISAO_EMITIDA' or processo.status == 'EM_RECURSO' or processo.status == 'FINALIZADO' %}
-            
+
             {# Se houve decisão, mostra o resultado #}
             {% if processo.decisao_final %}
-                <div class="process-detail p-3 rounded border mt-3 border-info bg-light">
-                    <span class="detail-label fw-bold text-primary">
-                        <i class="fas fa-gavel"></i> Decisão do Chefe CAL: {{ processo.decisao_final }}
-                    </span>
-                    
-                    {% if processo.tipo_sancao %}
-                        <p class="fw-bold mt-2">{{ processo.tipo_sancao }} 
-                        {% if processo.dias_sancao %}({{ processo.dias_sancao }} dias){% endif %}
-                        {% if processo.detalhes_sancao %}- {{ processo.detalhes_sancao }}{% endif %}
-                        </p>
-                    {% endif %}
-                    
-                    <p class="small text-muted mt-2">{{ processo.fundamentacao }}</p>
+                <div class="collapse mt-2" id="formRecurso">
+                    <form action="{{ url_for('justica.enviar_recurso', pid=processo.id, processo_id=processo.id) }}" method="POST" class="card p-3 shadow-sm border-warning" onsubmit="this.querySelector('button[type=submit]').disabled = true; this.querySelector('button[type=submit]').innerText = 'Enviando...';">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                        <input type="hidden" name="processo_id" value="{{ processo.id }}">
+                        <input type="hidden" name="pid" value="{{ processo.id }}">
+
+                        <label class="fw-bold mb-2">Argumentação do Recurso (ao Comandante):</label>
+                        <textarea name="texto_recurso" class="form-control mb-2" rows="4" required></textarea>
+                        <button type="submit" class="btn btn-warning w-100 fw-bold rounded shadow-sm">
+                            <i class="fas fa-gavel"></i> Enviar Recurso
+                        </button>
+                    </form>
                 </div>
+
             {% endif %}
 
             {# LÓGICA DE RECURSO #}
             {% if processo.status == 'DECISAO_EMITIDA' %}
-                
+
                 {# Passo 1: Ciência da Decisão #}
                 {% if not processo.data_notificacao_decisao %}
                     <form action="{{ url_for('justica.dar_ciente', processo_id=processo.id) }}" method="POST" class="mt-3">
@@ -124,7 +129,7 @@
                 {# Passo 2: Opção de Recurso (se prazo ok) #}
                 {% else %}
                     {% set horas_recurso = ((agora - processo.data_notificacao_decisao).total_seconds() / 3600) | int %}
-                    
+
                     {% if horas_recurso > 48 %}
                         <div class="alert alert-secondary mt-3">
                             Prazo para recurso expirado (48h). Processo transitado em julgado.
@@ -135,7 +140,7 @@
                             <button class="btn btn-warning w-100" type="button" data-bs-toggle="collapse" data-bs-target="#formRecurso">
                                 <i class="fas fa-gavel"></i> Desejo Interpor Recurso ao Comandante
                             </button>
-                            
+
                             <div class="collapse mt-2" id="formRecurso">
                                 <form action="{{ url_for('justica.enviar_recurso', pid=processo.id) }}" method="POST" class="card p-3 shadow-sm border-warning">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -147,7 +152,7 @@
                         </div>
                     {% endif %}
                 {% endif %}
-            
+
             {% elif processo.status == 'EM_RECURSO' %}
                  <div class="alert alert-warning mt-3">
                     <i class="fas fa-clock"></i> Seu recurso foi enviado ao Comandante e está em análise.
