@@ -34,7 +34,7 @@
         </div>
         {% endif %}
 
-        {# CASO 1: AGUARDANDO CIÊNCIA (Prazo: 24h) #}
+        {# CASO 1: AGUARDANDO CIÊNCIA #}
         {% if 'AGUARDANDO' in (processo.status | string | upper) %}
             <div class="alert alert-warning mt-3 border-warning shadow-sm">
                 <i class="fas fa-clock"></i> <strong>Atenção:</strong> Você tem o prazo legal de 24 horas para dar ciência e abrir o prazo para sua defesa.
@@ -49,11 +49,11 @@
             </form>
         {% endif %}
 
-        {# CASO 2: ALUNO NOTIFICADO - ABRINDO DEFESA (Prazo: 24h) #}
+        {# CASO 2: ALUNO NOTIFICADO - ABRINDO DEFESA #}
         {% if 'NOTIFICADO' in (processo.status | string | upper) %}
             <div class="alert alert-info mt-3 border-info shadow-sm">
                 <i class="fas fa-edit me-1"></i> <strong>Escreva sua Defesa:</strong><br>
-                <span class="small">Você tem 24h a partir da ciência para enviar. Seja claro e objetivo.</span>
+                <span class="small">Você tem 24h a partir da ciência para enviar sua justificativa. Seja claro e objetivo.</span>
             </div>
             <form action="{{ url_for('justica.enviar_defesa', processo_id=processo.id, pid=processo.id) }}" method="POST" onsubmit="this.querySelector('button[type=submit]').disabled = true; this.querySelector('button[type=submit]').innerHTML = '<i class=\'fas fa-spinner fa-spin me-2\'></i> Enviando...';">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -80,8 +80,9 @@
             </div>
         {% endif %}
 
-        {# CASO 3: DECISÃO DO CHEFE EMITIDA E RECURSO (Prazo: 48h) #}
+        {# CASO 3: DECISÃO DO CHEFE EMITIDA E RECURSO #}
         {% if 'DECISAO_EMITIDA' in (processo.status | string | upper) or 'EM_RECURSO' in (processo.status | string | upper) or 'FINALIZADO' in (processo.status | string | upper) %}
+
             {% if processo.decisao_final %}
                 <div class="process-detail p-3 rounded border mt-3 border-info bg-light">
                     <span class="detail-label fw-bold text-primary">
@@ -119,7 +120,7 @@
                                 <input type="hidden" name="pid" value="{{ processo.id }}">
 
                                 <label class="fw-bold mb-2 small text-uppercase">Argumentação do Recurso:</label>
-                                <textarea name="texto_recurso" class="form-control mb-3" rows="4" required></textarea>
+                                <textarea name="texto_recurso" class="form-control mb-3" rows="4" placeholder="Exponha os motivos pelos quais a decisão deve ser revista pelo Comandante da Escola..." required></textarea>
                                 <button type="submit" class="btn btn-warning w-100 fw-bold">ENVIAR RECURSO</button>
                             </form>
                         </div>
@@ -128,7 +129,7 @@
 
             {% elif 'EM_RECURSO' in (processo.status | string | upper) %}
                  <div class="alert alert-warning mt-3 shadow-sm">
-                    <i class="fas fa-spinner fa-spin"></i> Recurso enviado ao Comandante da Escola. Aguardando.
+                    <i class="fas fa-spinner fa-spin"></i> Recurso enviado ao Comandante da Escola. Aguardando julgamento.
                  </div>
 
             {% elif 'FINALIZADO' in (processo.status | string | upper) and processo.decisao_recurso %}
@@ -138,6 +139,7 @@
                     <p class="mb-0 small border-top pt-2 mt-1">{{ processo.fundamentacao_recurso }}</p>
                  </div>
             {% endif %}
+
         {% endif %}
     </div>
 </div>

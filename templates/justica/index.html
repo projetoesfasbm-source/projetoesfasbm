@@ -42,7 +42,7 @@
                 <h3 class="justice-content-title">Processos em Andamento</h3>
                 {% if em_andamento %}
                     {% for p in em_andamento %}
-                        <div class="card mb-3 shadow-sm border-start border-4 {{ 'border-warning' if p.status == 'AGUARDANDO_CIENCIA' else 'border-primary' }}">
+                        <div class="card mb-3 shadow-sm border-start border-4 {{ 'border-warning' if 'AGUARDANDO' in p.status|string|upper else 'border-primary' }}">
                             <div class="card-body">
                                 <div class="row align-items-center">
                                     <div class="col-md-2">
@@ -56,36 +56,28 @@
                                     <div class="col-md-4">
                                         <small class="text-muted d-block">Fato/Status</small>
                                         <div class="text-truncate text-dark" title="{{ p.fato_constatado }}">{{ p.fato_constatado }}</div>
-                                        <span class="badge bg-secondary">{{ p.status }}</span>
+                                        <span class="badge bg-secondary">{{ p.status|string|replace('_', ' ') }}</span>
                                         {% if p.pontos > 0 %}
                                             <span class="badge bg-danger ms-1">-{{ p.pontos }} pts (Previsto)</span>
                                         {% endif %}
                                     </div>
                                     <div class="col-md-3 text-end">
-                                        <div class="d-flex justify-content-end gap-2">
+                                        <div class="d-inline-block">
                                             {% if current_user.role != 'aluno' %}
-                                                <button type="button" class="btn btn-sm btn-info text-white rounded" onclick="toggleAnalise('{{ p.id }}')">
+                                                <button type="button" class="btn btn-sm btn-info text-white rounded mb-1 me-1 shadow-sm" onclick="toggleAnalise('{{ p.id }}')">
                                                     <i class="fas fa-gavel"></i> Analisar
                                                 </button>
 
                                                 <form action="{{ url_for('justica.deletar_processo', pid=p.id) }}" method="POST" class="d-inline" onsubmit="return confirm('ATENÇÃO: Excluir este processo?');">
                                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                                    <button type="submit" class="btn btn-sm btn-danger rounded" title="Excluir">
+                                                    <button type="submit" class="btn btn-sm btn-danger rounded mb-1 shadow-sm" title="Excluir">
                                                         <i class="fas fa-trash"></i> Excluir
                                                     </button>
                                                 </form>
                                             {% endif %}
-
-                                            {% if p.status == 'AGUARDANDO_CIENCIA' %}
-                                            <form action="{{ url_for('justica.dar_ciente', processo_id=p.id) }}" method="POST" class="d-inline">
-                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                                <button type="submit" class="btn btn-sm btn-warning fw-bold rounded">
-                                                    <i class="fas fa-check"></i> Dar Ciente
-                                                </button>
-                                            </form>
-                                            {% endif %}
                                         </div>
                                     </div>
+                                </div>
 
                                 <div id="collapseProcesso{{ p.id }}" class="mt-3 pt-3 border-top bg-light p-3 rounded" style="display: none;">
                                     <form action="{{ url_for('justica.finalizar_processo', pid=p.id) }}" method="POST">
@@ -155,14 +147,14 @@
                                                 </div>
 
                                                 <div class="text-end">
-                                                    <button type="button" class="btn btn-secondary btn-sm" onclick="toggleAnalise('{{ p.id }}')">Cancelar</button>
-                                                    <button type="submit" class="btn btn-primary btn-sm fw-bold">Confirmar Decisão</button>
+                                                    <button type="button" class="btn btn-secondary btn-sm rounded" onclick="toggleAnalise('{{ p.id }}')">Cancelar</button>
+                                                    <button type="submit" class="btn btn-primary btn-sm fw-bold rounded">Confirmar Decisão</button>
                                                 </div>
                                             </div>
                                         </div>
                                     </form>
                                 </div>
-                                </div>
+                            </div>
                         </div>
                     {% endfor %}
                 {% else %}
@@ -173,7 +165,7 @@
             <div class="justice-content" id="finalizadosContent">
                 <div class="d-flex justify-content-end mb-3">
                     {% if current_user.role != 'aluno' %}
-                        <a href="{{ url_for('justica.exportar_selecao') }}" class="btn btn-sm btn-outline-dark">
+                        <a href="{{ url_for('justica.exportar_selecao') }}" class="btn btn-sm btn-outline-dark rounded">
                             <i class="fas fa-file-export"></i> Exportar Termos
                         </a>
                     {% endif %}
@@ -280,7 +272,7 @@
                                         <label class="small">Termo de Justificação (Gerado Automaticamente)</label>
                                         <textarea id="campoObservacao" name="observacao" class="form-control" rows="15"></textarea>
                                     </div>
-                                    <div class="text-end"><button type="submit" class="btn btn-danger">Registrar</button></div>
+                                    <div class="text-end"><button type="submit" class="btn btn-danger rounded fw-bold">Registrar Infração</button></div>
                                 </div>
                             </div>
                         </form>
@@ -309,7 +301,7 @@
                                 <div class="col-md-7">
                                     <label class="form-label">Motivo</label>
                                     <textarea name="descricao" class="form-control" rows="5" required></textarea>
-                                    <div class="text-end mt-3"><button type="submit" class="btn btn-success">Registrar Elogio</button></div>
+                                    <div class="text-end mt-3"><button type="submit" class="btn btn-success rounded fw-bold">Registrar Elogio</button></div>
                                 </div>
                             </div>
                         </form>
@@ -331,7 +323,6 @@
 </style>
 
 <script>
-// FUNÇÃO: MOSTRA/ESCONDE O FORMULÁRIO DE ANÁLISE DO PROCESSO
 function toggleAnalise(id) {
     const el = document.getElementById('collapseProcesso' + id);
     if (el.style.display === 'none') {
@@ -341,27 +332,23 @@ function toggleAnalise(id) {
     }
 }
 
-// FUNÇÃO: CONTROLA A VISIBILIDADE DOS CAMPOS DE PUNIÇÃO (TURNOS E PONTOS)
 function toggleInputsInline(selectEl, id) {
     const divTurnos = document.getElementById('divTurnos' + id);
     const divPontos = document.getElementById('divPontos' + id);
     const val = selectEl.value;
 
-    // Reseta (Esconde tudo)
     divTurnos.style.display = 'none';
     divPontos.style.display = 'none';
 
     if (val === 'Sustação da Dispensa') {
-        divTurnos.style.display = 'block'; // Mostra Seletor de Turnos
-        divPontos.style.display = 'block'; // Mostra Pontos
+        divTurnos.style.display = 'block';
+        divPontos.style.display = 'block';
     } else if (val === 'Advertência' || val === 'Repreensão') {
-        divPontos.style.display = 'block'; // Mostra apenas Pontos
+        divPontos.style.display = 'block';
     }
-    // "Justificado" e "Absolver" não mostram nada
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-    // INICIALIZA O BUSCADOR INTELIGENTE (Tom Select) SE O ELEMENTO EXISTIR NA TELA
     if(document.getElementById("regraSelect")) {
         var controlRegra = new TomSelect("#regraSelect", {
             create: false,
@@ -369,10 +356,9 @@ document.addEventListener('DOMContentLoaded', function() {
             allowEmptyOption: true,
             maxOptions: 1000
         });
-        window.controlRegra = controlRegra; // Torna acessível globalmente
+        window.controlRegra = controlRegra;
     }
 
-    // LÓGICA DAS ABAS (TABS) SUPERIORES
     document.querySelectorAll('.justice-option-btn').forEach(btn => {
         btn.addEventListener('click', function(e) {
             if(this.tagName.toLowerCase() === 'a') return;
@@ -384,9 +370,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // --- FUNÇÕES DE LÓGICA DO FORMULÁRIO DE REGISTRO (MANTIDAS DO ORIGINAL) ---
-
-    // Alterna entre NPCCAL, RDBM e Crime
     window.toggleTiposInfracao = function() {
         const isNPCCAL = document.getElementById('rad_npccal').checked;
         const isRDBM = document.getElementById('rad_rdbm').checked;
@@ -408,13 +391,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 window.controlRegra.clear();
                 window.controlRegra.disable();
             }
-            hiddenOrigem.value = isRDBM ? 'RDBM' : 'NPCCAL'; // Crime tecnicamente não tem origem NPCCAL, mas ajustamos aqui
+            hiddenOrigem.value = isRDBM ? 'RDBM' : 'NPCCAL';
             hiddenCrime.value = !isRDBM ? 'true' : 'false';
         }
         atualizarTextoInteligente();
     };
 
-    // Carrega alunos via AJAX
     window.carregarAlunos = function(turmaId, containerId) {
         const container = document.getElementById(containerId);
         if(!turmaId) return;
@@ -422,11 +404,11 @@ document.addEventListener('DOMContentLoaded', function() {
         fetch(`/justica-e-disciplina/api/alunos-por-turma/${turmaId}`)
             .then(r => r.json())
             .then(data => {
-                if (container.tagName === 'SELECT') { // Para elogios
+                if (container.tagName === 'SELECT') {
                      let html = '<option value="">-- Selecione --</option>';
                      data.forEach(a => html += `<option value="${a.id}">${a.numero ? a.numero+' - ':''}${a.graduacao} ${a.nome}</option>`);
                      container.innerHTML = html;
-                } else { // Para infrações (checkboxes)
+                } else {
                     container.innerHTML = data.map(a => `
                         <div class="form-check border-bottom py-1">
                             <input class="form-check-input aluno-check-${containerId}" type="checkbox" name="alunos_selecionados" value="${a.id}" id="chk_${containerId}_${a.id}" onchange="if('${containerId}'=='listaAlunosInfracao') atualizarTextoInteligente()">
@@ -439,7 +421,6 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     };
 
-    // Marcar/Desmarcar todos
     window.toggleTodos = function(cId) {
         const checks = document.querySelectorAll(`.aluno-check-${cId}`);
         const status = Array.from(checks).some(c => !c.checked);
@@ -455,7 +436,6 @@ document.addEventListener('DOMContentLoaded', function() {
         return `${parts[2]} de ${meses[parseInt(parts[1]) - 1]} de ${parts[0]}`;
     }
 
-    // Gera o texto automático da Parte/Termo
     window.atualizarTextoInteligente = function() {
         const checks = document.querySelectorAll('.aluno-check-listaAlunosInfracao:checked');
         const regSel = document.getElementById('regraSelect');
