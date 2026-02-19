@@ -34,41 +34,29 @@
         </div>
         {% endif %}
 
-        {# --- ÁREA DE AÇÃO DO ALUNO --- #}
-
-        {# CASO 1: AGUARDANDO CIÊNCIA #}
+        {# CASO 1: AGUARDANDO CIÊNCIA (Prazo: 24h) #}
         {% if 'AGUARDANDO' in (processo.status | string | upper) %}
-            {% set horas_passadas = ((agora - processo.data_registro).total_seconds() / 3600) | int %}
-
-            {% if horas_passadas > 24 %}
-                <div class="alert alert-danger mt-3 fw-bold">
-                    <i class="fas fa-clock"></i> PRAZO DE CIÊNCIA EXPIRADO! ({{ horas_passadas }}h passadas)
-                    <div class="small fw-normal">Você ultrapassou o prazo de 24h. O Chefe do CAL foi notificado. Declare ciência imediatamente para regularizar.</div>
-                </div>
-            {% else %}
-                <div class="alert alert-warning mt-3 border-warning">
-                    <i class="fas fa-exclamation-triangle"></i> Notificação Pendente. Você tem 24h para dar ciência.
-                </div>
-            {% endif %}
-
-            <form action="{{ url_for('justica.dar_ciente', processo_id=processo.id) }}" method="POST" class="mt-3">
+            <div class="alert alert-warning mt-3 border-warning shadow-sm">
+                <i class="fas fa-clock"></i> <strong>Atenção:</strong> Você tem o prazo legal de 24 horas para dar ciência e abrir o prazo para sua defesa.
+            </div>
+            <form action="{{ url_for('justica.dar_ciente', processo_id=processo.id, pid=processo.id) }}" method="POST" class="mt-2" onsubmit="this.querySelector('button[type=submit]').disabled = true;">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="btn btn-warning w-100 fw-bold">
+                <input type="hidden" name="processo_id" value="{{ processo.id }}">
+                <input type="hidden" name="pid" value="{{ processo.id }}">
+                <button type="submit" class="btn btn-warning w-100 fw-bold rounded shadow-sm">
                     <i class="fas fa-check-double me-2"></i> DECLARAR CIÊNCIA
                 </button>
             </form>
         {% endif %}
 
-        {# CASO 2: ALUNO NOTIFICADO (Defesa - 1ª Instância para o Chefe CAL) #}
+        {# CASO 2: ALUNO NOTIFICADO - ABRINDO DEFESA (Prazo: 24h) #}
         {% if 'NOTIFICADO' in (processo.status | string | upper) %}
-            <div class="alert alert-info mt-3 border-info">
-                <strong>Escreva sua Defesa:</strong><br>
-                Digite sua justificativa abaixo e clique em enviar.
+            <div class="alert alert-info mt-3 border-info shadow-sm">
+                <i class="fas fa-edit me-1"></i> <strong>Escreva sua Defesa:</strong><br>
+                <span class="small">Você tem 24h a partir da ciência para enviar. Seja claro e objetivo.</span>
             </div>
-
             <form action="{{ url_for('justica.enviar_defesa', processo_id=processo.id, pid=processo.id) }}" method="POST" onsubmit="this.querySelector('button[type=submit]').disabled = true; this.querySelector('button[type=submit]').innerHTML = '<i class=\'fas fa-spinner fa-spin me-2\'></i> Enviando...';">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
                 <input type="hidden" name="processo_id" value="{{ processo.id }}">
                 <input type="hidden" name="pid" value="{{ processo.id }}">
 
@@ -81,95 +69,75 @@
             </form>
         {% endif %}
 
-        {# EXIBE A DEFESA #}
+        {# EXIBE A DEFESA CASO JÁ TENHA SIDO ENVIADA #}
         {% if processo.defesa %}
             <div class="process-detail bg-light p-3 rounded border mt-3">
                 <span class="detail-label fw-bold text-success small text-uppercase">
                     <i class="fas fa-check-circle"></i> Sua Defesa:
                 </span>
-                <p class="preserve-whitespace fst-italic mt-2">{{ processo.defesa }}</p>
-                <small class="text-muted d-block mt-2">Enviada em {{ processo.data_defesa.strftime('%d/%m/%Y às %H:%M') }}</small>
+                <p class="preserve-whitespace fst-italic mt-2 mb-0">{{ processo.defesa }}</p>
+                <small class="text-muted d-block mt-2">Enviada em {{ processo.data_defesa.strftime('%d/%m/%Y às %H:%M') if processo.data_defesa else 'Data Indisponível' }}</small>
             </div>
         {% endif %}
 
-        {# CASO 3: DECISÃO DO CHEFE (Permite Recurso) #}
-        {% if processo.status == 'DECISAO_EMITIDA' or processo.status == 'EM_RECURSO' or processo.status == 'FINALIZADO' %}
-
-            {# Se houve decisão, mostra o resultado #}
+        {# CASO 3: DECISÃO DO CHEFE EMITIDA E RECURSO (Prazo: 48h) #}
+        {% if 'DECISAO_EMITIDA' in (processo.status | string | upper) or 'EM_RECURSO' in (processo.status | string | upper) or 'FINALIZADO' in (processo.status | string | upper) %}
             {% if processo.decisao_final %}
-                <div class="collapse mt-2" id="formRecurso">
-                    <form action="{{ url_for('justica.enviar_recurso', pid=processo.id, processo_id=processo.id) }}" method="POST" class="card p-3 shadow-sm border-warning" onsubmit="this.querySelector('button[type=submit]').disabled = true; this.querySelector('button[type=submit]').innerText = 'Enviando...';">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-                        <input type="hidden" name="processo_id" value="{{ processo.id }}">
-                        <input type="hidden" name="pid" value="{{ processo.id }}">
-
-                        <label class="fw-bold mb-2">Argumentação do Recurso (ao Comandante):</label>
-                        <textarea name="texto_recurso" class="form-control mb-2" rows="4" required></textarea>
-                        <button type="submit" class="btn btn-warning w-100 fw-bold rounded shadow-sm">
-                            <i class="fas fa-gavel"></i> Enviar Recurso
-                        </button>
-                    </form>
+                <div class="process-detail p-3 rounded border mt-3 border-info bg-light">
+                    <span class="detail-label fw-bold text-primary">
+                        <i class="fas fa-gavel"></i> Veredito do Chefe CAL: {{ processo.decisao_final }}
+                    </span>
+                    {% if processo.tipo_sancao %}
+                        <p class="fw-bold mt-2 mb-1">{{ processo.tipo_sancao }}
+                        {% if processo.dias_sancao %}({{ processo.dias_sancao }} dias){% endif %}
+                        {% if processo.detalhes_sancao %}- {{ processo.detalhes_sancao }}{% endif %}
+                        </p>
+                    {% endif %}
+                    <p class="small text-muted mt-2 mb-0">{{ processo.fundamentacao }}</p>
                 </div>
-
             {% endif %}
 
-            {# LÓGICA DE RECURSO #}
-            {% if processo.status == 'DECISAO_EMITIDA' %}
-
-                {# Passo 1: Ciência da Decisão #}
+            {% if 'DECISAO_EMITIDA' in (processo.status | string | upper) %}
                 {% if not processo.data_notificacao_decisao %}
-                    <form action="{{ url_for('justica.dar_ciente', processo_id=processo.id) }}" method="POST" class="mt-3">
+                    <form action="{{ url_for('justica.dar_ciente', processo_id=processo.id, pid=processo.id) }}" method="POST" class="mt-3">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="btn btn-primary w-100">
+                        <button type="submit" class="btn btn-info text-white w-100 fw-bold rounded shadow-sm">
                             <i class="fas fa-eye"></i> Dar Ciência da Decisão
                         </button>
                     </form>
-
-                {# Passo 2: Opção de Recurso (se prazo ok) #}
                 {% else %}
-                    {% set horas_recurso = ((agora - processo.data_notificacao_decisao).total_seconds() / 3600) | int %}
+                    <div class="mt-3">
+                        <small class="text-muted d-block mb-2 text-center fw-bold">Você tem até 48h após a ciência para recorrer ao Comandante.</small>
+                        <button class="btn btn-warning w-100 fw-bold shadow-sm rounded" type="button" data-bs-toggle="collapse" data-bs-target="#formRecurso">
+                            <i class="fas fa-balance-scale"></i> Desejo Interpor Recurso
+                        </button>
 
-                    {% if horas_recurso > 48 %}
-                        <div class="alert alert-secondary mt-3">
-                            Prazo para recurso expirado (48h). Processo transitado em julgado.
-                        </div>
-                    {% else %}
-                        <div class="mt-3">
-                            <small class="text-muted d-block mb-2">Você tem até 48h para recorrer. Restam {{ 48 - horas_recurso }}h.</small>
-                            <button class="btn btn-warning w-100" type="button" data-bs-toggle="collapse" data-bs-target="#formRecurso">
-                                <i class="fas fa-gavel"></i> Desejo Interpor Recurso ao Comandante
-                            </button>
+                        <div class="collapse mt-2" id="formRecurso">
+                            <form action="{{ url_for('justica.enviar_recurso', pid=processo.id, processo_id=processo.id) }}" method="POST" class="card p-3 shadow-sm border-warning rounded" onsubmit="this.querySelector('button[type=submit]').disabled = true;">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="processo_id" value="{{ processo.id }}">
+                                <input type="hidden" name="pid" value="{{ processo.id }}">
 
-                            <div class="collapse mt-2" id="formRecurso">
-                                <form action="{{ url_for('justica.enviar_recurso', pid=processo.id) }}" method="POST" class="card p-3 shadow-sm border-warning">
-                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                    <label class="fw-bold mb-2">Argumentação do Recurso:</label>
-                                    <textarea name="texto_recurso" class="form-control mb-2" rows="4" required></textarea>
-                                    <button type="submit" class="btn btn-warning w-100">Enviar Recurso</button>
-                                </form>
-                            </div>
+                                <label class="fw-bold mb-2 small text-uppercase">Argumentação do Recurso:</label>
+                                <textarea name="texto_recurso" class="form-control mb-3" rows="4" required></textarea>
+                                <button type="submit" class="btn btn-warning w-100 fw-bold">ENVIAR RECURSO</button>
+                            </form>
                         </div>
-                    {% endif %}
+                    </div>
                 {% endif %}
 
-            {% elif processo.status == 'EM_RECURSO' %}
-                 <div class="alert alert-warning mt-3">
-                    <i class="fas fa-clock"></i> Seu recurso foi enviado ao Comandante e está em análise.
-                 </div>
-                 <div class="bg-white p-2 rounded border mb-2 small">
-                    <strong>Seu Recurso:</strong><br>
-                    {{ processo.texto_recurso }}
+            {% elif 'EM_RECURSO' in (processo.status | string | upper) %}
+                 <div class="alert alert-warning mt-3 shadow-sm">
+                    <i class="fas fa-spinner fa-spin"></i> Recurso enviado ao Comandante da Escola. Aguardando.
                  </div>
 
-            {% elif processo.status == 'FINALIZADO' and processo.decisao_recurso %}
-                 <div class="alert {% if processo.decisao_recurso == 'DEFERIDO' %}alert-success{% else %}alert-danger{% endif %} mt-3">
-                    <strong>Decisão do Comandante (Recurso):</strong> {{ processo.decisao_recurso }}
-                    <hr>
-                    <small>{{ processo.fundamentacao_recurso }}</small>
+            {% elif 'FINALIZADO' in (processo.status | string | upper) and processo.decisao_recurso %}
+                 <div class="alert {% if processo.decisao_recurso == 'DEFERIDO' %}alert-success{% else %}alert-danger{% endif %} mt-3 shadow-sm">
+                    <h6 class="fw-bold mb-1"><i class="fas fa-university"></i> Decisão (Recurso)</h6>
+                    <span class="badge {% if processo.decisao_recurso == 'DEFERIDO' %}bg-success{% else %}bg-danger{% endif %} fs-6 mb-2">{{ processo.decisao_recurso }}</span>
+                    <p class="mb-0 small border-top pt-2 mt-1">{{ processo.fundamentacao_recurso }}</p>
                  </div>
             {% endif %}
-
         {% endif %}
     </div>
 </div>
