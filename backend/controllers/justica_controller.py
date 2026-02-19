@@ -347,14 +347,14 @@ def enviar_recurso(pid):
 @can_manage_justice_required
 def finalizar_processo(pid):
     """
-    Chefe CAL analisa e emite DECISÃO.
+    Chefe CAL analisa e emite DECISÃO. (Lógica Restaurada)
     """
     processo = db.session.get(ProcessoDisciplina, pid)
     if not processo:
         flash("Processo não encontrado.", "error"); return redirect(url_for('justica.index'))
 
     decisao = request.form.get('decisao') 
-    fundamentacao_texto = request.form.get('observacao_decisao') # Captura observacao_decisao do template
+    fundamentacao_texto = request.form.get('fundamentacao')
     turnos_sustacao = request.form.get('turnos_sustacao')
     
     try:
@@ -368,25 +368,12 @@ def finalizar_processo(pid):
     # Registra a decisão do Chefe
     processo.decisao_final = decisao
     processo.data_decisao = datetime.now().astimezone()
+    processo.status = StatusProcesso.DECISAO_EMITIDA.value
     processo.relator_id = current_user.id 
     processo.fundamentacao = fundamentacao_texto
     processo.observacao_decisao = fundamentacao_texto
 
-    # --- LÓGICA POR TIPO DE ESCOLA ---
-    tipo_npccal = 'ctsp'
-    if g.active_school and hasattr(g.active_school, 'npccal_type') and g.active_school.npccal_type:
-        tipo_npccal = g.active_school.npccal_type.lower()
-
-    if tipo_npccal == 'cbfpm':
-        # No CBFPM, move para DECISAO_EMITIDA para permitir rito de recurso (48h)
-        processo.status = StatusProcesso.DECISAO_EMITIDA.value
-        msg_sucesso = "Decisão registrada. O aluno tem 48h para interpor recurso após dar ciência."
-    else:
-        # No CTSP e outros, finaliza no ato
-        processo.status = StatusProcesso.FINALIZADO.value
-        msg_sucesso = "Decisão confirmada e processo finalizado."
-
-    # Lógica de Sanção
+    # Lógica de Sanção (RESTAURADA conforme original)
     if decisao in ['Advertência', 'Repreensão']:
         processo.tipo_sancao = decisao
         processo.dias_sancao = 0 
@@ -419,7 +406,7 @@ def finalizar_processo(pid):
                 url=link
             )
 
-        flash(msg_sucesso, "success")
+        flash("Decisão registrada. O aluno tem 48h para interpor recurso após dar ciência.", "success")
         
     except Exception as e:
         db.session.rollback()
