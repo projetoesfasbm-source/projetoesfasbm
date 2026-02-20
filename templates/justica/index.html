@@ -75,7 +75,7 @@
                                                     <form action="{{ url_for('justica.deletar_processo', pid=p.id) }}" method="POST" onsubmit="return confirm('ATENÇÃO: Tem certeza que deseja EXCLUIR este processo?');" class="d-inline">
                                                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                                         <button type="submit" class="btn btn-sm btn-danger fw-bold d-flex align-items-center gap-1">
-                                                            <i class="fas fa-trash"></i> <span>EXCLUIR</span>
+                                                            <i class="fas fa-trash"></i> <span>Excluir</span>
                                                         </button>
                                                     </form>
                                                 {% endif %}
@@ -253,19 +253,30 @@
                         {% for p in finalizados %}
                             <div class="card mb-2 bg-light border-success">
                                 <div class="card-body py-2">
-                                    <div class="row">
-                                        <div class="col-8">
+                                    <div class="row align-items-center">
+                                        <div class="col-md-8 col-sm-10">
                                             <strong>{{ p.aluno.user.nome_completo }}</strong> - {{ p.decisao_final or 'Finalizado' }}
                                             {% if p.tipo_sancao == 'Sustação da Dispensa' %}
                                                 <span class="badge bg-danger ms-2">{{ p.detalhes_sancao }}</span>
                                             {% endif %}
                                             <br><small class="text-muted">{{ p.fato_constatado }}</small>
                                         </div>
-                                        <div class="col-4 text-end">
-                                            <span class="badge bg-success">Concluído</span>
-                                            {% if p.pontos > 0 %}
-                                                <span class="badge bg-secondary">-{{ p.pontos }} pts</span>
-                                            {% endif %}
+                                        <div class="col-md-4 col-sm-2 text-end">
+                                            <div class="d-flex justify-content-end align-items-center gap-2">
+                                                <span class="badge bg-success">Concluído</span>
+                                                {% if p.pontos > 0 %}
+                                                    <span class="badge bg-secondary">-{{ p.pontos }} pts</span>
+                                                {% endif %}
+                                                
+                                                {% if current_user.role != 'aluno' %}
+                                                    <form action="{{ url_for('justica.deletar_processo', pid=p.id) }}" method="POST" onsubmit="return confirm('ATENÇÃO: Tem certeza que deseja EXCLUIR este processo finalizado?');" class="d-inline">
+                                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir Processo Finalizado">
+                                                            <i class="fas fa-trash"></i> Excluir
+                                                        </button>
+                                                    </form>
+                                                {% endif %}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -574,7 +585,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 .then(r => r.json())
                 .then(d => {
                     const nomeCompleto = `${d.posto_graduacao} ${d.nome_completo}, Id Func. ${d.matricula}`;
-                    box.value = `Termo de Justificação:\n\nTendo em vista as informações constantes na Parte Nº ___/___Pel/CAl/EsFAS/${anoAtual}, evidenciando a existência, em tese, de infração das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação:\n\n1. Justificante: ${nomeCompleto}.\n\n2. Descrição da conduta infracional: O ${nomeCompleto}, no dia ${dataExtenso}, ${descFato}. Com isso, incorreu ${regraDesc}.\n\n3. Cientifico-lhe que a contar do recebimento da presente, abre-se o prazo de 24 horas, para que, querendo, apresente resposta escrita com as provas que entender cabíveis. Fica advertido o acusado que a não entrega da justificação dentro do prazo estipulado, implicará em reconhecimento como verdadeiros os facos imputados.\n\n[NOME, POSTO/GRADUAÇÃO E FUNÇÃO DO RESPONSÁVEL]`;
+                    box.value = `Termo de Justificação:\n\nTendo em vista as informações constantes na Parte Nº ___/___Pel/CAl/EsFAS/${anoAtual}, evidenciando a existência, em tese, de infração das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação:\n\n1. Justificante: ${nomeCompleto}.\n\n2. Descrição da conduta infracional: O ${nomeCompleto}, no dia ${dataExtenso}, ${descFato}. Com isso, incorreu ${regraDesc}.\n\n3. Cientifico-lhe que a contar do recebimento da presente, abre-se o prazo de 24 horas, para que, querendo, apresente resposta escrita com as provas que entender cabíveis. Fica advertido o acusado que a não entrega da justificação dentro do prazo estipulado, implicará em reconhecimento como verdadeiros os fatos imputados.\n\n[NOME, POSTO/GRADUAÇÃO E FUNÇÃO DO RESPONSÁVEL]`;
                 });
         } else if(checks.length > 1) {
             box.value = `Termo Coletivo para ${checks.length} alunos.\nFato: ${descFato}\nEnquadramento: ${regraDesc}`;
