@@ -394,7 +394,7 @@
 
 <style>
     /* CORREÇÃO DO LAYOUT HORIZONTAL E ZOOM */
-    .justice-page-layout { display: block; width: 100%; overflow-x: hidden; }
+    .justice-page-layout { display: block; width: 100%; }
     .justice-options { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
     .justice-content { display: none; width: 100%; }
     .justice-content.active { display: block; }
@@ -403,6 +403,19 @@
     /* Previne que o TomSelect e textos longos expandam a largura da tela */
     .ts-wrapper { max-width: 100%; }
     .ts-dropdown .option { white-space: normal !important; word-wrap: break-word; }
+
+    /* CORREÇÃO GLOBAL PARA ESTOURO DE TELA NO FLEXBOX */
+    /* Garante matematicamente que nenhuma coluna flex expanda além da largura da tela */
+    .justice-page-layout .row > [class*="col-"] {
+        min-width: 0;
+    }
+
+    /* Força que textos longos (ex: URLs, regras cadastradas sem espaço) sejam quebrados, 
+       mantendo os botões laterais estritamente no seu devido lugar */
+    .justice-page-layout .card-body {
+        overflow-wrap: break-word;
+        word-break: break-word;
+    }
 </style>
 
 <script>
