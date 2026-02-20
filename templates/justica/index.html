@@ -54,16 +54,10 @@
                                         <small class="text-muted d-block">Aluno</small>
                                         <span class="fw-bold">{{ p.aluno.user.nome_completo }}</span>
                                     </div>
-                                    <div class="col-md-4" style="min-width: 0;">
+                                    <div class="col-md-4">
                                         <small class="text-muted d-block">Fato/Status</small>
                                         <div class="text-truncate text-dark" title="{{ p.fato_constatado }}">{{ p.fato_constatado }}</div>
-                                        <span class="badge bg-secondary">
-                                            {% if p.status == 'DECISAO_EMITIDA' or p.status.value == 'DECISAO_EMITIDA' %}
-                                                Aguardando Recurso
-                                            {% else %}
-                                                {{ p.status }}
-                                            {% endif %}
-                                        </span>
+                                        <span class="badge bg-secondary">{{ p.status }}</span>
                                         {% if p.pontos > 0 %}
                                             <span class="badge bg-danger ms-1">-{{ p.pontos }} pts (Previsto)</span>
                                         {% endif %}
@@ -86,22 +80,20 @@
                                             {% endif %}
 
                                             {% if current_user.role == 'aluno' %}
-                                                {% if not p.defesa and p.status not in ['DECISAO_EMITIDA', 'StatusProcesso.DECISAO_EMITIDA', 'EM_RECURSO', 'StatusProcesso.EM_RECURSO', 'FINALIZADO', 'StatusProcesso.FINALIZADO'] %}
+                                                {% if not p.defesa and p.status not in ['DECISAO_EMITIDA', 'AGUARDANDO_RECURSO'] %}
                                                     <button type="button" class="btn btn-sm btn-warning fw-bold text-dark" onclick="toggleDefesa('{{ p.id }}')" title="Registrar Ciência e Defesa">
                                                         <i class="fas fa-file-signature"></i> DAR CIENTE / DEFESA
                                                     </button>
-                                                {% elif p.status == 'DECISAO_EMITIDA' or p.status.value == 'DECISAO_EMITIDA' %}
+                                                {% elif p.status == 'AGUARDANDO_RECURSO' %}
                                                     <button type="button" class="btn btn-sm btn-primary fw-bold text-white" onclick="toggleRecurso('{{ p.id }}')" title="Interpor Recurso">
                                                         <i class="fas fa-gavel"></i> RECURSO
                                                     </button>
-                                                {% elif p.status == 'EM_RECURSO' or p.status.value == 'EM_RECURSO' %}
-                                                    <span class="badge bg-info py-2 text-dark"><i class="fas fa-clock"></i> Recurso em Análise</span>
                                                 {% elif p.defesa %}
                                                     <span class="badge bg-success py-2"><i class="fas fa-check"></i> Defesa Enviada</span>
                                                 {% endif %}
                                             {% endif %}
                                             
-                                            {% if current_user.role != 'aluno' and (p.status in ['AGUARDANDO_CIENCIA', 'StatusProcesso.AGUARDANDO_CIENCIA', 'ALUNO_NOTIFICADO', 'StatusProcesso.ALUNO_NOTIFICADO', 'DECISAO_EMITIDA', 'StatusProcesso.DECISAO_EMITIDA']) %}
+                                            {% if current_user.role != 'aluno' and (p.status == 'AGUARDANDO_CIENCIA' or p.status == 'NOTIFICADO' or p.status == 'DECISAO_EMITIDA') %}
                                                 <form action="{{ url_for('justica.dar_ciente', processo_id=p.id) }}" method="POST" class="d-inline">
                                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                                     <button type="submit" class="btn btn-sm btn-outline-warning text-dark" title="Forçar Ciência (Admin)">
@@ -148,7 +140,7 @@
                                 </div>
                                 {% endif %}
 
-                                {% if current_user.role == 'aluno' and (p.status == 'DECISAO_EMITIDA' or p.status.value == 'DECISAO_EMITIDA') %}
+                                {% if current_user.role == 'aluno' and p.status == 'AGUARDANDO_RECURSO' %}
                                 <div id="collapseRecurso{{ p.id }}" class="mt-3 pt-3 border-top bg-white p-3 rounded border border-warning shadow-sm" style="display: none;">
                                     <h5 class="text-primary fw-bold"><i class="fas fa-gavel me-2"></i>Interpor Recurso ao Comandante</h5>
                                     <p class="small text-muted mb-2">O prazo para interposição de recurso é de 48 horas após a ciência da decisão.</p>
@@ -180,43 +172,30 @@
                                                 {% endif %}
 
                                                 {% if p.defesa %}
-                                                <div class="alert alert-secondary border-secondary mb-2">
+                                                <div class="alert alert-secondary border-secondary">
                                                     <h6 class="fw-bold text-dark mb-1"><i class="fas fa-shield-alt me-1"></i>Defesa do Aluno:</h6>
                                                     <p class="mb-0" style="white-space: pre-wrap;">{{ p.defesa }}</p>
                                                     <small class="text-muted d-block mt-1">Enviada em: {{ p.data_defesa.strftime('%d/%m/%Y %H:%M') if p.data_defesa else '-' }}</small>
                                                 </div>
                                                 {% else %}
-                                                <div class="alert alert-warning py-2 small mb-2">
+                                                <div class="alert alert-warning py-2 small">
                                                     <i class="fas fa-exclamation-circle me-1"></i> O aluno ainda não enviou defesa.
-                                                </div>
-                                                {% endif %}
-
-                                                {% if p.texto_recurso %}
-                                                <div class="alert alert-info border-info mb-2">
-                                                    <h6 class="fw-bold text-dark mb-1"><i class="fas fa-gavel me-1"></i>Recurso do Aluno (Comandante):</h6>
-                                                    <p class="mb-0" style="white-space: pre-wrap;">{{ p.texto_recurso }}</p>
-                                                    <small class="text-muted d-block mt-1">Enviado em: {{ p.data_recurso.strftime('%d/%m/%Y %H:%M') if p.data_recurso else '-' }}</small>
                                                 </div>
                                                 {% endif %}
                                             </div>
 
                                             <div class="col-md-6">
-                                                <h6 class="fw-bold text-primary"><i class="fas fa-gavel me-1"></i>Decisão Administrativa</h6>
+                                                <h6 class="fw-bold text-primary"><i class="fas fa-gavel me-1"></i>Decisão do Chefe</h6>
                                                 
                                                 <div class="mb-3">
                                                     <label class="form-label small fw-bold">Veredito</label>
                                                     <select name="decisao" class="form-select" required onchange="toggleInputsInline(this, '{{ p.id }}')">
                                                         <option value="">-- Selecione --</option>
-                                                        {% if p.status == 'EM_RECURSO' or p.status.value == 'EM_RECURSO' %}
-                                                            <option value="absolver">DEFERIDO (Anular punição e Arquivar)</option>
-                                                            <option value="Mantida">INDEFERIDO (Manter punição original)</option>
-                                                        {% else %}
-                                                            <option value="Justificado">Justificado (Sem punição)</option>
-                                                            <option value="Advertência">Advertência</option>
-                                                            <option value="Repreensão">Repreensão</option>
-                                                            <option value="Sustação da Dispensa">Sustação da Dispensa</option>
-                                                            <option value="absolver">Absolver / Arquivar</option>
-                                                        {% endif %}
+                                                        <option value="Justificado">Justificado (Sem punição)</option>
+                                                        <option value="Advertência">Advertência</option>
+                                                        <option value="Repreensão">Repreensão</option>
+                                                        <option value="Sustação da Dispensa">Sustação da Dispensa</option>
+                                                        <option value="absolver">Absolver / Arquivar</option>
                                                     </select>
                                                 </div>
 
@@ -415,7 +394,7 @@
 
 <style>
     /* CORREÇÃO DO LAYOUT HORIZONTAL E ZOOM */
-    .justice-page-layout { display: block; width: 100%; }
+    .justice-page-layout { display: block; width: 100%; overflow-x: hidden; }
     .justice-options { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
     .justice-content { display: none; width: 100%; }
     .justice-content.active { display: block; }
