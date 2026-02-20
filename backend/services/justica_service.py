@@ -165,7 +165,7 @@ class JusticaService:
         Args:
             aluno_id: ID do aluno.
             mapa_vinculos: Dict {str(processo_id): atributo_index_1_to_18}.
-                            Obrigatório passar se houver punições.
+                           Obrigatório passar se houver punições.
         
         Returns:
             (limites, erro): Tuple onde 'limites' é lista de 18 floats e 'erro' é string ou None.
@@ -372,13 +372,7 @@ class JusticaService:
         try:
             p = db.session.get(ProcessoDisciplina, pid)
             if not p: return False, "Processo não encontrado."
-            
-            is_pontuado = JusticaService._is_curso_pontuado(aluno_id=p.aluno_id)
-            if is_pontuado and decisao not in ['IMPROCEDENTE', 'ANULADO', 'ARQUIVADO']:
-                p.status = StatusProcesso.DECISAO_EMITIDA
-            else:
-                p.status = StatusProcesso.FINALIZADO 
-            
+            p.status = StatusProcesso.FINALIZADO 
             p.decisao_final = decisao; p.fundamentacao = fundamentacao; p.detalhes_sancao = detalhes
             
             p.is_crime = is_crime
@@ -418,37 +412,3 @@ class JusticaService:
             p = db.session.get(ProcessoDisciplina, pid)
             db.session.delete(p); db.session.commit(); return True, "Ok"
         except: return False, "Erro"
-
-    @staticmethod
-    def registrar_ciencia_decisao(pid, user):
-        try:
-            p = db.session.get(ProcessoDisciplina, pid)
-            p.data_notificacao_decisao = datetime.now().astimezone()
-            db.session.commit(); return True, "Ciente registrado"
-        except: db.session.rollback(); return False, "Erro"
-
-    @staticmethod
-    def enviar_recurso(pid, texto, user):
-        try:
-            p = db.session.get(ProcessoDisciplina, pid)
-            p.status = StatusProcesso.EM_RECURSO
-            p.texto_recurso = texto
-            p.data_recurso = datetime.now().astimezone()
-            db.session.commit(); return True, "Recurso enviado"
-        except: db.session.rollback(); return False, "Erro"
-
-    @staticmethod
-    def julgar_recurso(pid, decisao_recurso, fundamentacao, autoridade_id):
-        try:
-            p = db.session.get(ProcessoDisciplina, pid)
-            p.status = StatusProcesso.FINALIZADO
-            p.decisao_recurso = decisao_recurso
-            p.fundamentacao_recurso = fundamentacao
-            p.autoridade_recurso_id = autoridade_id
-            p.data_julgamento_recurso = datetime.now().astimezone()
-            
-            if decisao_recurso in ['DEFERIDO', 'ANULADO']:
-                p.pontos = 0.0
-                
-            db.session.commit(); return True, "Recurso julgado"
-        except Exception as e: db.session.rollback(); return False, str(e)

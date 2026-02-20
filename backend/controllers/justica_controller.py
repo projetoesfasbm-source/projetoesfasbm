@@ -264,19 +264,16 @@ def dar_ciente(processo_id):
         return redirect(url_for('justica.index'))
 
     if processo.status == StatusProcesso.AGUARDANDO_CIENCIA.value:
-        sucesso, msg = JusticaService.registrar_ciente(processo_id, current_user)
-        if sucesso:
-            flash("Ciência do processo registrada. Você pode enviar sua defesa.", "success")
-        else:
-            flash(f"Erro: {msg}", "danger")
+        processo.data_ciencia = datetime.now().astimezone()
+        processo.status = StatusProcesso.ALUNO_NOTIFICADO
+        processo.ciente_aluno = True
+        flash("Ciência do processo registrada. Você pode enviar sua defesa.", "success")
     
     elif processo.status == StatusProcesso.DECISAO_EMITIDA.value:
-        sucesso, msg = JusticaService.registrar_ciencia_decisao(processo_id, current_user)
-        if sucesso:
-            flash("Ciência da decisão registrada. Prazo de 48h para recurso iniciado.", "info")
-        else:
-            flash(f"Erro: {msg}", "danger")
+        processo.data_notificacao_decisao = datetime.now().astimezone()
+        flash("Ciência da decisão registrada. Prazo de 48h para recurso iniciado.", "info")
 
+    db.session.commit()
     return redirect(url_for('justica.index'))
 
 @justica_bp.route('/enviar-defesa/<int:processo_id>', methods=['POST'])
@@ -337,12 +334,12 @@ def enviar_recurso(pid):
     if not texto:
         flash("Escreva os argumentos do recurso.", "warning"); return redirect(url_for('justica.index'))
 
-    sucesso, msg = JusticaService.enviar_recurso(pid, texto, current_user)
-    if sucesso:
-        flash("Recurso enviado ao Comandante.", "success")
-    else:
-        flash(f"Erro ao enviar recurso: {msg}", "danger")
-        
+    processo.texto_recurso = texto
+    processo.data_recurso = agora
+    processo.status = StatusProcesso.EM_RECURSO.value
+
+    db.session.commit()
+    flash("Recurso enviado ao Comandante.", "success")
     return redirect(url_for('justica.index'))
 
 @justica_bp.route('/finalizar-processo/<int:pid>', methods=['POST'])
@@ -444,29 +441,26 @@ def julgar_recurso(pid):
         flash("Apenas o Comandante (Admin Escola) pode julgar recursos.", "error")
         return redirect(url_for('justica.index'))
 
+    processo = db.session.get(ProcessoDisciplina, pid)
     decisao = request.form.get('decisao_recurso')
     parecer = request.form.get('fundamentacao_recurso')
 
-    processo = db.session.get(ProcessoDisciplina, pid)
+    processo.decisao_recurso = decisao
+    processo.fundamentacao_recurso = parecer
+    processo.autoridade_recurso_id = current_user.id
+    processo.data_julgamento_recurso = datetime.now().astimezone()
     
-    # Preservando a anotação visual para o histórico do processo antes de mandar para o serviço
     if decisao == 'DEFERIDO':
-        msg_obs = f" | Recurso DEFERIDO pelo Comandante em {datetime.now().strftime('%d/%m')}. Punição anulada."
+        processo.tipo_sancao = "ANULADO (Recurso Deferido)"
+        processo.pontos = 0.0
+        processo.observacao_decisao += f" | Recurso DEFERIDO pelo Comandante em {datetime.now().strftime('%d/%m')}. Punição anulada."
     else:
-        msg_obs = f" | Recurso INDEFERIDO pelo Comandante em {datetime.now().strftime('%d/%m')}. Decisão mantida."
-        
-    if processo.observacao_decisao:
-        processo.observacao_decisao += msg_obs
-    else:
-        processo.observacao_decisao = msg_obs
+        processo.observacao_decisao += f" | Recurso INDEFERIDO pelo Comandante em {datetime.now().strftime('%d/%m')}. Decisão mantida."
 
-    sucesso, msg = JusticaService.julgar_recurso(pid, decisao, parecer, current_user.id)
-    
-    if sucesso:
-        flash("Recurso julgado. Processo finalizado.", "success")
-    else:
-        flash(f"Erro ao julgar recurso: {msg}", "danger")
-        
+    processo.status = StatusProcesso.FINALIZADO.value
+
+    db.session.commit()
+    flash("Recurso julgado. Processo finalizado.", "success")
     return redirect(url_for('justica.index'))
 
 @justica_bp.route('/arquivar-processo/<int:pid>', methods=['POST'])

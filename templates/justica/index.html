@@ -6,388 +6,389 @@
 <link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
 
-<div class="content-header">
-    <h1>Justiça e Disciplina</h1>
-    <p>Gestão de processos disciplinares e avaliação atitudinal.</p>
-</div>
+<div class="container-xl">
+    <div class="content-header mt-4">
+        <h1>Justiça e Disciplina</h1>
+        <p>Gestão de processos disciplinares e avaliação atitudinal.</p>
+    </div>
 
-<div class="justice-page-layout">
-    <div class="justice-main-content">
-        <div class="justice-container">
+    <div class="justice-page-layout">
+        <div class="justice-main-content">
+            <div class="justice-container">
 
-            <div class="justice-options">
-                <button class="btn btn-primary justice-option-btn active" data-target="inProgressContent">Em Andamento</button>
-                <button class="btn btn-warning justice-option-btn" data-target="finalizadosContent">Finalizados</button>
+                <div class="justice-options mb-4">
+                    <button class="btn btn-primary justice-option-btn active" data-target="inProgressContent">Em Andamento</button>
+                    <button class="btn btn-warning justice-option-btn" data-target="finalizadosContent">Finalizados</button>
 
-                {% if current_user.role != 'aluno' %}
-                    <button class="btn btn-danger justice-option-btn" data-target="newInfracaoContent">
-                        <i class="fas fa-exclamation-triangle me-1"></i>Nova Infração
-                    </button>
-                    <button class="btn btn-success justice-option-btn" data-target="newElogioContent">
-                        <i class="fas fa-star me-1"></i>Novo Elogio
-                    </button>
-                    
-                    {% set school_type = 'ctsp' %}
-                    {% if g.active_school and g.active_school.npccal_type %}
-                        {% set school_type = g.active_school.npccal_type|lower %}
-                    {% endif %}
-                    {% if school_type in ['cbfpm', 'cspm'] %}
-                    <a href="{{ url_for('justica.fada_boletim') }}" class="btn btn-info text-white justice-option-btn">
-                        <i class="fas fa-clipboard-list me-1"></i> Boletim / Avaliar (FADA)
-                    </a>
-                    {% endif %}
-                {% endif %}
-            </div>
-
-            <div class="justice-content active" id="inProgressContent">
-                <h3 class="justice-content-title">Processos em Andamento</h3>
-                {% if em_andamento %}
-                    {% for p in em_andamento %}
-                        <div class="card mb-3 shadow-sm border-start border-4 border-primary">
-                            <div class="card-body">
-                                <div class="row align-items-center">
-                                    <div class="col-md-2">
-                                        <small class="text-muted d-block">Data</small>
-                                        <strong>{{ p.data_ocorrencia.strftime('%d/%m/%Y') }}</strong>
-                                    </div>
-                                    <div class="col-md-3">
-                                        <small class="text-muted d-block">Aluno</small>
-                                        <span class="fw-bold">{{ p.aluno.user.nome_completo }}</span>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <small class="text-muted d-block">Fato/Status</small>
-                                        <div class="text-truncate text-dark" title="{{ p.fato_constatado }}">{{ p.fato_constatado }}</div>
-                                        <span class="badge bg-secondary">{{ p.status }}</span>
-                                        {% if p.pontos > 0 %}
-                                            <span class="badge bg-danger ms-1">-{{ p.pontos }} pts (Previsto)</span>
-                                        {% endif %}
-                                    </div>
-                                    
-                                    <div class="col-md-3 text-end">
-                                        <div class="d-flex justify-content-end gap-2 flex-wrap mt-2 mt-md-0">
-                                            
-                                            {% if current_user.role != 'aluno' %}
-                                                <button type="button" class="btn btn-sm btn-info text-white" onclick="toggleAnalise('{{ p.id }}')" title="Analisar/Decidir">
-                                                    <i class="fas fa-gavel"></i> Analisar
-                                                </button>
-                                                
-                                                <form action="{{ url_for('justica.deletar_processo', pid=p.id) }}" method="POST" onsubmit="return confirm('ATENÇÃO: Tem certeza que deseja EXCLUIR este processo?');" class="d-inline">
-                                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                                    <button type="submit" class="btn btn-sm btn-danger fw-bold d-flex align-items-center gap-1">
-                                                        <i class="fas fa-trash"></i> <span>EXCLUIR</span>
-                                                    </button>
-                                                </form>
-                                            {% endif %}
-
-                                            {% if current_user.role == 'aluno' %}
-                                                {% if not p.defesa and p.status not in ['DECISAO_EMITIDA', 'AGUARDANDO_RECURSO'] %}
-                                                    <button type="button" class="btn btn-sm btn-warning fw-bold text-dark" onclick="toggleDefesa('{{ p.id }}')" title="Registrar Ciência e Defesa">
-                                                        <i class="fas fa-file-signature"></i> DAR CIENTE / DEFESA
-                                                    </button>
-                                                {% elif p.status == 'AGUARDANDO_RECURSO' %}
-                                                    <button type="button" class="btn btn-sm btn-primary fw-bold text-white" onclick="toggleRecurso('{{ p.id }}')" title="Interpor Recurso">
-                                                        <i class="fas fa-gavel"></i> RECURSO
-                                                    </button>
-                                                {% elif p.defesa %}
-                                                    <span class="badge bg-success py-2"><i class="fas fa-check"></i> Defesa Enviada</span>
-                                                {% endif %}
-                                            {% endif %}
-                                            
-                                            {% if current_user.role != 'aluno' and (p.status == 'AGUARDANDO_CIENCIA' or p.status == 'NOTIFICADO' or p.status == 'DECISAO_EMITIDA') %}
-                                                <form action="{{ url_for('justica.dar_ciente', processo_id=p.id) }}" method="POST" class="d-inline">
-                                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                                    <button type="submit" class="btn btn-sm btn-outline-warning text-dark" title="Forçar Ciência (Admin)">
-                                                        <i class="fas fa-check-double"></i>
-                                                    </button>
-                                                </form>
-                                            {% endif %}
-
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {% if current_user.role == 'aluno' and not p.defesa %}
-                                <div id="collapseDefesa{{ p.id }}" class="mt-3 pt-3 border-top bg-light p-3 rounded" style="display: none;">
-                                    <div class="row">
-                                        <div class="col-md-12">
-                                            <h5 class="text-warning fw-bold"><i class="fas fa-shield-alt me-2"></i>Registrar Defesa e Ciência</h5>
-                                            <p class="small text-muted mb-2">
-                                                Ao clicar em "Enviar Defesa", você declara estar ciente do fato imputado e submete a justificativa abaixo. **Esta ação é única e não poderá ser editada.**
-                                            </p>
-                                            
-                                            <form action="{{ url_for('justica.enviar_defesa', processo_id=p.id) }}" method="POST">
-                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                                
-                                                <div class="mb-3">
-                                                    <label class="form-label fw-bold small">Fato Constatado:</label>
-                                                    <div class="p-2 bg-white border rounded text-muted fst-italic">{{ p.fato_constatado }}</div>
-                                                </div>
-
-                                                <div class="mb-3">
-                                                    <label class="form-label fw-bold">Sua Justificativa / Defesa:</label>
-                                                    <textarea name="defesa" class="form-control" rows="6" placeholder="Escreva aqui sua defesa ou justificativa..." required></textarea>
-                                                </div>
-
-                                                <div class="text-end">
-                                                    <button type="button" class="btn btn-secondary btn-sm" onclick="toggleDefesa('{{ p.id }}')">Cancelar</button>
-                                                    <button type="submit" class="btn btn-warning fw-bold text-dark">
-                                                        <i class="fas fa-paper-plane me-1"></i> Enviar Defesa
-                                                    </button>
-                                                </div>
-                                            </form>
-                                        </div>
-                                    </div>
-                                </div>
-                                {% endif %}
-
-                                {% if current_user.role == 'aluno' and p.status == 'AGUARDANDO_RECURSO' %}
-                                <div id="collapseRecurso{{ p.id }}" class="mt-3 pt-3 border-top bg-white p-3 rounded border border-warning shadow-sm" style="display: none;">
-                                    <h5 class="text-primary fw-bold"><i class="fas fa-gavel me-2"></i>Interpor Recurso ao Comandante</h5>
-                                    <p class="small text-muted mb-2">O prazo para interposição de recurso é de 48 horas após a ciência da decisão.</p>
-                                    <form action="{{ url_for('justica.enviar_recurso', pid=p.id) }}" method="POST">
-                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                        <div class="mb-3">
-                                            <label class="form-label fw-bold">Argumentação do Recurso:</label>
-                                            <textarea name="texto_recurso" class="form-control" rows="6" placeholder="Digite aqui os motivos do seu recurso detalhadamente..." required></textarea>
-                                        </div>
-                                        <div class="text-end">
-                                            <button type="button" class="btn btn-secondary btn-sm" onclick="toggleRecurso('{{ p.id }}')">Cancelar</button>
-                                            <button type="submit" class="btn btn-primary fw-bold">Enviar Recurso</button>
-                                        </div>
-                                    </form>
-                                </div>
-                                {% endif %}
-
-                                <div id="collapseProcesso{{ p.id }}" class="mt-3 pt-3 border-top bg-light p-3 rounded" style="display: none;">
-                                    <form action="{{ url_for('justica.finalizar_processo', pid=p.id) }}" method="POST">
-                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                        
-                                        <div class="row">
-                                            <div class="col-md-6 border-end">
-                                                <h6 class="fw-bold text-muted"><i class="fas fa-file-alt me-1"></i>Descrição do Fato:</h6>
-                                                <div class="p-2 bg-white border rounded text-dark fst-italic mb-3" style="white-space: pre-wrap; max-height: 200px; overflow-y: auto;">{{ p.fato_constatado }}</div>
-                                                
-                                                {% if p.observacao %}
-                                                <div class="small text-muted mb-3"><strong>Nota Original:</strong> {{ p.observacao }}</div>
-                                                {% endif %}
-
-                                                {% if p.defesa %}
-                                                <div class="alert alert-secondary border-secondary">
-                                                    <h6 class="fw-bold text-dark mb-1"><i class="fas fa-shield-alt me-1"></i>Defesa do Aluno:</h6>
-                                                    <p class="mb-0" style="white-space: pre-wrap;">{{ p.defesa }}</p>
-                                                    <small class="text-muted d-block mt-1">Enviada em: {{ p.data_defesa.strftime('%d/%m/%Y %H:%M') if p.data_defesa else '-' }}</small>
-                                                </div>
-                                                {% else %}
-                                                <div class="alert alert-warning py-2 small">
-                                                    <i class="fas fa-exclamation-circle me-1"></i> O aluno ainda não enviou defesa.
-                                                </div>
-                                                {% endif %}
-                                            </div>
-
-                                            <div class="col-md-6">
-                                                <h6 class="fw-bold text-primary"><i class="fas fa-gavel me-1"></i>Decisão do Chefe</h6>
-                                                
-                                                <div class="mb-3">
-                                                    <label class="form-label small fw-bold">Veredito</label>
-                                                    <select name="decisao" class="form-select" required onchange="toggleInputsInline(this, '{{ p.id }}')">
-                                                        <option value="">-- Selecione --</option>
-                                                        <option value="Justificado">Justificado (Sem punição)</option>
-                                                        <option value="Advertência">Advertência</option>
-                                                        <option value="Repreensão">Repreensão</option>
-                                                        <option value="Sustação da Dispensa">Sustação da Dispensa</option>
-                                                        <option value="absolver">Absolver / Arquivar</option>
-                                                    </select>
-                                                </div>
-
-                                                <div class="mb-3" id="divTurnos{{ p.id }}" style="display:none;">
-                                                    <label class="form-label small text-danger fw-bold">Sustação (1 Turno = 6 horas):</label>
-                                                    <select name="turnos_sustacao" class="form-select border-danger text-danger fw-bold">
-                                                        <option value="">Selecione...</option>
-                                                        <option value="1 Turno (6h)">1 Turno (6h)</option>
-                                                        <option value="2 Turnos (12h)">2 Turnos (12h)</option>
-                                                        <option value="3 Turnos (18h)">3 Turnos (18h)</option>
-                                                        <option value="4 Turnos (24h)">4 Turnos (24h)</option>
-                                                        <option value="5 Turnos (30h)">5 Turnos (30h)</option>
-                                                        <option value="6 Turnos (36h)">6 Turnos (36h)</option>
-                                                        <option value="7 Turnos (42h)">7 Turnos (42h)</option>
-                                                        <option value="8 Turnos (48h)">8 Turnos (48h)</option>
-                                                    </select>
-                                                </div>
-
-                                                <div class="mb-3" id="divPontos{{ p.id }}" style="display:none;">
-                                                    <label class="form-label small">Pontos Perdidos (Automático)</label>
-                                                    <input type="number" step="0.01" name="pontos_finais" class="form-control" 
-                                                           value="{{ p.pontos }}" placeholder="0.0">
-                                                </div>
-
-                                                <div class="mb-3">
-                                                    <label class="form-label small">Fundamentação / Observação</label>
-                                                    <textarea name="observacao_decisao" class="form-control" rows="4" placeholder="Justifique a decisão..."></textarea>
-                                                </div>
-
-                                                <div class="text-end">
-                                                    <button type="button" class="btn btn-secondary btn-sm" onclick="toggleAnalise('{{ p.id }}')">Cancelar</button>
-                                                    <button type="submit" class="btn btn-primary btn-sm fw-bold">Confirmar Decisão</button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </form>
-                                </div>
-                            </div>
-                        </div>
-                    {% endfor %}
-                {% else %}
-                    <div class="alert alert-info">Nenhum processo em andamento.</div>
-                {% endif %}
-            </div>
-
-            <div class="justice-content" id="finalizadosContent">
-                <div class="d-flex justify-content-end mb-3">
                     {% if current_user.role != 'aluno' %}
-                        <a href="{{ url_for('justica.exportar_selecao') }}" class="btn btn-sm btn-outline-dark">
-                            <i class="fas fa-file-export"></i> Exportar Termos
+                        <button class="btn btn-danger justice-option-btn" data-target="newInfracaoContent">
+                            <i class="fas fa-exclamation-triangle me-1"></i>Nova Infração
+                        </button>
+                        <button class="btn btn-success justice-option-btn" data-target="newElogioContent">
+                            <i class="fas fa-star me-1"></i>Novo Elogio
+                        </button>
+                        
+                        {% set school_type = 'ctsp' %}
+                        {% if g.active_school and g.active_school.npccal_type %}
+                            {% set school_type = g.active_school.npccal_type|lower %}
+                        {% endif %}
+                        {% if school_type in ['cbfpm', 'cspm'] %}
+                        <a href="{{ url_for('justica.fada_boletim') }}" class="btn btn-info text-white justice-option-btn">
+                            <i class="fas fa-clipboard-list me-1"></i> Boletim / Avaliar (FADA)
                         </a>
+                        {% endif %}
                     {% endif %}
                 </div>
-                {% if finalizados %}
-                    {% for p in finalizados %}
-                        <div class="card mb-2 bg-light border-success">
-                            <div class="card-body py-2">
-                                <div class="row">
-                                    <div class="col-8">
-                                        <strong>{{ p.aluno.user.nome_completo }}</strong> - {{ p.decisao_final or 'Finalizado' }}
-                                        {% if p.tipo_sancao == 'Sustação da Dispensa' %}
-                                            <span class="badge bg-danger ms-2">{{ p.detalhes_sancao }}</span>
-                                        {% endif %}
-                                        <br><small class="text-muted">{{ p.fato_constatado }}</small>
+
+                <div class="justice-content active" id="inProgressContent">
+                    <h3 class="justice-content-title mb-3">Processos em Andamento</h3>
+                    {% if em_andamento %}
+                        {% for p in em_andamento %}
+                            <div class="card mb-3 shadow-sm border-start border-4 border-primary">
+                                <div class="card-body">
+                                    <div class="row align-items-center">
+                                        <div class="col-md-2 col-sm-4">
+                                            <small class="text-muted d-block small text-uppercase fw-bold">Data</small>
+                                            <strong>{{ p.data_ocorrencia.strftime('%d/%m/%Y') }}</strong>
+                                        </div>
+                                        <div class="col-md-3 col-sm-8">
+                                            <small class="text-muted d-block small text-uppercase fw-bold">Aluno</small>
+                                            <span class="fw-bold">{{ p.aluno.user.nome_completo }}</span>
+                                        </div>
+                                        <div class="col-md-4 col-sm-12 mt-2 mt-md-0">
+                                            <small class="text-muted d-block small text-uppercase fw-bold">Fato/Status</small>
+                                            <div class="text-truncate text-dark" title="{{ p.fato_constatado }}">{{ p.fato_constatado }}</div>
+                                            <span class="badge bg-secondary">{{ p.status }}</span>
+                                            {% if p.pontos > 0 %}
+                                                <span class="badge bg-danger ms-1">-{{ p.pontos }} pts (Previsto)</span>
+                                            {% endif %}
+                                        </div>
+                                        
+                                        <div class="col-md-3 text-md-end text-start mt-3 mt-md-0">
+                                            <div class="d-flex justify-content-md-end justify-content-start gap-2 flex-wrap">
+                                                
+                                                {% if current_user.role != 'aluno' %}
+                                                    <button type="button" class="btn btn-sm btn-info text-white" onclick="toggleAnalise('{{ p.id }}')" title="Analisar/Decidir">
+                                                        <i class="fas fa-gavel"></i> Analisar
+                                                    </button>
+                                                    
+                                                    <form action="{{ url_for('justica.deletar_processo', pid=p.id) }}" method="POST" onsubmit="return confirm('ATENÇÃO: Tem certeza que deseja EXCLUIR este processo?');" class="d-inline">
+                                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                        <button type="submit" class="btn btn-sm btn-danger fw-bold d-flex align-items-center gap-1">
+                                                            <i class="fas fa-trash"></i> <span>EXCLUIR</span>
+                                                        </button>
+                                                    </form>
+                                                {% endif %}
+
+                                                {% if current_user.role == 'aluno' %}
+                                                    {% if not p.defesa and p.status not in ['DECISAO_EMITIDA', 'AGUARDANDO_RECURSO'] %}
+                                                        <button type="button" class="btn btn-sm btn-warning fw-bold text-dark" onclick="toggleDefesa('{{ p.id }}')" title="Registrar Ciência e Defesa">
+                                                            <i class="fas fa-file-signature"></i> DAR CIENTE / DEFESA
+                                                        </button>
+                                                    {% elif p.status == 'AGUARDANDO_RECURSO' %}
+                                                        <button type="button" class="btn btn-sm btn-primary fw-bold text-white" onclick="toggleRecurso('{{ p.id }}')" title="Interpor Recurso">
+                                                            <i class="fas fa-gavel"></i> RECURSO
+                                                        </button>
+                                                    {% elif p.defesa %}
+                                                        <span class="badge bg-success py-2"><i class="fas fa-check"></i> Defesa Enviada</span>
+                                                    {% endif %}
+                                                {% endif %}
+                                                
+                                                {% if current_user.role != 'aluno' and (p.status == 'AGUARDANDO_CIENCIA' or p.status == 'NOTIFICADO' or p.status == 'DECISAO_EMITIDA') %}
+                                                    <form action="{{ url_for('justica.dar_ciente', processo_id=p.id) }}" method="POST" class="d-inline">
+                                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                        <button type="submit" class="btn btn-sm btn-outline-warning text-dark" title="Forçar Ciência (Admin)">
+                                                            <i class="fas fa-check-double"></i>
+                                                        </button>
+                                                    </form>
+                                                {% endif %}
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div class="col-4 text-end">
-                                        <span class="badge bg-success">Concluído</span>
-                                        {% if p.pontos > 0 %}
-                                            <span class="badge bg-secondary">-{{ p.pontos }} pts</span>
-                                        {% endif %}
+
+                                    {% if current_user.role == 'aluno' and not p.defesa %}
+                                    <div id="collapseDefesa{{ p.id }}" class="mt-3 pt-3 border-top bg-light p-3 rounded" style="display: none;">
+                                        <div class="row">
+                                            <div class="col-md-12">
+                                                <h5 class="text-warning fw-bold"><i class="fas fa-shield-alt me-2"></i>Registrar Defesa e Ciência</h5>
+                                                <p class="small text-muted mb-2">
+                                                    Ao clicar em "Enviar Defesa", você declara estar ciente do fato imputado e submete a justificativa abaixo. **Esta ação é única e não poderá ser editada.**
+                                                </p>
+                                                
+                                                <form action="{{ url_for('justica.enviar_defesa', processo_id=p.id) }}" method="POST">
+                                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                    
+                                                    <div class="mb-3">
+                                                        <label class="form-label fw-bold small">Fato Constatado:</label>
+                                                        <div class="p-2 bg-white border rounded text-muted fst-italic">{{ p.fato_constatado }}</div>
+                                                    </div>
+
+                                                    <div class="mb-3">
+                                                        <label class="form-label fw-bold">Sua Justificativa / Defesa:</label>
+                                                        <textarea name="defesa" class="form-control" rows="6" placeholder="Escreva aqui sua defesa ou justificativa..." required></textarea>
+                                                    </div>
+
+                                                    <div class="text-end">
+                                                        <button type="button" class="btn btn-secondary btn-sm" onclick="toggleDefesa('{{ p.id }}')">Cancelar</button>
+                                                        <button type="submit" class="btn btn-warning fw-bold text-dark">
+                                                            <i class="fas fa-paper-plane me-1"></i> Enviar Defesa
+                                                        </button>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endif %}
+
+                                    {% if current_user.role == 'aluno' and p.status == 'AGUARDANDO_RECURSO' %}
+                                    <div id="collapseRecurso{{ p.id }}" class="mt-3 pt-3 border-top bg-white p-3 rounded border border-warning shadow-sm" style="display: none;">
+                                        <h5 class="text-primary fw-bold"><i class="fas fa-gavel me-2"></i>Interpor Recurso ao Comandante</h5>
+                                        <p class="small text-muted mb-2">O prazo para interposição de recurso é de 48 horas após a ciência da decisão.</p>
+                                        <form action="{{ url_for('justica.enviar_recurso', pid=p.id) }}" method="POST">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <div class="mb-3">
+                                                <label class="form-label fw-bold">Argumentação do Recurso:</label>
+                                                <textarea name="texto_recurso" class="form-control" rows="6" placeholder="Digite aqui os motivos do seu recurso detalhadamente..." required></textarea>
+                                            </div>
+                                            <div class="text-end">
+                                                <button type="button" class="btn btn-secondary btn-sm" onclick="toggleRecurso('{{ p.id }}')">Cancelar</button>
+                                                <button type="submit" class="btn btn-primary fw-bold">Enviar Recurso</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                    {% endif %}
+
+                                    <div id="collapseProcesso{{ p.id }}" class="mt-3 pt-3 border-top bg-light p-3 rounded" style="display: none;">
+                                        <form action="{{ url_for('justica.finalizar_processo', pid=p.id) }}" method="POST">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            
+                                            <div class="row">
+                                                <div class="col-md-6 border-end">
+                                                    <h6 class="fw-bold text-muted"><i class="fas fa-file-alt me-1"></i>Descrição do Fato:</h6>
+                                                    <div class="p-2 bg-white border rounded text-dark fst-italic mb-3" style="white-space: pre-wrap; max-height: 200px; overflow-y: auto;">{{ p.fato_constatado }}</div>
+                                                    
+                                                    {% if p.observacao %}
+                                                    <div class="small text-muted mb-3"><strong>Nota Original:</strong> {{ p.observacao }}</div>
+                                                    {% endif %}
+
+                                                    {% if p.defesa %}
+                                                    <div class="alert alert-secondary border-secondary">
+                                                        <h6 class="fw-bold text-dark mb-1"><i class="fas fa-shield-alt me-1"></i>Defesa do Aluno:</h6>
+                                                        <p class="mb-0" style="white-space: pre-wrap;">{{ p.defesa }}</p>
+                                                        <small class="text-muted d-block mt-1">Enviada em: {{ p.data_defesa.strftime('%d/%m/%Y %H:%M') if p.data_defesa else '-' }}</small>
+                                                    </div>
+                                                    {% else %}
+                                                    <div class="alert alert-warning py-2 small">
+                                                        <i class="fas fa-exclamation-circle me-1"></i> O aluno ainda não enviou defesa.
+                                                    </div>
+                                                    {% endif %}
+                                                </div>
+
+                                                <div class="col-md-6">
+                                                    <h6 class="fw-bold text-primary"><i class="fas fa-gavel me-1"></i>Decisão do Chefe</h6>
+                                                    
+                                                    <div class="mb-3">
+                                                        <label class="form-label small fw-bold">Veredito</label>
+                                                        <select name="decisao" class="form-select" required onchange="toggleInputsInline(this, '{{ p.id }}')">
+                                                            <option value="">-- Selecione --</option>
+                                                            <option value="Justificado">Justificado (Sem punição)</option>
+                                                            <option value="Advertência">Advertência</option>
+                                                            <option value="Repreensão">Repreensão</option>
+                                                            <option value="Sustação da Dispensa">Sustação da Dispensa</option>
+                                                            <option value="absolver">Absolver / Arquivar</option>
+                                                        </select>
+                                                    </div>
+
+                                                    <div class="mb-3" id="divTurnos{{ p.id }}" style="display:none;">
+                                                        <label class="form-label small text-danger fw-bold">Sustação (1 Turno = 6 horas):</label>
+                                                        <select name="turnos_sustacao" class="form-select border-danger text-danger fw-bold">
+                                                            <option value="">Selecione...</option>
+                                                            <option value="1 Turno (6h)">1 Turno (6h)</option>
+                                                            <option value="2 Turnos (12h)">2 Turnos (12h)</option>
+                                                            <option value="3 Turnos (18h)">3 Turnos (18h)</option>
+                                                            <option value="4 Turnos (24h)">4 Turnos (24h)</option>
+                                                            <option value="5 Turnos (30h)">5 Turnos (30h)</option>
+                                                            <option value="6 Turnos (36h)">6 Turnos (36h)</option>
+                                                            <option value="7 Turnos (42h)">7 Turnos (42h)</option>
+                                                            <option value="8 Turnos (48h)">8 Turnos (48h)</option>
+                                                        </select>
+                                                    </div>
+
+                                                    <div class="mb-3" id="divPontos{{ p.id }}" style="display:none;">
+                                                        <label class="form-label small">Pontos Perdidos (Automático)</label>
+                                                        <input type="number" step="0.01" name="pontos_finais" class="form-control" 
+                                                               value="{{ p.pontos }}" placeholder="0.0">
+                                                    </div>
+
+                                                    <div class="mb-3">
+                                                        <label class="form-label small">Fundamentação / Observação</label>
+                                                        <textarea name="observacao_decisao" class="form-control" rows="4" placeholder="Justifique a decisão..."></textarea>
+                                                    </div>
+
+                                                    <div class="text-end">
+                                                        <button type="button" class="btn btn-secondary btn-sm" onclick="toggleAnalise('{{ p.id }}')">Cancelar</button>
+                                                        <button type="submit" class="btn btn-primary btn-sm fw-bold">Confirmar Decisão</button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </form>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    {% endfor %}
-                {% else %}
-                    <div class="alert alert-info">Nenhum processo finalizado.</div>
-                {% endif %}
-            </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="alert alert-info">Nenhum processo em andamento.</div>
+                    {% endif %}
+                </div>
 
-            <div class="justice-content" id="newInfracaoContent">
-                <div class="card border-danger shadow-sm">
-                    <div class="card-header bg-danger text-white"><h4 class="mb-0">Registrar Infração</h4></div>
-                    <div class="card-body">
-                         <form method="POST" action="{{ url_for('justica.registrar_em_massa') }}">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <input type="hidden" name="tipo_registro" value="infracao">
-                            <input type="hidden" name="origem_punicao" id="hidden_origem_punicao" value="NPCCAL">
-                            <input type="hidden" name="is_crime" id="hidden_is_crime" value="false">
-
-                             <div class="row">
-                                <div class="col-md-5 mb-3 border-end">
-                                    <label class="form-label fw-bold">1. Turma</label>
-                                    <select class="form-select mb-2" onchange="carregarAlunos(this.value, 'listaAlunosInfracao')">
-                                        <option value="">-- Escolha --</option>
-                                        {% for turma in turmas %}
-                                        <option value="{{ turma.id }}">{{ turma.nome }}</option>
-                                        {% endfor %}
-                                    </select>
-                                    <a href="#" onclick="toggleTodos('listaAlunosInfracao'); return false;" class="small text-danger">Marcar Todos</a>
-                                    <div id="listaAlunosInfracao" class="border rounded bg-light p-2" style="max-height: 350px; overflow-y: auto;">
-                                        <div class="text-center text-muted small py-3">Selecione uma turma.</div>
+                <div class="justice-content" id="finalizadosContent">
+                    <div class="d-flex justify-content-end mb-3">
+                        {% if current_user.role != 'aluno' %}
+                            <a href="{{ url_for('justica.exportar_selecao') }}" class="btn btn-sm btn-outline-dark">
+                                <i class="fas fa-file-export"></i> Exportar Termos
+                            </a>
+                        {% endif %}
+                    </div>
+                    {% if finalizados %}
+                        {% for p in finalizados %}
+                            <div class="card mb-2 bg-light border-success">
+                                <div class="card-body py-2">
+                                    <div class="row">
+                                        <div class="col-8">
+                                            <strong>{{ p.aluno.user.nome_completo }}</strong> - {{ p.decisao_final or 'Finalizado' }}
+                                            {% if p.tipo_sancao == 'Sustação da Dispensa' %}
+                                                <span class="badge bg-danger ms-2">{{ p.detalhes_sancao }}</span>
+                                            {% endif %}
+                                            <br><small class="text-muted">{{ p.fato_constatado }}</small>
+                                        </div>
+                                        <div class="col-4 text-end">
+                                            <span class="badge bg-success">Concluído</span>
+                                            {% if p.pontos > 0 %}
+                                                <span class="badge bg-secondary">-{{ p.pontos }} pts</span>
+                                            {% endif %}
+                                        </div>
                                     </div>
                                 </div>
-                                <div class="col-md-7 mb-3">
-                                    <label class="form-label fw-bold">2. Detalhes</label>
-                                    <div class="mb-3 p-2 border rounded bg-white">
-                                        <label class="small fw-bold d-block mb-1">Tipo de Enquadramento</label>
-                                        <div class="form-check form-check-inline">
-                                            <input class="form-check-input" type="radio" name="tipo_visual" id="rad_npccal" value="NPCCAL" checked onchange="toggleTiposInfracao()">
-                                            <label class="form-check-label small" for="rad_npccal">Falta NPCCAL</label>
-                                        </div>
-                                        <div class="form-check form-check-inline">
-                                            <input class="form-check-input" type="radio" name="tipo_visual" id="rad_rdbm" value="RDBM" onchange="toggleTiposInfracao()">
-                                            <label class="form-check-label small text-warning fw-bold" for="rad_rdbm">Transgressão RDBM</label>
-                                        </div>
-                                        <div class="form-check form-check-inline">
-                                            <input class="form-check-input" type="radio" name="tipo_visual" id="rad_crime" value="CRIME" onchange="toggleTiposInfracao()">
-                                            <label class="form-check-label small text-danger fw-bold" for="rad_crime">Crime Militar/Comum</label>
-                                        </div>
-                                    </div>
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="alert alert-info">Nenhum processo finalizado.</div>
+                    {% endif %}
+                </div>
 
-                                    <div class="mb-2" id="box_regras_npccal">
-                                        <label class="small">Pesquisar Falta (Código ou Descrição)</label>
-                                        <select id="regraSelect" name="regra_id" class="form-select" onchange="atualizarTextoInteligente()" placeholder="Digite para pesquisar a regra...">
-                                            <option value="">-- Selecione a Falta --</option>
-                                            {% for regra in fatos_predefinidos %}
-                                            <option value="{{ regra.id }}" data-desc="no item {{ regra.codigo }} '{{ regra.descricao }}'">{{ regra.codigo }} - {{ regra.descricao }}</option>
+                <div class="justice-content" id="newInfracaoContent">
+                    <div class="card border-danger shadow-sm">
+                        <div class="card-header bg-danger text-white"><h4 class="mb-0">Registrar Infração</h4></div>
+                        <div class="card-body">
+                             <form method="POST" action="{{ url_for('justica.registrar_em_massa') }}">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="tipo_registro" value="infracao">
+                                <input type="hidden" name="origem_punicao" id="hidden_origem_punicao" value="NPCCAL">
+                                <input type="hidden" name="is_crime" id="hidden_is_crime" value="false">
+
+                                 <div class="row">
+                                    <div class="col-md-5 mb-3 border-end">
+                                        <label class="form-label fw-bold">1. Turma</label>
+                                        <select class="form-select mb-2" onchange="carregarAlunos(this.value, 'listaAlunosInfracao')">
+                                            <option value="">-- Escolha --</option>
+                                            {% for turma in turmas %}
+                                            <option value="{{ turma.id }}">{{ turma.nome }}</option>
                                             {% endfor %}
                                         </select>
-                                    </div>
-
-                                    <div class="mb-2" id="box_regras_manual" style="display: none;">
-                                        <label class="small">Descrição da Transgressão / Crime</label>
-                                        <input type="text" id="inputManualDesc" name="codigo_infracao" class="form-control" placeholder="Ex: Art. 15 do RDBM ou Art. 290 do CPM..." oninput="atualizarTextoInteligente()">
-                                    </div>
-
-                                    <div class="row mb-2">
-                                        <div class="col-md-7">
-                                            <label class="small">Data do Fato</label>
-                                            <input type="date" name="data_fato" id="dataFatoInput" class="form-control" value="{{ hoje }}" onchange="atualizarTextoInteligente()">
-                                        </div>
-                                        <div class="col-md-5">
-                                            <label class="small">Hora</label>
-                                            <input type="time" name="hora_fato" class="form-control" value="{{ agora_hora or '12:00' }}">
+                                        <a href="#" onclick="toggleTodos('listaAlunosInfracao'); return false;" class="small text-danger">Marcar Todos</a>
+                                        <div id="listaAlunosInfracao" class="border rounded bg-light p-2" style="max-height: 350px; overflow-y: auto;">
+                                            <div class="text-center text-muted small py-3">Selecione uma turma.</div>
                                         </div>
                                     </div>
-                                    <div class="mb-2">
-                                        <label class="small">Fato Constatado (Descrição detalhada da conduta)</label>
-                                        <textarea name="descricao" id="descricaoFatoInput" class="form-control" rows="2" placeholder="Ex: deixou a parte de cima do seu armário fora dos padrões exigidos." required oninput="atualizarTextoInteligente()"></textarea>
+                                    <div class="col-md-7 mb-3">
+                                        <label class="form-label fw-bold">2. Detalhes</label>
+                                        <div class="mb-3 p-2 border rounded bg-white">
+                                            <label class="small fw-bold d-block mb-1">Tipo de Enquadramento</label>
+                                            <div class="form-check form-check-inline">
+                                                <input class="form-check-input" type="radio" name="tipo_visual" id="rad_npccal" value="NPCCAL" checked onchange="toggleTiposInfracao()">
+                                                <label class="form-check-label small" for="rad_npccal">Falta NPCCAL</label>
+                                            </div>
+                                            <div class="form-check form-check-inline">
+                                                <input class="form-check-input" type="radio" name="tipo_visual" id="rad_rdbm" value="RDBM" onchange="toggleTiposInfracao()">
+                                                <label class="form-check-label small text-warning fw-bold" for="rad_rdbm">Transgressão RDBM</label>
+                                            </div>
+                                            <div class="form-check form-check-inline">
+                                                <input class="form-check-input" type="radio" name="tipo_visual" id="rad_crime" value="CRIME" onchange="toggleTiposInfracao()">
+                                                <label class="form-check-label small text-danger fw-bold" for="rad_crime">Crime Militar/Comum</label>
+                                            </div>
+                                        </div>
+
+                                        <div class="mb-2" id="box_regras_npccal">
+                                            <label class="small">Pesquisar Falta (Código ou Descrição)</label>
+                                            <select id="regraSelect" name="regra_id" class="form-select" onchange="atualizarTextoInteligente()" placeholder="Digite para pesquisar a regra...">
+                                                <option value="">-- Selecione a Falta --</option>
+                                                {% for regra in fatos_predefinidos %}
+                                                <option value="{{ regra.id }}" data-desc="no item {{ regra.codigo }} '{{ regra.descricao }}'">{{ regra.codigo }} - {{ regra.descricao }}</option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+
+                                        <div class="mb-2" id="box_regras_manual" style="display: none;">
+                                            <label class="small">Descrição da Transgressão / Crime</label>
+                                            <input type="text" id="inputManualDesc" name="codigo_infracao" class="form-control" placeholder="Ex: Art. 15 do RDBM ou Art. 290 do CPM..." oninput="atualizarTextoInteligente()">
+                                        </div>
+
+                                        <div class="row mb-2">
+                                            <div class="col-md-7">
+                                                <label class="small">Data do Fato</label>
+                                                <input type="date" name="data_fato" id="dataFatoInput" class="form-control" value="{{ hoje }}" onchange="atualizarTextoInteligente()">
+                                            </div>
+                                            <div class="col-md-5">
+                                                <label class="small">Hora</label>
+                                                <input type="time" name="hora_fato" class="form-control" value="{{ agora_hora or '12:00' }}">
+                                            </div>
+                                        </div>
+                                        <div class="mb-2">
+                                            <label class="small">Fato Constatado (Descrição detalhada da conduta)</label>
+                                            <textarea name="descricao" id="descricaoFatoInput" class="form-control" rows="2" placeholder="Ex: deixou a parte de cima do seu armário fora dos padrões exigidos." required oninput="atualizarTextoInteligente()"></textarea>
+                                        </div>
+                                        <div class="mb-2">
+                                            <label class="small">Termo de Justificação (Gerado Automaticamente)</label>
+                                            <textarea id="campoObservacao" name="observacao" class="form-control" rows="15"></textarea>
+                                        </div>
+                                        <div class="text-end"><button type="submit" class="btn btn-danger">Registrar</button></div>
                                     </div>
-                                    <div class="mb-2">
-                                        <label class="small">Termo de Justificação (Gerado Automaticamente)</label>
-                                        <textarea id="campoObservacao" name="observacao" class="form-control" rows="15"></textarea>
-                                    </div>
-                                    <div class="text-end"><button type="submit" class="btn btn-danger">Registrar</button></div>
                                 </div>
-                            </div>
-                        </form>
+                            </form>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <div class="justice-content" id="newElogioContent">
-                <div class="card border-success shadow-sm">
-                    <div class="card-header bg-success text-white"><h4 class="mb-0">Registrar Elogio</h4></div>
-                    <div class="card-body">
-                         <form method="POST" action="{{ url_for('justica.registrar_em_massa') }}">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <input type="hidden" name="tipo_registro" value="elogio">
-                            <div class="row">
-                                <div class="col-md-5 border-end">
-                                    <label class="form-label">Turma</label>
-                                    <select class="form-select mb-2" onchange="carregarAlunos(this.value, 'listaAlunosElogio')">
-                                        <option value="">-- Escolha --</option>
-                                        {% for turma in turmas %}
-                                        <option value="{{ turma.id }}">{{ turma.nome }}</option>
-                                        {% endfor %}
-                                    </select>
-                                    <div id="listaAlunosElogio" class="border rounded p-2" style="max-height:300px; overflow-y:auto;"></div>
+                <div class="justice-content" id="newElogioContent">
+                    <div class="card border-success shadow-sm">
+                        <div class="card-header bg-success text-white"><h4 class="mb-0">Registrar Elogio</h4></div>
+                        <div class="card-body">
+                             <form method="POST" action="{{ url_for('justica.registrar_em_massa') }}">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="tipo_registro" value="elogio">
+                                <div class="row">
+                                    <div class="col-md-5 border-end">
+                                        <label class="form-label">Turma</label>
+                                        <select class="form-select mb-2" onchange="carregarAlunos(this.value, 'listaAlunosElogio')">
+                                            <option value="">-- Escolha --</option>
+                                            {% for turma in turmas %}
+                                            <option value="{{ turma.id }}">{{ turma.nome }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <div id="listaAlunosElogio" class="border rounded p-2" style="max-height:300px; overflow-y:auto;"></div>
+                                    </div>
+                                    <div class="col-md-7">
+                                        <label class="form-label">Motivo</label>
+                                        <textarea name="descricao" class="form-control" rows="5" required></textarea>
+                                        <div class="text-end mt-3"><button type="submit" class="btn btn-success">Registrar Elogio</button></div>
+                                    </div>
                                 </div>
-                                <div class="col-md-7">
-                                    <label class="form-label">Motivo</label>
-                                    <textarea name="descricao" class="form-control" rows="5" required></textarea>
-                                    <div class="text-end mt-3"><button type="submit" class="btn btn-success">Registrar Elogio</button></div>
-                                </div>
-                            </div>
-                        </form>
+                            </form>
+                        </div>
                     </div>
                 </div>
-            </div>
 
+            </div>
         </div>
     </div>
 </div>
@@ -398,6 +399,7 @@
     .justice-options { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
     .justice-content { display: none; width: 100%; }
     .justice-content.active { display: block; }
+    .justice-container { width: 100%; max-width: 100%; }
     .ts-control { min-height: 38px; border-radius: 0.375rem; }
     
     /* Previne que o TomSelect e textos longos expandam a largura da tela */
@@ -572,7 +574,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 .then(r => r.json())
                 .then(d => {
                     const nomeCompleto = `${d.posto_graduacao} ${d.nome_completo}, Id Func. ${d.matricula}`;
-                    box.value = `Termo de Justificação:\n\nTendo em vista as informações constantes na Parte Nº ___/___Pel/CAl/EsFAS/${anoAtual}, evidenciando a existência, em tese, de infração das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação:\n\n1. Justificante: ${nomeCompleto}.\n\n2. Descrição da conduta infracional: O ${nomeCompleto}, no dia ${dataExtenso}, ${descFato}. Com isso, incorreu ${regraDesc}.\n\n3. Cientifico-lhe que a contar do recebimento da presente, abre-se o prazo de 24 horas, para que, querendo, apresente resposta escrita com as provas que entender cabíveis. Fica advertido o acusado que a não entrega da justificação dentro do prazo estipulado, implicará em reconhecimento como verdadeiros os fatos imputados.\n\n[NOME, POSTO/GRADUAÇÃO E FUNÇÃO DO RESPONSÁVEL]`;
+                    box.value = `Termo de Justificação:\n\nTendo em vista as informações constantes na Parte Nº ___/___Pel/CAl/EsFAS/${anoAtual}, evidenciando a existência, em tese, de infração das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação:\n\n1. Justificante: ${nomeCompleto}.\n\n2. Descrição da conduta infracional: O ${nomeCompleto}, no dia ${dataExtenso}, ${descFato}. Com isso, incorreu ${regraDesc}.\n\n3. Cientifico-lhe que a contar do recebimento da presente, abre-se o prazo de 24 horas, para que, querendo, apresente resposta escrita com as provas que entender cabíveis. Fica advertido o acusado que a não entrega da justificação dentro do prazo estipulado, implicará em reconhecimento como verdadeiros os facos imputados.\n\n[NOME, POSTO/GRADUAÇÃO E FUNÇÃO DO RESPONSÁVEL]`;
                 });
         } else if(checks.length > 1) {
             box.value = `Termo Coletivo para ${checks.length} alunos.\nFato: ${descFato}\nEnquadramento: ${regraDesc}`;
