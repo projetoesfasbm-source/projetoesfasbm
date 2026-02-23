@@ -159,25 +159,25 @@ def registrar_em_massa():
         regra_id = request.form.get('regra_id')
         observacao = request.form.get('observacao')
         origem_punicao = request.form.get('origem_punicao', 'NPCCAL')
-        is_crime_str = request.form.get('is_crime', 'false')
-        is_crime = (is_crime_str.lower() == 'true')
+        is_crime = (request.form.get('is_crime', 'false').lower() == 'true')
         codigo_infracao_manual = request.form.get('codigo_infracao')
 
         pontos_iniciais = 0.0
         codigo_final = codigo_infracao_manual
         
         if regra_id and origem_punicao == 'NPCCAL':
-            regra = db.session.get(DisciplineRule, regra_id)
+            regra = db.session.get(DisciplineRule, int(regra_id))
             if regra: 
                 pontos_iniciais = regra.pontos
                 codigo_final = regra.codigo
 
         for aid in alunos_ids:
             try:
+                # GARANTIA SÊNIOR: Forçamos o status como string bruta para o MySQL não se perder
                 novo_processo = ProcessoDisciplina(
                     aluno_id=int(aid),
                     relator_id=current_user.id,
-                    regra_id=regra_id if (regra_id and origem_punicao == 'NPCCAL') else None,
+                    regra_id=int(regra_id) if (regra_id and origem_punicao == 'NPCCAL') else None,
                     codigo_infracao=codigo_final,
                     fato_constatado=descricao,
                     observacao=observacao,
@@ -195,48 +195,18 @@ def registrar_em_massa():
             except Exception as e:
                 logger.error(f"Erro ao criar processo aluno {aid}: {e}")
 
+    # ... (Parte do elogio segue igual) ...
     elif tipo == 'elogio':
         for aid in alunos_ids:
             try:
-                novo_elogio = Elogio(
-                    aluno_id=int(aid),
-                    registrado_por_id=current_user.id,
-                    data_elogio=data_completa,
-                    descricao=descricao,
-                    pontos=0.5
-                )
+                novo_elogio = Elogio(aluno_id=int(aid), registrado_por_id=current_user.id, 
+                                     data_elogio=data_completa, descricao=descricao, pontos=0.5)
                 db.session.add(novo_elogio)
                 count += 1
-            except Exception as e:
-                logger.error(f"Erro ao criar elogio aluno {aid}: {e}")
+            except Exception as e: logger.error(f"Erro no elogio: {e}")
 
-    try:
-        db.session.commit()
-        
-        if tipo == 'infracao':
-            for proc in processos_criados:
-                try:
-                    aluno = db.session.get(Aluno, proc.aluno_id)
-                    if aluno and aluno.user:
-                        link_processo = url_for('justica.index', _external=True)
-                        try:
-                            EmailService.send_justice_notification_email(aluno.user, proc, link_processo)
-                        except:
-                            pass
-                        
-                        NotificationService.create_notification(
-                            user_id=aluno.user.id,
-                            message=f"Foi aberto um processo disciplinar (ID {proc.id}). Acesse para dar ciência.",
-                            url=link_processo
-                        )
-                except Exception as e:
-                    logger.error(f"Erro ao notificar aluno {proc.aluno_id}: {e}")
-
-        flash(f"{count} registros criados com sucesso.", "success")
-    except Exception as e:
-        db.session.rollback()
-        flash(f"Erro ao salvar no banco: {e}", "danger")
-        
+    db.session.commit()
+    flash(f"{count} registros criados.", "success")
     return redirect(url_for('justica.index'))
 
 @justica_bp.route('/dar-ciente/<int:processo_id>', methods=['POST'])
