@@ -18,12 +18,10 @@ logger = logging.getLogger(__name__)
 
 class JusticaService:
     
-    # Constantes Oficiais (PDF Art. 120 e 125)
     FADA_BASE = 8.0        
     FADA_MAX_ABSOLUTO = 10.0 
     NDISC_BASE = 20.0
     
-    # Pesos (PDF Art. 125 §7 e 173)
     DESC_FADA_LEVE = 0.25
     DESC_FADA_MEDIA = 0.50
     DESC_FADA_GRAVE = 1.00
@@ -113,7 +111,7 @@ class JusticaService:
         aluno = db.session.get(Aluno, aluno_id)
         if not aluno: return limites, None
         dt_inicio, dt_limite = JusticaService.get_datas_limites(aluno.turma_id)
-        stmt = select(ProcessoDisciplina).where(ProcessoDisciplina.aluno_id == aluno_id, ProcessoDisciplina.status == StatusProcesso.FINALIZADO)
+        stmt = select(ProcessoDisciplina).where(ProcessoDisciplina.aluno_id == aluno_id, ProcessoDisciplina.status == StatusProcesso.FINALIZADO.value)
         processos = db.session.scalars(stmt).all()
         if mapa_vinculos is None: mapa_vinculos = {}
         
@@ -146,7 +144,7 @@ class JusticaService:
         aluno = db.session.get(Aluno, aluno_id)
         if not aluno: return 0.0
         dt_inicio, dt_limite = JusticaService.get_datas_limites(aluno.turma_id)
-        query = select(ProcessoDisciplina).where(ProcessoDisciplina.aluno_id == aluno_id, ProcessoDisciplina.status == StatusProcesso.FINALIZADO)
+        query = select(ProcessoDisciplina).where(ProcessoDisciplina.aluno_id == aluno_id, ProcessoDisciplina.status == StatusProcesso.FINALIZADO.value)
         processos = db.session.scalars(query).all()
         pontos_perdidos = 0.0
         for p in processos:
@@ -162,7 +160,7 @@ class JusticaService:
         aluno = db.session.get(Aluno, aluno_id)
         if not aluno: return 0.0
         dt_inicio, dt_limite = JusticaService.get_datas_limites(aluno.turma_id)
-        query_proc = select(ProcessoDisciplina).where(ProcessoDisciplina.aluno_id == aluno_id, ProcessoDisciplina.status == StatusProcesso.FINALIZADO)
+        query_proc = select(ProcessoDisciplina).where(ProcessoDisciplina.aluno_id == aluno_id, ProcessoDisciplina.status == StatusProcesso.FINALIZADO.value)
         processos = db.session.scalars(query_proc).all()
         query_elogios = select(Elogio).where(Elogio.aluno_id == aluno_id)
         elogios = db.session.scalars(query_elogios).all()
@@ -227,7 +225,7 @@ class JusticaService:
             novo = ProcessoDisciplina(
                 aluno_id=aluno_id, relator_id=autor_id, fato_constatado=descricao, observacao=observacao, 
                 pontos=pontos, codigo_infracao=cod, regra_id=regra_id, 
-                status=StatusProcesso.AGUARDANDO_CIENCIA, data_ocorrencia=dt, origem_punicao='NPCCAL'
+                status=StatusProcesso.AGUARDANDO_CIENCIA.value, data_ocorrencia=dt, origem_punicao='NPCCAL'
             )
             db.session.add(novo); db.session.commit(); return True, "Sucesso"
         except Exception as e: db.session.rollback(); return False, str(e)
@@ -242,7 +240,7 @@ class JusticaService:
         try:
             p = db.session.get(ProcessoDisciplina, pid)
             if not p: return False, "Processo não encontrado."
-            p.status = StatusProcesso.FINALIZADO 
+            p.status = StatusProcesso.FINALIZADO.value
             p.decisao_final = decisao; p.fundamentacao = fundamentacao; p.detalhes_sancao = detalhes
             p.is_crime = is_crime; p.tipo_sancao = tipo_sancao
             p.dias_sancao = dias_sancao if dias_sancao else 0
@@ -253,46 +251,40 @@ class JusticaService:
             return True, "Processo finalizado."
         except Exception as e: db.session.rollback(); return False, str(e)
     
-    # --- NOVO: MÁQUINA DE ESTADOS E TEMPORIZADORES (LAZY EVALUATION) ---
     @staticmethod
     def verificar_e_atualizar_prazos(processos):
-        """Avalia todos os processos na tela e empurra de fase se o prazo estourou."""
         agora = datetime.now().astimezone()
         alterado = False
         
         for p in processos:
-            # 1. Prazo de Ciência do Aluno (24h)
             if p.status == StatusProcesso.AGUARDANDO_CIENCIA.value and p.prazo_ciencia:
                 if agora > p.prazo_ciencia:
-                    p.status = StatusProcesso.DEFESA_ENVIADA.value  # Vai direto pra julgamento
+                    p.status = StatusProcesso.DEFESA_ENVIADA.value
                     p.is_revelia = True
                     msg = "\n[SISTEMA]: Prazo de 24h para ciência expirou. Julgamento à revelia."
                     p.observacao = (p.observacao or "") + msg
                     alterado = True
 
-            # 2. Prazo de Defesa do Aluno (24h)
             elif p.status == StatusProcesso.ALUNO_NOTIFICADO.value and p.prazo_defesa:
                 if agora > p.prazo_defesa:
-                    p.status = StatusProcesso.DEFESA_ENVIADA.value  # Vai direto pra julgamento
+                    p.status = StatusProcesso.DEFESA_ENVIADA.value
                     p.is_revelia = True
                     msg = "\n[SISTEMA]: Prazo de 24h para defesa expirou. Julgamento à revelia."
                     p.observacao = (p.observacao or "") + msg
                     alterado = True
                     
-            # 3. Prazo de Recurso do Aluno (48h)
             elif p.status == StatusProcesso.DECISAO_EMITIDA.value and p.prazo_recurso:
                 if agora > p.prazo_recurso:
-                    p.status = StatusProcesso.FINALIZADO.value # Encerra rito de vez
+                    p.status = StatusProcesso.FINALIZADO.value
                     msg = "\n[SISTEMA]: TRÂNSITO EM JULGADO: Prazo de recurso de 48h expirou."
                     p.observacao_decisao = (p.observacao_decisao or "") + msg
                     alterado = True
 
         if alterado:
-            try:
-                db.session.commit()
+            try: db.session.commit()
             except Exception as e:
                 db.session.rollback()
-                logger.error(f"Erro ao verificar_e_atualizar_prazos: {e}")
+                logger.error(f"Erro ao verificar prazos: {e}")
                 
         return alterado
 
@@ -300,7 +292,7 @@ class JusticaService:
     def registrar_ciente(pid, user):
         try:
             p = db.session.get(ProcessoDisciplina, pid)
-            p.status = StatusProcesso.ALUNO_NOTIFICADO; p.ciente_aluno = True; p.data_ciente = datetime.now().astimezone()
+            p.status = StatusProcesso.ALUNO_NOTIFICADO.value; p.ciente_aluno = True; p.data_ciente = datetime.now().astimezone()
             db.session.commit(); return True, "Ciente"
         except: db.session.rollback(); return False, "Erro"
         
@@ -308,7 +300,7 @@ class JusticaService:
     def enviar_defesa(pid, texto, user):
         try:
             p = db.session.get(ProcessoDisciplina, pid)
-            p.status = StatusProcesso.DEFESA_ENVIADA; p.defesa = texto; p.data_defesa = datetime.now().astimezone()
+            p.status = StatusProcesso.DEFESA_ENVIADA.value; p.defesa = texto; p.data_defesa = datetime.now().astimezone()
             db.session.commit(); return True, "Enviado"
         except: db.session.rollback(); return False, "Erro"
         
