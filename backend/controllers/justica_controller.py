@@ -4,8 +4,6 @@ from flask_login import login_required, current_user
 from sqlalchemy import select, or_
 from sqlalchemy.orm import joinedload
 from datetime import datetime, timedelta
-import uuid
-import hashlib
 import logging
 
 from ..models.database import db
@@ -15,7 +13,6 @@ from ..models.aluno import Aluno
 from ..models.user import User
 from ..models.turma import Turma
 from ..models.discipline_rule import DisciplineRule
-from ..models.fada_avaliacao import FadaAvaliacao
 
 from ..services.justica_service import JusticaService
 from ..services.user_service import UserService
@@ -23,12 +20,11 @@ from ..services.turma_service import TurmaService
 from ..services.email_service import EmailService
 from ..services.notification_service import NotificationService
 
-from utils.decorators import admin_or_programmer_required, can_manage_justice_required
+from utils.decorators import can_manage_justice_required
 
 justica_bp = Blueprint('justica', __name__, url_prefix='/justica-e-disciplina')
 logger = logging.getLogger(__name__)
 
-# --- FUNÇÃO DE CONVERSÃO ALGARISMO ROMANO ---
 def sort_roman(rule):
     s = str(rule.codigo).upper().strip()
     if s.isdigit(): return int(s)
@@ -46,8 +42,6 @@ def sort_roman(rule):
 @login_required
 def index():
     school_id = UserService.get_current_school_id()
-    
-    # --- FILTRO DE REGRAS E ORDENAÇÃO ROMANA ---
     tipo_npccal = 'ctsp' 
     if g.active_school and hasattr(g.active_school, 'npccal_type') and g.active_school.npccal_type:
         tipo_npccal = g.active_school.npccal_type.lower()
@@ -55,82 +49,48 @@ def index():
     fatos_predefinidos = db.session.scalars(
         select(DisciplineRule).where(DisciplineRule.npccal_type == tipo_npccal)
     ).all()
-    # Ordena inteligentemente respeitando valor romano (I, II, III, IV, IX, X...)
     fatos_predefinidos.sort(key=sort_roman)
     
     if current_user.role == 'aluno':
-        if not current_user.aluno_profile or not current_user.aluno_profile.turma:
-            flash("Perfil incompleto.", "danger")
-            return redirect(url_for('main.dashboard'))
-        
-        school_id = current_user.aluno_profile.turma.school_id
-        g.active_school = current_user.aluno_profile.turma.school
         aluno_id = current_user.aluno_profile.id
-
-        stmt_andamento = select(ProcessoDisciplina).options(
-            joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.user),
-            joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.turma)
-        ).where(
+        stmt_andamento = select(ProcessoDisciplina).where(
             ProcessoDisciplina.aluno_id == aluno_id,
             ProcessoDisciplina.status != StatusProcesso.FINALIZADO.value,
             ProcessoDisciplina.status != StatusProcesso.ARQUIVADO.value
         ).order_by(ProcessoDisciplina.data_ocorrencia.desc())
         
-        stmt_finalizados = select(ProcessoDisciplina).options(
-            joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.user),
-            joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.turma)
-        ).where(
+        stmt_finalizados = select(ProcessoDisciplina).where(
             ProcessoDisciplina.aluno_id == aluno_id,
             or_(ProcessoDisciplina.status == StatusProcesso.FINALIZADO.value, ProcessoDisciplina.status == StatusProcesso.ARQUIVADO.value)
         ).order_by(ProcessoDisciplina.data_decisao.desc()).limit(50)
     else:
-        if not school_id:
-            flash("Nenhuma escola selecionada.", "warning")
-            return redirect(url_for('main.dashboard'))
-
-        stmt_andamento = select(ProcessoDisciplina).join(Aluno).join(Turma).options(
-            joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.user),
-            joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.turma)
-        ).where(
+        stmt_andamento = select(ProcessoDisciplina).join(Aluno).join(Turma).where(
             Turma.school_id == school_id,
             ProcessoDisciplina.status != StatusProcesso.FINALIZADO.value,
             ProcessoDisciplina.status != StatusProcesso.ARQUIVADO.value
         ).order_by(ProcessoDisciplina.data_ocorrencia.desc())
 
-        stmt_finalizados = select(ProcessoDisciplina).join(Aluno).join(Turma).options(
-            joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.user),
-            joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.turma)
-        ).where(
+        stmt_finalizados = select(ProcessoDisciplina).join(Aluno).join(Turma).where(
             Turma.school_id == school_id,
             or_(ProcessoDisciplina.status == StatusProcesso.FINALIZADO.value, ProcessoDisciplina.status == StatusProcesso.ARQUIVADO.value)
         ).order_by(ProcessoDisciplina.data_decisao.desc()).limit(50)
 
-    # 1. Pega os processos em andamento do BD
     em_andamento = db.session.scalars(stmt_andamento).unique().all()
-    
-    # 2. Roda a Avaliação Preguiçosa (Lazy Evaluation) para estourar prazos vencidos
+    # Chama o serviço para atualizar prazos via Lazy Evaluation
     houve_alteracao = JusticaService.verificar_e_atualizar_prazos(em_andamento)
-    
-    # 3. Se algo mudou, consulta o banco de novo
     if houve_alteracao:
          em_andamento = db.session.scalars(stmt_andamento).unique().all()
 
     finalizados = db.session.scalars(stmt_finalizados).unique().all()
-    
     turmas = TurmaService.get_turmas_by_school(school_id) if school_id else []
     
-    agora_hora = datetime.now().strftime('%H:%M')
-    hoje = datetime.now().strftime('%Y-%m-%d')
-    agora_dt = datetime.now().astimezone()
-
     return render_template('justica/index.html', 
                            em_andamento=em_andamento, 
                            finalizados=finalizados, 
                            turmas=turmas, 
                            fatos_predefinidos=fatos_predefinidos, 
-                           agora_hora=agora_hora, 
-                           hoje=hoje,
-                           agora=agora_dt)
+                           hoje=datetime.now().strftime('%Y-%m-%d'),
+                           agora_hora=datetime.now().strftime('%H:%M'))
 
 @justica_bp.route('/registrar-em-massa', methods=['POST'])
 @login_required
@@ -138,8 +98,7 @@ def index():
 def registrar_em_massa():
     tipo = request.form.get('tipo_registro')
     alunos_ids = request.form.getlist('alunos_selecionados') or request.form.getlist('alunos_selecionados[]')
-    
-    data_fato_str = request.form.get('data_fato', datetime.now().strftime('%Y-%m-%d'))
+    data_fato_str = request.form.get('data_fato')
     hora_fato = request.form.get('hora_fato', '12:00')
     descricao = request.form.get('descricao')
     
@@ -149,51 +108,112 @@ def registrar_em_massa():
         data_completa = datetime.now().astimezone()
 
     if not alunos_ids:
-        flash("Nenhum aluno selecionado.", "warning")
-        return redirect(url_for('justica.index'))
-
-    count = 0
-    processos_criados = []
+        flash("Selecione os alunos.", "warning"); return redirect(url_for('justica.index'))
 
     if tipo == 'infracao':
         regra_id = request.form.get('regra_id')
-        observacao = request.form.get('observacao')
-        origem_punicao = request.form.get('origem_punicao', 'NPCCAL')
-        is_crime = (request.form.get('is_crime', 'false').lower() == 'true')
-        codigo_infracao_manual = request.form.get('codigo_infracao')
-
-        pontos_iniciais = 0.0
-        codigo_final = codigo_infracao_manual
-        
-        if regra_id and origem_punicao == 'NPCCAL':
+        origem = request.form.get('origem_punicao', 'NPCCAL')
+        pontos = 0.0
+        if regra_id and origem == 'NPCCAL':
             regra = db.session.get(DisciplineRule, int(regra_id))
-            if regra: 
-                pontos_iniciais = regra.pontos
-                codigo_final = regra.codigo
+            if regra: pontos = regra.pontos
 
         for aid in alunos_ids:
-            try:
-                # GARANTIA SÊNIOR: Forçamos o status como string bruta para o MySQL não se perder
-                novo_processo = ProcessoDisciplina(
-                    aluno_id=int(aid),
-                    relator_id=current_user.id,
-                    regra_id=int(regra_id) if (regra_id and origem_punicao == 'NPCCAL') else None,
-                    codigo_infracao=codigo_final,
-                    fato_constatado=descricao,
-                    observacao=observacao,
-                    data_ocorrencia=data_completa,
-                    data_registro=datetime.now().astimezone(),
-                    status=StatusProcesso.AGUARDANDO_CIENCIA.value,
-                    origem_punicao=origem_punicao,
-                    is_crime=is_crime,
-                    pontos=pontos_iniciais
-                )
-                db.session.add(novo_processo)
-                db.session.flush() 
-                processos_criados.append(novo_processo)
-                count += 1
-            except Exception as e:
-                logger.error(f"Erro ao criar processo aluno {aid}: {e}")
+            novo = ProcessoDisciplina(
+                aluno_id=int(aid),
+                relator_id=current_user.id,
+                fato_constatado=descricao,
+                status=StatusProcesso.AGUARDANDO_CIENCIA.value, # GARANTIA: Grava valor string
+                data_ocorrencia=data_completa,
+                data_registro=datetime.now().astimezone(),
+                pontos=pontos,
+                origem_punicao=origem
+            )
+            db.session.add(novo)
+    
+    elif tipo == 'elogio':
+        for aid in alunos_ids:
+            db.session.add(Elogio(aluno_id=int(aid), registrado_por_id=current_user.id, data_elogio=data_completa, descricao=descricao, pontos=0.5))
+
+    db.session.commit()
+    flash("Registros criados com sucesso.", "success")
+    return redirect(url_for('justica.index'))
+
+@justica_bp.route('/dar-ciente/<int:processo_id>', methods=['POST'])
+@login_required
+def dar_ciente(processo_id):
+    processo = db.session.get(ProcessoDisciplina, processo_id)
+    if processo.status == StatusProcesso.AGUARDANDO_CIENCIA.value:
+        processo.data_ciente = datetime.now().astimezone()
+        processo.status = StatusProcesso.ALUNO_NOTIFICADO.value
+        flash("Ciência registrada. Prepare sua defesa.", "success")
+    elif processo.status == StatusProcesso.DECISAO_EMITIDA.value:
+        processo.data_notificacao_decisao = datetime.now().astimezone()
+        flash("Ciência da decisão registrada. Prazo de recurso iniciado.", "info")
+    db.session.commit()
+    return redirect(url_for('justica.index'))
+
+@justica_bp.route('/enviar-defesa/<int:processo_id>', methods=['POST'])
+@login_required
+def enviar_defesa(processo_id):
+    processo = db.session.get(ProcessoDisciplina, processo_id)
+    processo.defesa = request.form.get('defesa')
+    processo.data_defesa = datetime.now().astimezone()
+    processo.status = StatusProcesso.DEFESA_ENVIADA.value
+    db.session.commit()
+    flash("Defesa enviada com sucesso.", "success")
+    return redirect(url_for('justica.index'))
+
+@justica_bp.route('/finalizar-processo/<int:pid>', methods=['POST'])
+@login_required
+@can_manage_justice_required
+def finalizar_processo(pid):
+    processo = db.session.get(ProcessoDisciplina, pid)
+    decisao = request.form.get('decisao')
+    processo.decisao_final = decisao
+    processo.observacao_decisao = request.form.get('observacao_decisao')
+    processo.data_decisao = datetime.now().astimezone()
+    
+    if g.active_school.npccal_type.lower() == 'cbfpm':
+        processo.status = StatusProcesso.DECISAO_EMITIDA.value
+    else:
+        processo.status = StatusProcesso.FINALIZADO.value
+
+    db.session.commit()
+    flash("Decisão publicada.", "success")
+    return redirect(url_for('justica.index'))
+
+@justica_bp.route('/enviar-recurso/<int:pid>', methods=['POST'])
+@login_required
+def enviar_recurso(pid):
+    processo = db.session.get(ProcessoDisciplina, pid)
+    processo.texto_recurso = request.form.get('texto_recurso')
+    processo.data_recurso = datetime.now().astimezone()
+    processo.status = StatusProcesso.EM_RECURSO.value
+    db.session.commit()
+    flash("Recurso enviado ao Comandante.", "success")
+    return redirect(url_for('justica.index'))
+
+@justica_bp.route('/julgar-recurso/<int:pid>', methods=['POST'])
+@login_required
+def julgar_recurso(pid):
+    processo = db.session.get(ProcessoDisciplina, pid)
+    processo.decisao_recurso = request.form.get('decisao_recurso')
+    processo.fundamentacao_recurso = request.form.get('fundamentacao_recurso')
+    processo.status = StatusProcesso.FINALIZADO.value
+    processo.data_julgamento_recurso = datetime.now().astimezone()
+    db.session.commit()
+    flash("Recurso julgado pelo Comandante.", "success")
+    return redirect(url_for('justica.index'))
+
+@justica_bp.route('/deletar-processo/<int:pid>', methods=['POST'])
+@login_required
+@can_manage_justice_required
+def deletar_processo(pid):
+    p = db.session.get(ProcessoDisciplina, pid)
+    db.session.delete(p); db.session.commit()
+    flash("Processo excluído.", "success")
+    return redirect(url_for('justica.index'))
 
     # ... (Parte do elogio segue igual) ...
     elif tipo == 'elogio':

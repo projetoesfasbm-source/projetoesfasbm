@@ -19,10 +19,10 @@ class StatusProcesso(str, enum.Enum):
     AGUARDANDO_CIENCIA = "AGUARDANDO_CIENCIA"
     ALUNO_NOTIFICADO = "ALUNO_NOTIFICADO"
     DEFESA_ENVIADA = "DEFESA_ENVIADA"
-    EM_ANALISE = "EM_ANALISE"         # Analise do Chefe CAL
-    DECISAO_EMITIDA = "DECISAO_EMITIDA" # Chefe decidiu, aguardando ciência da decisão pelo aluno
-    EM_RECURSO = "EM_RECURSO"         # Aluno recorreu ao Comandante
-    FINALIZADO = "FINALIZADO"         # Encerrado
+    EM_ANALISE = "EM_ANALISE"
+    DECISAO_EMITIDA = "DECISAO_EMITIDA"
+    EM_RECURSO = "EM_RECURSO"
+    FINALIZADO = "FINALIZADO"
     ARQUIVADO = "ARQUIVADO"
 
 class ProcessoDisciplina(db.Model):
@@ -39,7 +39,6 @@ class ProcessoDisciplina(db.Model):
     observacao: Mapped[t.Optional[str]] = mapped_column(Text, nullable=True)
     pontos: Mapped[float] = mapped_column(Float, default=0.0)
 
-    # Status configurado para ser imune a valores nulos ou vazios
     status: Mapped[str] = mapped_column(
         String(50),
         default=StatusProcesso.AGUARDANDO_CIENCIA.value,
@@ -47,17 +46,14 @@ class ProcessoDisciplina(db.Model):
         nullable=False
     )
 
-    # VALIDADOR DE CAUSA RAIZ: Impede gravação de string vazia no banco
     @validates('status')
     def validate_status(self, key, value):
         if not value or value == "" or value is None:
             return StatusProcesso.AGUARDANDO_CIENCIA.value
-        # Se for um objeto Enum, extrai o valor string
         if hasattr(value, 'value'):
             return str(value.value).upper()
         return str(value).upper().strip()
 
-    # DATAS FLUXO
     data_ocorrencia: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
     data_registro: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
     data_ciente: Mapped[t.Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -73,25 +69,21 @@ class ProcessoDisciplina(db.Model):
     data_defesa: Mapped[t.Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     data_decisao: Mapped[t.Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    # FLUXO RECURSAL
     data_notificacao_decisao: Mapped[t.Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     data_recurso: Mapped[t.Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     data_julgamento_recurso: Mapped[t.Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    # TEXTOS
     defesa: Mapped[t.Optional[str]] = mapped_column(Text, nullable=True)
     decisao_final: Mapped[t.Optional[str]] = mapped_column(String(50), nullable=True)
     fundamentacao: Mapped[t.Optional[str]] = mapped_column(Text, nullable=True)
     observacao_decisao: Mapped[t.Optional[str]] = mapped_column(Text, nullable=True)
     detalhes_sancao: Mapped[t.Optional[str]] = mapped_column(Text, nullable=True)
 
-    # RECURSO
     texto_recurso: Mapped[t.Optional[str]] = mapped_column(Text, nullable=True)
     decisao_recurso: Mapped[t.Optional[str]] = mapped_column(String(50), nullable=True)
     fundamentacao_recurso: Mapped[t.Optional[str]] = mapped_column(Text, nullable=True)
     autoridade_recurso_id: Mapped[t.Optional[int]] = mapped_column(ForeignKey('users.id'), nullable=True)
 
-    # OUTROS
     is_crime: Mapped[bool] = mapped_column(Boolean, default=False)
     tipo_sancao: Mapped[t.Optional[str]] = mapped_column(String(50), nullable=True)
     dias_sancao: Mapped[int] = mapped_column(Integer, default=0)
@@ -99,13 +91,11 @@ class ProcessoDisciplina(db.Model):
     ciente_aluno: Mapped[bool] = mapped_column(Boolean, default=False)
     is_revelia: Mapped[bool] = mapped_column(Boolean, default=False)
 
-    # RELACIONAMENTOS
     aluno = relationship("Aluno", backref=db.backref("processos_novos", overlaps="processos_disciplinares"))
     relator: Mapped["User"] = relationship(foreign_keys=[relator_id])
     autoridade_recurso: Mapped[t.Optional["User"]] = relationship(foreign_keys=[autoridade_recurso_id])
     regra: Mapped[t.Optional["DisciplineRule"]] = relationship()
 
-    # --- PROPRIEDADES DE CÁLCULO DE PRAZO ---
     @property
     def prazo_ciencia(self):
         base_date = self.data_registro or self.data_ocorrencia
@@ -130,11 +120,3 @@ class ProcessoDisciplina(db.Model):
 
     def __repr__(self):
         return f"<Processo {self.id} - Aluno {self.aluno_id} - {self.status}>"
-    
-    def to_dict(self):
-        return {
-            'id': self.id,
-            'aluno_nome': self.aluno.user.nome_completo if self.aluno and self.aluno.user else "Desconhecido",
-            'status': self.status,
-            'is_revelia': self.is_revelia
-        }
