@@ -351,7 +351,6 @@ def finalizar_processo(pid):
     if g.active_school and hasattr(g.active_school, 'npccal_type') and g.active_school.npccal_type:
         tipo_npccal = g.active_school.npccal_type.lower()
 
-    # Modificado para incluir CTSP e CSPM na mesma lógica de CBFPM
     if tipo_npccal in ['cbfpm', 'ctsp', 'cspm']:
         processo.status = StatusProcesso.DECISAO_EMITIDA.value
         msg_sucesso = "Decisão registrada. O aluno tem 48h para interpor recurso após dar ciência."
@@ -646,13 +645,25 @@ def get_aluno_details(aluno_id):
     a = db.session.get(Aluno, aluno_id)
     return jsonify({'nome_completo': a.user.nome_completo, 'matricula': a.user.matricula, 'posto_graduacao': a.user.posto_graduacao}) if a else jsonify({})
 
+
 @justica_bp.route('/exportar-selecao')
 @login_required
 def exportar_selecao():
-    stmt = select(ProcessoDisciplina).where(ProcessoDisciplina.status == StatusProcesso.FINALIZADO.value).order_by(ProcessoDisciplina.data_decisao.desc())
+    school_id = UserService.get_current_school_id()
+    if not school_id:
+        flash("Nenhuma escola selecionada.", "warning")
+        return redirect(url_for('main.dashboard'))
+
+    # Adicionadas as relações com Aluno e Turma para filtrar estritamente pela escola atual logada
+    stmt = select(ProcessoDisciplina).join(Aluno).join(Turma).where(
+        ProcessoDisciplina.status == StatusProcesso.FINALIZADO.value,
+        Turma.school_id == school_id
+    ).order_by(ProcessoDisciplina.data_decisao.desc())
+    
     stmt = stmt.options(joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.user))
     processos = db.session.scalars(stmt).unique().all()
     return render_template('justica/exportar_selecao.html', processos=processos, datetime=datetime)
+
 
 @justica_bp.route('/confirmar-publicacao-boletim', methods=['POST'])
 @login_required

@@ -1,0 +1,215 @@
+{
+    "timestamp": "2026-02-23T20:48:20.523266",
+    "target_users": {
+        "2612909": {
+            "id": 1152,
+            "matricula": "2612909",
+            "username": null,
+            "email": "leandro-ortiz@bm.rs.gov.br",
+            "password_hash": "scrypt:32768:8:1$hC1h1HZaoT4RB135$e0d50215b46229e584e82d2116c4e061f78f7f5e671bf491cb9b00925e0d4e3990e811ae110f26ee5869651532d303497881d07edc28fe774a1ee717024cbc84",
+            "nome_completo": "Leandro Da Rosa Ortiz",
+            "nome_de_guerra": "Ortiz",
+            "posto_graduacao": "1º Sargento PM",
+            "role": "instrutor",
+            "is_active": true,
+            "must_change_password": false,
+            "relationships": {
+                "vinculos_escolas": [
+                    {
+                        "school_id": 1,
+                        "is_active": null,
+                        "deleted_at": null
+                    },
+                    {
+                        "school_id": 13,
+                        "is_active": null,
+                        "deleted_at": null
+                    }
+                ]
+            }
+        },
+        "2886170": {
+            "id": 815,
+            "matricula": "2886170",
+            "username": null,
+            "email": null,
+            "password_hash": null,
+            "nome_completo": null,
+            "nome_de_guerra": null,
+            "posto_graduacao": null,
+            "role": "instrutor",
+            "is_active": false,
+            "must_change_password": false,
+            "relationships": {
+                "vinculos_escolas": [
+                    {
+                        "school_id": 1,
+                        "is_active": null,
+                        "deleted_at": null
+                    },
+                    {
+                        "school_id": 13,
+                        "is_active": null,
+                        "deleted_at": null
+                    }
+                ]
+            }
+        },
+        "2992779": {
+            "id": 817,
+            "matricula": "2992779",
+            "username": null,
+            "email": null,
+            "password_hash": null,
+            "nome_completo": null,
+            "nome_de_guerra": null,
+            "posto_graduacao": null,
+            "role": "instrutor",
+            "is_active": false,
+            "must_change_password": false,
+            "relationships": {
+                "vinculos_escolas": [
+                    {
+                        "school_id": 13,
+                        "is_active": null,
+                        "deleted_at": null
+                    }
+                ]
+            }
+        },
+        "3710653": {
+            "id": 845,
+            "matricula": "3710653",
+            "username": null,
+            "email": null,
+            "password_hash": null,
+            "nome_completo": null,
+            "nome_de_guerra": null,
+            "posto_graduacao": null,
+            "role": "instrutor",
+            "is_active": false,
+            "must_change_password": false,
+            "relationships": {
+                "vinculos_escolas": [
+                    {
+                        "school_id": 1,
+                        "is_active": null,
+                        "deleted_at": null
+                    },
+                    {
+                        "school_id": 13,
+                        "is_active": null,
+                        "deleted_at": null
+                    }
+                ]
+            }
+        }
+    },
+    "healthy_users_baseline": {
+        "1010100": {
+            "id": 1129,
+            "matricula": "1010100",
+            "username": null,
+            "email": "alunoteste@bm.rs.gov.br",
+            "password_hash": "scrypt:32768:8:1$9d3v1vbqgreNNrX5$c4b27e0befd4d97ab3df4c360de9b99a258d84c1b3431016f4d5139c58b1c07558a155b827b68c38eb0148efb04a622a4834aa32091d0d46af1a793c1edcfa3a",
+            "nome_completo": "Aluno Teste",
+            "nome_de_guerra": "Teste",
+            "posto_graduacao": "Soldado PM",
+            "role": "aluno",
+            "is_active": true,
+            "must_change_password": false,
+            "relationships": {
+                "vinculos_escolas": []
+            }
+        },
+        "1010101": {
+            "id": 1133,
+            "matricula": "1010101",
+            "username": null,
+            "email": "esfaspoa-sens@bm.rs.gov.br",
+            "password_hash": "scrypt:32768:8:1$xZEg6AH63upKy8xC$64eefab8e451922b6aeb96f175c564b5c0ee0ca97ddd34ab58883f02fb0c49d3dd46d1a9b89d69b3443cb2e366704b1343c4172b67a156aadbbf7819f3983950",
+            "nome_completo": "Seção De Ensino",
+            "nome_de_guerra": "Seção De Ensino",
+            "posto_graduacao": "Soldado PM",
+            "role": "instrutor",
+            "is_active": true,
+            "must_change_password": false,
+            "relationships": {
+                "vinculos_escolas": [
+                    {
+                        "school_id": 14,
+                        "is_active": null,
+                        "deleted_at": null
+                    }
+                ]
+            }
+        },
+        "1010123": {
+            "id": 4,
+            "matricula": "1010123",
+            "username": null,
+            "email": "admsm@bm.rs.gov.br",
+            "password_hash": "scrypt:32768:8:1$6pF2hxPH1wucQB8Y$2ba2d2f0c1094715fcfe291e7489298da659fae59c60f964cb297077d471ec01185bfad1c8faf1f1657257bffee2c5ecfcc6c9c769c31844f921fc1b0a50b93b",
+            "nome_completo": "Administrador EsFAS Santa Maria",
+            "nome_de_guerra": "Administrador",
+            "posto_graduacao": "Outro",
+            "role": "admin_escola",
+            "is_active": true,
+            "must_change_password": true,
+            "relationships": {
+                "vinculos_escolas": [
+                    {
+                        "school_id": 1,
+                        "is_active": null,
+                        "deleted_at": null
+                    }
+                ]
+            }
+        },
+        "1010124": {
+            "id": 610,
+            "matricula": "1010124",
+            "username": null,
+            "email": "alunotestesm@gmail.com",
+            "password_hash": "scrypt:32768:8:1$I9j7zI3EBJWLyTKc$f385f4bf5a5f2cf6623b338168cd8f12ddd7c7c78ac3f463ffd96776736ea22db6ca958934294003bedb876c6b76bf4d213a5763f4020200065a2799acda89c5",
+            "nome_completo": "Aluno",
+            "nome_de_guerra": "Aluno",
+            "posto_graduacao": "Soldado PM",
+            "role": "aluno",
+            "is_active": true,
+            "must_change_password": false,
+            "relationships": {
+                "vinculos_escolas": [
+                    {
+                        "school_id": 1,
+                        "is_active": null,
+                        "deleted_at": null
+                    }
+                ]
+            }
+        },
+        "1010125": {
+            "id": 612,
+            "matricula": "1010125",
+            "username": null,
+            "email": "admin_ctemn@bm.rs.gov.br",
+            "password_hash": "scrypt:32768:8:1$q1eGeLAIvMVCFnZJ$bc46ddf3b34c324637202ce393f3493c9735c67eb6a000bba1ec3ff2041ebaaac18b2f77675ecf07ee8ecf736fa940b8316213f7895cbff60c1870456eeb2306",
+            "nome_completo": "Admin_CTEMn",
+            "nome_de_guerra": "CTE Mn",
+            "posto_graduacao": "Outro",
+            "role": "admin_escola",
+            "is_active": true,
+            "must_change_password": true,
+            "relationships": {
+                "vinculos_escolas": [
+                    {
+                        "school_id": 13,
+                        "is_active": null,
+                        "deleted_at": null
+                    }
+                ]
+            }
+        }
+    },
+    "analysis_conclusion": []
+}
