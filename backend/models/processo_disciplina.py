@@ -101,20 +101,31 @@ class ProcessoDisciplina(db.Model):
     # --- PROPRIEDADES DE CÁLCULO DE PRAZO (USADAS NO FRONTEND) ---
     @property
     def prazo_ciencia(self):
-        if self.data_registro:
-            return self.data_registro + timedelta(hours=24)
+        # Fallback de segurança: se não tiver data de registro (antigos), usa a de ocorrência
+        base_date = self.data_registro or self.data_ocorrencia
+        if base_date:
+            return base_date + timedelta(hours=24)
         return None
 
     @property
     def prazo_defesa(self):
         if self.data_ciente:
             return self.data_ciente + timedelta(hours=24)
+        # Fallback: se estiver notificado mas faltar a data do clique (processos antigos)
+        if self.status == 'ALUNO_NOTIFICADO':
+            base_date = self.data_registro or self.data_ocorrencia
+            if base_date:
+                return base_date + timedelta(hours=48) # 24h ciência + 24h defesa
         return None
 
     @property
     def prazo_recurso(self):
         if self.data_notificacao_decisao:
             return self.data_notificacao_decisao + timedelta(hours=48)
+        # Fallback para decisões antigas
+        if self.status == 'DECISAO_EMITIDA':
+            if self.data_decisao:
+                return self.data_decisao + timedelta(hours=48)
         return None
 
     def __repr__(self):

@@ -257,31 +257,38 @@ class JusticaService:
         alterado = False
         
         for p in processos:
+            # 1. Prazo de Ciência do Aluno (24h)
             if p.status == StatusProcesso.AGUARDANDO_CIENCIA.value and p.prazo_ciencia:
-                if agora > p.prazo_ciencia:
+                prazo_seguro = JusticaService._ensure_datetime(p.prazo_ciencia)
+                if agora > prazo_seguro:
                     p.status = StatusProcesso.DEFESA_ENVIADA.value
                     p.is_revelia = True
                     msg = "\n[SISTEMA]: Prazo de 24h para ciência expirou. Julgamento à revelia."
                     p.observacao = (p.observacao or "") + msg
                     alterado = True
 
+            # 2. Prazo de Defesa do Aluno (24h)
             elif p.status == StatusProcesso.ALUNO_NOTIFICADO.value and p.prazo_defesa:
-                if agora > p.prazo_defesa:
+                prazo_seguro = JusticaService._ensure_datetime(p.prazo_defesa)
+                if agora > prazo_seguro:
                     p.status = StatusProcesso.DEFESA_ENVIADA.value
                     p.is_revelia = True
                     msg = "\n[SISTEMA]: Prazo de 24h para defesa expirou. Julgamento à revelia."
                     p.observacao = (p.observacao or "") + msg
                     alterado = True
                     
+            # 3. Prazo de Recurso do Aluno (48h)
             elif p.status == StatusProcesso.DECISAO_EMITIDA.value and p.prazo_recurso:
-                if agora > p.prazo_recurso:
+                prazo_seguro = JusticaService._ensure_datetime(p.prazo_recurso)
+                if agora > prazo_seguro:
                     p.status = StatusProcesso.FINALIZADO.value
                     msg = "\n[SISTEMA]: TRÂNSITO EM JULGADO: Prazo de recurso de 48h expirou."
                     p.observacao_decisao = (p.observacao_decisao or "") + msg
                     alterado = True
 
         if alterado:
-            try: db.session.commit()
+            try:
+                db.session.commit()
             except Exception as e:
                 db.session.rollback()
                 logger.error(f"Erro ao verificar prazos: {e}")
