@@ -2,7 +2,7 @@
 from __future__ import annotations
 import typing as t
 import enum
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy import ForeignKey, String, Float, Text, Boolean, Integer, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -64,7 +64,7 @@ class ProcessoDisciplina(db.Model):
     data_defesa: Mapped[t.Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     data_decisao: Mapped[t.Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    # FLUXO RECURSAL (NOVOS CAMPOS)
+    # FLUXO RECURSAL
     data_notificacao_decisao: Mapped[t.Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     data_recurso: Mapped[t.Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     data_julgamento_recurso: Mapped[t.Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -87,15 +87,35 @@ class ProcessoDisciplina(db.Model):
     tipo_sancao: Mapped[t.Optional[str]] = mapped_column(String(50), nullable=True)
     dias_sancao: Mapped[int] = mapped_column(Integer, default=0)
     origem_punicao: Mapped[str] = mapped_column(String(20), default='NPCCAL')
-    
-    # Campo corrigido (apenas UM agora)
     ciente_aluno: Mapped[bool] = mapped_column(Boolean, default=False)
+    
+    # NOVO: Controle de Revelia
+    is_revelia: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # RELACIONAMENTOS
     aluno = relationship("Aluno", backref=db.backref("processos_novos", overlaps="processos_disciplinares"))
     relator: Mapped["User"] = relationship(foreign_keys=[relator_id])
     autoridade_recurso: Mapped[t.Optional["User"]] = relationship(foreign_keys=[autoridade_recurso_id])
     regra: Mapped[t.Optional["DisciplineRule"]] = relationship()
+
+    # --- PROPRIEDADES DE CÁLCULO DE PRAZO (USADAS NO FRONTEND) ---
+    @property
+    def prazo_ciencia(self):
+        if self.data_registro:
+            return self.data_registro + timedelta(hours=24)
+        return None
+
+    @property
+    def prazo_defesa(self):
+        if self.data_ciente:
+            return self.data_ciente + timedelta(hours=24)
+        return None
+
+    @property
+    def prazo_recurso(self):
+        if self.data_notificacao_decisao:
+            return self.data_notificacao_decisao + timedelta(hours=48)
+        return None
 
     def __repr__(self):
         return f"<Processo {self.id} - Aluno {self.aluno_id} - {self.status}>"
@@ -110,5 +130,6 @@ class ProcessoDisciplina(db.Model):
             'status': self.status,
             'pontos': self.pontos,
             'decisao': self.decisao_final,
-            'fundamentacao': self.fundamentacao or self.observacao_decisao
+            'fundamentacao': self.fundamentacao or self.observacao_decisao,
+            'is_revelia': self.is_revelia
         }

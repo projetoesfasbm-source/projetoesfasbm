@@ -28,33 +28,6 @@ from utils.decorators import admin_or_programmer_required, can_manage_justice_re
 justica_bp = Blueprint('justica', __name__, url_prefix='/justica-e-disciplina')
 logger = logging.getLogger(__name__)
 
-# --- FUNÇÃO AUXILIAR DE VERIFICAÇÃO DE PRAZOS ---
-def verificar_prazos_automaticos(processos):
-    agora = datetime.now().astimezone()
-    alterado = False
-    
-    for proc in processos:
-        if proc.status == StatusProcesso.DECISAO_EMITIDA.value and proc.data_notificacao_decisao:
-            if proc.data_notificacao_decisao.tzinfo is None:
-                 pass
-            else:
-                horas_passadas = (agora - proc.data_notificacao_decisao).total_seconds() / 3600
-                if horas_passadas > 48:
-                    proc.status = StatusProcesso.FINALIZADO.value
-                    msg = " | TRÂNSITO EM JULGADO: Prazo de recurso de 48h expirou."
-                    if proc.observacao_decisao:
-                        proc.observacao_decisao += msg
-                    else:
-                        proc.observacao_decisao = msg
-                    alterado = True
-
-    if alterado:
-        try:
-            db.session.commit()
-        except Exception as e:
-            db.session.rollback()
-            logger.error(f"Erro ao finalizar processos por prazo: {e}")
-
 @justica_bp.route('/')
 @login_required
 def index():
@@ -118,10 +91,14 @@ def index():
             or_(ProcessoDisciplina.status == StatusProcesso.FINALIZADO, ProcessoDisciplina.status == StatusProcesso.ARQUIVADO)
         ).order_by(ProcessoDisciplina.data_decisao.desc()).limit(50)
 
+    # 1. Pega os processos em andamento do BD
     em_andamento = db.session.scalars(stmt_andamento).unique().all()
-    verificar_prazos_automaticos(em_andamento)
     
-    if any(p.status == StatusProcesso.FINALIZADO.value for p in em_andamento):
+    # 2. Roda a Avaliação Preguiçosa (Lazy Evaluation) para estourar prazos vencidos
+    houve_alteracao = JusticaService.verificar_e_atualizar_prazos(em_andamento)
+    
+    # 3. Se algo mudou (processo foi pra revelia ou finalizou), consulta o banco de novo para limpar a tela
+    if houve_alteracao:
          em_andamento = db.session.scalars(stmt_andamento).unique().all()
 
     finalizados = db.session.scalars(stmt_finalizados).unique().all()
@@ -272,6 +249,8 @@ def dar_ciente(processo_id):
     elif processo.status == StatusProcesso.DECISAO_EMITIDA.value:
         processo.data_notificacao_decisao = datetime.now().astimezone()
         flash("Ciência da decisão registrada. Prazo de 48h para recurso iniciado.", "info")
+    else:
+        flash("Este processo já passou da fase de ciência.", "warning")
 
     db.session.commit()
     return redirect(url_for('justica.index'))
@@ -288,6 +267,10 @@ def enviar_defesa(processo_id):
     
     if not is_aluno_dono:
         flash("Permissão negada. Apenas o aluno autuado pode enviar a defesa.", "error")
+        return redirect(url_for('justica.index'))
+        
+    if processo.status != StatusProcesso.ALUNO_NOTIFICADO.value:
+        flash("O processo não está aguardando defesa.", "warning")
         return redirect(url_for('justica.index'))
     
     texto_defesa = request.form.get('defesa')
@@ -352,9 +335,13 @@ def finalizar_processo(pid):
     processo = db.session.get(ProcessoDisciplina, pid)
     if not processo:
         flash("Processo não encontrado.", "error"); return redirect(url_for('justica.index'))
+        
+    if processo.status not in [StatusProcesso.DEFESA_ENVIADA.value, StatusProcesso.EM_ANALISE.value]:
+        flash("O processo ainda não está pronto para julgamento.", "warning")
+        return redirect(url_for('justica.index'))
 
     decisao = request.form.get('decisao') 
-    fundamentacao_texto = request.form.get('observacao_decisao') # Captura observacao_decisao do template
+    fundamentacao_texto = request.form.get('observacao_decisao')
     turnos_sustacao = request.form.get('turnos_sustacao')
     
     try:
@@ -369,6 +356,10 @@ def finalizar_processo(pid):
     processo.decisao_final = decisao
     processo.data_decisao = datetime.now().astimezone()
     processo.relator_id = current_user.id 
+    
+    if processo.is_revelia:
+        fundamentacao_texto = f"[JULGAMENTO À REVELIA]: {fundamentacao_texto}"
+        
     processo.fundamentacao = fundamentacao_texto
     processo.observacao_decisao = fundamentacao_texto
 
@@ -431,9 +422,6 @@ def finalizar_processo(pid):
 @justica_bp.route('/julgar-recurso/<int:pid>', methods=['POST'])
 @login_required
 def julgar_recurso(pid):
-    """
-    Comandante (admin_escola) julga o recurso.
-    """
     school_id = UserService.get_current_school_id()
     is_comandante = current_user.is_admin_escola_in_school(school_id)
     
@@ -494,7 +482,7 @@ def deletar_processo(pid):
     flash(message, 'success' if success else 'danger')
     return redirect(url_for('justica.index'))
 
-# --- ROTAS FADA (MANTIDAS) ---
+# --- ROTAS FADA (MANTIDAS INTACTAS) ---
 @justica_bp.route('/fada/boletim')
 @login_required
 def fada_boletim():
