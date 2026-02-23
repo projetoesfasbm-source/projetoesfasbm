@@ -351,7 +351,8 @@ def finalizar_processo(pid):
     if g.active_school and hasattr(g.active_school, 'npccal_type') and g.active_school.npccal_type:
         tipo_npccal = g.active_school.npccal_type.lower()
 
-    if tipo_npccal == 'cbfpm':
+    # Modificado para incluir CTSP e CSPM na mesma lógica de CBFPM
+    if tipo_npccal in ['cbfpm', 'ctsp', 'cspm']:
         processo.status = StatusProcesso.DECISAO_EMITIDA.value
         msg_sucesso = "Decisão registrada. O aluno tem 48h para interpor recurso após dar ciência."
     else:
