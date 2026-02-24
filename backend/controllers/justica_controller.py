@@ -195,6 +195,7 @@ def registrar_em_massa():
             except Exception as e:
                 logger.error(f"Erro ao criar processo aluno {aid}: {e}")
 
+    # ... (Parte do elogio segue igual) ...
     elif tipo == 'elogio':
         for aid in alunos_ids:
             try:
@@ -639,6 +640,7 @@ def get_aluno_details(aluno_id):
     a = db.session.get(Aluno, aluno_id)
     return jsonify({'nome_completo': a.user.nome_completo, 'matricula': a.user.matricula, 'posto_graduacao': a.user.posto_graduacao}) if a else jsonify({})
 
+
 @justica_bp.route('/exportar-selecao')
 @login_required
 def exportar_selecao():
@@ -647,6 +649,7 @@ def exportar_selecao():
         flash("Nenhuma escola selecionada.", "warning")
         return redirect(url_for('main.dashboard'))
 
+    # Adicionadas as relações com Aluno e Turma para filtrar estritamente pela escola atual logada
     stmt = select(ProcessoDisciplina).join(Aluno).join(Turma).where(
         ProcessoDisciplina.status == StatusProcesso.FINALIZADO.value,
         Turma.school_id == school_id
@@ -655,6 +658,7 @@ def exportar_selecao():
     stmt = stmt.options(joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.user))
     processos = db.session.scalars(stmt).unique().all()
     return render_template('justica/exportar_selecao.html', processos=processos, datetime=datetime)
+
 
 @justica_bp.route('/confirmar-publicacao-boletim', methods=['POST'])
 @login_required

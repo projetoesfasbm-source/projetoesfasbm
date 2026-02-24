@@ -110,7 +110,7 @@ class ProcessoDisciplina(db.Model):
     # --- PROPRIEDADES DE CÁLCULO DE PRAZO (USADAS NO FRONTEND) ---
     @property
     def prazo_ciencia(self):
-        # Desativado para o aluno conforme nova regra. Mantido como referência interna.
+        # Desativado visualmente para o aluno conforme nova regra. Mantido como referência interna ADM.
         base_date = self.data_registro or self.data_ocorrencia
         if base_date:
             return base_date + timedelta(hours=24)
@@ -120,6 +120,7 @@ class ProcessoDisciplina(db.Model):
     def prazo_defesa(self):
         if self.data_ciente:
             return self.data_ciente + timedelta(hours=24)
+        # Fallback: se estiver notificado mas faltar a data do clique (processos antigos)
         if self.status == 'ALUNO_NOTIFICADO':
             base_date = self.data_registro or self.data_ocorrencia
             if base_date:
