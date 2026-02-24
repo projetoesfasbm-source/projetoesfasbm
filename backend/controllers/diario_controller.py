@@ -1,11 +1,20 @@
 # backend/controllers/diario_controller.py
-from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, jsonify
 from flask_login import login_required, current_user
+from datetime import datetime
 import os
 
 from ..services.diario_service import DiarioService
 from ..services.user_service import UserService
 from utils.image_utils import compress_image_to_memory, allowed_file
+
+# Importações necessárias para a nova rota de faltas
+from ..models.database import db
+from ..models.diario_classe import DiarioClasse
+from ..models.frequencia import FrequenciaAluno
+from ..models.aluno import Aluno
+from ..models.turma import Turma
+from ..models.user import User
 
 diario_bp = Blueprint('diario', __name__, url_prefix='/diario-classe')
 
@@ -95,3 +104,72 @@ def assinar(diario_id):
             flash(msg, "danger")
 
     return render_template('diario/instrutor_assinar.html', diario=diario, instrutor=instrutor)
+
+# --- NOVA ROTA: Consulta de Faltas por Dia ---
+@diario_bp.route('/faltas-por-dia', methods=['GET'])
+@login_required
+def faltas_por_dia():
+    school_id = UserService.get_current_school_id()
+    if not school_id:
+        return jsonify({"success": False, "message": "Escola não selecionada."}), 403
+
+    data_str = request.args.get('data')
+    if not data_str:
+        return jsonify({"success": False, "message": "Data não fornecida."}), 400
+
+    try:
+        data_busca = datetime.strptime(data_str, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({"success": False, "message": "Formato de data inválido."}), 400
+
+    try:
+        # Busca as frequências (faltas) com os joins exatos no User e Turma para obter nomes e agrupamento
+        faltas_query = db.session.query(
+            FrequenciaAluno.id,
+            User.nome_completo,
+            User.nome_de_guerra.label('nome_guerra'),
+            Aluno.num_aluno.label('numero_aluno'),
+            Turma.nome.label('turma_nome'),
+            DiarioClasse.periodo,
+            FrequenciaAluno.justificativa
+        ).select_from(FrequenciaAluno).join(
+            DiarioClasse, FrequenciaAluno.diario_id == DiarioClasse.id
+        ).join(
+            Aluno, FrequenciaAluno.aluno_id == Aluno.id
+        ).join(
+            User, Aluno.user_id == User.id
+        ).join(
+            Turma, DiarioClasse.turma_id == Turma.id
+        ).filter(
+            Turma.school_id == school_id,
+            DiarioClasse.data_aula == data_busca,
+            FrequenciaAluno.presente == False
+        ).order_by(
+            Turma.nome,
+            User.nome_completo
+        ).all()
+
+        # Organiza os resultados agrupando por turma (pelotão)
+        resultado_agrupado = {}
+        for falta in faltas_query:
+            turma = falta.turma_nome
+            if turma not in resultado_agrupado:
+                resultado_agrupado[turma] = []
+            
+            resultado_agrupado[turma].append({
+                "id_frequencia": falta.id,
+                "numero_aluno": falta.numero_aluno,
+                "nome_completo": falta.nome_completo,
+                "nome_guerra": falta.nome_guerra,
+                "periodo": falta.periodo,
+                "justificativa": falta.justificativa
+            })
+
+        return jsonify({
+            "success": True, 
+            "data_consulta": data_str,
+            "faltas": resultado_agrupado
+        })
+    except Exception as e:
+        # Retorna o erro específico da query para debug direto na tela caso algo ainda falhe
+        return jsonify({"success": False, "message": f"Falha ao consultar banco de dados: {str(e)}"}), 500

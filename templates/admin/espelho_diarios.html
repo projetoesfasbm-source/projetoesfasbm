@@ -99,6 +99,13 @@
             <h3 class="mb-0 text-primary fw-bold"><i class="fas fa-book-reader me-2"></i>Gerenciamento de Diários</h3>
             <p class="text-muted mb-0">Auditoria, Edição, Devolução e Impressão.</p>
         </div>
+        <div class="d-flex align-items-center gap-2 bg-white p-2 rounded shadow-sm border">
+            <label class="mb-0 small text-muted fw-bold ms-2">Consulta de Faltas:</label>
+            <input type="date" id="dataFaltasDiarias" class="form-control form-control-sm" style="width: auto;">
+            <button class="btn btn-danger btn-sm fw-bold" onclick="consultarFaltasDia()">
+                <i class="fas fa-user-times me-1"></i> Faltas
+            </button>
+        </div>
     </div>
 
     <div class="card shadow-sm border-0 mb-4 bg-light">
@@ -287,18 +294,67 @@
     </div>
 </div>
 
+<div class="modal fade" id="modalFaltasDia" tabindex="-1" aria-hidden="true" style="z-index: 1060;">
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+        <div class="modal-content shadow-lg border-0">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title fw-bold">
+                    <i class="fas fa-user-times me-2"></i> Relatório de Faltas Diárias
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body bg-light" id="printAreaFaltas">
+                <div class="text-center mb-4 d-none d-print-block">
+                    <h4 class="fw-bold mb-0">Relatório de Faltas</h4>
+                    <p class="text-muted" id="printDataFaltas"></p>
+                </div>
+                
+                <div class="d-flex justify-content-between align-items-center mb-3 d-print-none">
+                    <h6 class="mb-0 text-secondary fw-bold text-uppercase" id="displayDataFaltas">Buscando...</h6>
+                    <button class="btn btn-sm btn-outline-dark" onclick="window.print()">
+                        <i class="fas fa-print me-1"></i> Imprimir Lista
+                    </button>
+                </div>
+
+                <div id="resultadoFaltasDia">
+                    <div class="text-center py-5 text-muted">
+                        <div class="spinner-border text-danger mb-3" role="status"></div>
+                        <p>Buscando informações no banco de dados...</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer bg-white border-top d-print-none">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
     const todosAlunosData = {{ todos_alunos|tojson }};
     let modalInstance = null;
     let modalDevolucao = null;
+    let modalFaltasDia = null;
 
     document.addEventListener('DOMContentLoaded', function() {
         // Move o modal para o body para garantir z-index
-        const modalEl = document.getElementById('modalDevolucao');
-        if (modalEl) {
-            document.body.appendChild(modalEl);
-        }
+        const modais = ['modalDevolucao', 'modalFaltasDia'];
+        modais.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) document.body.appendChild(el);
+        });
+        
         renderizarTabelaCompleta();
+
+        // Preenche o input de data com a data de hoje por padrão
+        const dataInput = document.getElementById('dataFaltasDiarias');
+        if(dataInput && !dataInput.value) {
+            const hoje = new Date();
+            const yyyy = hoje.getFullYear();
+            const mm = String(hoje.getMonth() + 1).padStart(2, '0');
+            const dd = String(hoje.getDate()).padStart(2, '0');
+            dataInput.value = `${yyyy}-${mm}-${dd}`;
+        }
     });
 
     function renderizarTabelaCompleta() {
@@ -337,6 +393,89 @@
         if (!modalDevolucao) modalDevolucao = new bootstrap.Modal(modalEl);
         modalDevolucao.show();
     }
+
+    function consultarFaltasDia() {
+        const dataSelecionada = document.getElementById('dataFaltasDiarias').value;
+        if (!dataSelecionada) {
+            alert('Por favor, selecione uma data primeiro.');
+            return;
+        }
+
+        const partesData = dataSelecionada.split('-');
+        const dataFormatada = `${partesData[2]}/${partesData[1]}/${partesData[0]}`;
+        
+        document.getElementById('displayDataFaltas').innerText = `Data: ${dataFormatada}`;
+        document.getElementById('printDataFaltas').innerText = `Data da Consulta: ${dataFormatada}`;
+
+        const divResultado = document.getElementById('resultadoFaltasDia');
+        divResultado.innerHTML = `
+            <div class="text-center py-5 text-muted">
+                <div class="spinner-border text-danger mb-3" role="status"></div>
+                <p>Buscando faltas registradas em ${dataFormatada}...</p>
+            </div>
+        `;
+
+        const modalEl = document.getElementById('modalFaltasDia');
+        if (!modalFaltasDia) modalFaltasDia = new bootstrap.Modal(modalEl);
+        modalFaltasDia.show();
+
+        fetch(`/diario-classe/faltas-por-dia?data=${dataSelecionada}`)
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) {
+                    divResultado.innerHTML = `<div class="alert alert-danger"><i class="fas fa-exclamation-circle me-2"></i> ${data.message}</div>`;
+                    return;
+                }
+
+                const faltasAgrupadas = data.faltas;
+                const turmas = Object.keys(faltasAgrupadas);
+
+                if (turmas.length === 0) {
+                    divResultado.innerHTML = `
+                        <div class="alert alert-success border-0 text-center py-4">
+                            <i class="fas fa-check-circle fa-3x mb-3 d-block text-success"></i>
+                            <h5 class="mb-0">Nenhuma falta registrada!</h5>
+                            <p class="text-muted small mt-1">Todos os alunos presentes nos diários lançados nesta data.</p>
+                        </div>`;
+                    return;
+                }
+
+                let html = '';
+                turmas.forEach(turma => {
+                    html += `
+                        <div class="card border-0 shadow-sm mb-3">
+                            <div class="card-header bg-dark text-white fw-bold py-2">
+                                <i class="fas fa-layer-group me-2"></i> ${turma} 
+                                <span class="badge bg-light text-dark float-end">${faltasAgrupadas[turma].length} faltas</span>
+                            </div>
+                            <ul class="list-group list-group-flush">
+                    `;
+                    
+                    faltasAgrupadas[turma].forEach(aluno => {
+                        let periodo = aluno.periodo ? `(${aluno.periodo}º Período)` : '';
+                        let justif = aluno.justificativa ? `<br><small class="text-muted fst-italic"><i class="fas fa-info-circle"></i> Justificativa: ${aluno.justificativa}</small>` : '';
+                        
+                        html += `
+                            <li class="list-group-item d-flex justify-content-between align-items-center py-2">
+                                <div>
+                                    <span class="fw-bold">${aluno.nome_guerra || aluno.nome_completo}</span>
+                                    ${justif}
+                                </div>
+                                <span class="badge bg-light text-dark border small">${periodo}</span>
+                            </li>
+                        `;
+                    });
+
+                    html += `</ul></div>`;
+                });
+
+                divResultado.innerHTML = html;
+            })
+            .catch(err => {
+                console.error("Erro ao buscar faltas:", err);
+                divResultado.innerHTML = `<div class="alert alert-danger"><i class="fas fa-exclamation-triangle me-2"></i> Erro ao processar a requisição. Tente novamente.</div>`;
+            });
+    }
 </script>
 
 <style>
@@ -348,5 +487,17 @@
     .alert-card-atencao { border-left: 5px solid #ffc107 !important; background: linear-gradient(to right, #fff9f2, #fff); }
     .alert-card-moderado { border-left: 5px solid #6c757d !important; }
     .aluno-card-item .card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important; }
+
+    /* Estilos para Impressão do Modal */
+    @media print {
+        body * { visibility: hidden; }
+        #modalFaltasDia, #printAreaFaltas, #printAreaFaltas * { visibility: visible; }
+        #modalFaltasDia { position: absolute; left: 0; top: 0; width: 100%; height: auto; z-index: 9999; }
+        .modal-content { border: none !important; box-shadow: none !important; }
+        .modal-header, .modal-footer, .btn-close { display: none !important; }
+        .card { border: 1px solid #ddd !important; break-inside: avoid; }
+        .card-header { background-color: #f8f9fa !important; color: #000 !important; border-bottom: 1px solid #ddd; }
+        .badge { border: 1px solid #000 !important; color: #000 !important; }
+    }
 </style>
 {% endblock %}
