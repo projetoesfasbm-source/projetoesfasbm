@@ -44,10 +44,10 @@
         border-radius: 6px;
     }
 
-    /* ESTILO PARA OS SWITCHES DE PRESENÇA */
+    /* ESTILO PARA OS SWITCHES DE PRESENÇA NA MATRIZ */
     .form-switch .form-check-input {
-        width: 3em;
-        height: 1.5em;
+        width: 2.5em; /* Ligeiramente menores para caber melhor na tabela */
+        height: 1.25em;
         cursor: pointer;
     }
     
@@ -106,54 +106,40 @@
                 <div class="card border-0 bg-light shadow-sm mb-4">
                     <div class="card-header bg-dark text-white fw-bold d-flex justify-content-between align-items-center">
                         <span><i class="fas fa-clipboard-list me-2"></i> Auditoria de Frequência</span>
-                        <span class="badge bg-light text-dark">{{ diario.frequencias|length }} Alunos</span>
+                        <span class="badge bg-light text-dark">{{ alunos_list|length }} Alunos</span>
                     </div>
                     <div class="card-body p-0">
                         <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
-                            <table class="table table-hover table-striped mb-0 align-middle">
+                            <table class="table table-hover table-striped mb-0 align-middle text-center">
                                 <thead class="table-light sticky-top" style="z-index: 1;">
                                     <tr>
-                                        <th class="ps-3">Nº</th>
-                                        <th>Nome do Aluno</th>
-                                        <th>Períodos (Frequência)</th>
-                                        <th class="text-center">Presença</th>
+                                        <th class="text-start ps-3" style="width: 60px;">Nº</th>
+                                        <th class="text-start">Nome do Aluno</th>
+                                        {% for d in diarios_bloco %}
+                                        <th><span class="badge border border-secondary text-secondary">{{ d.periodo }}º Tempo</span></th>
+                                        {% endfor %}
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {% for freq in diario.frequencias|sort(attribute='aluno.num_aluno') %}
-                                    {% set resumo = resumo_periodos.get(freq.aluno_id, {'P': [], 'F': []}) %}
+                                    {% for aluno in alunos_list %}
                                     <tr>
-                                        <td class="ps-3 fw-bold text-muted">{{ freq.aluno.num_aluno or '--' }}</td>
-                                        <td class="fw-bold">{{ freq.aluno.user.nome_de_guerra or freq.aluno.user.nome_completo }}</td>
+                                        <td class="text-start ps-3 fw-bold text-muted">{{ aluno.num_aluno or '--' }}</td>
+                                        <td class="text-start fw-bold">{{ aluno.user.nome_de_guerra or aluno.user.nome_completo }}</td>
+                                        
+                                        {% for d in diarios_bloco %}
                                         <td>
-                                            {% if resumo.P %}
-                                                <span class="badge bg-success me-1 mb-1 shadow-sm" title="Períodos Presente">P: {{ resumo.P|join(', ') }}</span>
-                                            {% endif %}
-                                            {% if resumo.F %}
-                                                <span class="badge bg-danger mb-1 shadow-sm" title="Períodos que Faltou">F: {{ resumo.F|join(', ') }}</span>
-                                            {% endif %}
-                                            {% if not resumo.P and not resumo.F %}
-                                                <span class="text-muted small fst-italic">Sem registro</span>
-                                            {% endif %}
-                                        </td>
-                                        <td class="text-center">
                                             <div class="form-check form-switch d-flex justify-content-center m-0 p-0">
-                                                <input type="hidden" name="freq_{{ freq.aluno_id }}" value="0">
-                                                <input class="form-check-input ms-0 me-2 switch-presenca" type="checkbox" 
-                                                       name="freq_{{ freq.aluno_id }}" value="1" 
-                                                       id="switch_{{ freq.aluno_id }}" 
-                                                       {% if freq.presente %}checked{% endif %}
-                                                       onchange="togglePresencaColor(this, {{ freq.aluno_id }})">
-                                                <label class="form-check-label ms-1 {% if freq.presente %}presente-text{% else %}falta-text{% endif %}" 
-                                                       id="label_{{ freq.aluno_id }}" for="switch_{{ freq.aluno_id }}">
-                                                    {% if freq.presente %}P{% else %}F{% endif %}
-                                                </label>
+                                                <input type="hidden" name="presenca_{{ aluno.id }}_{{ d.id }}" value="0">
+                                                <input class="form-check-input ms-0 shadow-sm" type="checkbox" 
+                                                       name="presenca_{{ aluno.id }}_{{ d.id }}" value="1" 
+                                                       {% if freq_map[aluno.id][d.id] %}checked{% endif %}>
                                             </div>
                                         </td>
+                                        {% endfor %}
                                     </tr>
                                     {% else %}
                                     <tr>
-                                        <td colspan="4" class="text-center py-4 text-muted">Nenhum aluno vinculado a este diário.</td>
+                                        <td colspan="{{ diarios_bloco|length + 2 }}" class="text-center py-4 text-muted">Nenhum aluno vinculado a este diário.</td>
                                     </tr>
                                     {% endfor %}
                                 </tbody>
@@ -161,7 +147,7 @@
                         </div>
                     </div>
                     <div class="card-footer bg-white text-muted small">
-                        <i class="fas fa-info-circle me-1"></i> As faltas marcadas pelo chefe de turma já estão preenchidas. O instrutor pode verificar o histórico de períodos ao lado e corrigir qualquer erro antes de validar a aula em questão.
+                        <i class="fas fa-info-circle me-1"></i> As faltas marcadas pelo chefe de turma já estão preenchidas. O instrutor pode corrigir clicando nas chaves correspondentes a cada tempo de aula.
                     </div>
                 </div>
                 <div class="mb-4">
@@ -259,18 +245,8 @@
 
 <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.0.0/dist/signature_pad.umd.min.js"></script>
 <script>
-    // --- LÓGICA DE AUDITORIA DE FALTAS (SEM JUSTIFICATIVA) ---
-    function togglePresencaColor(checkbox, alunoId) {
-        let label = document.getElementById('label_' + alunoId);
-        if (checkbox.checked) {
-            label.innerText = 'P';
-            label.className = 'form-check-label ms-1 presente-text';
-        } else {
-            label.innerText = 'F';
-            label.className = 'form-check-label ms-1 falta-text';
-        }
-    }
-
+    // A função togglePresencaColor não é mais necessária pois a interface usa apenas os switches
+    
     // --- LÓGICA ORIGINAL DO SIGNATURE PAD ---
     var canvas = document.getElementById('signaturePad');
     var signaturePad = new SignaturePad(canvas, {

@@ -72,14 +72,18 @@
                                                         <button type="button" class="btn btn-sm btn-primary fw-bold text-white" onclick="toggleJulgarRecurso('{{ p.id }}')" title="Julgar Recurso">
                                                             <i class="fas fa-balance-scale"></i> Julgar Recurso
                                                         </button>
-                                                    {% elif p.status in ['AGUARDANDO_CIENCIA', 'ALUNO_NOTIFICADO'] %}
-                                                        <button type="button" class="btn btn-sm btn-secondary text-white" disabled title="Aguardando prazo do aluno">
+                                                    {% elif p.status == 'AGUARDANDO_CIENCIA' %}
+                                                        <button type="button" class="btn btn-sm btn-secondary text-white" disabled title="Aguardando ciência do aluno">
+                                                            <i class="fas fa-clock"></i> Notificado há:
+                                                            <br><small class="cronometro-progressivo badge bg-dark mt-1" data-inicio="{{ p.data_registro.isoformat() if p.data_registro else p.data_ocorrencia.isoformat() }}"></small>
+                                                        </button>
+                                                        <button type="button" class="btn btn-sm btn-danger d-none btn-punir-ciencia mt-1 mt-md-0" data-inicio="{{ p.data_registro.isoformat() if p.data_registro else p.data_ocorrencia.isoformat() }}" onclick="prepararNovaInfracao('{{ p.aluno.turma_id }}', '{{ p.aluno.id }}')" title="O aluno não deu ciente em 24h.">
+                                                            <i class="fas fa-gavel"></i> Punir Atraso
+                                                        </button>
+                                                    {% elif p.status == 'ALUNO_NOTIFICADO' and not p.is_revelia %}
+                                                        <button type="button" class="btn btn-sm btn-secondary text-white" disabled title="Aguardando prazo de defesa do aluno">
                                                             <i class="fas fa-lock"></i> Analisar
-                                                            {% if p.status == 'AGUARDANDO_CIENCIA' and p.prazo_ciencia %}
-                                                                <br><small class="cronometro-prazo badge bg-dark mt-1" data-prazo="{{ p.prazo_ciencia.isoformat() }}"></small>
-                                                            {% elif p.status == 'ALUNO_NOTIFICADO' and p.prazo_defesa %}
-                                                                <br><small class="cronometro-prazo badge bg-dark mt-1" data-prazo="{{ p.prazo_defesa.isoformat() }}"></small>
-                                                            {% endif %}
+                                                            <br><small class="cronometro-prazo badge bg-dark mt-1" data-prazo="{{ p.prazo_defesa.isoformat() }}"></small>
                                                         </button>
                                                     {% elif p.status in ['DEFESA_ENVIADA', 'EM_ANALISE'] %}
                                                         <button type="button" class="btn btn-sm btn-info text-white" onclick="toggleAnalise('{{ p.id }}')" title="Analisar/Decidir">
@@ -92,19 +96,10 @@
                                                     
                                                     <form action="{{ url_for('justica.deletar_processo', pid=p.id) }}" method="POST" onsubmit="return confirm('ATENÇÃO: Tem certeza que deseja EXCLUIR este processo?');" class="d-inline">
                                                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                                        <button type="submit" class="btn btn-sm btn-danger fw-bold d-flex align-items-center gap-1">
-                                                            <i class="fas fa-trash"></i> <span>Excluir</span>
+                                                        <button type="submit" class="btn btn-sm btn-danger fw-bold d-flex align-items-center gap-1" title="Excluir">
+                                                            <i class="fas fa-trash"></i>
                                                         </button>
                                                     </form>
-
-                                                    {% if p.status in ['AGUARDANDO_CIENCIA', 'ALUNO_NOTIFICADO', 'DECISAO_EMITIDA'] %}
-                                                        <form action="{{ url_for('justica.dar_ciente', processo_id=p.id) }}" method="POST" class="d-inline">
-                                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                                            <button type="submit" class="btn btn-sm btn-outline-warning text-dark" title="Forçar Ciência (Admin)">
-                                                                <i class="fas fa-check-double"></i>
-                                                            </button>
-                                                        </form>
-                                                    {% endif %}
                                                 {% endif %}
 
                                                 {% if current_user.role == 'aluno' %}
@@ -113,7 +108,6 @@
                                                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                                             <button type="submit" class="btn btn-sm btn-warning fw-bold text-dark">
                                                                 <i class="fas fa-check"></i> DAR CIENTE 
-                                                                <span class="cronometro-prazo badge bg-dark ms-1" data-prazo="{{ p.prazo_ciencia.isoformat() if p.prazo_ciencia else '' }}"></span>
                                                             </button>
                                                         </form>
                                                     {% elif p.status == 'ALUNO_NOTIFICADO' and not p.defesa %}
@@ -122,17 +116,10 @@
                                                             <span class="cronometro-prazo badge bg-dark ms-1" data-prazo="{{ p.prazo_defesa.isoformat() if p.prazo_defesa else '' }}"></span>
                                                         </button>
                                                     {% elif p.status == 'DECISAO_EMITIDA' %}
-                                                        {% if not p.data_notificacao_decisao %}
-                                                            <form action="{{ url_for('justica.dar_ciente', processo_id=p.id) }}" method="POST" class="d-inline">
-                                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                                                <button type="submit" class="btn btn-sm btn-info fw-bold text-white"><i class="fas fa-eye"></i> CIÊNCIA DA DECISÃO</button>
-                                                            </form>
-                                                        {% else %}
-                                                            <button type="button" class="btn btn-sm btn-primary fw-bold text-white" onclick="toggleRecurso('{{ p.id }}')">
-                                                                <i class="fas fa-gavel"></i> ENVIAR RECURSO
-                                                                <span class="cronometro-prazo badge bg-dark ms-1" data-prazo="{{ p.prazo_recurso.isoformat() if p.prazo_recurso else '' }}"></span>
-                                                            </button>
-                                                        {% endif %}
+                                                        <button type="button" class="btn btn-sm btn-primary fw-bold text-white" onclick="toggleRecurso('{{ p.id }}')">
+                                                            <i class="fas fa-gavel"></i> ENVIAR RECURSO
+                                                            <span class="cronometro-prazo badge bg-dark ms-1" data-prazo="{{ p.prazo_recurso.isoformat() if p.prazo_recurso else '' }}"></span>
+                                                        </button>
                                                     {% elif p.status == 'EM_RECURSO' %}
                                                         <span class="badge bg-primary py-2"><i class="fas fa-clock"></i> Recurso em Análise</span>
                                                     {% elif p.defesa %}
@@ -178,15 +165,15 @@
                                     </div>
                                     {% endif %}
 
-                                    {% if current_user.role == 'aluno' and p.status == 'DECISAO_EMITIDA' and p.data_notificacao_decisao %}
+                                    {% if current_user.role == 'aluno' and p.status == 'DECISAO_EMITIDA' %}
                                     <div id="collapseRecurso{{ p.id }}" class="mt-3 pt-3 border-top bg-white p-3 rounded border border-warning shadow-sm" style="display: none;">
                                         <h5 class="text-primary fw-bold"><i class="fas fa-gavel me-2"></i>Interpor Recurso ao Comandante</h5>
-                                        <p class="small text-muted mb-2">O prazo para interposição de recurso é de 48 horas após a ciência da decisão.</p>
+                                        <p class="small text-muted mb-2">O prazo para interposição de recurso é de 48 horas após a emissão da decisão do Chefe.</p>
                                         <form action="{{ url_for('justica.enviar_recurso', pid=p.id) }}" method="POST">
                                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                             <div class="mb-3">
                                                 <label class="form-label fw-bold">Argumentação do Recurso:</label>
-                                                <textarea name="texto_recurso" class="form-control" rows="6" placeholder="Digite aqui os motivos do seu recurso detalhadamente..." required></textarea>
+                                                <textarea name="texto_recurso" class="form-control" rows="6" placeholder="Justifique os motivos para anulação ou revisão da decisão..." required></textarea>
                                             </div>
                                             <div class="text-end">
                                                 <button type="button" class="btn btn-secondary btn-sm" onclick="toggleRecurso('{{ p.id }}')">Cancelar</button>
@@ -378,7 +365,7 @@
                                  <div class="row">
                                     <div class="col-md-5 mb-3 border-end">
                                         <label class="form-label fw-bold">1. Turma</label>
-                                        <select class="form-select mb-2" onchange="carregarAlunos(this.value, 'listaAlunosInfracao')">
+                                        <select class="form-select mb-2" id="selectTurmaNovaInfracao" onchange="carregarAlunos(this.value, 'listaAlunosInfracao')">
                                             <option value="">-- Escolha --</option>
                                             {% for turma in turmas %}
                                             <option value="{{ turma.id }}">{{ turma.nome }}</option>
@@ -557,16 +544,18 @@ function toggleInputsInline(selectEl, id) {
     }
 }
 
-// --- MÁQUINA DE CRONÔMETROS EM TEMPO REAL ---
+// --- MÁQUINA DE CRONÔMETROS E AUTOMATIZAÇÃO (NOVO FLUXO COMANDANTE) ---
 function iniciarCronometros() {
-    const elementos = document.querySelectorAll('.cronometro-prazo');
-    if (elementos.length === 0) return;
+    const regressivos = document.querySelectorAll('.cronometro-prazo');
+    const progressivos = document.querySelectorAll('.cronometro-progressivo');
+    const botoesPunir = document.querySelectorAll('.btn-punir-ciencia');
 
     setInterval(() => {
         const agora = new Date().getTime();
         let precisaRecarregar = false;
 
-        elementos.forEach(el => {
+        // 1. Relógios Regressivos (Para Aluno - Defesa e Recurso)
+        regressivos.forEach(el => {
             const prazoStr = el.getAttribute('data-prazo');
             if (!prazoStr) return;
             
@@ -584,25 +573,52 @@ function iniciarCronometros() {
                 const h = Math.floor(diff / (1000 * 60 * 60));
                 const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
                 const s = Math.floor((diff % (1000 * 60)) / 1000);
+                el.innerHTML = `⏳ ${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+            }
+        });
+
+        // 2. Relógios Progressivos (Para ADM - Ciência)
+        progressivos.forEach(el => {
+            const inicioStr = el.getAttribute('data-inicio');
+            if(!inicioStr) return;
+            const inicio = new Date(inicioStr).getTime();
+            const diff = agora - inicio;
+            
+            if (diff > 0) {
+                const h = Math.floor(diff / (1000 * 60 * 60));
+                const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                const s = Math.floor((diff % (1000 * 60)) / 1000);
+                el.innerHTML = `⏱️ ${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
                 
-                const hh = h.toString().padStart(2, '0');
-                const mm = m.toString().padStart(2, '0');
-                const ss = s.toString().padStart(2, '0');
-                
-                el.innerHTML = `⏳ ${hh}:${mm}:${ss}`;
+                // Se passar de 24h (86.400.000 ms), pinta de vermelho
+                if (diff > 86400000) {
+                    if (!el.classList.contains('bg-danger')) {
+                        el.classList.remove('bg-dark');
+                        el.classList.add('bg-danger');
+                    }
+                }
+            }
+        });
+
+        // 3. Controle do Botão "Punir Atraso" (Para ADM - Aparece após 24h)
+        botoesPunir.forEach(btn => {
+            const inicioStr = btn.getAttribute('data-inicio');
+            if(!inicioStr) return;
+            const inicio = new Date(inicioStr).getTime();
+            const diff = agora - inicio;
+            
+            if (diff > 86400000) { // Maior que 24h
+                btn.classList.remove('d-none');
             }
         });
 
         if (precisaRecarregar) {
-            setTimeout(() => {
-                window.location.reload();
-            }, 2000);
+            setTimeout(() => { window.location.reload(); }, 2000);
         }
     }, 1000);
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-    // Inicializa o Relógio
     iniciarCronometros();
 
     if(document.getElementById("regraSelect")) {
@@ -724,6 +740,48 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
         } else if(checks.length > 1) {
             box.value = `Termo Coletivo para ${checks.length} alunos.\nFato: ${descFato}\nEnquadramento: ${regraDesc}`;
+        }
+    };
+
+    // --- NOVA FUNÇÃO DO COMANDANTE (PUNIÇÃO POR ATRASO DE CIÊNCIA) ---
+    window.prepararNovaInfracao = function(turmaId, alunoId) {
+        // 1. Troca a aba para "Nova Infração"
+        document.querySelector('[data-target="newInfracaoContent"]').click();
+        
+        // 2. Seleciona a turma correspondente
+        const turmaSelect = document.getElementById('selectTurmaNovaInfracao');
+        if(turmaSelect) {
+            turmaSelect.value = turmaId;
+            
+            // 3. Simula a chamada da API para carregar a lista de alunos daquela turma
+            const containerId = 'listaAlunosInfracao';
+            const container = document.getElementById(containerId);
+            container.innerHTML = '<div class="text-center p-2">Carregando alunos...</div>';
+            
+            fetch(`/justica-e-disciplina/api/alunos-por-turma/${turmaId}`)
+                .then(r => r.json())
+                .then(data => {
+                    container.innerHTML = data.map(a => `
+                        <div class="form-check border-bottom py-1">
+                            <input class="form-check-input aluno-check-${containerId}" type="checkbox" name="alunos_selecionados" value="${a.id}" id="chk_${containerId}_${a.id}" onchange="if('${containerId}'=='listaAlunosInfracao') atualizarTextoInteligente()">
+                            <label class="form-check-label" for="chk_${containerId}_${a.id}">
+                                ${a.numero ? a.numero + ' - ' : ''}${a.nome}
+                            </label>
+                        </div>
+                    `).join('');
+                    
+                    // 4. Aguarda meio segundo para a renderização, marca o checkbox do aluno e preenche o fato
+                    setTimeout(() => {
+                        const chk = document.getElementById(`chk_${containerId}_${alunoId}`);
+                        if(chk) {
+                            chk.checked = true;
+                            // Preenche automaticamente o texto da conduta infracional
+                            document.getElementById('descricaoFatoInput').value = "Deixou de dar ciência, no prazo regulamentar, no processo disciplinar que lhe foi imputado.";
+                            // Força a atualização do texto inteligente
+                            atualizarTextoInteligente();
+                        }
+                    }, 500);
+                });
         }
     };
 });

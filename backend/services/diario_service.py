@@ -29,10 +29,6 @@ class DiarioService:
 
     @staticmethod
     def get_diarios_pendentes(school_id, user_id=None, turma_id=None, disciplina_id=None, status=None):
-        """
-        Busca os diários usando apenas a lógica de vínculos existente.
-        Corrigido para garantir que instrutores vinculados vejam as aulas lançadas pelos alunos.
-        """
         stmt = (
             select(DiarioClasse)
             .join(Turma, DiarioClasse.turma_id == Turma.id)
@@ -172,28 +168,40 @@ class DiarioService:
             elif tipo_assinatura == 'upload':
                 dados_assinatura.save(filepath)
 
-            if frequencias_atualizadas:
-                freqs_do_diario = db.session.scalars(
-                    select(FrequenciaAluno).where(FrequenciaAluno.diario_id == diario_pai.id)
-                ).all()
-                for f in freqs_do_diario:
-                    if f.aluno_id in frequencias_atualizadas:
-                        dados_novos = frequencias_atualizadas[f.aluno_id]
-                        f.presente = dados_novos.get('presente', f.presente)
-                        if f.presente:
-                            f.justificativa = None
-
-            siblings = db.session.scalars(
+            # --- NOVA LÓGICA: ATUALIZA FREQUÊNCIAS POR PERÍODO EM TODO O BLOCO ---
+            bloco_completo = db.session.scalars(
                 select(DiarioClasse).where(
                     DiarioClasse.data_aula == diario_pai.data_aula,
                     DiarioClasse.turma_id == diario_pai.turma_id,
-                    DiarioClasse.disciplina_id == diario_pai.disciplina_id,
-                    DiarioClasse.status == 'pendente'
+                    DiarioClasse.disciplina_id == diario_pai.disciplina_id
                 )
             ).all()
 
+            if frequencias_atualizadas:
+                for d in bloco_completo:
+                    if d.id in frequencias_atualizadas:
+                        for aluno_id, presente_bool in frequencias_atualizadas[d.id].items():
+                            freq = db.session.scalar(
+                                select(FrequenciaAluno).where(
+                                    FrequenciaAluno.diario_id == d.id,
+                                    FrequenciaAluno.aluno_id == aluno_id
+                                )
+                            )
+                            # Se não existir, cria o registro igual na chamada
+                            if not freq:
+                                freq = FrequenciaAluno(diario_id=d.id, aluno_id=aluno_id)
+                                db.session.add(freq)
+                            
+                            freq.presente = presente_bool
+                            if freq.presente:
+                                freq.justificativa = None
+            # ---------------------------------------------------------------------
+
+            # Assina apenas as pendentes
+            siblings_pendentes = [d for d in bloco_completo if d.status == 'pendente']
             timestamp = datetime.now()
-            for d in siblings:
+            
+            for d in siblings_pendentes:
                 d.assinatura_path = db_path
                 d.status = 'assinado'
                 d.data_assinatura = timestamp
@@ -202,7 +210,7 @@ class DiarioService:
                 if observacoes_atualizadas is not None: d.observacoes = observacoes_atualizadas
 
             db.session.commit()
-            return True, f"Sucesso! {len(siblings)} aulas assinadas."
+            return True, f"Sucesso! {len(siblings_pendentes)} aulas assinadas."
         except Exception as e:
             db.session.rollback()
             return False, str(e)
@@ -247,17 +255,12 @@ class DiarioService:
             db.session.rollback()
             return False, str(e)
 
-    # ==========================================================
-    # NOVA FUNÇÃO: EXCLUIR DIÁRIO EM BLOCO
-    # ==========================================================
     @staticmethod
     def excluir_diario_admin(diario_id, admin_user):
         diario = db.session.get(DiarioClasse, diario_id)
         if not diario: 
             return False, "Diário não encontrado."
-        
         try:
-            # Seleciona todo o bloco daquela aula
             siblings = db.session.scalars(select(DiarioClasse).where(
                 DiarioClasse.data_aula == diario.data_aula,
                 DiarioClasse.turma_id == diario.turma_id,
@@ -266,7 +269,6 @@ class DiarioService:
             
             total_apagados = len(siblings)
             
-            # Deleta cada período. As frequências ligadas a ele sumirão via Cascade Delete.
             for d in siblings:
                 db.session.delete(d)
                 

@@ -195,7 +195,6 @@ def registrar_em_massa():
             except Exception as e:
                 logger.error(f"Erro ao criar processo aluno {aid}: {e}")
 
-    # ... (Parte do elogio segue igual) ...
     elif tipo == 'elogio':
         for aid in alunos_ids:
             try:
@@ -225,17 +224,14 @@ def dar_ciente(processo_id):
         flash("Permissão negada.", "error")
         return redirect(url_for('justica.index'))
 
+    # Removido a etapa de "DECISAO_EMITIDA", agora o aluno dá ciente apenas na primeira fase
     if processo.status == StatusProcesso.AGUARDANDO_CIENCIA.value:
         processo.data_ciencia = datetime.now().astimezone()
         processo.status = StatusProcesso.ALUNO_NOTIFICADO.value
         processo.ciente_aluno = True
-        flash("Ciência do processo registrada. Você pode enviar sua defesa.", "success")
-    
-    elif processo.status == StatusProcesso.DECISAO_EMITIDA.value:
-        processo.data_notificacao_decisao = datetime.now().astimezone()
-        flash("Ciência da decisão registrada. Prazo de 48h para recurso iniciado.", "info")
+        flash("Ciência do processo registrada. O prazo para defesa foi iniciado.", "success")
     else:
-        flash("Este processo já passou da fase de ciência.", "warning")
+        flash("Este processo não aguarda ciência inicial.", "warning")
 
     db.session.commit()
     return redirect(url_for('justica.index'))
@@ -289,12 +285,10 @@ def enviar_recurso(pid):
     if processo.status != StatusProcesso.DECISAO_EMITIDA.value:
         flash("Status inválido para recurso.", "error"); return redirect(url_for('justica.index'))
     
-    if not processo.data_notificacao_decisao:
-        flash("Você precisa dar ciência da decisão antes.", "warning"); return redirect(url_for('justica.index'))
-
     agora = datetime.now().astimezone()
-    if processo.data_notificacao_decisao.tzinfo:
-        horas_passadas = (agora - processo.data_notificacao_decisao).total_seconds() / 3600
+    # Recurso agora conta 48h automáticas da data da decisão
+    if processo.data_decisao and processo.data_decisao.tzinfo:
+        horas_passadas = (agora - processo.data_decisao).total_seconds() / 3600
         if horas_passadas > 48:
             flash("Prazo de 48h para recurso expirado.", "error"); return redirect(url_for('justica.index'))
 
@@ -353,7 +347,7 @@ def finalizar_processo(pid):
 
     if tipo_npccal in ['cbfpm', 'ctsp', 'cspm']:
         processo.status = StatusProcesso.DECISAO_EMITIDA.value
-        msg_sucesso = "Decisão registrada. O aluno tem 48h para interpor recurso após dar ciência."
+        msg_sucesso = "Decisão registrada. O prazo de 48h para recurso já está correndo."
     else:
         processo.status = StatusProcesso.FINALIZADO.value
         msg_sucesso = "Decisão confirmada e processo finalizado."
@@ -385,7 +379,7 @@ def finalizar_processo(pid):
             link = url_for('justica.index', _external=True)
             NotificationService.create_notification(
                 user_id=aluno.user.id,
-                message=f"Decisão emitida no processo {processo.id}. Acesse para ciência/recurso.",
+                message=f"Decisão emitida no processo {processo.id}. O prazo para recurso está correndo.",
                 url=link
             )
         flash(msg_sucesso, "success")
@@ -645,7 +639,6 @@ def get_aluno_details(aluno_id):
     a = db.session.get(Aluno, aluno_id)
     return jsonify({'nome_completo': a.user.nome_completo, 'matricula': a.user.matricula, 'posto_graduacao': a.user.posto_graduacao}) if a else jsonify({})
 
-
 @justica_bp.route('/exportar-selecao')
 @login_required
 def exportar_selecao():
@@ -654,7 +647,6 @@ def exportar_selecao():
         flash("Nenhuma escola selecionada.", "warning")
         return redirect(url_for('main.dashboard'))
 
-    # Adicionadas as relações com Aluno e Turma para filtrar estritamente pela escola atual logada
     stmt = select(ProcessoDisciplina).join(Aluno).join(Turma).where(
         ProcessoDisciplina.status == StatusProcesso.FINALIZADO.value,
         Turma.school_id == school_id
@@ -663,7 +655,6 @@ def exportar_selecao():
     stmt = stmt.options(joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.user))
     processos = db.session.scalars(stmt).unique().all()
     return render_template('justica/exportar_selecao.html', processos=processos, datetime=datetime)
-
 
 @justica_bp.route('/confirmar-publicacao-boletim', methods=['POST'])
 @login_required

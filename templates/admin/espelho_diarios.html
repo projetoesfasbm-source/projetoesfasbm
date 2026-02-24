@@ -172,7 +172,7 @@
                             <th>Disciplina</th>
                             <th>Conteúdo</th>
                             <th>Validação</th>
-                            <th class="text-center" style="width: 220px;">Ações</th>
+                            <th class="text-center" style="width: 290px;">Ações</th> 
                         </tr>
                     </thead>
                     <tbody>
@@ -211,9 +211,15 @@
                                     </a>
                                     
                                     <button type="button" 
-                                            class="btn btn-danger btn-sm px-3 fw-bold shadow-sm"
+                                            class="btn btn-warning btn-sm px-3 fw-bold shadow-sm text-dark"
                                             onclick="abrirModalDevolucao({{ diario.id }})">
                                         <i class="fas fa-undo me-1"></i> Devolver
+                                    </button>
+
+                                    <button type="button" 
+                                            class="btn btn-danger btn-sm px-3 fw-bold shadow-sm"
+                                            onclick="abrirModalExcluir({{ diario.id }}, '{{ diario.disciplina.materia }}')">
+                                        <i class="fas fa-trash-alt me-1"></i> Excluir
                                     </button>
                                 </div>
                             </td>
@@ -262,9 +268,9 @@
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 
                 <input type="hidden" name="diario_id" id="inputDiarioId">
-                <div class="modal-header bg-danger text-white">
-                    <h5 class="modal-title"><i class="fas fa-undo me-2"></i>Devolver Diário</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <div class="modal-header bg-warning text-dark">
+                    <h5 class="modal-title fw-bold"><i class="fas fa-undo me-2"></i>Devolver Diário</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body bg-white text-dark">
                     <div class="alert alert-warning border-0 d-flex align-items-center">
@@ -285,8 +291,36 @@
                 </div>
                 <div class="modal-footer bg-light">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-danger fw-bold">
+                    <button type="submit" class="btn btn-warning fw-bold text-dark">
                         <i class="fas fa-check me-1"></i> Confirmar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalExcluirDiario" tabindex="-1" aria-hidden="true" style="z-index: 1060;">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <form id="formExcluirDiario" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title fw-bold"><i class="fas fa-trash-alt me-2"></i>Excluir Diário</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body bg-white text-dark text-center py-4">
+                    <i class="fas fa-exclamation-circle text-danger fa-4x mb-3"></i>
+                    <h5 class="fw-bold">Tem certeza?</h5>
+                    <p class="mb-1 text-muted">Você está prestes a excluir permanentemente a aula de <strong><span id="nomeDisciplinaExclusao"></span></strong>.</p>
+                    <p class="small text-danger fw-bold mt-3 border p-2 bg-light rounded">
+                        Todos os períodos deste bloco e as frequências lançadas serão apagados do sistema de forma irreversível.
+                    </p>
+                </div>
+                <div class="modal-footer bg-light justify-content-center">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-danger fw-bold px-4">
+                        <i class="fas fa-trash-alt me-1"></i> Sim, Excluir
                     </button>
                 </div>
             </form>
@@ -329,9 +363,10 @@
     let modalInstance = null;
     let modalDevolucao = null;
     let modalFaltasDia = null;
+    let modalExcluir = null;
 
     document.addEventListener('DOMContentLoaded', function() {
-        const modais = ['modalDevolucao', 'modalFaltasDia'];
+        const modais = ['modalDevolucao', 'modalFaltasDia', 'modalExcluirDiario'];
         modais.forEach(id => {
             const el = document.getElementById(id);
             if (el) document.body.appendChild(el);
@@ -384,6 +419,15 @@
         const modalEl = document.getElementById('modalDevolucao');
         if (!modalDevolucao) modalDevolucao = new bootstrap.Modal(modalEl);
         modalDevolucao.show();
+    }
+
+    function abrirModalExcluir(diarioId, disciplinaNome) {
+        document.getElementById('nomeDisciplinaExclusao').innerText = disciplinaNome;
+        document.getElementById('formExcluirDiario').action = `/admin-escola/excluir-diario/${diarioId}`;
+        
+        const modalEl = document.getElementById('modalExcluirDiario');
+        if (!modalExcluir) modalExcluir = new bootstrap.Modal(modalEl);
+        modalExcluir.show();
     }
 
     function consultarFaltasDia() {
@@ -445,11 +489,14 @@
                     faltasAgrupadas[turma].forEach(aluno => {
                         let periodo = aluno.periodo ? `(${aluno.periodo}º Período)` : '';
                         let justif = aluno.justificativa ? `<br><small class="text-muted fst-italic"><i class="fas fa-info-circle"></i> Justificativa: ${aluno.justificativa}</small>` : '';
+                        // --- NOVA LÓGICA DE EXIBIÇÃO DA MATÉRIA ---
+                        let materia = aluno.materia ? `<br><small class="text-primary fw-bold"><i class="fas fa-book me-1"></i> ${aluno.materia}</small>` : '';
                         
                         html += `
                             <li class="list-group-item d-flex justify-content-between align-items-center py-2" style="border-bottom: 1px solid #eee;">
                                 <div>
                                     <span class="fw-bold text-dark">${aluno.nome_guerra || aluno.nome_completo}</span>
+                                    ${materia}
                                     ${justif}
                                 </div>
                                 <span class="badge border border-secondary text-secondary small">${periodo}</span>

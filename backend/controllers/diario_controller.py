@@ -43,11 +43,45 @@ def listar_pendentes():
 @diario_bp.route('/instrutor/assinar/<int:diario_id>', methods=['GET', 'POST'])
 @login_required
 def assinar(diario_id):
+    from ..models.database import db
+    from ..models.diario_classe import DiarioClasse
+    from ..models.aluno import Aluno
+    from ..models.user import User
+
     diario, instrutor = DiarioService.get_diario_para_assinatura(diario_id, current_user.id)
     
     if not diario:
         flash("Diário não encontrado.", "danger")
         return redirect(url_for('diario.listar_pendentes'))
+
+    # Puxa o bloco completo ordenado por período
+    diarios_bloco = db.session.scalars(
+        db.select(DiarioClasse).where(
+            DiarioClasse.data_aula == diario.data_aula,
+            DiarioClasse.turma_id == diario.turma_id,
+            DiarioClasse.disciplina_id == diario.disciplina_id
+        ).order_by(DiarioClasse.periodo, DiarioClasse.id)
+    ).all()
+
+    # Busca os alunos para listar na matriz de presença
+    alunos_query = db.session.scalars(
+        db.select(Aluno)
+        .join(User)
+        .where(Aluno.turma_id == diario.turma_id)
+        .order_by(Aluno.num_aluno, User.nome_de_guerra)
+    ).all()
+
+    # Prepara o mapa atual de presenças do banco para a tela inicial
+    freq_map = {}
+    for a in alunos_query:
+        freq_map[a.id] = {}
+        for d in diarios_bloco:
+            freq_map[a.id][d.id] = True # Default é presente
+            
+    for d in diarios_bloco:
+        for f in d.frequencias:
+            if f.aluno_id in freq_map:
+                freq_map[f.aluno_id][d.id] = f.presente
 
     if request.method == 'POST':
         tipo = request.form.get('tipo_assinatura')
@@ -62,7 +96,6 @@ def assinar(diario_id):
             dados = request.form.get('assinatura_base64')
         elif tipo == 'upload': 
             arquivo = request.files.get('assinatura_upload')
-            
             if arquivo:
                 if allowed_file(arquivo.filename, arquivo.stream, ['png', 'jpg', 'jpeg']):
                     dados = compress_image_to_memory(arquivo, max_size=(256, 256), quality=60)
@@ -72,26 +105,19 @@ def assinar(diario_id):
                 else:
                     flash("Formato de arquivo inválido para assinatura.", "danger")
                     return redirect(url_for('diario.listar_pendentes'))
-
         elif tipo == 'padrao': 
             dados = True
 
-        # --- LÓGICA DE CAPTURA DE FREQUÊNCIAS (CORRIGIDA) ---
+        # Lê do HTML a matriz inteira (Período por Período)
         frequencias_atualizadas = {}
-        for key in request.form:
-            if key.startswith('freq_'):
-                aluno_id = key.split('_')[1]
-                
-                # getlist() pega todos os valores enviados para esta chave. 
-                # Se o switch de presente estiver ligado, a lista será ['0', '1'].
-                # Se o switch de presente estiver desligado, a lista será apenas ['0'].
-                valores_enviados = request.form.getlist(key)
+        for d in diarios_bloco:
+            frequencias_atualizadas[d.id] = {}
+            for a in alunos_query:
+                campo_name = f"presenca_{a.id}_{d.id}"
+                valores_enviados = request.form.getlist(campo_name)
+                # Se na lista enviada tiver o '1', significa checkbox ativado (Presente)
                 presente = '1' in valores_enviados
-                
-                frequencias_atualizadas[int(aluno_id)] = {
-                    'presente': presente
-                }
-        # ----------------------------------------------------
+                frequencias_atualizadas[d.id][a.id] = presente
 
         ok, msg = DiarioService.assinar_diario(
             diario_id=diario.id, 
@@ -110,28 +136,12 @@ def assinar(diario_id):
         else:
             flash(msg, "danger")
 
-    from ..models.database import db
-    from ..models.diario_classe import DiarioClasse
-    
-    siblings = db.session.query(DiarioClasse).filter(
-        DiarioClasse.data_aula == diario.data_aula,
-        DiarioClasse.turma_id == diario.turma_id,
-        DiarioClasse.disciplina_id == diario.disciplina_id
-    ).order_by(DiarioClasse.periodo).all()
-
-    resumo_periodos = {}
-    for d in siblings:
-        per = str(d.periodo) if d.periodo else "?"
-        for f in d.frequencias:
-            if f.aluno_id not in resumo_periodos:
-                resumo_periodos[f.aluno_id] = {'P': [], 'F': []}
-            
-            if f.presente:
-                resumo_periodos[f.aluno_id]['P'].append(per + "º")
-            else:
-                resumo_periodos[f.aluno_id]['F'].append(per + "º")
-
-    return render_template('diario/instrutor_assinar.html', diario=diario, instrutor=instrutor, resumo_periodos=resumo_periodos)
+    return render_template('diario/instrutor_assinar.html', 
+                           diario=diario, 
+                           instrutor=instrutor, 
+                           diarios_bloco=diarios_bloco, 
+                           alunos_list=alunos_query, 
+                           freq_map=freq_map)
 
 
 @diario_bp.route('/faltas-por-dia', methods=['GET'])
@@ -143,6 +153,7 @@ def faltas_por_dia():
     from ..models.aluno import Aluno
     from ..models.turma import Turma
     from ..models.user import User
+    from ..models.disciplina import Disciplina
 
     school_id = UserService.get_current_school_id()
     if not school_id:
@@ -165,7 +176,8 @@ def faltas_por_dia():
             Aluno.num_aluno.label('numero_aluno'),
             Turma.nome.label('turma_nome'),
             DiarioClasse.periodo,
-            FrequenciaAluno.justificativa
+            FrequenciaAluno.justificativa,
+            Disciplina.materia.label('materia_nome')
         ).select_from(FrequenciaAluno).join(
             DiarioClasse, FrequenciaAluno.diario_id == DiarioClasse.id
         ).join(
@@ -174,6 +186,8 @@ def faltas_por_dia():
             User, Aluno.user_id == User.id
         ).join(
             Turma, DiarioClasse.turma_id == Turma.id
+        ).join(
+            Disciplina, DiarioClasse.disciplina_id == Disciplina.id 
         ).filter(
             Turma.school_id == school_id,
             DiarioClasse.data_aula == data_busca,
@@ -195,7 +209,8 @@ def faltas_por_dia():
                 "nome_completo": falta.nome_completo,
                 "nome_guerra": falta.nome_guerra,
                 "periodo": falta.periodo,
-                "justificativa": falta.justificativa
+                "justificativa": falta.justificativa,
+                "materia": falta.materia_nome
             })
 
         return jsonify({

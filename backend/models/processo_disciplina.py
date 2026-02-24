@@ -20,7 +20,7 @@ class StatusProcesso(str, enum.Enum):
     ALUNO_NOTIFICADO = "ALUNO_NOTIFICADO"
     DEFESA_ENVIADA = "DEFESA_ENVIADA"
     EM_ANALISE = "EM_ANALISE"         # Analise do Chefe CAL
-    DECISAO_EMITIDA = "DECISAO_EMITIDA" # Chefe decidiu, aguardando ciencia do aluno
+    DECISAO_EMITIDA = "DECISAO_EMITIDA" # Chefe decidiu, abre recurso automatico
     EM_RECURSO = "EM_RECURSO"         # Aluno recorreu ao Comandante
     FINALIZADO = "FINALIZADO"         # Encerrado
     ARQUIVADO = "ARQUIVADO"
@@ -110,7 +110,7 @@ class ProcessoDisciplina(db.Model):
     # --- PROPRIEDADES DE CÁLCULO DE PRAZO (USADAS NO FRONTEND) ---
     @property
     def prazo_ciencia(self):
-        # Fallback de segurança: se não tiver data de registro (antigos), usa a de ocorrência
+        # Desativado para o aluno conforme nova regra. Mantido como referência interna.
         base_date = self.data_registro or self.data_ocorrencia
         if base_date:
             return base_date + timedelta(hours=24)
@@ -120,21 +120,18 @@ class ProcessoDisciplina(db.Model):
     def prazo_defesa(self):
         if self.data_ciente:
             return self.data_ciente + timedelta(hours=24)
-        # Fallback: se estiver notificado mas faltar a data do clique (processos antigos)
         if self.status == 'ALUNO_NOTIFICADO':
             base_date = self.data_registro or self.data_ocorrencia
             if base_date:
-                return base_date + timedelta(hours=48) # 24h ciência + 24h defesa
+                return base_date + timedelta(hours=48)
         return None
 
     @property
     def prazo_recurso(self):
-        if self.data_notificacao_decisao:
-            return self.data_notificacao_decisao + timedelta(hours=48)
-        # Fallback para decisões antigas
-        if self.status == 'DECISAO_EMITIDA':
-            if self.data_decisao:
-                return self.data_decisao + timedelta(hours=48)
+        # Novo Fluxo Automático do Comandante: Baseado apenas na data da decisão do Chefe
+        base_date = self.data_decisao or self.data_notificacao_decisao
+        if self.status == StatusProcesso.DECISAO_EMITIDA.value and base_date:
+            return base_date + timedelta(hours=48)
         return None
 
     def __repr__(self):
