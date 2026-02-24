@@ -383,7 +383,7 @@ def editar_diario_bloco(diario_id):
     )
 
 # ==============================================================================
-# NOVAS ROTAS ADICIONADAS (NECESSÁRIAS PARA O SISTEMA DE DEVOLUÇÃO E IMPRESSÃO)
+# NOVAS ROTAS ADICIONADAS (NECESSÁRIAS PARA O SISTEMA DE DEVOLUÇÃO E IMPRESSÃO E EXCLUSÃO)
 # ==============================================================================
 
 @admin_escola_bp.route('/retornar-diario', methods=['POST'])
@@ -405,6 +405,24 @@ def retornar_diario():
         flash(msg, "danger")
         
     return redirect(url_for('admin_escola.espelho_diarios'))
+
+
+@admin_escola_bp.route('/excluir-diario/<int:diario_id>', methods=['POST'])
+@login_required
+@sens_permission_required
+def excluir_diario(diario_id):
+    """
+    Rota para o administrador excluir permanentemente um diário (e suas frequências em cascata).
+    """
+    sucesso, msg = DiarioService.excluir_diario_admin(diario_id, current_user)
+    
+    if sucesso:
+        flash(msg, "success")
+    else:
+        flash(msg, "danger")
+        
+    return redirect(url_for('admin_escola.espelho_diarios'))
+
 
 @admin_escola_bp.route('/imprimir-relatorio')
 @login_required

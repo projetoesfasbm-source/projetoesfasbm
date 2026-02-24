@@ -49,16 +49,12 @@ class DiarioService:
         if user_id:
             instrutor = DiarioService.get_current_instrutor(user_id)
             if instrutor:
-                # A SOLUÇÃO REAL: Buscamos no diário aulas cuja disciplina 
-                # possua vínculo com este instrutor na tabela DisciplinaTurma
                 subquery_vinculos = select(DisciplinaTurma.disciplina_id).where(
                     or_(
                         DisciplinaTurma.instrutor_id_1 == instrutor.id,
                         DisciplinaTurma.instrutor_id_2 == instrutor.id
                     )
                 )
-                
-                # Filtra os diários onde a disciplina faz parte dos vínculos do instrutor
                 stmt = stmt.where(DiarioClasse.disciplina_id.in_(subquery_vinculos))
             else:
                 return []
@@ -139,7 +135,6 @@ class DiarioService:
         diario = db.session.get(DiarioClasse, diario_id)
         if not diario: return None, None
 
-        # Validação simples baseada na tabela de vínculos
         vinculo = db.session.scalars(
             select(DisciplinaTurma).where(
                 DisciplinaTurma.disciplina_id == diario.disciplina_id,
@@ -177,7 +172,6 @@ class DiarioService:
             elif tipo_assinatura == 'upload':
                 dados_assinatura.save(filepath)
 
-            # --- ATUALIZAÇÃO DIRETA DAS FREQUÊNCIAS (Tratamento Anti-Erro) ---
             if frequencias_atualizadas:
                 freqs_do_diario = db.session.scalars(
                     select(FrequenciaAluno).where(FrequenciaAluno.diario_id == diario_pai.id)
@@ -185,13 +179,9 @@ class DiarioService:
                 for f in freqs_do_diario:
                     if f.aluno_id in frequencias_atualizadas:
                         dados_novos = frequencias_atualizadas[f.aluno_id]
-                        # Usa .get() para evitar o erro de chave ausente no Python
                         f.presente = dados_novos.get('presente', f.presente)
-                        
-                        # Higiene no Banco de Dados: Se agora o aluno está presente, limpamos a justificativa de falta antiga
                         if f.presente:
                             f.justificativa = None
-            # -----------------------------------------------------------------
 
             siblings = db.session.scalars(
                 select(DiarioClasse).where(
@@ -256,3 +246,33 @@ class DiarioService:
         except Exception as e:
             db.session.rollback()
             return False, str(e)
+
+    # ==========================================================
+    # NOVA FUNÇÃO: EXCLUIR DIÁRIO EM BLOCO
+    # ==========================================================
+    @staticmethod
+    def excluir_diario_admin(diario_id, admin_user):
+        diario = db.session.get(DiarioClasse, diario_id)
+        if not diario: 
+            return False, "Diário não encontrado."
+        
+        try:
+            # Seleciona todo o bloco daquela aula
+            siblings = db.session.scalars(select(DiarioClasse).where(
+                DiarioClasse.data_aula == diario.data_aula,
+                DiarioClasse.turma_id == diario.turma_id,
+                DiarioClasse.disciplina_id == diario.disciplina_id
+            )).all()
+            
+            total_apagados = len(siblings)
+            
+            # Deleta cada período. As frequências ligadas a ele sumirão via Cascade Delete.
+            for d in siblings:
+                db.session.delete(d)
+                
+            db.session.commit()
+            return True, f"Sucesso: {total_apagados} aula(s) (e suas frequências) foram excluídas permanentemente."
+            
+        except Exception as e:
+            db.session.rollback()
+            return False, f"Erro ao excluir diário: {str(e)}"
