@@ -11,6 +11,7 @@ from ..models.instrutor import Instrutor
 from ..models.turma import Turma
 from ..models.disciplina import Disciplina
 from ..models.disciplina_turma import DisciplinaTurma
+from ..models.frequencia import FrequenciaAluno
 from sqlalchemy import select, and_, or_, distinct
 
 class DiarioService:
@@ -153,7 +154,7 @@ class DiarioService:
         return None, None
 
     @staticmethod
-    def assinar_diario(diario_id, user_id, tipo_assinatura, dados_assinatura=None, salvar_padrao=False, conteudo_atualizado=None, observacoes_atualizadas=None):
+    def assinar_diario(diario_id, user_id, tipo_assinatura, dados_assinatura=None, salvar_padrao=False, conteudo_atualizado=None, observacoes_atualizadas=None, frequencias_atualizadas=None):
         diario_pai, instrutor = DiarioService.get_diario_para_assinatura(diario_id, user_id)
         if not diario_pai:
             return False, "Permissão negada."
@@ -175,6 +176,18 @@ class DiarioService:
                 with open(filepath, 'wb') as f: f.write(base64.b64decode(encoded))
             elif tipo_assinatura == 'upload':
                 dados_assinatura.save(filepath)
+
+            # --- ATUALIZAÇÃO DIRETA DAS FREQUÊNCIAS APENAS DESTE DIÁRIO ---
+            if frequencias_atualizadas:
+                freqs_do_diario = db.session.scalars(
+                    select(FrequenciaAluno).where(FrequenciaAluno.diario_id == diario_pai.id)
+                ).all()
+                for f in freqs_do_diario:
+                    if f.aluno_id in frequencias_atualizadas:
+                        dados_novos = frequencias_atualizadas[f.aluno_id]
+                        f.presente = dados_novos['presente']
+                        f.justificativa = dados_novos['justificativa']
+            # ----------------------------------------------------------------
 
             siblings = db.session.scalars(
                 select(DiarioClasse).where(

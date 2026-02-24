@@ -44,6 +44,16 @@
         border-radius: 6px;
     }
 
+    /* ESTILO PARA OS SWITCHES DE PRESENÇA */
+    .form-switch .form-check-input {
+        width: 3em;
+        height: 1.5em;
+        cursor: pointer;
+    }
+    
+    .presente-text { color: #198754; font-weight: bold; }
+    .falta-text { color: #dc3545; font-weight: bold; }
+
     /* AJUSTE PARA TELAS MUITO PEQUENAS */
     @media (max-width: 576px) {
         .signature-wrapper {
@@ -94,6 +104,63 @@
                     <div class="form-text">Você pode ajustar o conteúdo ministrado antes de assinar.</div>
                 </div>
 
+                <div class="card border-0 bg-light shadow-sm mb-4">
+                    <div class="card-header bg-dark text-white fw-bold d-flex justify-content-between align-items-center">
+                        <span><i class="fas fa-clipboard-list me-2"></i> Auditoria de Frequência</span>
+                        <span class="badge bg-light text-dark">{{ diario.frequencias|length }} Alunos</span>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                            <table class="table table-hover table-striped mb-0 align-middle">
+                                <thead class="table-light sticky-top" style="z-index: 1;">
+                                    <tr>
+                                        <th class="ps-3">Nº</th>
+                                        <th>Nome do Aluno</th>
+                                        <th class="text-center">Presença</th>
+                                        <th>Justificativa (Falta)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for freq in diario.frequencias|sort(attribute='aluno.num_aluno') %}
+                                    <tr>
+                                        <td class="ps-3 fw-bold text-muted">{{ freq.aluno.num_aluno or '--' }}</td>
+                                        <td class="fw-bold">{{ freq.aluno.user.nome_de_guerra or freq.aluno.user.nome_completo }}</td>
+                                        <td class="text-center">
+                                            <div class="form-check form-switch d-flex justify-content-center m-0 p-0">
+                                                <input type="hidden" name="freq_{{ freq.aluno_id }}" value="0">
+                                                <input class="form-check-input ms-0 me-2 switch-presenca" type="checkbox" 
+                                                       name="freq_{{ freq.aluno_id }}" value="1" 
+                                                       id="switch_{{ freq.aluno_id }}" 
+                                                       {% if freq.presente %}checked{% endif %}
+                                                       onchange="togglePresencaColor(this, {{ freq.aluno_id }})">
+                                                <label class="form-check-label ms-1 {% if freq.presente %}presente-text{% else %}falta-text{% endif %}" 
+                                                       id="label_{{ freq.aluno_id }}" for="switch_{{ freq.aluno_id }}">
+                                                    {% if freq.presente %}P{% else %}F{% endif %}
+                                                </label>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <input type="text" class="form-control form-control-sm justificativa-input" 
+                                                   name="just_{{ freq.aluno_id }}" 
+                                                   id="just_{{ freq.aluno_id }}" 
+                                                   value="{{ freq.justificativa or '' }}" 
+                                                   placeholder="Motivo da falta..."
+                                                   {% if freq.presente %}disabled style="background-color: #e9ecef;"{% endif %}>
+                                        </td>
+                                    </tr>
+                                    {% else %}
+                                    <tr>
+                                        <td colspan="4" class="text-center py-4 text-muted">Nenhum aluno vinculado a este diário.</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="card-footer bg-white text-muted small">
+                        <i class="fas fa-info-circle me-1"></i> As faltas marcadas pelo chefe de turma já estão preenchidas. O instrutor pode corrigir qualquer erro antes de validar.
+                    </div>
+                </div>
                 <div class="mb-4">
                     <label for="observacoes" class="form-label text-muted fw-bold">Observações:</label>
                     <textarea class="form-control shadow-sm" id="observacoes" name="observacoes" rows="3">{{ diario.observacoes }}</textarea>
@@ -189,47 +256,53 @@
 
 <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.0.0/dist/signature_pad.umd.min.js"></script>
 <script>
+    // --- LÓGICA DE AUDITORIA DE FALTAS ---
+    function togglePresencaColor(checkbox, alunoId) {
+        let label = document.getElementById('label_' + alunoId);
+        let justInput = document.getElementById('just_' + alunoId);
+        
+        if (checkbox.checked) {
+            label.innerText = 'P';
+            label.className = 'form-check-label ms-1 presente-text';
+            justInput.disabled = true;
+            justInput.style.backgroundColor = '#e9ecef';
+            justInput.value = ''; // Limpa a justificativa se ficou presente
+        } else {
+            label.innerText = 'F';
+            label.className = 'form-check-label ms-1 falta-text';
+            justInput.disabled = false;
+            justInput.style.backgroundColor = '#ffffff';
+        }
+    }
+
+    // --- LÓGICA ORIGINAL DO SIGNATURE PAD ---
     var canvas = document.getElementById('signaturePad');
-    // Inicialização básica
     var signaturePad = new SignaturePad(canvas, {
         backgroundColor: 'rgb(255, 255, 255)',
         penColor: 'rgb(0, 0, 0)',
-        minWidth: 1.5, // Linha um pouco mais grossa para visibilidade mobile
+        minWidth: 1.5,
         maxWidth: 3.5
     });
 
-    // FUNÇÃO CRÍTICA PARA MOBILE: Ajusta a resolução interna do canvas
     function resizeCanvas() {
-        // Pega o elemento pai para saber a largura real disponível na tela
         var parentWidth = canvas.parentElement.offsetWidth;
         var parentHeight = canvas.parentElement.offsetHeight;
-
-        // Ratio corrige a densidade de pixels (Retina display, etc)
         var ratio = Math.max(window.devicePixelRatio || 1, 1);
 
-        // Define o tamanho visual (CSS)
         canvas.width = parentWidth * ratio;
         canvas.height = parentHeight * ratio;
-        
-        // Escala o contexto do canvas para desenhar corretamente
         canvas.getContext("2d").scale(ratio, ratio);
-
-        // Limpa (necessário após redimensionar) e mantém dados se houver (opcional, aqui limpamos)
         signaturePad.clear(); 
     }
 
-    // Chama no carregamento
     window.addEventListener("load", resizeCanvas);
-    // Chama se o usuário girar o celular
     window.addEventListener("resize", resizeCanvas);
-    // Chama quando a aba "Desenhar" for clicada (para garantir renderização correta se estava oculta)
     document.getElementById('draw-tab').addEventListener('shown.bs.tab', resizeCanvas);
 
     function clearPad() { 
         signaturePad.clear(); 
     }
 
-    // Lógica de Tabs e Submit (Mantida)
     var hasSaved = {{ 'true' if instrutor.assinatura_padrao_path else 'false' }};
     document.getElementById('tipo_assinatura').value = hasSaved ? 'padrao' : 'canvas';
 
@@ -238,7 +311,6 @@
         if(tipo === 'padrao') {
             document.querySelectorAll('input[name="salvar_padrao"]').forEach(el => el.checked = false);
         }
-        // Se clicar em desenhar, força um resize rápido para garantir coordenadas
         if(tipo === 'canvas') {
             setTimeout(resizeCanvas, 100);
         }
