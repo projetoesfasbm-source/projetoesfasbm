@@ -177,7 +177,7 @@ class DiarioService:
             elif tipo_assinatura == 'upload':
                 dados_assinatura.save(filepath)
 
-            # --- ATUALIZAÇÃO DIRETA DAS FREQUÊNCIAS APENAS DESTE DIÁRIO ---
+            # --- ATUALIZAÇÃO DIRETA DAS FREQUÊNCIAS (Tratamento Anti-Erro) ---
             if frequencias_atualizadas:
                 freqs_do_diario = db.session.scalars(
                     select(FrequenciaAluno).where(FrequenciaAluno.diario_id == diario_pai.id)
@@ -185,9 +185,13 @@ class DiarioService:
                 for f in freqs_do_diario:
                     if f.aluno_id in frequencias_atualizadas:
                         dados_novos = frequencias_atualizadas[f.aluno_id]
-                        f.presente = dados_novos['presente']
-                        f.justificativa = dados_novos['justificativa']
-            # ----------------------------------------------------------------
+                        # Usa .get() para evitar o erro de chave ausente no Python
+                        f.presente = dados_novos.get('presente', f.presente)
+                        
+                        # Higiene no Banco de Dados: Se agora o aluno está presente, limpamos a justificativa de falta antiga
+                        if f.presente:
+                            f.justificativa = None
+            # -----------------------------------------------------------------
 
             siblings = db.session.scalars(
                 select(DiarioClasse).where(

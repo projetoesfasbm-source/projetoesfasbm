@@ -4,7 +4,7 @@
 <style>
     /* ESTILO DOS BOTÕES (ABAS SÓLIDAS) */
     .nav-pills .nav-link {
-        background-color: #6c757d; /* Cinza (Inativo) */
+        background-color: #6c757d;
         color: white !important;
         font-weight: bold;
         margin-right: 10px;
@@ -17,7 +17,7 @@
     }
 
     .nav-pills .nav-link.active {
-        background-color: #0d6efd !important; /* Azul (Ativo) */
+        background-color: #0d6efd !important;
         border-color: #0a58ca;
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
@@ -27,11 +27,11 @@
         position: relative;
         width: 100%;
         height: 0;
-        padding-bottom: 50%; /* Proporção 2:1 (Retângulo agradável) */
-        border: 2px solid #0d6efd; /* Borda azul para destacar a área */
+        padding-bottom: 50%;
+        border: 2px solid #0d6efd;
         background-color: #ffffff;
         border-radius: 8px;
-        touch-action: none; /* IMPEDE O SCROLL DA TELA AO DESENHAR */
+        touch-action: none;
     }
 
     /* CANVAS PREENCHENDO O CONTAINER */
@@ -54,10 +54,9 @@
     .presente-text { color: #198754; font-weight: bold; }
     .falta-text { color: #dc3545; font-weight: bold; }
 
-    /* AJUSTE PARA TELAS MUITO PEQUENAS */
     @media (max-width: 576px) {
         .signature-wrapper {
-            padding-bottom: 65%; /* Um pouco mais alto no celular para facilitar o dedo */
+            padding-bottom: 65%;
         }
     }
 </style>
@@ -116,15 +115,27 @@
                                     <tr>
                                         <th class="ps-3">Nº</th>
                                         <th>Nome do Aluno</th>
+                                        <th>Períodos (Frequência)</th>
                                         <th class="text-center">Presença</th>
-                                        <th>Justificativa (Falta)</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {% for freq in diario.frequencias|sort(attribute='aluno.num_aluno') %}
+                                    {% set resumo = resumo_periodos.get(freq.aluno_id, {'P': [], 'F': []}) %}
                                     <tr>
                                         <td class="ps-3 fw-bold text-muted">{{ freq.aluno.num_aluno or '--' }}</td>
                                         <td class="fw-bold">{{ freq.aluno.user.nome_de_guerra or freq.aluno.user.nome_completo }}</td>
+                                        <td>
+                                            {% if resumo.P %}
+                                                <span class="badge bg-success me-1 mb-1 shadow-sm" title="Períodos Presente">P: {{ resumo.P|join(', ') }}</span>
+                                            {% endif %}
+                                            {% if resumo.F %}
+                                                <span class="badge bg-danger mb-1 shadow-sm" title="Períodos que Faltou">F: {{ resumo.F|join(', ') }}</span>
+                                            {% endif %}
+                                            {% if not resumo.P and not resumo.F %}
+                                                <span class="text-muted small fst-italic">Sem registro</span>
+                                            {% endif %}
+                                        </td>
                                         <td class="text-center">
                                             <div class="form-check form-switch d-flex justify-content-center m-0 p-0">
                                                 <input type="hidden" name="freq_{{ freq.aluno_id }}" value="0">
@@ -139,14 +150,6 @@
                                                 </label>
                                             </div>
                                         </td>
-                                        <td>
-                                            <input type="text" class="form-control form-control-sm justificativa-input" 
-                                                   name="just_{{ freq.aluno_id }}" 
-                                                   id="just_{{ freq.aluno_id }}" 
-                                                   value="{{ freq.justificativa or '' }}" 
-                                                   placeholder="Motivo da falta..."
-                                                   {% if freq.presente %}disabled style="background-color: #e9ecef;"{% endif %}>
-                                        </td>
                                     </tr>
                                     {% else %}
                                     <tr>
@@ -158,7 +161,7 @@
                         </div>
                     </div>
                     <div class="card-footer bg-white text-muted small">
-                        <i class="fas fa-info-circle me-1"></i> As faltas marcadas pelo chefe de turma já estão preenchidas. O instrutor pode corrigir qualquer erro antes de validar.
+                        <i class="fas fa-info-circle me-1"></i> As faltas marcadas pelo chefe de turma já estão preenchidas. O instrutor pode verificar o histórico de períodos ao lado e corrigir qualquer erro antes de validar a aula em questão.
                     </div>
                 </div>
                 <div class="mb-4">
@@ -256,22 +259,15 @@
 
 <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.0.0/dist/signature_pad.umd.min.js"></script>
 <script>
-    // --- LÓGICA DE AUDITORIA DE FALTAS ---
+    // --- LÓGICA DE AUDITORIA DE FALTAS (SEM JUSTIFICATIVA) ---
     function togglePresencaColor(checkbox, alunoId) {
         let label = document.getElementById('label_' + alunoId);
-        let justInput = document.getElementById('just_' + alunoId);
-        
         if (checkbox.checked) {
             label.innerText = 'P';
             label.className = 'form-check-label ms-1 presente-text';
-            justInput.disabled = true;
-            justInput.style.backgroundColor = '#e9ecef';
-            justInput.value = ''; // Limpa a justificativa se ficou presente
         } else {
             label.innerText = 'F';
             label.className = 'form-check-label ms-1 falta-text';
-            justInput.disabled = false;
-            justInput.style.backgroundColor = '#ffffff';
         }
     }
 

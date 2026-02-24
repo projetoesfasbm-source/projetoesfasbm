@@ -8,14 +8,6 @@ from ..services.diario_service import DiarioService
 from ..services.user_service import UserService
 from utils.image_utils import compress_image_to_memory, allowed_file
 
-# Importações necessárias para a nova rota de faltas
-from ..models.database import db
-from ..models.diario_classe import DiarioClasse
-from ..models.frequencia import FrequenciaAluno
-from ..models.aluno import Aluno
-from ..models.turma import Turma
-from ..models.user import User
-
 diario_bp = Blueprint('diario', __name__, url_prefix='/diario-classe')
 
 @diario_bp.route('/instrutor/pendentes')
@@ -71,10 +63,8 @@ def assinar(diario_id):
         elif tipo == 'upload': 
             arquivo = request.files.get('assinatura_upload')
             
-            # --- Lógica de Compressão para Assinatura ---
             if arquivo:
                 if allowed_file(arquivo.filename, arquivo.stream, ['png', 'jpg', 'jpeg']):
-                    # Comprime: 256x256, Qualidade 60
                     dados = compress_image_to_memory(arquivo, max_size=(256, 256), quality=60)
                     if not dados:
                         flash("Erro ao processar imagem da assinatura.", "danger")
@@ -82,10 +72,26 @@ def assinar(diario_id):
                 else:
                     flash("Formato de arquivo inválido para assinatura.", "danger")
                     return redirect(url_for('diario.listar_pendentes'))
-            # ----------------------------------------------
 
         elif tipo == 'padrao': 
             dados = True
+
+        # --- LÓGICA DE CAPTURA DE FREQUÊNCIAS (CORRIGIDA) ---
+        frequencias_atualizadas = {}
+        for key in request.form:
+            if key.startswith('freq_'):
+                aluno_id = key.split('_')[1]
+                
+                # getlist() pega todos os valores enviados para esta chave. 
+                # Se o switch de presente estiver ligado, a lista será ['0', '1'].
+                # Se o switch de presente estiver desligado, a lista será apenas ['0'].
+                valores_enviados = request.form.getlist(key)
+                presente = '1' in valores_enviados
+                
+                frequencias_atualizadas[int(aluno_id)] = {
+                    'presente': presente
+                }
+        # ----------------------------------------------------
 
         ok, msg = DiarioService.assinar_diario(
             diario_id=diario.id, 
@@ -94,7 +100,8 @@ def assinar(diario_id):
             dados_assinatura=dados, 
             salvar_padrao=salvar,
             conteudo_atualizado=conteudo_ministrado,
-            observacoes_atualizadas=observacoes
+            observacoes_atualizadas=observacoes,
+            frequencias_atualizadas=frequencias_atualizadas 
         )
         
         if ok:
@@ -103,12 +110,40 @@ def assinar(diario_id):
         else:
             flash(msg, "danger")
 
-    return render_template('diario/instrutor_assinar.html', diario=diario, instrutor=instrutor)
+    from ..models.database import db
+    from ..models.diario_classe import DiarioClasse
+    
+    siblings = db.session.query(DiarioClasse).filter(
+        DiarioClasse.data_aula == diario.data_aula,
+        DiarioClasse.turma_id == diario.turma_id,
+        DiarioClasse.disciplina_id == diario.disciplina_id
+    ).order_by(DiarioClasse.periodo).all()
 
-# --- NOVA ROTA: Consulta de Faltas por Dia ---
+    resumo_periodos = {}
+    for d in siblings:
+        per = str(d.periodo) if d.periodo else "?"
+        for f in d.frequencias:
+            if f.aluno_id not in resumo_periodos:
+                resumo_periodos[f.aluno_id] = {'P': [], 'F': []}
+            
+            if f.presente:
+                resumo_periodos[f.aluno_id]['P'].append(per + "º")
+            else:
+                resumo_periodos[f.aluno_id]['F'].append(per + "º")
+
+    return render_template('diario/instrutor_assinar.html', diario=diario, instrutor=instrutor, resumo_periodos=resumo_periodos)
+
+
 @diario_bp.route('/faltas-por-dia', methods=['GET'])
 @login_required
 def faltas_por_dia():
+    from ..models.database import db
+    from ..models.diario_classe import DiarioClasse
+    from ..models.frequencia import FrequenciaAluno
+    from ..models.aluno import Aluno
+    from ..models.turma import Turma
+    from ..models.user import User
+
     school_id = UserService.get_current_school_id()
     if not school_id:
         return jsonify({"success": False, "message": "Escola não selecionada."}), 403
@@ -123,7 +158,6 @@ def faltas_por_dia():
         return jsonify({"success": False, "message": "Formato de data inválido."}), 400
 
     try:
-        # Busca as frequências (faltas) com os joins exatos no User e Turma para obter nomes e agrupamento
         faltas_query = db.session.query(
             FrequenciaAluno.id,
             User.nome_completo,
@@ -149,7 +183,6 @@ def faltas_por_dia():
             User.nome_completo
         ).all()
 
-        # Organiza os resultados agrupando por turma (pelotão)
         resultado_agrupado = {}
         for falta in faltas_query:
             turma = falta.turma_nome
@@ -171,5 +204,4 @@ def faltas_por_dia():
             "faltas": resultado_agrupado
         })
     except Exception as e:
-        # Retorna o erro específico da query para debug direto na tela caso algo ainda falhe
         return jsonify({"success": False, "message": f"Falha ao consultar banco de dados: {str(e)}"}), 500
