@@ -28,7 +28,6 @@ from utils.decorators import admin_or_programmer_required, can_manage_justice_re
 justica_bp = Blueprint('justica', __name__, url_prefix='/justica-e-disciplina')
 logger = logging.getLogger(__name__)
 
-# --- FUNÇÃO DE CONVERSÃO ALGARISMO ROMANO ---
 def sort_roman(rule):
     s = str(rule.codigo).upper().strip()
     if s.isdigit(): return int(s)
@@ -47,7 +46,6 @@ def sort_roman(rule):
 def index():
     school_id = UserService.get_current_school_id()
     
-    # --- FILTRO DE REGRAS E ORDENAÇÃO ROMANA ---
     tipo_npccal = 'ctsp' 
     if g.active_school and hasattr(g.active_school, 'npccal_type') and g.active_school.npccal_type:
         tipo_npccal = g.active_school.npccal_type.lower()
@@ -55,7 +53,6 @@ def index():
     fatos_predefinidos = db.session.scalars(
         select(DisciplineRule).where(DisciplineRule.npccal_type == tipo_npccal)
     ).all()
-    # Ordena inteligentemente respeitando valor romano (I, II, III, IV, IX, X...)
     fatos_predefinidos.sort(key=sort_roman)
     
     if current_user.role == 'aluno':
@@ -105,18 +102,13 @@ def index():
             or_(ProcessoDisciplina.status == StatusProcesso.FINALIZADO.value, ProcessoDisciplina.status == StatusProcesso.ARQUIVADO.value)
         ).order_by(ProcessoDisciplina.data_decisao.desc()).limit(50)
 
-    # 1. Pega os processos em andamento do BD
     em_andamento = db.session.scalars(stmt_andamento).unique().all()
-    
-    # 2. Roda a Avaliação Preguiçosa (Lazy Evaluation) para estourar prazos vencidos
     houve_alteracao = JusticaService.verificar_e_atualizar_prazos(em_andamento)
     
-    # 3. Se algo mudou, consulta o banco de novo
     if houve_alteracao:
          em_andamento = db.session.scalars(stmt_andamento).unique().all()
 
     finalizados = db.session.scalars(stmt_finalizados).unique().all()
-    
     turmas = TurmaService.get_turmas_by_school(school_id) if school_id else []
     
     agora_hora = datetime.now().strftime('%H:%M')
@@ -173,7 +165,6 @@ def registrar_em_massa():
 
         for aid in alunos_ids:
             try:
-                # GARANTIA SÊNIOR: Forçamos o status como string bruta para o MySQL não se perder
                 novo_processo = ProcessoDisciplina(
                     aluno_id=int(aid),
                     relator_id=current_user.id,
@@ -195,7 +186,6 @@ def registrar_em_massa():
             except Exception as e:
                 logger.error(f"Erro ao criar processo aluno {aid}: {e}")
 
-    # ... (Parte do elogio segue igual) ...
     elif tipo == 'elogio':
         for aid in alunos_ids:
             try:
@@ -225,7 +215,6 @@ def dar_ciente(processo_id):
         flash("Permissão negada.", "error")
         return redirect(url_for('justica.index'))
 
-    # Removido a etapa de "DECISAO_EMITIDA", agora o aluno dá ciente apenas na primeira fase
     if processo.status == StatusProcesso.AGUARDANDO_CIENCIA.value:
         processo.data_ciencia = datetime.now().astimezone()
         processo.status = StatusProcesso.ALUNO_NOTIFICADO.value
@@ -287,7 +276,6 @@ def enviar_recurso(pid):
         flash("Status inválido para recurso.", "error"); return redirect(url_for('justica.index'))
     
     agora = datetime.now().astimezone()
-    # Recurso agora conta 48h automáticas da data da decisão
     if processo.data_decisao and processo.data_decisao.tzinfo:
         horas_passadas = (agora - processo.data_decisao).total_seconds() / 3600
         if horas_passadas > 48:
@@ -346,7 +334,10 @@ def finalizar_processo(pid):
     if g.active_school and hasattr(g.active_school, 'npccal_type') and g.active_school.npccal_type:
         tipo_npccal = g.active_school.npccal_type.lower()
 
-    if tipo_npccal in ['cbfpm', 'ctsp', 'cspm']:
+    if decisao == 'Justificado':
+        processo.status = StatusProcesso.FINALIZADO.value
+        msg_sucesso = "Decisão registrada como Justificado. O processo foi finalizado."
+    elif tipo_npccal in ['cbfpm', 'ctsp', 'cspm']:
         processo.status = StatusProcesso.DECISAO_EMITIDA.value
         msg_sucesso = "Decisão registrada. O prazo de 48h para recurso já está correndo."
     else:
@@ -378,9 +369,13 @@ def finalizar_processo(pid):
         aluno = db.session.get(Aluno, processo.aluno_id)
         if aluno and aluno.user:
             link = url_for('justica.index', _external=True)
+            msg_notificacao = f"Decisão emitida no processo {processo.id}. O prazo para recurso está correndo."
+            if decisao == 'Justificado':
+                msg_notificacao = f"Processo {processo.id} finalizado como Justificado."
+                
             NotificationService.create_notification(
                 user_id=aluno.user.id,
-                message=f"Decisão emitida no processo {processo.id}. O prazo para recurso está correndo.",
+                message=msg_notificacao,
                 url=link
             )
         flash(msg_sucesso, "success")
@@ -394,6 +389,9 @@ def finalizar_processo(pid):
 @justica_bp.route('/julgar-recurso/<int:pid>', methods=['POST'])
 @login_required
 def julgar_recurso(pid):
+    """
+    Comandante analisa o Recurso, podendo atenuar (modificar) a pena do Chefe CAL.
+    """
     school_id = UserService.get_current_school_id()
     is_comandante = current_user.is_admin_escola_in_school(school_id)
     
@@ -402,8 +400,10 @@ def julgar_recurso(pid):
         return redirect(url_for('justica.index'))
 
     processo = db.session.get(ProcessoDisciplina, pid)
+    
     decisao = request.form.get('decisao_recurso')
     parecer = request.form.get('fundamentacao_recurso')
+    nova_sancao = request.form.get('nova_sancao')
 
     processo.decisao_recurso = decisao
     processo.fundamentacao_recurso = parecer
@@ -411,9 +411,34 @@ def julgar_recurso(pid):
     processo.data_julgamento_recurso = datetime.now().astimezone()
     
     if decisao == 'DEFERIDO':
-        processo.tipo_sancao = "ANULADO (Recurso Deferido)"
-        processo.pontos = 0.0
-        processo.observacao_decisao += f" | Recurso DEFERIDO pelo Comandante em {datetime.now().strftime('%d/%m')}. Punição anulada."
+        # Busca os pontos (Se não for CTSP envia valor. Se for CTSP mantém o que já estava ou 0)
+        pontos_recurso = request.form.get('pontos_finais_recurso')
+        if pontos_recurso is not None:
+            try:
+                pontos_recurso = float(pontos_recurso)
+            except ValueError:
+                pontos_recurso = processo.pontos
+        else:
+            pontos_recurso = processo.pontos
+
+        if nova_sancao == 'Justificado':
+            processo.tipo_sancao = None
+            processo.dias_sancao = 0
+            processo.detalhes_sancao = None
+            processo.pontos = 0.0
+            processo.decisao_final = 'Justificado'
+            processo.observacao_decisao += f" | Recurso DEFERIDO. Punição anulada (Justificado) pelo Comandante em {datetime.now().strftime('%d/%m')}."
+        else:
+            processo.tipo_sancao = nova_sancao
+            processo.decisao_final = nova_sancao
+            if nova_sancao == 'Sustação da Dispensa':
+                processo.detalhes_sancao = request.form.get('turnos_sustacao_recurso')
+            else:
+                processo.detalhes_sancao = None
+            
+            processo.pontos = pontos_recurso
+            processo.observacao_decisao += f" | Recurso DEFERIDO PARCIALMENTE. Punição atenuada para {nova_sancao} pelo Comandante em {datetime.now().strftime('%d/%m')}."
+
     else:
         processo.observacao_decisao += f" | Recurso INDEFERIDO pelo Comandante em {datetime.now().strftime('%d/%m')}. Decisão mantida."
 
@@ -649,7 +674,6 @@ def exportar_selecao():
         flash("Nenhuma escola selecionada.", "warning")
         return redirect(url_for('main.dashboard'))
 
-    # Adicionadas as relações com Aluno e Turma para filtrar estritamente pela escola atual logada
     stmt = select(ProcessoDisciplina).join(Aluno).join(Turma).where(
         ProcessoDisciplina.status == StatusProcesso.FINALIZADO.value,
         Turma.school_id == school_id

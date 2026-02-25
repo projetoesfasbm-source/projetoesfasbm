@@ -77,7 +77,7 @@
                                                             <i class="fas fa-clock"></i> Notificado há:
                                                             <br><small class="cronometro-progressivo badge bg-dark mt-1" data-inicio="{{ p.data_registro.isoformat() if p.data_registro else p.data_ocorrencia.isoformat() }}"></small>
                                                         </button>
-                                                        <button type="button" class="btn btn-sm btn-danger d-none btn-punir-ciencia mt-1 mt-md-0" data-inicio="{{ p.data_registro.isoformat() if p.data_registro else p.data_ocorrencia.isoformat() }}" onclick="prepararNovaInfracao('{{ p.aluno.turma_id }}', '{{ p.aluno.id }}')" title="O aluno não deu ciente em 24h. Clique para gerar infração.">
+                                                        <button type="button" class="btn btn-sm btn-danger d-none btn-punir-ciencia mt-1 mt-md-0" data-inicio="{{ p.data_registro.isoformat() if p.data_registro else p.data_ocorrencia.isoformat() }}" onclick="prepararNovaInfracao('{{ p.aluno.turma_id }}', '{{ p.aluno.id }}')" title="O aluno não deu ciente em 24h.">
                                                             <i class="fas fa-gavel"></i> Punir Atraso
                                                         </button>
                                                     {% elif p.status == 'ALUNO_NOTIFICADO' and not p.is_revelia %}
@@ -99,7 +99,7 @@
                                                     
                                                     <form action="{{ url_for('justica.deletar_processo', pid=p.id) }}" method="POST" onsubmit="return confirm('ATENÇÃO: Tem certeza que deseja EXCLUIR este processo?');" class="d-inline">
                                                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                                        <button type="submit" class="btn btn-sm btn-danger" title="Excluir">
+                                                        <button type="submit" class="btn btn-sm btn-danger fw-bold" title="Excluir">
                                                             <i class="fas fa-trash"></i> Excluir
                                                         </button>
                                                     </form>
@@ -221,13 +221,44 @@
                                                 
                                                 <div class="col-md-6">
                                                     <div class="mb-3">
-                                                        <label class="form-label small fw-bold">Decisão do Recurso</label>
-                                                        <select name="decisao_recurso" class="form-select border-primary" required>
+                                                        <label class="form-label small fw-bold">Parecer do Recurso</label>
+                                                        <select name="decisao_recurso" class="form-select border-primary" required onchange="toggleOpcoesRecurso(this, '{{ p.id }}')">
                                                             <option value="">-- Selecione --</option>
-                                                            <option value="INDEFERIDO">INDEFERIDO (Manter Punição)</option>
-                                                            <option value="DEFERIDO">DEFERIDO (Anular Punição)</option>
+                                                            <option value="INDEFERIDO">INDEFERIDO (Manter Punição do Chefe)</option>
+                                                            <option value="DEFERIDO">DEFERIDO (Modificar / Anular Punição)</option>
                                                         </select>
                                                     </div>
+
+                                                    <div id="divNovaSancao{{ p.id }}" style="display: none;" class="p-2 bg-white border rounded mb-3">
+                                                        <div class="mb-2">
+                                                            <label class="form-label small fw-bold text-success">Nova Decisão (Aplicada pelo Comandante)</label>
+                                                            <select name="nova_sancao" class="form-select" onchange="toggleInputsRecurso(this, '{{ p.id }}')">
+                                                                <option value="">-- Selecione --</option>
+                                                                <option value="Justificado">Justificado (Anular Punição)</option>
+                                                                <option value="Advertência">Advertência</option>
+                                                                <option value="Repreensão">Repreensão</option>
+                                                                <option value="Sustação da Dispensa">Sustação da Dispensa</option>
+                                                            </select>
+                                                        </div>
+
+                                                        <div class="mb-2" id="divTurnosRecurso{{ p.id }}" style="display:none;">
+                                                            <label class="form-label small text-danger fw-bold">Nova Sustação (1 Turno = 6 horas):</label>
+                                                            <select name="turnos_sustacao_recurso" class="form-select border-danger text-danger fw-bold">
+                                                                <option value="">Selecione...</option>
+                                                                {% for i in range(1, 9) %}
+                                                                <option value="{{ i }} Turno(s) ({{ i*6 }}h)">{{ i }} Turno(s) ({{ i*6 }}h)</option>
+                                                                {% endfor %}
+                                                            </select>
+                                                        </div>
+
+                                                        {% if school_type != 'ctsp' %}
+                                                        <div class="mb-2" id="divPontosRecurso{{ p.id }}" style="display:none;">
+                                                            <label class="form-label small">Nova Pontuação (Atenuada)</label>
+                                                            <input type="number" step="0.01" name="pontos_finais_recurso" class="form-control" value="{{ p.pontos }}">
+                                                        </div>
+                                                        {% endif %}
+                                                    </div>
+
                                                     <div class="mb-3">
                                                         <label class="form-label small">Fundamentação (Parecer do Comandante)</label>
                                                         <textarea name="fundamentacao_recurso" class="form-control" rows="4" placeholder="Justifique a decisão do recurso..." required></textarea>
@@ -494,15 +525,12 @@
 </div>
 
 <style>
-    /* CORREÇÃO DO LAYOUT HORIZONTAL E ZOOM */
     .justice-page-layout { display: block; width: 100%; overflow-x: hidden; }
     .justice-options { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
     .justice-content { display: none; width: 100%; }
     .justice-content.active { display: block; }
     .justice-container { width: 100%; max-width: 100%; }
     .ts-control { min-height: 38px; border-radius: 0.375rem; }
-    
-    /* Previne que o TomSelect e textos longos expandam a largura da tela */
     .ts-wrapper { max-width: 100%; }
     .ts-dropdown .option { white-space: normal !important; word-wrap: break-word; }
 </style>
@@ -512,46 +540,25 @@
 
 function toggleAnalise(id) {
     const el = document.getElementById('collapseProcesso' + id);
-    if (el.style.display === 'none') {
-        el.style.display = 'block';
-    } else {
-        el.style.display = 'none';
-    }
+    if (el) el.style.display = (el.style.display === 'none') ? 'block' : 'none';
 }
 
 function toggleDefesa(id) {
     const el = document.getElementById('collapseDefesa' + id);
-    if (el) {
-        if (el.style.display === 'none') {
-            el.style.display = 'block';
-        } else {
-            el.style.display = 'none';
-        }
-    }
+    if (el) el.style.display = (el.style.display === 'none') ? 'block' : 'none';
 }
 
 function toggleRecurso(id) {
     const el = document.getElementById('collapseRecurso' + id);
-    if (el) {
-        if (el.style.display === 'none') {
-            el.style.display = 'block';
-        } else {
-            el.style.display = 'none';
-        }
-    }
+    if (el) el.style.display = (el.style.display === 'none') ? 'block' : 'none';
 }
 
 function toggleJulgarRecurso(id) {
     const el = document.getElementById('collapseJulgarRecurso' + id);
-    if (el) {
-        if (el.style.display === 'none') {
-            el.style.display = 'block';
-        } else {
-            el.style.display = 'none';
-        }
-    }
+    if (el) el.style.display = (el.style.display === 'none') ? 'block' : 'none';
 }
 
+// Controle dos inputs dinâmicos na Análise do Chefe CAL
 function toggleInputsInline(selectEl, id) {
     const divTurnos = document.getElementById('divTurnos' + id);
     const divPontos = document.getElementById('divPontos' + id);
@@ -568,6 +575,35 @@ function toggleInputsInline(selectEl, id) {
     }
 }
 
+// Controle dos inputs dinâmicos no Recurso do Comandante
+window.toggleOpcoesRecurso = function(selectEl, id) {
+    const divNovaSancao = document.getElementById('divNovaSancao' + id);
+    const selectNovaSancao = document.querySelector(`#divNovaSancao${id} select[name="nova_sancao"]`);
+    if (selectEl.value === 'DEFERIDO') {
+        if (divNovaSancao) divNovaSancao.style.display = 'block';
+        if (selectNovaSancao) selectNovaSancao.required = true;
+    } else {
+        if (divNovaSancao) divNovaSancao.style.display = 'none';
+        if (selectNovaSancao) selectNovaSancao.required = false;
+    }
+};
+
+window.toggleInputsRecurso = function(selectEl, id) {
+    const divTurnos = document.getElementById('divTurnosRecurso' + id);
+    const divPontos = document.getElementById('divPontosRecurso' + id);
+    const val = selectEl.value;
+
+    if (divTurnos) divTurnos.style.display = 'none';
+    if (divPontos) divPontos.style.display = 'none';
+
+    if (val === 'Sustação da Dispensa') {
+        if (divTurnos) divTurnos.style.display = 'block';
+        if (divPontos) divPontos.style.display = 'block';
+    } else if (val === 'Advertência' || val === 'Repreensão') {
+        if (divPontos) divPontos.style.display = 'block';
+    }
+};
+
 // --- MÁQUINA DE CRONÔMETROS E AUTOMATIZAÇÃO ---
 function iniciarCronometros() {
     const regressivos = document.querySelectorAll('.cronometro-prazo');
@@ -578,7 +614,6 @@ function iniciarCronometros() {
         const agora = new Date().getTime();
         let precisaRecarregar = false;
 
-        // 1. Relógios Regressivos
         regressivos.forEach(el => {
             const prazoStr = el.getAttribute('data-prazo');
             if (!prazoStr) return;
@@ -606,7 +641,6 @@ function iniciarCronometros() {
             }
         });
 
-        // 2. Relógios Progressivos (Para ADM - Ciência)
         progressivos.forEach(el => {
             const inicioStr = el.getAttribute('data-inicio');
             if(!inicioStr) return;
@@ -624,7 +658,6 @@ function iniciarCronometros() {
                 
                 el.innerHTML = `⏱️ ${hh}:${mm}:${ss}`;
                 
-                // Se passar de 24h (86.400.000 ms), pinta de vermelho
                 if (diff > 86400000) {
                     if (!el.classList.contains('bg-danger')) {
                         el.classList.remove('bg-dark');
@@ -634,22 +667,19 @@ function iniciarCronometros() {
             }
         });
 
-        // 3. Controle do Botão "Punir Atraso" (Para ADM)
         botoesPunir.forEach(btn => {
             const inicioStr = btn.getAttribute('data-inicio');
             if(!inicioStr) return;
             const inicio = new Date(inicioStr).getTime();
             const diff = agora - inicio;
             
-            if (diff > 86400000) { // Maior que 24h
+            if (diff > 86400000) { 
                 btn.classList.remove('d-none');
             }
         });
 
         if (precisaRecarregar) {
-            setTimeout(() => {
-                window.location.reload();
-            }, 2000);
+            setTimeout(() => { window.location.reload(); }, 2000);
         }
     }, 1000);
 }
@@ -779,7 +809,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     };
 
-    // --- NOVA FUNÇÃO DO COMANDANTE (PUNIÇÃO POR ATRASO DE CIÊNCIA) ---
     window.prepararNovaInfracao = function(turmaId, alunoId) {
         document.querySelector('[data-target="newInfracaoContent"]').click();
         
