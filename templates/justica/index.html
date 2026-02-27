@@ -208,28 +208,65 @@
 
                                     {% if current_user.role != 'aluno' and p.status == 'EM_RECURSO' %}
                                     <div id="collapseJulgarRecurso{{ p.id }}" class="mt-3 pt-3 border-top bg-light p-3 rounded border border-primary shadow-sm" style="display: none;">
-                                        <h5 class="text-primary fw-bold"><i class="fas fa-balance-scale me-2"></i>Julgamento de Recurso (Comandante)</h5>
+                                        <h5 class="text-primary fw-bold mb-3"><i class="fas fa-balance-scale me-2"></i>Julgamento de Recurso (Comandante)</h5>
                                         <form action="{{ url_for('justica.julgar_recurso', pid=p.id) }}" method="POST">
                                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                             
                                             <div class="row">
-                                                <div class="col-md-6 border-end">
-                                                    <h6 class="fw-bold text-muted">Argumentação do Aluno:</h6>
-                                                    <div class="p-2 bg-white border rounded text-dark fst-italic mb-3" style="white-space: pre-wrap; max-height: 200px; overflow-y: auto;">{{ p.texto_recurso }}</div>
-                                                    <small class="text-muted d-block mt-1">Enviado em: {{ p.data_recurso.strftime('%d/%m/%Y %H:%M') if p.data_recurso else '-' }}</small>
+                                                <div class="col-md-7 border-end">
+                                                    <h6 class="fw-bold text-muted mb-2"><i class="fas fa-list-alt me-1"></i>Histórico Completo do Processo</h6>
+                                                    <div class="pe-2" style="max-height: 400px; overflow-y: auto;">
+                                                        
+                                                        <div class="mb-3">
+                                                            <span class="badge bg-secondary mb-1">1. Fato Constatado</span>
+                                                            <div class="p-2 bg-white border rounded text-dark small" style="white-space: pre-wrap;">{{ p.fato_constatado }}</div>
+                                                        </div>
+
+                                                        <div class="mb-3">
+                                                            <span class="badge bg-warning text-dark mb-1">2. Defesa Inicial do Aluno</span>
+                                                            {% if p.defesa %}
+                                                            <div class="p-2 bg-white border rounded text-dark small fst-italic" style="white-space: pre-wrap;">{{ p.defesa }}</div>
+                                                            <small class="text-muted d-block mt-1" style="font-size: 0.75rem;">Enviada em: {{ p.data_defesa.strftime('%d/%m/%Y %H:%M') if p.data_defesa else '-' }}</small>
+                                                            {% else %}
+                                                            <div class="p-2 bg-white border border-danger rounded text-danger small fw-bold"><i class="fas fa-exclamation-triangle"></i> Julgado à Revelia (Não apresentou defesa)</div>
+                                                            {% endif %}
+                                                        </div>
+
+                                                        <div class="mb-3">
+                                                            <span class="badge bg-danger mb-1">3. Decisão do Chefe CAL</span>
+                                                            <div class="p-2 bg-white border border-danger rounded text-dark small">
+                                                                <strong>Veredito:</strong> {{ p.decisao_final }}
+                                                                {% if p.tipo_sancao == 'Sustação da Dispensa' and p.detalhes_sancao %}
+                                                                    <span class="badge bg-danger ms-1">{{ p.detalhes_sancao }}</span>
+                                                                {% endif %}
+                                                                {% if p.pontos > 0 %}
+                                                                    | <strong>Pontos Perdidos:</strong> -{{ p.pontos }} pts
+                                                                {% endif %}
+                                                                <hr class="my-1 border-danger border-opacity-50">
+                                                                <strong>Fundamentação do Chefe:</strong> <span style="white-space: pre-wrap;">{{ p.observacao_decisao }}</span>
+                                                            </div>
+                                                        </div>
+
+                                                        <div class="mb-2">
+                                                            <span class="badge bg-primary mb-1">4. Recurso do Aluno ao Comandante</span>
+                                                            <div class="p-2 bg-primary bg-opacity-10 border border-primary rounded text-dark small fst-italic" style="white-space: pre-wrap;">{{ p.texto_recurso }}</div>
+                                                            <small class="text-muted d-block mt-1" style="font-size: 0.75rem;">Enviado em: {{ p.data_recurso.strftime('%d/%m/%Y %H:%M') if p.data_recurso else '-' }}</small>
+                                                        </div>
+                                                        
+                                                    </div>
                                                 </div>
                                                 
-                                                <div class="col-md-6">
+                                                <div class="col-md-5 ps-md-3 mt-3 mt-md-0">
                                                     <div class="mb-3">
                                                         <label class="form-label small fw-bold">Parecer do Recurso</label>
-                                                        <select name="decisao_recurso" class="form-select border-primary" required onchange="toggleOpcoesRecurso(this, '{{ p.id }}')">
+                                                        <select name="decisao_recurso" class="form-select border-primary shadow-sm" required onchange="toggleOpcoesRecurso(this, '{{ p.id }}')">
                                                             <option value="">-- Selecione --</option>
                                                             <option value="INDEFERIDO">INDEFERIDO (Manter Punição do Chefe)</option>
                                                             <option value="DEFERIDO">DEFERIDO (Modificar / Anular Punição)</option>
                                                         </select>
                                                     </div>
 
-                                                    <div id="divNovaSancao{{ p.id }}" style="display: none;" class="p-2 bg-white border rounded mb-3">
+                                                    <div id="divNovaSancao{{ p.id }}" style="display: none;" class="p-3 bg-light border border-success rounded mb-3">
                                                         <div class="mb-2">
                                                             <label class="form-label small fw-bold text-success">Nova Decisão (Aplicada pelo Comandante)</label>
                                                             <select name="nova_sancao" class="form-select" onchange="toggleInputsRecurso(this, '{{ p.id }}')">
@@ -260,12 +297,12 @@
                                                     </div>
 
                                                     <div class="mb-3">
-                                                        <label class="form-label small">Fundamentação (Parecer do Comandante)</label>
-                                                        <textarea name="fundamentacao_recurso" class="form-control" rows="4" placeholder="Justifique a decisão do recurso..." required></textarea>
+                                                        <label class="form-label small fw-bold">Fundamentação (Parecer do Comandante)</label>
+                                                        <textarea name="fundamentacao_recurso" class="form-control shadow-sm" rows="5" placeholder="Justifique a decisão do recurso..." required></textarea>
                                                     </div>
-                                                    <div class="text-end">
+                                                    <div class="text-end mt-4">
                                                         <button type="button" class="btn btn-secondary btn-sm" onclick="toggleJulgarRecurso('{{ p.id }}')">Cancelar</button>
-                                                        <button type="submit" class="btn btn-primary btn-sm fw-bold">Publicar Decisão</button>
+                                                        <button type="submit" class="btn btn-primary btn-sm fw-bold px-3">Publicar Decisão</button>
                                                     </div>
                                                 </div>
                                             </div>
