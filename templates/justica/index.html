@@ -218,8 +218,11 @@
                                                     <div class="pe-2" style="max-height: 400px; overflow-y: auto;">
                                                         
                                                         <div class="mb-3">
-                                                            <span class="badge bg-secondary mb-1">1. Fato Constatado</span>
-                                                            <div class="p-2 bg-white border rounded text-dark small" style="white-space: pre-wrap;">{{ p.fato_constatado }}</div>
+                                                            <span class="badge bg-secondary mb-1">1. Fato Constatado e Nota Original</span>
+                                                            <div class="p-2 bg-white border rounded text-dark small mb-1" style="white-space: pre-wrap;"><strong>Fato:</strong> {{ p.fato_constatado }}</div>
+                                                            {% if p.observacao %}
+                                                            <div class="p-2 bg-light border border-secondary border-opacity-50 rounded text-muted small mt-1" style="white-space: pre-wrap;"><strong>Nota Original:</strong><br>{{ p.observacao }}</div>
+                                                            {% endif %}
                                                         </div>
 
                                                         <div class="mb-3">

@@ -257,27 +257,22 @@ class JusticaService:
         alterado = False
         
         for p in processos:
-            # 1. Prazo de Ciência do Aluno (24h)
-            if p.status == StatusProcesso.AGUARDANDO_CIENCIA.value and p.prazo_ciencia:
-                prazo_seguro = JusticaService._ensure_datetime(p.prazo_ciencia)
-                if agora > prazo_seguro:
-                    p.status = StatusProcesso.DEFESA_ENVIADA.value
-                    p.is_revelia = True
-                    msg = "\n[SISTEMA]: Prazo de 24h para ciência expirou. Julgamento à revelia."
-                    p.observacao = (p.observacao or "") + msg
-                    alterado = True
-
-            # 2. Prazo de Defesa do Aluno (24h)
-            elif p.status == StatusProcesso.ALUNO_NOTIFICADO.value and p.prazo_defesa:
+            # 1. Fase Inicial (AGUARDANDO_CIENCIA)
+            # A nova doutrina não aplica mais revelia automática aqui.
+            # O processo aguardará o Chefe clicar em "Punir Atraso" (via Frontend).
+            
+            # 2. Prazo de Defesa do Aluno (24h após ter dado o Ciente)
+            if p.status == StatusProcesso.ALUNO_NOTIFICADO.value and p.prazo_defesa:
                 prazo_seguro = JusticaService._ensure_datetime(p.prazo_defesa)
                 if agora > prazo_seguro:
-                    p.status = StatusProcesso.DEFESA_ENVIADA.value
+                    # CORREÇÃO: Aluno notificado que não envia defesa vai para EM_ANALISE (e não DEFESA_ENVIADA)
+                    p.status = StatusProcesso.EM_ANALISE.value
                     p.is_revelia = True
-                    msg = "\n[SISTEMA]: Prazo de 24h para defesa expirou. Julgamento à revelia."
+                    msg = "\n[SISTEMA]: Prazo de 24h para defesa expirou sem manifestação. Julgamento à revelia."
                     p.observacao = (p.observacao or "") + msg
                     alterado = True
                     
-            # 3. Prazo de Recurso do Aluno (48h)
+            # 3. Prazo de Recurso do Aluno (48h após a decisão do Chefe)
             elif p.status == StatusProcesso.DECISAO_EMITIDA.value and p.prazo_recurso:
                 prazo_seguro = JusticaService._ensure_datetime(p.prazo_recurso)
                 if agora > prazo_seguro:
