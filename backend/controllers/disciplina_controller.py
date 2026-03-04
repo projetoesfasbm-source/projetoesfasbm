@@ -60,12 +60,24 @@ def listar_disciplinas():
 
     # SITUAÇÃO 1: Se não houver turma selecionada, mostra Andamento TOTAL da escola
     if not turma_id:
+        # Chama o service para buscar o consolidado de todas as turmas
         disciplinas_totais = DisciplinaService.get_andamento_total_escola(school_id, ciclo_id)
+        
+        # Formatamos para manter compatibilidade com o loop do template
+        # Na visão total, 'disciplina' será o nome da matéria para exibição
+        disciplinas_com_progresso = []
+        for d_total in disciplinas_totais:
+            disciplinas_com_progresso.append({
+                'disciplina_nome': d_total['materia'],
+                'progresso': d_total['progresso'],
+                'is_consolidated': True
+            })
+
         return render_template('listar_disciplinas.html', 
-                               disciplinas=disciplinas_totais, 
+                               disciplinas_com_progresso=disciplinas_com_progresso, 
                                turmas=turmas_disponiveis, 
                                ciclos=ciclos, 
-                               turma_selecionada=None,
+                               turma_selecionada_id=None,
                                ciclo_selecionado=ciclo_id,
                                is_total_view=True,
                                delete_form=delete_form)
@@ -85,15 +97,17 @@ def listar_disciplinas():
     disciplinas_com_progresso = []
     for d in disciplinas_objs:
         disciplinas_com_progresso.append({
-            'obj': d,
-            'progresso': DisciplinaService.get_dados_progresso(d)
+            'disciplina': d,
+            'disciplina_nome': d.materia,
+            'progresso': DisciplinaService.get_dados_progresso(d),
+            'is_consolidated': False
         })
 
     return render_template('listar_disciplinas.html', 
-                           disciplinas=disciplinas_com_progresso, 
+                           disciplinas_com_progresso=disciplinas_com_progresso, 
                            turmas=turmas_disponiveis, 
                            ciclos=ciclos, 
-                           turma_selecionada=turma_selecionada,
+                           turma_selecionada_id=turma_id,
                            ciclo_selecionado=ciclo_id,
                            is_total_view=False,
                            delete_form=delete_form)
