@@ -396,7 +396,7 @@ height: 100%; }
 
 html, body{ height: 100%;
 background: transparent !important; }
-html::before{ content: ""; position: fixed; inset: 0; z-index: -3; background-image: var(--site-bg-url, none); background-size: cover; background-position: center center;
+html::before{ content: ""; position: fixed; inset: 0; z-index: -3; background-image: url("/static/img/fundo.jpg"); background-size: cover; background-position: center center;
 background-repeat: no-repeat; background-attachment: fixed; }
 html::after{ content: ""; position: fixed; inset: 0; z-index: -2; background: rgba(255,255,255,0.80); pointer-events: none;
 }
@@ -445,34 +445,7 @@ body.no-sidebar .content-wrapper {
 }
 
 /* ==========================================================================
-   15. Layout Adaptativo e Correções Mobile (PROFESSIONAL FIX)
-   ========================================================================== */
-
-.btn-group { display: flex; gap: 0.5rem; align-items: center; justify-content: flex-end; }
-.sidebar-toggle { display: none; background: none; border: none; font-size: 1.5rem; color: var(--color-text); cursor: pointer; padding: 0; margin-right: 0.5rem;}
-.sidebar-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); z-index: 1999; opacity: 0; visibility: hidden; transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out; }
-.sidebar-overlay.active { opacity: 1; visibility: visible; }
-
-/* ==========================================================================
-   15. Layout Adaptativo e Correções Mobile (CORREÇÃO DEFINITIVA)
-   ========================================================================== */
-
-.btn-group { display: flex; gap: 0.5rem; align-items: center; justify-content: flex-end; }
-.sidebar-toggle { display: none; background: none; border: none; font-size: 1.5rem; color: var(--color-text); cursor: pointer; padding: 0; margin-right: 0.5rem;}
-.sidebar-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); z-index: 1999; opacity: 0; visibility: hidden; transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out; }
-.sidebar-overlay.active { opacity: 1; visibility: visible; }
-
-/* ==========================================================================
-   15. Layout Adaptativo e Correções Mobile (V4 - PROFISSIONAL FINAL)
-   ========================================================================== */
-
-.btn-group { display: flex; gap: 0.5rem; align-items: center; justify-content: flex-end; }
-.sidebar-toggle { display: none; background: none; border: none; font-size: 1.5rem; color: var(--color-text); cursor: pointer; padding: 0; margin-right: 0.5rem;}
-.sidebar-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); z-index: 1999; opacity: 0; visibility: hidden; transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out; }
-.sidebar-overlay.active { opacity: 1; visibility: visible; }
-
-/* ==========================================================================
-   15. Layout Adaptativo e Correções Mobile (V5 - FINAL FIX)
+   15. Layout Adaptativo e Correções Mobile
    ========================================================================== */
 
 /* Garante que o container de botões sempre fique à direita */
@@ -482,18 +455,15 @@ body.no-sidebar .content-wrapper {
 .sidebar-toggle { display: none; background: none; border: none; font-size: 1.5rem; color: var(--color-text); cursor: pointer; padding: 0; margin-right: 0.5rem;}
 
 /* Overlay do Menu Mobile */
-.sidebar-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); z-index: 1999; opacity: 0; visibility: hidden; transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out; }
-.sidebar-overlay.active { opacity: 1; visibility: visible; }
-
-/* --- REGRAS ESPECÍFICAS PARA CELULAR (Telas menores que 992px) --- */
-/* ==========================================================================
-   15. Layout Adaptativo e Correções Mobile (V6 - RECUPERAÇÃO)
-   ========================================================================== */
-
-.btn-group { display: flex; gap: 0.5rem; align-items: center; justify-content: flex-end; }
-.sidebar-toggle { display: none; background: none; border: none; font-size: 1.5rem; color: var(--color-text); cursor: pointer; padding: 0; margin-right: 0.5rem;}
 .sidebar-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); z-index: 1035; opacity: 0; visibility: hidden; transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out; }
 .sidebar-overlay.active { opacity: 1; visibility: visible; }
+
+/* Utilitários de Barra de Progresso Particionada */
+.progress { display: flex; overflow: hidden; background-color: #e9ecef; }
+.progress-bar { display: flex; flex-direction: column; justify-content: center; overflow: hidden; color: #fff; text-align: center; white-space: nowrap; transition: width .6s ease; }
+
+.legend-item { display: inline-flex; align-items: center; font-size: 0.85rem; margin-right: 15px; }
+.legend-color { width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; }
 
 @media (max-width: 991.98px) {
     /* 1. Barra Superior Sólida - AJUSTADA COM SAFE AREA */
@@ -582,29 +552,21 @@ body.no-sidebar .content-wrapper {
 
     /* 4. Botão Sair - CORREÇÃO CRÍTICA DO DUPLO TEXTO */
     .top-navbar-right-items .btn-outline-danger {
-        /* Tamanho e Forma */
         width: auto !important;
         height: 32px !important;
         padding: 0 8px !important;
         border-radius: 6px !important;
-        
-        /* Cores */
         background-color: #fee2e2 !important;
         border: 1px solid #fca5a5 !important;
         color: #dc2626 !important;
-        
-        /* Layout Flex para alinhar ícone e texto */
         display: flex !important;
         align-items: center;
         justify-content: center;
         gap: 5px;
-        
-        /* Oculta o texto original que vem do HTML */
         font-size: 0 !important;
         line-height: 0;
     }
 
-    /* Ícone */
     .top-navbar-right-items .btn-outline-danger::before {
         content: "\f2f5"; 
         font-family: "Font Awesome 6 Free";
@@ -613,7 +575,6 @@ body.no-sidebar .content-wrapper {
         line-height: 1;
     }
     
-    /* Novo Texto Controlado pelo CSS */
     .top-navbar-right-items .btn-outline-danger::after {
         content: "SAIR";
         font-size: 11px !important;
@@ -622,7 +583,6 @@ body.no-sidebar .content-wrapper {
         letter-spacing: 0.5px;
     }
 
-    /* Ajustes Gerais - AJUSTADO PARA COMPENSAR A SAFE AREA */
     .main-content {
         margin-left: 0;
         padding-top: calc(64px + env(safe-area-inset-top, 0px)) !important;
@@ -630,7 +590,7 @@ body.no-sidebar .content-wrapper {
 
     .sidebar {
         transform: translateX(-100%);
-        z-index: 1040 !important; /* Z-Index padrão do Bootstrap para ficar sobre o overlay */
+        z-index: 1040 !important;
         top: 0;
         height: 100vh;
         box-shadow: 5px 0 25px rgba(0,0,0,0.15);
@@ -641,174 +601,4 @@ body.no-sidebar .content-wrapper {
     .table-styled tr { display: block; border: 1px solid var(--color-border); border-radius: 12px; margin-bottom: 1rem; background: #fff; }
     .table-styled td { display: flex; justify-content: space-between; border-bottom: 1px solid #f1f5f9; padding: 1rem; text-align: right; }
     .table-styled td::before { content: attr(data-label); font-weight: 700; text-align: left; margin-right: auto; color: #64748b; font-size: 0.8rem; text-transform: uppercase; }
-}
-
-/* ==========================================================================
-   1. Design System & Variáveis Globais
-   ========================================================================== */
-
-:root {
-    --color-primary: #1e3a8a;
-    --color-primary-light: #3b82f6;
-    --color-secondary: #1a232c;
-    --color-success: #10b981;
-    --color-danger: #ef4444;
-    --color-warning: #f59e0b;
-    --color-info: #0ea5e9;
-    --color-text: #2c3e50;
-    --color-text-muted: #64748b;
-    --color-border: #e2e8f0;
-    --color-background: #f8fafc;
-    --color-white: #ffffff;
-    --font-family-base: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    --font-family-title: 'Bree Serif', serif;
-    --font-size-base: 1rem;
-    --line-height-base: 1.6;
-    --border-radius: 12px;
-    --shadow-soft: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-    --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-}
-
-/* Reset e Base */
-* { margin: 0; padding: 0; box-sizing: border-box; }
-
-body {
-    font-family: var(--font-family-base);
-    background-color: var(--color-background);
-    color: var(--color-text);
-    line-height: var(--line-height-base);
-    overflow-x: hidden;
-}
-
-/* Utilitários de Barra de Progresso Particionada */
-.progress-multi {
-    height: 12px !important;
-    border-radius: 10px !important;
-    background-color: #e9ecef !important;
-    overflow: hidden;
-    display: flex;
-    box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
-}
-
-.progress-part-realized {
-    background-color: var(--color-success) !important;
-    height: 100%;
-    transition: width 0.6s ease;
-}
-
-.progress-part-scheduled {
-    background-color: var(--color-warning) !important;
-    height: 100%;
-    transition: width 0.6s ease;
-}
-
-.progress-part-remaining {
-    background-color: #dee2e6 !important;
-    height: 100%;
-}
-
-.legend-item {
-    display: inline-flex;
-    align-items: center;
-    font-size: 0.85rem;
-    margin-right: 15px;
-}
-
-.legend-color {
-    width: 12px;
-    height: 12px;
-    border-radius: 3px;
-    margin-right: 5px;
-}
-
-/* Layout Geral */
-.sidebar {
-    width: 260px;
-    height: 100vh;
-    background-color: var(--color-secondary);
-    position: fixed;
-    left: 0;
-    top: 0;
-    transition: all 0.3s ease;
-    z-index: 1000;
-    box-shadow: 4px 0 10px rgba(0,0,0,0.1);
-}
-
-.main-content {
-    margin-left: 260px;
-    padding: 30px;
-    transition: all 0.3s ease;
-    min-height: 100vh;
-}
-
-/* Top Navbar */
-.top-navbar {
-    background-color: var(--color-white);
-    height: 70px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 30px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    position: sticky;
-    top: 0;
-    z-index: 999;
-}
-
-/* Cards e Tabelas */
-.card-styled {
-    background: var(--color-white);
-    border-radius: var(--border-radius);
-    border: 1px solid var(--color-border);
-    box-shadow: var(--shadow-soft);
-    margin-bottom: 25px;
-    overflow: hidden;
-}
-
-.table-styled {
-    width: 100%;
-    border-collapse: separate;
-    border-spacing: 0;
-}
-
-.table-styled thead th {
-    background-color: #f1f5f9;
-    color: var(--color-primary);
-    font-weight: 600;
-    padding: 15px;
-    border-bottom: 2px solid var(--color-border);
-    text-transform: uppercase;
-    font-size: 0.8rem;
-    letter-spacing: 0.05em;
-}
-
-.table-styled tbody td {
-    padding: 15px;
-    border-bottom: 1px solid var(--color-border);
-    vertical-align: middle;
-}
-
-/* Responsividade */
-@media (max-width: 992px) {
-    .sidebar { left: -260px; }
-    .main-content { margin-left: 0; }
-    .sidebar.open { left: 0; }
-}
-
-/* Botões */
-.btn {
-    border-radius: 8px;
-    padding: 10px 20px;
-    font-weight: 500;
-    transition: all 0.2s;
-}
-
-.btn-primary { background-color: var(--color-primary); border-color: var(--color-primary); }
-.btn-primary:hover { background-color: #1e40af; transform: translateY(-1px); }
-
-/* Estilos para Mobile Safe Area */
-@media (max-width: 768px) {
-    .main-content {
-        padding-top: calc(70px + env(safe-area-inset-top, 0px)) !important;
-    }
 }

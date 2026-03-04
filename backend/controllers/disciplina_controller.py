@@ -40,52 +40,6 @@ class DisciplinaForm(FlaskForm):
 class DeleteForm(FlaskForm):
     pass
 
-# --- FUNÇÃO AUXILIAR PARA GARANTIR CONTAGEM IDÊNTICA À AUDITORIA ---
-def _calcular_progresso_real(disciplina):
-    """
-    Calcula o progresso somando diretamente os horários agendados,
-    usando a mesma lógica da aba de auditoria/detalhes.
-    """
-    # Query idêntica à rota 'detalhes_disciplina'
-    agendamentos = db.session.scalars(
-        select(Horario)
-        .join(Semana, Horario.semana_id == Semana.id)
-        .where(Horario.disciplina_id == disciplina.id)
-    ).all()
-
-    total_auditado = 0
-    for agendamento in agendamentos:
-        # Regra simples: usa duração se existir, senão conta como 1 tempo
-        qtd = agendamento.duracao if agendamento.duracao else 1
-        total_auditado += qtd
-
-    # Cálculos derivados
-    previsto = disciplina.carga_horaria_prevista
-    percentual = 0
-    if previsto > 0:
-        percentual = round((total_auditado / previsto) * 100, 1)
-    
-    # Define cor da barra
-    cor = 'success'
-    if percentual < 50:
-        cor = 'danger'
-    elif percentual < 80:
-        cor = 'warning'
-
-    # Estrutura compatível com o template
-    return {
-        'total_auditado': total_auditado, # Usado no template como 'auditadas'
-        'realizado': total_auditado,      # Compatibilidade com nomes variados
-        'previsto': previsto,
-        'percentual': percentual,
-        'pct_realizado': percentual,      # Compatibilidade
-        'pct_agendado': 0,                # Simplificação para listagem rápida
-        'agendado': 0,
-        'horas_restantes': previsto - total_auditado,
-        'restante_para_planejar': previsto - total_auditado,
-        'cor': cor
-    }
-
 @disciplina_bp.route('/')
 @login_required
 @can_view_management_pages_required
@@ -95,50 +49,64 @@ def listar_disciplinas():
         flash('Nenhuma escola associada ou selecionada.', 'warning')
         return redirect(url_for('main.dashboard'))
         
-    turma_selecionada_id = request.args.get('turma_id', type=int)
+    turma_id = request.args.get('turma_id', type=int)
+    ciclo_id = request.args.get('ciclo_id', type=int)
     
+    # Carregar dados para os seletores de filtro
     turmas_disponiveis = TurmaService.get_turmas_by_school(school_id)
-    todas_disciplinas = DisciplinaService.get_disciplinas_by_school(school_id)
-
-    disciplinas_filtradas = []
-    if turma_selecionada_id:
-        disciplinas_filtradas = [d for d in todas_disciplinas if d.turma_id == turma_selecionada_id]
-    else:
-        disciplinas_filtradas = [] 
-
-    # Ordenação por nome
-    disciplinas_filtradas.sort(key=lambda d: d.materia)
-
-    # Preparar dados de progresso USANDO A LÓGICA CORRIGIDA
-    disciplinas_com_progresso = []
-    for d in disciplinas_filtradas:
-        # AQUI ESTÁ A CORREÇÃO: Usa a função local que imita a auditoria
-        progresso = _calcular_progresso_real(d)
-        disciplinas_com_progresso.append({'disciplina': d, 'progresso': progresso})
-
-    delete_form = DeleteForm()
-    
-    # Busca Ciclos ordenados por nome para evitar erros
     ciclos = db.session.scalars(select(Ciclo).where(Ciclo.school_id == school_id).order_by(Ciclo.nome)).all()
     
+    delete_form = DeleteForm()
+
+    # SITUAÇÃO 1: Se não houver turma selecionada, mostra Andamento TOTAL da escola
+    if not turma_id:
+        disciplinas_totais = DisciplinaService.get_andamento_total_escola(school_id, ciclo_id)
+        return render_template('listar_disciplinas.html', 
+                               disciplinas=disciplinas_totais, 
+                               turmas=turmas_disponiveis, 
+                               ciclos=ciclos, 
+                               turma_selecionada=None,
+                               ciclo_selecionado=ciclo_id,
+                               is_total_view=True,
+                               delete_form=delete_form)
+
+    # Visão por Turma Selecionada
+    turma_selecionada = db.session.get(Turma, turma_id)
+    if not turma_selecionada or turma_selecionada.school_id != school_id:
+        flash('Turma inválida ou acesso negado.', 'danger')
+        return redirect(url_for('disciplina.listar_disciplinas'))
+
+    query = select(Disciplina).where(Disciplina.turma_id == turma_id)
+    if ciclo_id:
+        query = query.where(Disciplina.ciclo_id == ciclo_id)
+    
+    disciplinas_objs = db.session.execute(query.order_by(Disciplina.materia)).scalars().all()
+    
+    disciplinas_com_progresso = []
+    for d in disciplinas_objs:
+        disciplinas_com_progresso.append({
+            'obj': d,
+            'progresso': DisciplinaService.get_dados_progresso(d)
+        })
+
     return render_template('listar_disciplinas.html', 
-                           disciplinas_com_progresso=disciplinas_com_progresso,
-                           delete_form=delete_form,
-                           turmas=turmas_disponiveis,
-                           turma_selecionada_id=turma_selecionada_id,
-                           ciclos=ciclos)
+                           disciplinas=disciplinas_com_progresso, 
+                           turmas=turmas_disponiveis, 
+                           ciclos=ciclos, 
+                           turma_selecionada=turma_selecionada,
+                           ciclo_selecionado=ciclo_id,
+                           is_total_view=False,
+                           delete_form=delete_form)
 
 @disciplina_bp.route('/dashboard-intelligence')
 @login_required
 @can_view_management_pages_required
 def dashboard_disciplinas():
-    """Rota exclusiva para o novo Dashboard"""
     school_id = UserService.get_current_school_id()
     if not school_id:
         return redirect(url_for('disciplina.listar_disciplinas'))
 
     ciclo_id_arg = request.args.get('ciclo_id')
-    
     ciclos = db.session.scalars(select(Ciclo).where(Ciclo.school_id == school_id).order_by(Ciclo.nome)).all()
     ciclo_selecionado_id = int(ciclo_id_arg) if ciclo_id_arg else (ciclos[-1].id if ciclos else None)
 
@@ -159,7 +127,6 @@ def adicionar_disciplina():
         return redirect(url_for('disciplina.listar_disciplinas'))
         
     form = DisciplinaForm()
-    
     ciclos = db.session.scalars(select(Ciclo).where(Ciclo.school_id == school_id).order_by(Ciclo.nome)).all()
     form.ciclo_id.choices = [(c.id, c.nome) for c in ciclos]
     
@@ -179,7 +146,7 @@ def adicionar_disciplina():
                     'carga_horaria_prevista': form.carga_horaria_prevista.data,
                     'turma_id': t_id,
                     'ciclo_id': form.ciclo_id.data,
-                    'instrutor_id': None 
+                    'school_id': school_id
                 }
                 DisciplinaService.create_disciplina(data)
                 success_count += 1
@@ -198,7 +165,7 @@ def editar_disciplina(disciplina_id):
     disciplina = db.session.get(Disciplina, disciplina_id)
     school_id = UserService.get_current_school_id()
 
-    if not disciplina or (school_id and disciplina.turma.school_id != school_id):
+    if not disciplina or (disciplina.turma.school_id != school_id):
         flash('Disciplina não encontrada ou permissão negada.', 'danger')
         return redirect(url_for('disciplina.listar_disciplinas'))
 
@@ -211,7 +178,6 @@ def editar_disciplina(disciplina_id):
         submit = SubmitField('Salvar')
 
     form = EditDisciplinaForm(obj=disciplina)
-    
     ciclos = db.session.scalars(select(Ciclo).where(Ciclo.school_id == school_id).order_by(Ciclo.nome)).all()
     form.ciclo_id.choices = [(c.id, c.nome) for c in ciclos]
     form.turma_id.choices = [(disciplina.turma.id, disciplina.turma.nome)]
@@ -233,11 +199,10 @@ def editar_disciplina(disciplina_id):
 @login_required
 @school_admin_or_programmer_required
 def excluir_disciplina(disciplina_id):
-    form = DeleteForm()
     disciplina = db.session.get(Disciplina, disciplina_id)
     school_id = UserService.get_current_school_id()
     
-    if disciplina and school_id and disciplina.turma.school_id != school_id:
+    if disciplina and disciplina.turma.school_id != school_id:
             flash('Permissão negada.', 'danger')
             return redirect(url_for('disciplina.listar_disciplinas'))
             
@@ -258,7 +223,6 @@ def api_disciplinas_por_turma(turma_id):
     disciplinas = sorted(turma.disciplinas, key=lambda d: d.materia)
     return jsonify([{'id': d.id, 'materia': d.materia} for d in disciplinas])
 
-# --- ROTA DE AUDITORIA E DETALHES (Mantida intacta pois é a fonte da verdade) ---
 @disciplina_bp.route('/detalhes/<int:disciplina_id>')
 @login_required
 def detalhes_disciplina(disciplina_id):
@@ -338,7 +302,9 @@ def detalhes_disciplina(disciplina_id):
             'periodos': p_str, 'qtd': item['qtd'], 'instrutor': item['instrutor_nome']
         })
     
-    horas_restantes = disciplina.carga_horaria_prevista - total_tempos_agendados
+    progresso = DisciplinaService.get_dados_progresso(disciplina)
     
-    return render_template('detalhes_disciplina.html', disciplina=disciplina, agendamentos=final_output,
-                           total_auditado=total_tempos_agendados, horas_restantes=horas_restantes)
+    return render_template('detalhes_disciplina.html', 
+                           disciplina=disciplina, 
+                           agendamentos=final_output,
+                           progresso=progresso)
