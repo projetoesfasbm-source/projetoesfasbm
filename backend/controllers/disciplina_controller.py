@@ -7,7 +7,7 @@ from flask_wtf import FlaskForm
 from wtforms import StringField, IntegerField, SubmitField, SelectField, SelectMultipleField
 from wtforms.validators import DataRequired, Length, NumberRange, Optional
 from wtforms.widgets import CheckboxInput, ListWidget
-from datetime import timedelta 
+from datetime import timedelta, datetime
 
 from ..models.database import db
 from ..models.disciplina import Disciplina
@@ -44,8 +44,11 @@ class DeleteForm(FlaskForm):
 def _calcular_progresso_real(disciplina):
     """
     Calcula o progresso somando diretamente os horários agendados,
-    usando a mesma lógica da aba de auditoria/detalhes.
+    separando as aulas passadas (Ministradas) das futuras (Agendadas)
+    através do cálculo da data real de cada bloco.
     """
+    hoje = datetime.now().date()
+    
     # Query idêntica à rota 'detalhes_disciplina'
     agendamentos = db.session.scalars(
         select(Horario)
@@ -53,36 +56,70 @@ def _calcular_progresso_real(disciplina):
         .where(Horario.disciplina_id == disciplina.id)
     ).all()
 
-    total_auditado = 0
-    for agendamento in agendamentos:
-        # Regra simples: usa duração se existir, senão conta como 1 tempo
-        qtd = agendamento.duracao if agendamento.duracao else 1
-        total_auditado += qtd
+    mapa_dias = {
+        'segunda': 0, 'segunda-feira': 0, 'terça': 1, 'terca': 1, 'terça-feira': 1,
+        'quarta': 2, 'quarta-feira': 2, 'quinta': 3, 'quinta-feira': 3,
+        'sexta': 4, 'sexta-feira': 4, 'sábado': 5, 'sabado': 5, 'domingo': 6
+    }
 
-    # Cálculos derivados
-    previsto = disciplina.carga_horaria_prevista
-    percentual = 0
-    if previsto > 0:
-        percentual = round((total_auditado / previsto) * 100, 1)
+    ministradas = 0
+    agendadas = 0
+
+    for agendamento in agendamentos:
+        qtd = agendamento.duracao if agendamento.duracao else 1
+        
+        # Calcula a data real da aula
+        data_real = agendamento.semana.data_inicio
+        dia_text = agendamento.dia_semana.lower().strip() if agendamento.dia_semana else ""
+        offset = mapa_dias.get(dia_text)
+        
+        if offset is not None:
+             data_real = agendamento.semana.data_inicio + timedelta(days=offset)
+        
+        # Normaliza para objeto tipo Date
+        if isinstance(data_real, datetime):
+            data_comparacao = data_real.date()
+        else:
+            data_comparacao = data_real
+
+        # Classificação: Passado/Hoje -> Ministradas | Futuro -> Agendadas
+        if data_comparacao <= hoje:
+            ministradas += qtd
+        else:
+            agendadas += qtd
+
+    previsto = disciplina.carga_horaria_prevista or 0
     
+    # Proteção: Evita que a soma do banco ultrapasse a meta visualmente
+    if ministradas > previsto and previsto > 0:
+        ministradas = previsto
+        agendadas = 0
+    elif (ministradas + agendadas) > previsto and previsto > 0:
+        agendadas = previsto - ministradas
+
+    restante = max(0, previsto - (ministradas + agendadas))
+
+    pct_ministrada = round((ministradas / previsto * 100), 1) if previsto > 0 else 0
+    pct_agendada = round((agendadas / previsto * 100), 1) if previsto > 0 else 0
+    pct_restante = round((restante / previsto * 100), 1) if previsto > 0 else 0
+
     # Define cor da barra
+    percentual_planejado = pct_ministrada + pct_agendada
     cor = 'success'
-    if percentual < 50:
+    if percentual_planejado < 50:
         cor = 'danger'
-    elif percentual < 80:
+    elif percentual_planejado < 80:
         cor = 'warning'
 
-    # Estrutura compatível com o template
+    # Retorna o dicionário completo para preencher o novo HTML
     return {
-        'total_auditado': total_auditado, # Usado no template como 'auditadas'
-        'realizado': total_auditado,      # Compatibilidade com nomes variados
+        'realizado': ministradas,
+        'agendado': agendadas,
+        'restante_para_planejar': restante,
         'previsto': previsto,
-        'percentual': percentual,
-        'pct_realizado': percentual,      # Compatibilidade
-        'pct_agendado': 0,                # Simplificação para listagem rápida
-        'agendado': 0,
-        'horas_restantes': previsto - total_auditado,
-        'restante_para_planejar': previsto - total_auditado,
+        'pct_realizado': pct_ministrada,
+        'pct_agendado': pct_agendada,
+        'pct_restante': pct_restante,
         'cor': cor
     }
 
@@ -109,10 +146,9 @@ def listar_disciplinas():
     # Ordenação por nome
     disciplinas_filtradas.sort(key=lambda d: d.materia)
 
-    # Preparar dados de progresso USANDO A LÓGICA CORRIGIDA
+    # Preparar dados de progresso USANDO A NOVA FUNÇÃO INTERNA CORRIGIDA
     disciplinas_com_progresso = []
     for d in disciplinas_filtradas:
-        # AQUI ESTÁ A CORREÇÃO: Usa a função local que imita a auditoria
         progresso = _calcular_progresso_real(d)
         disciplinas_com_progresso.append({'disciplina': d, 'progresso': progresso})
 
@@ -258,7 +294,7 @@ def api_disciplinas_por_turma(turma_id):
     disciplinas = sorted(turma.disciplinas, key=lambda d: d.materia)
     return jsonify([{'id': d.id, 'materia': d.materia} for d in disciplinas])
 
-# --- ROTA DE AUDITORIA E DETALHES (Mantida intacta pois é a fonte da verdade) ---
+# --- ROTA DE AUDITORIA E DETALHES ---
 @disciplina_bp.route('/detalhes/<int:disciplina_id>')
 @login_required
 def detalhes_disciplina(disciplina_id):
