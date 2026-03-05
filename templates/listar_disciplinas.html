@@ -1,18 +1,12 @@
 {% extends "base.html" %}
 
-{% block title %}Andamento das Disciplinas{% endblock %}
+{% block title %}Lista de Disciplinas{% endblock %}
 
 {% block content %}
 <div class="content-header d-flex justify-content-between align-items-center">
     <div>
         <h1>Disciplinas</h1>
-        <p class="text-muted">
-            {% if is_total_view %}
-                <span class="badge bg-primary">Visão Geral da Escola</span> Somatório de todas as turmas da instituição.
-            {% else %}
-                Acompanhando andamento da Turma: <strong>{{ turma_selecionada.nome }}</strong>
-            {% endif %}
-        </p>
+        <p>Gerencie as matérias e acompanhe o andamento pelo Quadro de Horários.</p>
     </div>
 
     <div class="d-flex gap-2">
@@ -20,7 +14,7 @@
             <i class="fas fa-chart-line me-1"></i> Dashboard Inteligente
         </a>
 
-        {% if current_user.role in ['programador', 'admin_escola'] %}
+        {% if current_user.is_sens or current_user.role in ['programador', 'admin_escola'] %}
         <a href="{{ url_for('disciplina.adicionar_disciplina') }}" class="btn btn-primary shadow-sm btn-lg">
             <i class="fas fa-plus me-1"></i> Adicionar Disciplina
         </a>
@@ -28,163 +22,147 @@
     </div>
 </div>
 
-<div class="card-styled p-3 mb-4 shadow-sm bg-white" style="border-radius: 12px; border: 1px solid #e2e8f0;">
-    <form method="GET" action="{{ url_for('disciplina.listar_disciplinas') }}" id="filter-form" class="row g-3 align-items-end">
-        <div class="col-md-5">
-            <label for="turma_select" class="form-label fw-bold">Selecione uma Turma:</label>
+<div class="table-filters mt-3">
+    <form method="GET" action="{{ url_for('disciplina.listar_disciplinas') }}" id="filter-form" class="d-flex flex-wrap align-items-end gap-3">
+        <div class="filter-group flex-grow-1" style="max-width: 400px;">
+            <label for="turma_select" class="form-label"><strong>Selecione uma Turma:</strong></label>
             <select name="turma_id" id="turma_select" class="form-select shadow-sm" onchange="this.form.submit()">
-                <option value="">-- ANDAMENTO TOTAL DA ESCOLA --</option>
+                <option value="">-- Selecione para filtrar --</option>
                 {% for t in turmas %}
-                <option value="{{ t.id }}" {% if turma_selecionada and t.id == turma_selecionada.id %}selected{% endif %}>{{ t.nome }}</option>
+                <option value="{{ t.id }}" {% if t.id == turma_selecionada_id %}selected{% endif %}>{{ t.nome }}</option>
                 {% endfor %}
             </select>
-        </div>
-        <div class="col-md-4">
-            <label for="ciclo_id" class="form-label fw-bold">Filtrar por Ciclo:</label>
-            <select name="ciclo_id" id="ciclo_id" class="form-select shadow-sm" onchange="this.form.submit()">
-                <option value="">Todos os Ciclos</option>
-                {% for c in ciclos %}
-                <option value="{{ c.id }}" {% if ciclo_selecionado == c.id %}selected{% endif %}>{{ c.nome }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="col-md-3">
-            <a href="{{ url_for('disciplina.listar_disciplinas') }}" class="btn btn-outline-secondary w-100 shadow-sm">
-                <i class="fas fa-eraser me-1"></i> Limpar Filtros
-            </a>
         </div>
     </form>
 </div>
 
-{% if disciplinas %}
-<div class="d-flex flex-wrap gap-3 mb-3 px-2 align-items-center">
-    <div class="legend-item d-flex align-items-center small">
-        <div style="width: 12px; height: 12px; background-color: var(--color-success, #10b981); border-radius: 3px;" class="me-1"></div> Concluído
+{% if turma_selecionada_id %}
+<div class="table-container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3>
+            {% set turma_atual = turmas|selectattr('id', 'equalto', turma_selecionada_id)|first %}
+            <i class="fas fa-chalkboard-teacher me-2"></i>{{ turma_atual.nome if turma_atual else '' }}
+        </h3>
     </div>
-    <div class="legend-item d-flex align-items-center small">
-        <div style="width: 12px; height: 12px; background-color: var(--color-warning, #f59e0b); border-radius: 3px;" class="me-1"></div> No Quadro (Agendado)
-    </div>
-    <div class="legend-item d-flex align-items-center small">
-        <div style="width: 12px; height: 12px; background-color: #dee2e6; border-radius: 3px;" class="me-1"></div> Restante
-    </div>
-</div>
-{% endif %}
 
-<div class="card shadow-sm border-0" style="border-radius: 12px; overflow: hidden;">
-    <div class="card-body p-0">
-        <div class="table-responsive">
-            {% if disciplinas %}
-                <table class="table table-hover table-striped align-middle mb-0">
-                    <thead class="bg-light text-primary text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.05em;">
-                        <tr>
-                            <th style="width: 30%;" class="ps-4 py-3">Matéria</th>
-                            <th style="width: 10%;" class="text-center py-3">Meta (C.H)</th>
-                            <th style="width: 40%;" class="py-3 text-center">Progresso Detalhado</th>
-                            <th style="width: 20%;" class="text-end pe-4 py-3">Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for item in disciplinas %}
-                        <tr>
-                            <td class="ps-4">
-                                <div class="fw-bold" style="font-size: 1.05rem;">
-                                    {% if is_total_view %}
-                                        {{ item.materia }}
-                                    {% else %}
-                                        <a href="{{ url_for('disciplina.detalhes_disciplina', disciplina_id=item.obj.id) }}" class="text-dark text-decoration-none hover-link">
-                                            {{ item.obj.materia }} <i class="fas fa-search-plus small ms-1 text-primary"></i>
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                {% if disciplinas_com_progresso %}
+                    <table class="table table-hover table-striped align-middle mb-0">
+                        <thead class="bg-light">
+                            <tr>
+                                <th style="width: 30%;" class="ps-4">Matéria</th>
+                                <th style="width: 10%;" class="text-center">Meta</th>
+                                <th style="width: 40%;">Progresso (Quadro Horário)</th>
+                                
+                                {% if current_user.is_sens or current_user.role in ['programador', 'admin_escola'] %}
+                                <th style="width: 20%;" class="text-end pe-4">Ações</th>
+                                {% endif %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in disciplinas_com_progresso %}
+                            <tr>
+                                <td class="ps-4">
+                                    <div class="fw-bold" style="font-size: 1.1rem;">
+                                        <a href="{{ url_for('disciplina.detalhes_disciplina', disciplina_id=item.disciplina.id) }}" class="text-dark text-decoration-none hover-link" title="Verificar agendamentos no Quadro">
+                                            {{ item.disciplina.materia }} <i class="fas fa-search-plus small ms-1 text-primary"></i>
                                         </a>
-                                    {% endif %}
-                                </div>
-                                <div class="text-muted small">
-                                    {% if not is_total_view %}
-                                        <i class="far fa-calendar me-1"></i>Ciclo: {{ item.obj.ciclo.nome if item.obj.ciclo else '-' }}
-                                    {% else %}
-                                        Consolidado Institucional
-                                    {% endif %}
-                                </div>
-                            </td>
-                            <td class="text-center">
-                                <span class="badge bg-dark rounded-pill" style="font-size: 0.9em;">
-                                    {{ item.progresso.previsto }}h
-                                </span>
-                            </td>
-                            <td>
-                                {% set p = item.progresso %}
-                                <div class="px-3">
-                                    <div class="d-flex justify-content-between mb-1 small" style="font-size: 0.75rem;">
-                                        <span>Realizado: <strong>{{ p.realizado }}h</strong></span>
-                                        <span class="text-muted">Total: {{ p.previsto }}h</span>
                                     </div>
-                                    
-                                    {# BARRA DE PROGRESSO MULTI-CORES (Situação 2) #}
-                                    <div class="progress" style="height: 12px; border-radius: 6px; background-color: #e9ecef; display: flex;">
-                                        {# Parte Verde: Realizado #}
-                                        <div class="progress-bar" role="progressbar" 
-                                             style="width: {{ p.pct_realizado }}%; background-color: #10b981;" 
-                                             title="Concluído: {{ p.realizado }}h"></div>
+                                    <div class="text-muted small">
+                                        {# Exibe apenas o nome do ciclo, pois data não existe mais no modelo #}
+                                        <i class="far fa-calendar me-1"></i>Ciclo: {{ item.disciplina.ciclo.nome if item.disciplina.ciclo else '-' }}
+                                    </div>
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge bg-dark rounded-pill" style="font-size: 1em;">{{ item.progresso.previsto }}h</span>
+                                </td>
+                                <td>
+                                    <div class="d-flex flex-column gap-1">
+                                        <div class="progress" style="height: 25px; border-radius: 10px; background-color: #e9ecef; box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);">
+                                            {# Barra VERDE: Aulas Realizadas #}
+                                            <div class="progress-bar bg-success" role="progressbar" 
+                                                 style="width: {{ item.progresso.pct_realizado }}%;" 
+                                                 title="Realizado: {{ item.progresso.realizado }}h">
+                                                 {% if item.progresso.pct_realizado > 10 %}{{ item.progresso.realizado }}h{% endif %}
+                                            </div>
+                                            
+                                            {# Barra AZUL: Aulas Agendadas #}
+                                            <div class="progress-bar bg-info progress-bar-striped progress-bar-animated" role="progressbar" 
+                                                 style="width: {{ item.progresso.pct_agendado }}%;" 
+                                                 title="Agendado Futuro: {{ item.progresso.agendado }}h">
+                                                 {% if item.progresso.pct_agendado > 10 %}{{ item.progresso.agendado }}h{% endif %}
+                                            </div>
+                                        </div>
                                         
-                                        {# Parte Amarela: Agendado futuro #}
-                                        <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" 
-                                             style="width: {{ p.pct_agendado }}%; background-color: #f59e0b;" 
-                                             title="Agendado no Quadro: {{ p.agendado }}h"></div>
+                                        <div class="d-flex justify-content-between small px-1" style="font-size: 0.85rem;">
+                                            <span class="text-success fw-bold">
+                                                <i class="fas fa-check-square"></i> Feito: {{ item.progresso.realizado }}h
+                                            </span>
+                                            
+                                            {% if item.progresso.restante_para_planejar > 0 %}
+                                                <span class="text-danger fw-bold">
+                                                    <i class="fas fa-exclamation-triangle"></i> Restam: {{ item.progresso.restante_para_planejar }}h
+                                                </span>
+                                            {% else %}
+                                                <span class="text-primary fw-bold">
+                                                    <i class="fas fa-thumbs-up"></i> Completo
+                                                </span>
+                                            {% endif %}
+                                        </div>
                                     </div>
-                                    
-                                    <div class="d-flex justify-content-between mt-1" style="font-size: 0.7rem;">
-                                        <span class="text-success">{{ p.pct_realizado }}% concluído</span>
-                                        {% if p.agendado > 0 %}
-                                            <span class="text-warning">+{{ p.agendado }}h agendadas</span>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                            </td>
-                            <td class="text-end pe-4 text-nowrap">
-                                <div class="d-flex justify-content-end gap-2">
-                                    {% if not is_total_view %}
-                                        <a href="{{ url_for('disciplina.detalhes_disciplina', disciplina_id=item.obj.id) }}" 
-                                           class="btn btn-sm btn-info text-white shadow-sm" title="Ver Detalhes">
-                                            <i class="fas fa-eye"></i>
+                                </td>
+                                
+                                {% if current_user.is_sens or current_user.role in ['programador', 'admin_escola'] %}
+                                <td class="text-end pe-4 text-nowrap align-middle">
+                                    <div class="d-flex justify-content-end gap-2">
+                                        <a href="{{ url_for('disciplina.editar_disciplina', disciplina_id=item.disciplina.id) }}" 
+                                           class="btn btn-warning text-dark fw-bold shadow-sm" 
+                                           title="Editar Disciplina">
+                                            <i class="fas fa-edit"></i> Editar
                                         </a>
-                                        {% if current_user.role in ['programador', 'admin_escola'] %}
-                                            <a href="{{ url_for('disciplina.editar_disciplina', disciplina_id=item.obj.id) }}" 
-                                               class="btn btn-sm btn-warning text-dark shadow-sm" title="Editar">
-                                                <i class="fas fa-edit"></i>
-                                            </a>
-                                            <form method="POST" action="{{ url_for('disciplina.excluir_disciplina', disciplina_id=item.obj.id) }}" 
-                                                  onsubmit="return confirm('Excluir esta disciplina?');" class="d-inline m-0">
-                                                {{ delete_form.hidden_tag() }}
-                                                <button type="submit" class="btn btn-sm btn-danger shadow-sm">
-                                                    <i class="fas fa-trash"></i>
-                                                </button>
-                                            </form>
-                                        {% endif %}
-                                    {% else %}
-                                        <span class="badge bg-light text-muted border">Agrupado</span>
-                                    {% endif %}
-                                </div>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            {% else %}
-                <div class="text-center py-5">
-                    <div class="text-muted mb-3" style="font-size: 3rem;"><i class="fas fa-layer-group"></i></div>
-                    {% if is_total_view %}
-                        <h4>Nenhum dado consolidado</h4>
-                        <p class="text-muted">Não há disciplinas cadastradas em nenhuma turma ainda.</p>
-                    {% else %}
+                                        
+                                        <form method="POST" action="{{ url_for('disciplina.excluir_disciplina', disciplina_id=item.disciplina.id) }}" 
+                                              onsubmit="return confirm('Tem certeza que deseja excluir a disciplina {{ item.disciplina.materia }}?');"
+                                              class="d-inline-block m-0">
+                                            {{ delete_form.hidden_tag() }}
+                                            <button type="submit" class="btn btn-danger fw-bold shadow-sm" title="Excluir">
+                                                <i class="fas fa-trash"></i> Excluir
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                                {% endif %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <div class="text-center py-5">
+                        <div class="text-muted mb-3" style="font-size: 3rem;"><i class="fas fa-folder-open"></i></div>
                         <h4>Nenhuma Disciplina Encontrada</h4>
-                        <p class="text-muted">Esta turma não possui disciplinas para os filtros selecionados.</p>
-                    {% endif %}
-                </div>
-            {% endif %}
+                        <p class="text-muted">Esta turma ainda não possui disciplinas cadastradas.</p>
+                        
+                        {% if current_user.is_sens or current_user.role in ['programador', 'admin_escola'] %}
+                        <a href="{{ url_for('disciplina.adicionar_disciplina') }}" class="btn btn-primary mt-2 btn-lg">Cadastrar Agora</a>
+                        {% endif %}
+                    </div>
+                {% endif %}
+            </div>
         </div>
     </div>
 </div>
+{% else %}
+<div class="alert alert-info mt-4 shadow-sm text-center p-5">
+    <h4><i class="fas fa-info-circle me-2"></i>Nenhuma Turma Selecionada</h4>
+    <p>Por favor, selecione uma turma no menu acima para gerenciar as disciplinas.</p>
+</div>
+{% endif %}
 
 <style>
-.hover-link:hover { text-decoration: underline !important; color: #1e3a8a !important; }
-.progress-bar { transition: width 0.6s ease; }
+.bg-info { background-color: #17a2b8 !important; color: white; }
+.table-hover tbody tr:hover { background-color: #f8f9fa; }
+.hover-link:hover { text-decoration: underline !important; color: #0056b3 !important; }
 </style>
 {% endblock %}
