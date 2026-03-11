@@ -200,6 +200,40 @@ def registrar_em_massa():
     flash(f"{count} registros criados.", "success")
     return redirect(url_for('justica.index'))
 
+@justica_bp.route('/editar-processo/<int:pid>', methods=['POST'])
+@login_required
+@can_manage_justice_required
+def editar_processo(pid):
+    processo = db.session.get(ProcessoDisciplina, pid)
+    if processo and processo.status == StatusProcesso.AGUARDANDO_CIENCIA.value:
+        processo.fato_constatado = request.form.get('fato_constatado', processo.fato_constatado)
+        processo.observacao = request.form.get('observacao', processo.observacao)
+        processo.codigo_infracao = request.form.get('codigo_infracao', processo.codigo_infracao)
+        db.session.commit()
+        flash("Processo atualizado com sucesso.", "success")
+    else:
+        flash("Este processo já avançou de fase e não pode mais ser editado na origem.", "danger")
+    return redirect(url_for('justica.index'))
+
+@justica_bp.route('/cobrar-ciencia/<int:pid>', methods=['POST'])
+@login_required
+@can_manage_justice_required
+def cobrar_ciencia(pid):
+    processo = db.session.get(ProcessoDisciplina, pid)
+    if processo and processo.status == StatusProcesso.AGUARDANDO_CIENCIA.value:
+        aluno = db.session.get(Aluno, processo.aluno_id)
+        if aluno and aluno.user:
+            ano = processo.data_ocorrencia.strftime('%Y') if processo.data_ocorrencia else datetime.now().strftime('%Y')
+            link = url_for('justica.index', _external=True)
+            msg = f"URGENTE: O Processo Nº {processo.id}/{ano} está aguardando a sua ciência. Acesse o módulo de Justiça imediatamente para regularização e leitura do termo."
+            NotificationService.create_notification(
+                user_id=aluno.user.id,
+                message=msg,
+                url=link
+            )
+            flash(f"Cobrança oficial enviada com sucesso ao aluno {aluno.user.nome_completo}.", "success")
+    return redirect(url_for('justica.index'))
+
 @justica_bp.route('/dar-ciente/<int:processo_id>', methods=['POST'])
 @login_required
 def dar_ciente(processo_id):
@@ -297,9 +331,6 @@ def enviar_recurso(pid):
 @login_required
 @can_manage_justice_required
 def finalizar_processo(pid):
-    """
-    Chefe CAL analisa e emite DECISÃO.
-    """
     processo = db.session.get(ProcessoDisciplina, pid)
     if not processo:
         flash("Processo não encontrado.", "error"); return redirect(url_for('justica.index'))
@@ -389,9 +420,6 @@ def finalizar_processo(pid):
 @justica_bp.route('/julgar-recurso/<int:pid>', methods=['POST'])
 @login_required
 def julgar_recurso(pid):
-    """
-    Comandante analisa o Recurso, podendo atenuar (modificar) a pena do Chefe CAL.
-    """
     school_id = UserService.get_current_school_id()
     is_comandante = current_user.is_admin_escola_in_school(school_id)
 
@@ -411,7 +439,6 @@ def julgar_recurso(pid):
     processo.data_julgamento_recurso = datetime.now().astimezone()
 
     if decisao == 'DEFERIDO':
-        # Busca os pontos (Se não for CTSP envia valor. Se for CTSP mantém o que já estava ou 0)
         pontos_recurso = request.form.get('pontos_finais_recurso')
         if pontos_recurso is not None:
             try:
@@ -478,6 +505,34 @@ def deletar_processo(pid):
     success, message = JusticaService.deletar_processo(pid)
     flash(message, 'success' if success else 'danger')
     return redirect(url_for('justica.index'))
+
+@justica_bp.route('/imprimir-lote', methods=['POST'])
+@login_required
+@can_manage_justice_required
+def imprimir_lote():
+    ids_selecionados = request.form.getlist('processos_ids')
+    num_boletim = request.form.get('numero_boletim')
+
+    if not ids_selecionados:
+        flash("Nenhum processo selecionado para impressão.", "warning")
+        return redirect(url_for('justica.index'))
+
+    processos_para_imprimir = []
+    
+    for pid in ids_selecionados:
+        proc = db.session.get(ProcessoDisciplina, int(pid))
+        if proc:
+            if num_boletim:
+                msg_pub = f" | Publicado em Boletim Nº {num_boletim} em {datetime.now().strftime('%d/%m/%Y')}."
+                if not proc.observacao_decisao or f"Boletim Nº {num_boletim}" not in proc.observacao_decisao:
+                    if proc.observacao_decisao:
+                        proc.observacao_decisao += msg_pub
+                    else:
+                        proc.observacao_decisao = msg_pub
+            processos_para_imprimir.append(proc)
+
+    db.session.commit()
+    return render_template('justica/imprimir_lote.html', processos=processos_para_imprimir, num_boletim=num_boletim)
 
 # --- ROTAS FADA ---
 @justica_bp.route('/fada/boletim')
@@ -664,46 +719,3 @@ def get_alunos_turma(turma_id):
 def get_aluno_details(aluno_id):
     a = db.session.get(Aluno, aluno_id)
     return jsonify({'nome_completo': a.user.nome_completo, 'matricula': a.user.matricula, 'posto_graduacao': a.user.posto_graduacao}) if a else jsonify({})
-
-
-@justica_bp.route('/exportar-selecao')
-@login_required
-def exportar_selecao():
-    school_id = UserService.get_current_school_id()
-    if not school_id:
-        flash("Nenhuma escola selecionada.", "warning")
-        return redirect(url_for('main.dashboard'))
-
-    stmt = select(ProcessoDisciplina).join(Aluno).join(Turma).where(
-        ProcessoDisciplina.status == StatusProcesso.FINALIZADO.value,
-        Turma.school_id == school_id
-    ).order_by(ProcessoDisciplina.data_decisao.desc())
-
-    stmt = stmt.options(joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.user))
-    processos = db.session.scalars(stmt).unique().all()
-    return render_template('justica/exportar_selecao.html', processos=processos, datetime=datetime)
-
-
-@justica_bp.route('/confirmar-publicacao-boletim', methods=['POST'])
-@login_required
-@can_manage_justice_required
-def confirmar_publicacao_boletim():
-    ids_selecionados = request.form.getlist('processos_ids')
-    num_boletim = request.form.get('numero_boletim')
-
-    if not ids_selecionados or not num_boletim:
-        flash("Selecione os processos e informe o número do boletim.", "warning")
-        return redirect(url_for('justica.exportar_selecao'))
-
-    count = 0
-    for pid in ids_selecionados:
-        proc = db.session.get(ProcessoDisciplina, int(pid))
-        if proc:
-            msg_pub = f" | Publicado em Boletim nº {num_boletim} em {datetime.now().strftime('%d/%m/%Y')}"
-            if proc.observacao_decisao: proc.observacao_decisao += msg_pub
-            else: proc.observacao_decisao = msg_pub
-            count += 1
-
-    db.session.commit()
-    flash(f"{count} processos vinculados ao Boletim {num_boletim} com sucesso.", "success")
-    return redirect(url_for('justica.exportar_selecao'))

@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Impressão de Processos Disciplinares</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #fff;
+            color: #000;
+            margin: 0;
+            padding: 20px;
+        }
+        .header-impressao {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #000;
+            padding-bottom: 10px;
+        }
+        .header-impressao h3 { margin: 5px 0; font-size: 18px; text-transform: uppercase; }
+        .header-impressao h4 { margin: 5px 0; font-size: 16px; font-weight: normal; }
+        
+        .processo-card {
+            border: 1px solid #ccc;
+            padding: 15px;
+            margin-bottom: 20px;
+            page-break-inside: avoid;
+        }
+        .proc-cabecalho {
+            background-color: #f4f4f4;
+            padding: 8px 10px;
+            border-bottom: 1px solid #ccc;
+            font-weight: bold;
+            margin: -15px -15px 15px -15px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .secao-titulo {
+            font-size: 12px;
+            text-transform: uppercase;
+            font-weight: bold;
+            margin-top: 10px;
+            margin-bottom: 3px;
+            border-bottom: 1px solid #eee;
+            color: #555;
+        }
+        .conteudo-texto {
+            font-size: 13px;
+            white-space: pre-wrap;
+            line-height: 1.4;
+            margin-bottom: 10px;
+        }
+        
+        @media print {
+            body { padding: 0; }
+            .no-print { display: none !important; }
+        }
+        
+        .btn-imprimir {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            background-color: #0d6efd;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .btn-imprimir:hover { background-color: #0b5ed7; }
+    </style>
+</head>
+<body onload="window.print()">
+
+    <button class="no-print btn-imprimir" onclick="window.print()">Imprimir Documento</button>
+
+    <div class="header-impressao">
+        <h3>Polícia Militar / Brigada Militar</h3>
+        <h4>Extrato de Publicação de Processos Disciplinares</h4>
+        {% if num_boletim %}
+            <p style="margin-top: 10px; font-weight: bold;">Publicado no Boletim Nº {{ num_boletim }}</p>
+        {% endif %}
+    </div>
+
+    {% for p in processos %}
+        {% set ano_proc = p.data_ocorrencia.strftime('%Y') if p.data_ocorrencia else '' %}
+        <div class="processo-card">
+            <div class="proc-cabecalho">
+                <span>Aluno: {{ p.aluno.user.posto_graduacao }} {{ p.aluno.user.nome_completo }}</span>
+                <span>Processo Nº {{ p.id }}/{{ ano_proc }}</span>
+            </div>
+
+            <div class="secao-titulo">1. Fato Constatado e Enquadramento</div>
+            <div class="conteudo-texto"><strong>Fato:</strong> {{ p.fato_constatado }}</div>
+            {% if p.codigo_infracao %}<div class="conteudo-texto"><strong>Enquadramento:</strong> {{ p.codigo_infracao }}</div>{% endif %}
+
+            <div class="secao-titulo">2. Defesa Apresentada</div>
+            <div class="conteudo-texto">
+                {% if p.defesa %}
+                    {{ p.defesa }}
+                {% else %}
+                    <em>Não apresentou defesa no prazo regulamentar. Julgado à revelia.</em>
+                {% endif %}
+            </div>
+
+            <div class="secao-titulo">3. Decisão do Chefe CAL</div>
+            <div class="conteudo-texto">
+                <strong>Veredito:</strong> {{ p.decisao_final }} {% if p.tipo_sancao == 'Sustação da Dispensa' and p.detalhes_sancao %} ({{ p.detalhes_sancao }}) {% endif %} <br>
+                <strong>Fundamentação:</strong> {{ p.observacao_decisao }}
+            </div>
+
+            {% if p.texto_recurso %}
+            <div class="secao-titulo">4. Recurso ao Comandante</div>
+            <div class="conteudo-texto">
+                <strong>Decisão Final:</strong> {{ p.decisao_recurso }}<br>
+                <strong>Fundamentação:</strong> {{ p.fundamentacao_recurso }}
+            </div>
+            {% endif %}
+        </div>
+    {% endfor %}
+
+</body>
+</html>

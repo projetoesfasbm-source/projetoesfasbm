@@ -44,7 +44,10 @@
                     <h3 class="justice-content-title mb-3">Processos em Andamento</h3>
                     {% if em_andamento %}
                         {% for p in em_andamento %}
-                            <div class="card mb-3 shadow-sm border-start border-4 border-primary">
+                            {% set ano_proc = p.data_ocorrencia.strftime('%Y') %}
+                            {% set is_atrasado = p.status == 'AGUARDANDO_CIENCIA' and p.prazo_ciencia and agora > p.prazo_ciencia %}
+                            
+                            <div class="card mb-3 shadow-sm border-start border-4 {{ 'border-danger bg-danger bg-opacity-10' if current_user.role == 'aluno' and is_atrasado else 'border-primary' }}">
                                 <div class="card-body">
                                     <div class="row align-items-center">
                                         <div class="col-md-2 col-sm-4">
@@ -53,7 +56,8 @@
                                         </div>
                                         <div class="col-md-3 col-sm-8">
                                             <small class="text-muted d-block small text-uppercase fw-bold">Aluno</small>
-                                            <span class="fw-bold">{{ p.aluno.user.nome_completo }}</span>
+                                            <span class="fw-bold">{{ p.aluno.user.nome_completo }}</span> 
+                                            <span class="text-muted small d-block" style="font-size: 0.75rem;">(PD Nº {{ p.id }}/{{ ano_proc }})</span>
                                         </div>
                                         <div class="col-md-4 col-sm-12 mt-2 mt-md-0">
                                             <small class="text-muted d-block small text-uppercase fw-bold">Fato/Status</small>
@@ -77,8 +81,16 @@
                                                             <i class="fas fa-clock"></i> Notificado há:
                                                             <br><small class="cronometro-progressivo badge bg-dark mt-1" data-inicio="{{ p.data_registro.isoformat() if p.data_registro else p.data_ocorrencia.isoformat() }}"></small>
                                                         </button>
-                                                        <button type="button" class="btn btn-sm btn-danger d-none btn-punir-ciencia mt-1 mt-md-0" data-inicio="{{ p.data_registro.isoformat() if p.data_registro else p.data_ocorrencia.isoformat() }}" onclick="prepararNovaInfracao('{{ p.aluno.turma_id }}', '{{ p.aluno.id }}')" title="O aluno não deu ciente em 24h.">
-                                                            <i class="fas fa-gavel"></i> Punir Atraso
+                                                        
+                                                        <form action="{{ url_for('justica.cobrar_ciencia', pid=p.id) }}" method="POST" class="d-inline">
+                                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                            <button type="submit" class="btn btn-sm btn-warning d-none btn-cobrar-ciencia mt-1 mt-md-0 fw-bold" data-inicio="{{ p.data_registro.isoformat() if p.data_registro else p.data_ocorrencia.isoformat() }}" title="Notificar Urgência ao Aluno">
+                                                                <i class="fas fa-bell"></i> Cobrar Ciência
+                                                            </button>
+                                                        </form>
+
+                                                        <button type="button" class="btn btn-sm btn-info text-white fw-bold" onclick="toggleEditar('{{ p.id }}')" title="Editar Processo">
+                                                            <i class="fas fa-pencil-alt"></i> Editar
                                                         </button>
                                                     {% elif p.status == 'ALUNO_NOTIFICADO' and not p.is_revelia %}
                                                         <button type="button" class="btn btn-sm btn-secondary text-white" disabled title="Aguardando prazo de defesa do aluno">
@@ -107,12 +119,17 @@
 
                                                 {% if current_user.role == 'aluno' %}
                                                     {% if p.status == 'AGUARDANDO_CIENCIA' %}
-                                                        <form action="{{ url_for('justica.dar_ciente', processo_id=p.id) }}" method="POST" class="d-inline">
-                                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                                            <button type="submit" class="btn btn-sm btn-warning fw-bold text-dark">
-                                                                <i class="fas fa-check"></i> DAR CIENTE 
-                                                            </button>
-                                                        </form>
+                                                        <div class="text-end">
+                                                            {% if is_atrasado %}
+                                                            <span class="badge bg-danger mb-1" style="animation: blink 1.5s infinite;">URGENTE / ATRASADO</span><br>
+                                                            {% endif %}
+                                                            <form action="{{ url_for('justica.dar_ciente', processo_id=p.id) }}" method="POST" class="d-inline">
+                                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                                <button type="submit" class="btn btn-sm {{ 'btn-danger' if is_atrasado else 'btn-warning' }} fw-bold text-dark">
+                                                                    <i class="fas fa-check"></i> DAR CIENTE 
+                                                                </button>
+                                                            </form>
+                                                        </div>
                                                     {% elif p.status == 'ALUNO_NOTIFICADO' and not p.defesa %}
                                                         <button type="button" class="btn btn-sm btn-warning fw-bold text-dark" onclick="toggleDefesa('{{ p.id }}')">
                                                             <i class="fas fa-file-signature"></i> ENVIAR DEFESA 
@@ -133,6 +150,33 @@
                                             </div>
                                         </div>
                                     </div>
+
+                                    {% if current_user.role != 'aluno' and p.status == 'AGUARDANDO_CIENCIA' %}
+                                    <div id="collapseEditar{{ p.id }}" class="mt-3 pt-3 border-top bg-light p-3 rounded border border-info shadow-sm" style="display: none;">
+                                        <h5 class="text-info fw-bold mb-3"><i class="fas fa-pencil-alt me-2"></i>Editar Processo Original</h5>
+                                        <form action="{{ url_for('justica.editar_processo', pid=p.id) }}" method="POST">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <div class="row">
+                                                <div class="col-md-12 mb-3">
+                                                    <label class="form-label small fw-bold">Enquadramento (Regra/Artigo)</label>
+                                                    <input type="text" name="codigo_infracao" class="form-control border-info" value="{{ p.codigo_infracao or '' }}">
+                                                </div>
+                                                <div class="col-md-12 mb-3">
+                                                    <label class="form-label small fw-bold">Fato Constatado</label>
+                                                    <textarea name="fato_constatado" class="form-control" rows="3" required>{{ p.fato_constatado }}</textarea>
+                                                </div>
+                                                <div class="col-md-12 mb-3">
+                                                    <label class="form-label small fw-bold">Nota Original / Termo</label>
+                                                    <textarea name="observacao" class="form-control" rows="8">{{ p.observacao }}</textarea>
+                                                </div>
+                                                <div class="col-md-12 text-end">
+                                                    <button type="button" class="btn btn-secondary btn-sm" onclick="toggleEditar('{{ p.id }}')">Cancelar</button>
+                                                    <button type="submit" class="btn btn-info text-white btn-sm fw-bold px-3">Salvar Alterações</button>
+                                                </div>
+                                            </div>
+                                        </form>
+                                    </div>
+                                    {% endif %}
 
                                     {% if current_user.role == 'aluno' and p.status == 'ALUNO_NOTIFICADO' and not p.defesa %}
                                     <div id="collapseDefesa{{ p.id }}" class="mt-3 pt-3 border-top bg-light p-3 rounded" style="display: none;">
@@ -324,7 +368,7 @@
                                                     <div class="p-2 bg-white border rounded text-dark fst-italic mb-3" style="white-space: pre-wrap; max-height: 200px; overflow-y: auto;">{{ p.fato_constatado }}</div>
                                                     
                                                     {% if p.observacao %}
-                                                    <div class="small text-muted mb-3"><strong>Nota Original:</strong> {{ p.observacao }}</div>
+                                                    <div class="small text-muted mb-3" style="white-space: pre-wrap;"><strong>Nota Original:</strong><br>{{ p.observacao }}</div>
                                                     {% endif %}
 
                                                     {% if p.defesa %}
@@ -399,51 +443,122 @@
                 </div>
 
                 <div class="justice-content" id="finalizadosContent">
-                    <div class="d-flex justify-content-end mb-3">
-                        {% if current_user.role != 'aluno' %}
-                            <a href="{{ url_for('justica.exportar_selecao') }}" class="btn btn-sm btn-outline-dark">
-                                <i class="fas fa-file-export"></i> Exportar Termos
-                            </a>
-                        {% endif %}
-                    </div>
+                    {% if current_user.role != 'aluno' %}
+                    <form action="{{ url_for('justica.imprimir_lote') }}" method="POST" target="_blank" id="formImpressaoLote">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <div class="d-flex justify-content-between align-items-center mb-3 p-3 bg-white border border-dark rounded shadow-sm">
+                            <div class="d-flex align-items-center gap-2">
+                                <input type="checkbox" class="form-check-input" id="checkAllFinalizados" onchange="toggleAllFinalizados(this)">
+                                <label for="checkAllFinalizados" class="fw-bold mb-0 text-primary">Selecionar Todos</label>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <input type="text" name="numero_boletim" class="form-control form-control-sm border-dark" placeholder="Nº do Boletim (Opcional)" style="width: 200px;">
+                                <button type="submit" class="btn btn-sm btn-primary fw-bold" onclick="return validarImpressaoLote()">
+                                    <i class="fas fa-print me-1"></i> Publicar e Imprimir
+                                </button>
+                            </div>
+                        </div>
+                    {% endif %}
+
                     {% if finalizados %}
                         {% for p in finalizados %}
+                            {% set ano_proc = p.data_ocorrencia.strftime('%Y') %}
                             <div class="card mb-2 bg-light border-success">
                                 <div class="card-body py-2">
                                     <div class="row align-items-center">
-                                        <div class="col-md-8 col-sm-10">
-                                            <strong>{{ p.aluno.user.nome_completo }}</strong> - {{ p.decisao_final or 'Finalizado' }}
+                                        
+                                        {% if current_user.role != 'aluno' %}
+                                        <div class="col-auto pe-1">
+                                            <input type="checkbox" name="processos_ids" value="{{ p.id }}" class="form-check-input check-finalizado" style="width: 18px; height: 18px;">
+                                        </div>
+                                        {% endif %}
+
+                                        <div class="col-md-7 col-sm-9">
+                                            <strong>{{ p.aluno.user.nome_completo }}</strong> <span class="text-muted small ms-1">(PD Nº {{ p.id }}/{{ ano_proc }})</span>
+                                            <br>
+                                            <span class="badge bg-dark mt-1">{{ p.decisao_final or 'Finalizado' }}</span>
                                             {% if p.tipo_sancao == 'Sustação da Dispensa' %}
-                                                <span class="badge bg-danger ms-2">{{ p.detalhes_sancao }}</span>
+                                                <span class="badge bg-danger mt-1 ms-1">{{ p.detalhes_sancao }}</span>
                                             {% endif %}
                                             {% if p.decisao_recurso %}
-                                                <span class="badge bg-info text-dark ms-2">Recurso: {{ p.decisao_recurso }}</span>
+                                                <span class="badge bg-info text-dark mt-1 ms-1">Recurso: {{ p.decisao_recurso }}</span>
                                             {% endif %}
-                                            <br><small class="text-muted">{{ p.fato_constatado }}</small>
+                                            <br><small class="text-muted d-block mt-1 text-truncate" title="{{ p.fato_constatado }}">{{ p.fato_constatado }}</small>
                                         </div>
-                                        <div class="col-md-4 col-sm-2 text-end">
+                                        <div class="col-md-4 col-sm-3 text-end">
                                             <div class="d-flex justify-content-end align-items-center gap-2">
-                                                <span class="badge bg-success">Concluído</span>
                                                 {% if p.pontos > 0 %}
                                                     <span class="badge bg-secondary">-{{ p.pontos }} pts</span>
                                                 {% endif %}
                                                 
+                                                <span class="badge bg-success" style="cursor: pointer;" onclick="toggleDetalhesFinalizado('{{ p.id }}')" title="Ver todo o histórico do processo">
+                                                    Concluído <i class="fas fa-chevron-down ms-1"></i>
+                                                </span>
+                                                
                                                 {% if current_user.role != 'aluno' %}
-                                                    <form action="{{ url_for('justica.deletar_processo', pid=p.id) }}" method="POST" onsubmit="return confirm('ATENÇÃO: Tem certeza que deseja EXCLUIR este processo finalizado?');" class="d-inline">
-                                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir Processo Finalizado">
-                                                            <i class="fas fa-trash"></i> Excluir
-                                                        </button>
-                                                    </form>
+                                                    <button type="button" class="btn btn-sm btn-outline-danger border-0" onclick="confirmDeleteFinalizado('{{ p.id }}')" title="Excluir Processo Finalizado">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
                                                 {% endif %}
                                             </div>
                                         </div>
                                     </div>
+
+                                    <div id="collapseFinalizado{{ p.id }}" class="mt-3 pt-3 border-top border-success" style="display: none;">
+                                        <h6 class="fw-bold text-success mb-2"><i class="fas fa-archive me-1"></i>Histórico do Processo Finalizado</h6>
+                                        <div class="bg-white p-3 rounded border">
+                                            <div class="mb-3 border-bottom pb-2">
+                                                <span class="badge bg-secondary mb-1">1. Fato Constatado e Nota Original</span>
+                                                <div class="text-dark small mb-1" style="white-space: pre-wrap;"><strong>Fato:</strong> {{ p.fato_constatado }}</div>
+                                                {% if p.observacao %}
+                                                <div class="bg-light border border-secondary border-opacity-50 p-2 rounded text-muted small mt-1" style="white-space: pre-wrap;"><strong>Nota Original:</strong><br>{{ p.observacao }}</div>
+                                                {% endif %}
+                                            </div>
+
+                                            <div class="mb-3 border-bottom pb-2">
+                                                <span class="badge bg-warning text-dark mb-1">2. Defesa Inicial</span>
+                                                {% if p.defesa %}
+                                                <div class="text-dark small fst-italic" style="white-space: pre-wrap;">{{ p.defesa }}</div>
+                                                {% else %}
+                                                <div class="text-danger small fw-bold"><i class="fas fa-exclamation-triangle"></i> Julgado à Revelia (Não apresentou defesa)</div>
+                                                {% endif %}
+                                            </div>
+
+                                            <div class="mb-3 border-bottom pb-2">
+                                                <span class="badge bg-danger mb-1">3. Decisão do Chefe CAL</span>
+                                                <div class="text-dark small">
+                                                    <strong>Veredito:</strong> {{ p.decisao_final }}
+                                                    {% if p.tipo_sancao == 'Sustação da Dispensa' and p.detalhes_sancao %} <span class="badge bg-danger ms-1">{{ p.detalhes_sancao }}</span> {% endif %}
+                                                    <br><strong>Fundamentação:</strong> <span style="white-space: pre-wrap;">{{ p.observacao_decisao }}</span>
+                                                </div>
+                                            </div>
+
+                                            {% if p.texto_recurso %}
+                                            <div class="mb-2">
+                                                <span class="badge bg-primary mb-1">4. Recurso ao Comandante</span>
+                                                <div class="text-dark small fst-italic mb-2" style="white-space: pre-wrap;"><strong>Argumento:</strong> {{ p.texto_recurso }}</div>
+                                                <div class="text-dark small">
+                                                    <strong>Decisão do Comandante:</strong> {{ p.decisao_recurso }} <br>
+                                                    <strong>Parecer:</strong> <span style="white-space: pre-wrap;">{{ p.fundamentacao_recurso }}</span>
+                                                </div>
+                                            </div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+
                                 </div>
                             </div>
                         {% endfor %}
                     {% else %}
                         <div class="alert alert-info">Nenhum processo finalizado.</div>
+                    {% endif %}
+
+                    {% if current_user.role != 'aluno' %}
+                    </form>
+                    
+                    <form id="deleteFinalizadoForm" method="POST" style="display: none;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    </form>
                     {% endif %}
                 </div>
 
@@ -573,11 +688,15 @@
     .ts-control { min-height: 38px; border-radius: 0.375rem; }
     .ts-wrapper { max-width: 100%; }
     .ts-dropdown .option { white-space: normal !important; word-wrap: break-word; }
+    
+    @keyframes blink {
+        0% { opacity: 1; }
+        50% { opacity: 0; }
+        100% { opacity: 1; }
+    }
 </style>
 
 <script>
-// --- FUNÇÕES DE INTERFACE ---
-
 function toggleAnalise(id) {
     const el = document.getElementById('collapseProcesso' + id);
     if (el) el.style.display = (el.style.display === 'none') ? 'block' : 'none';
@@ -598,7 +717,46 @@ function toggleJulgarRecurso(id) {
     if (el) el.style.display = (el.style.display === 'none') ? 'block' : 'none';
 }
 
-// Controle dos inputs dinâmicos na Análise do Chefe CAL
+// NOVO: Função para Gaveta de Edição
+function toggleEditar(id) {
+    const el = document.getElementById('collapseEditar' + id);
+    if (el) el.style.display = (el.style.display === 'none') ? 'block' : 'none';
+}
+
+// NOVO: Função para Gaveta de Finalizados
+function toggleDetalhesFinalizado(id) {
+    const el = document.getElementById('collapseFinalizado' + id);
+    if (el) el.style.display = (el.style.display === 'none') ? 'block' : 'none';
+}
+
+// NOVO: Função para Checkboxes de Impressão em Lote
+function toggleAllFinalizados(source) {
+    const checkboxes = document.querySelectorAll('.check-finalizado');
+    for (let i = 0; i < checkboxes.length; i++) {
+        checkboxes[i].checked = source.checked;
+    }
+}
+
+function validarImpressaoLote() {
+    const checkboxes = document.querySelectorAll('.check-finalizado:checked');
+    if (checkboxes.length === 0) {
+        alert('Por favor, selecione pelo menos um processo para imprimir.');
+        return false;
+    }
+    // Aguarda um instante para o formulário abrir na nova guia e depois recarrega a página atual para limpar o form
+    setTimeout(() => { window.location.reload(); }, 1500);
+    return true;
+}
+
+// NOVO: Função para deletar finalizado de forma limpa
+function confirmDeleteFinalizado(pid) {
+    if(confirm('ATENÇÃO: Tem certeza que deseja EXCLUIR este processo finalizado?')) {
+        const form = document.getElementById('deleteFinalizadoForm');
+        form.action = '/justica-e-disciplina/deletar-processo/' + pid;
+        form.submit();
+    }
+}
+
 function toggleInputsInline(selectEl, id) {
     const divTurnos = document.getElementById('divTurnos' + id);
     const divPontos = document.getElementById('divPontos' + id);
@@ -615,7 +773,6 @@ function toggleInputsInline(selectEl, id) {
     }
 }
 
-// Controle dos inputs dinâmicos no Recurso do Comandante
 window.toggleOpcoesRecurso = function(selectEl, id) {
     const divNovaSancao = document.getElementById('divNovaSancao' + id);
     const selectNovaSancao = document.querySelector(`#divNovaSancao${id} select[name="nova_sancao"]`);
@@ -644,11 +801,10 @@ window.toggleInputsRecurso = function(selectEl, id) {
     }
 };
 
-// --- MÁQUINA DE CRONÔMETROS E AUTOMATIZAÇÃO ---
 function iniciarCronometros() {
     const regressivos = document.querySelectorAll('.cronometro-prazo');
     const progressivos = document.querySelectorAll('.cronometro-progressivo');
-    const botoesPunir = document.querySelectorAll('.btn-punir-ciencia');
+    const botoesCobranca = document.querySelectorAll('.btn-cobrar-ciencia');
 
     setInterval(() => {
         const agora = new Date().getTime();
@@ -707,7 +863,7 @@ function iniciarCronometros() {
             }
         });
 
-        botoesPunir.forEach(btn => {
+        botoesCobranca.forEach(btn => {
             const inicioStr = btn.getAttribute('data-inicio');
             if(!inicioStr) return;
             const inicio = new Date(inicioStr).getTime();
@@ -846,41 +1002,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
         } else if(checks.length > 1) {
             box.value = `Termo Coletivo para ${checks.length} alunos.\nFato: ${descFato}\nEnquadramento: ${regraDesc}`;
-        }
-    };
-
-    window.prepararNovaInfracao = function(turmaId, alunoId) {
-        document.querySelector('[data-target="newInfracaoContent"]').click();
-        
-        const turmaSelect = document.getElementById('selectTurmaNovaInfracao');
-        if(turmaSelect) {
-            turmaSelect.value = turmaId;
-            
-            const containerId = 'listaAlunosInfracao';
-            const container = document.getElementById(containerId);
-            container.innerHTML = '<div class="text-center p-2">Carregando alunos...</div>';
-            
-            fetch(`/justica-e-disciplina/api/alunos-por-turma/${turmaId}`)
-                .then(r => r.json())
-                .then(data => {
-                    container.innerHTML = data.map(a => `
-                        <div class="form-check border-bottom py-1">
-                            <input class="form-check-input aluno-check-${containerId}" type="checkbox" name="alunos_selecionados" value="${a.id}" id="chk_${containerId}_${a.id}" onchange="if('${containerId}'=='listaAlunosInfracao') atualizarTextoInteligente()">
-                            <label class="form-check-label" for="chk_${containerId}_${a.id}">
-                                ${a.numero ? a.numero + ' - ' : ''}${a.nome}
-                            </label>
-                        </div>
-                    `).join('');
-                    
-                    setTimeout(() => {
-                        const chk = document.getElementById(`chk_${containerId}_${alunoId}`);
-                        if(chk) {
-                            chk.checked = true;
-                            document.getElementById('descricaoFatoInput').value = "Deixou de dar ciência, no prazo regulamentar, no processo disciplinar que lhe foi imputado.";
-                            atualizarTextoInteligente();
-                        }
-                    }, 500);
-                });
         }
     };
 });
