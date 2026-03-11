@@ -108,12 +108,24 @@ def index():
     if houve_alteracao:
          em_andamento = db.session.scalars(stmt_andamento).unique().all()
 
+    # --- TRAVA SEGURA DE FUSO HORÁRIO PARA ATRASOS ---
+    agora_dt = datetime.now().astimezone()
+    for p in em_andamento:
+        p.is_atrasado = False
+        if p.status == 'AGUARDANDO_CIENCIA' and p.prazo_ciencia:
+            try:
+                pc = JusticaService._ensure_datetime(p.prazo_ciencia)
+                if agora_dt > pc:
+                    p.is_atrasado = True
+            except:
+                pass
+    # ---------------------------------------------------
+
     finalizados = db.session.scalars(stmt_finalizados).unique().all()
     turmas = TurmaService.get_turmas_by_school(school_id) if school_id else []
 
     agora_hora = datetime.now().strftime('%H:%M')
     hoje = datetime.now().strftime('%Y-%m-%d')
-    agora_dt = datetime.now().astimezone()
 
     return render_template('justica/index.html',
                            em_andamento=em_andamento,

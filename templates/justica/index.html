@@ -44,15 +44,15 @@
                     <h3 class="justice-content-title mb-3">Processos em Andamento</h3>
                     {% if em_andamento %}
                         {% for p in em_andamento %}
-                            {% set ano_proc = p.data_ocorrencia.strftime('%Y') %}
-                            {% set is_atrasado = p.status == 'AGUARDANDO_CIENCIA' and p.prazo_ciencia and agora > p.prazo_ciencia %}
+                            {% set ano_proc = p.data_ocorrencia.strftime('%Y') if p.data_ocorrencia else '2026' %}
+                            {% set is_atrasado = p.is_atrasado %}
                             
                             <div class="card mb-3 shadow-sm border-start border-4 {{ 'border-danger bg-danger bg-opacity-10' if current_user.role == 'aluno' and is_atrasado else 'border-primary' }}">
                                 <div class="card-body">
                                     <div class="row align-items-center">
                                         <div class="col-md-2 col-sm-4">
                                             <small class="text-muted d-block small text-uppercase fw-bold">Data</small>
-                                            <strong>{{ p.data_ocorrencia.strftime('%d/%m/%Y') }}</strong>
+                                            <strong>{{ p.data_ocorrencia.strftime('%d/%m/%Y') if p.data_ocorrencia else 'N/A' }}</strong>
                                         </div>
                                         <div class="col-md-3 col-sm-8">
                                             <small class="text-muted d-block small text-uppercase fw-bold">Aluno</small>
@@ -290,7 +290,7 @@
                                                                     | <strong>Pontos Perdidos:</strong> -{{ p.pontos }} pts
                                                                 {% endif %}
                                                                 <hr class="my-1 border-danger border-opacity-50">
-                                                                <strong>Fundamentação do Chefe:</strong> <span style="white-space: pre-wrap;">{{ p.observacao_decisao }}</span>
+                                                                <strong>Fundamentação do Chefe:</strong> <span style="white-space: pre-wrap;">{% if p.observacao_decisao and p.observacao_decisao|string != 'None' %}{{ p.observacao_decisao }}{% elif p.fundamentacao and p.fundamentacao|string != 'None' %}{{ p.fundamentacao }}{% else %}<em class="text-muted">Não informada.</em>{% endif %}</span>
                                                             </div>
                                                         </div>
 
@@ -422,7 +422,7 @@
 
                                                     <div class="mb-3">
                                                         <label class="form-label small">Fundamentação / Observação</label>
-                                                        <textarea name="observacao_decisao" class="form-control" rows="4" placeholder="Justifique a decisão..."></textarea>
+                                                        <textarea name="observacao_decisao" class="form-control" rows="4" placeholder="Justifique a decisão..." required></textarea>
                                                     </div>
 
                                                     <div class="text-end">
@@ -462,7 +462,7 @@
 
                     {% if finalizados %}
                         {% for p in finalizados %}
-                            {% set ano_proc = p.data_ocorrencia.strftime('%Y') %}
+                            {% set ano_proc = p.data_ocorrencia.strftime('%Y') if p.data_ocorrencia else '2026' %}
                             <div class="card mb-2 bg-light border-success">
                                 <div class="card-body py-2">
                                     <div class="row align-items-center">
@@ -483,6 +483,12 @@
                                             {% if p.decisao_recurso %}
                                                 <span class="badge bg-info text-dark mt-1 ms-1">Recurso: {{ p.decisao_recurso }}</span>
                                             {% endif %}
+                                            
+                                            {% if p.observacao_decisao and 'Publicado em Boletim Nº ' in p.observacao_decisao %}
+                                                {% set bol_extraido = p.observacao_decisao.split('Publicado em Boletim Nº ')[1].split(' em ')[0] %}
+                                                <span class="badge bg-secondary mt-1 ms-1" title="Documento já gerado e vinculado ao boletim."><i class="fas fa-bullhorn"></i> Pub Bol Nº {{ bol_extraido }}</span>
+                                            {% endif %}
+                                            
                                             <br><small class="text-muted d-block mt-1 text-truncate" title="{{ p.fato_constatado }}">{{ p.fato_constatado }}</small>
                                         </div>
                                         <div class="col-md-4 col-sm-3 text-end">
@@ -529,7 +535,7 @@
                                                 <div class="text-dark small">
                                                     <strong>Veredito:</strong> {{ p.decisao_final }}
                                                     {% if p.tipo_sancao == 'Sustação da Dispensa' and p.detalhes_sancao %} <span class="badge bg-danger ms-1">{{ p.detalhes_sancao }}</span> {% endif %}
-                                                    <br><strong>Fundamentação:</strong> <span style="white-space: pre-wrap;">{{ p.observacao_decisao }}</span>
+                                                    <br><strong>Fundamentação:</strong> <span style="white-space: pre-wrap;">{% if p.observacao_decisao and p.observacao_decisao|string != 'None' %}{{ p.observacao_decisao }}{% elif p.fundamentacao and p.fundamentacao|string != 'None' %}{{ p.fundamentacao }}{% else %}<em class="text-muted">Não informada.</em>{% endif %}</span>
                                                 </div>
                                             </div>
 
@@ -717,19 +723,16 @@ function toggleJulgarRecurso(id) {
     if (el) el.style.display = (el.style.display === 'none') ? 'block' : 'none';
 }
 
-// NOVO: Função para Gaveta de Edição
 function toggleEditar(id) {
     const el = document.getElementById('collapseEditar' + id);
     if (el) el.style.display = (el.style.display === 'none') ? 'block' : 'none';
 }
 
-// NOVO: Função para Gaveta de Finalizados
 function toggleDetalhesFinalizado(id) {
     const el = document.getElementById('collapseFinalizado' + id);
     if (el) el.style.display = (el.style.display === 'none') ? 'block' : 'none';
 }
 
-// NOVO: Função para Checkboxes de Impressão em Lote
 function toggleAllFinalizados(source) {
     const checkboxes = document.querySelectorAll('.check-finalizado');
     for (let i = 0; i < checkboxes.length; i++) {
@@ -743,12 +746,10 @@ function validarImpressaoLote() {
         alert('Por favor, selecione pelo menos um processo para imprimir.');
         return false;
     }
-    // Aguarda um instante para o formulário abrir na nova guia e depois recarrega a página atual para limpar o form
     setTimeout(() => { window.location.reload(); }, 1500);
     return true;
 }
 
-// NOVO: Função para deletar finalizado de forma limpa
 function confirmDeleteFinalizado(pid) {
     if(confirm('ATENÇÃO: Tem certeza que deseja EXCLUIR este processo finalizado?')) {
         const form = document.getElementById('deleteFinalizadoForm');

@@ -6,7 +6,7 @@
     <title>Impressão de Processos Disciplinares</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: Arial, Helvetica, sans-serif;
             background-color: #fff;
             color: #000;
             margin: 0;
@@ -22,39 +22,33 @@
         .header-impressao h4 { margin: 5px 0; font-size: 16px; font-weight: normal; }
         
         .processo-card {
-            border: 1px solid #ccc;
-            padding: 15px;
-            margin-bottom: 20px;
+            margin-bottom: 25px;
+            padding: 15px 20px; /* Espaço interno para o texto não colar na borda */
+            border: 1px solid #000; /* Borda preta oficial */
+            border-radius: 5px; /* Cantos levemente arredondados */
             page-break-inside: avoid;
         }
-        .proc-cabecalho {
-            background-color: #f4f4f4;
-            padding: 8px 10px;
-            border-bottom: 1px solid #ccc;
+        
+        .titulo-termo {
+            font-size: 15px;
             font-weight: bold;
-            margin: -15px -15px 15px -15px;
-            display: flex;
-            justify-content: space-between;
-        }
-        .secao-titulo {
-            font-size: 12px;
-            text-transform: uppercase;
-            font-weight: bold;
-            margin-top: 10px;
-            margin-bottom: 3px;
-            border-bottom: 1px solid #eee;
-            color: #555;
-        }
-        .conteudo-texto {
-            font-size: 13px;
-            white-space: pre-wrap;
-            line-height: 1.4;
             margin-bottom: 10px;
+            text-align: center;
+            text-decoration: underline;
+        }
+
+        .paragrafo-resumo {
+            font-size: 14px;
+            line-height: 1.5;
+            text-align: justify;
+            text-indent: 40px; /* Recuo padrão de ofício militar */
+            margin: 0;
         }
         
         @media print {
             body { padding: 0; }
             .no-print { display: none !important; }
+            .processo-card { margin-bottom: 20px; }
         }
         
         .btn-imprimir {
@@ -86,39 +80,53 @@
     </div>
 
     {% for p in processos %}
-        {% set ano_proc = p.data_ocorrencia.strftime('%Y') if p.data_ocorrencia else '' %}
-        <div class="processo-card">
-            <div class="proc-cabecalho">
-                <span>Aluno: {{ p.aluno.user.posto_graduacao }} {{ p.aluno.user.nome_completo }}</span>
-                <span>Processo Nº {{ p.id }}/{{ ano_proc }}</span>
-            </div>
+        {% set ano_proc = p.data_ocorrencia.strftime('%Y') if p.data_ocorrencia else '2026' %}
+        
+        {# 1. LIMPEZA E EXTRAÇÃO DO TEXTO ORIGINAL (Remove quebras de linha para fazer o texto corrido) #}
+        {% set obs_raw = p.observacao or '' %}
+        {% set obs_limpa = obs_raw | replace('Termo de Justificação:\n\n', '') | replace('Termo de Justificação:', '') | replace('\n', ' ') | replace('\r', ' ') %}
+        
+        {# 2. CORTA O TEXTO NO ITEM 3 (Para substituir pela versão dinâmica da defesa) #}
+        {% set obs_parts = obs_limpa.split('3. Cientifico-lhe') %}
+        {% set base_text = obs_parts[0] | trim %}
+        
+        {# Fallback caso o processo não tenha o item 3 padrão #}
+        {% if not base_text %}
+            {% set base_text = obs_limpa | trim %}
+        {% endif %}
 
-            <div class="secao-titulo">1. Fato Constatado e Enquadramento</div>
-            <div class="conteudo-texto"><strong>Fato:</strong> {{ p.fato_constatado }}</div>
-            {% if p.codigo_infracao %}<div class="conteudo-texto"><strong>Enquadramento:</strong> {{ p.codigo_infracao }}</div>{% endif %}
+        {# Tratamento para evitar espaços duplos feios na impressão #}
+        {% set base_text = base_text | replace('  ', ' ') | replace('  ', ' ') %}
 
-            <div class="secao-titulo">2. Defesa Apresentada</div>
-            <div class="conteudo-texto">
-                {% if p.defesa %}
-                    {{ p.defesa }}
-                {% else %}
-                    <em>Não apresentou defesa no prazo regulamentar. Julgado à revelia.</em>
-                {% endif %}
-            </div>
-
-            <div class="secao-titulo">3. Decisão do Chefe CAL</div>
-            <div class="conteudo-texto">
-                <strong>Veredito:</strong> {{ p.decisao_final }} {% if p.tipo_sancao == 'Sustação da Dispensa' and p.detalhes_sancao %} ({{ p.detalhes_sancao }}) {% endif %} <br>
-                <strong>Fundamentação:</strong> {{ p.observacao_decisao }}
-            </div>
-
-            {% if p.texto_recurso %}
-            <div class="secao-titulo">4. Recurso ao Comandante</div>
-            <div class="conteudo-texto">
-                <strong>Decisão Final:</strong> {{ p.decisao_recurso }}<br>
-                <strong>Fundamentação:</strong> {{ p.fundamentacao_recurso }}
-            </div>
+        {# 3. CONSTRUÇÃO DINÂMICA DO ITEM 3 (A Defesa) #}
+        {% set texto_defesa = "apresentou defesa por escrito" if p.defesa else "não apresentou defesa, sendo julgado à revelia" %}
+        
+        {# 4. CONSTRUÇÃO DINÂMICA DO ITEM 4 (A Decisão) #}
+        {% set texto_decisao = "justificado" if p.decisao_final == 'Justificado' else "não justificado" %}
+        
+        {# 5. CONSTRUÇÃO DINÂMICA DO ITEM 5 (A Punição - Só aparece se não for justificado) #}
+        {% set texto_punicao = "" %}
+        {% if p.decisao_final != 'Justificado' %}
+            {% set texto_punicao = " 5. Punir com " ~ p.decisao_final|lower %}
+            {% if p.detalhes_sancao %}
+                 {# Evita duplicar a palavra caso o detalhe já contenha o nome da punição #}
+                 {% if p.decisao_final|lower not in p.detalhes_sancao|lower %}
+                     {% set texto_punicao = texto_punicao ~ " de " ~ p.detalhes_sancao|lower %}
+                 {% else %}
+                     {% set texto_punicao = " 5. Punir com " ~ p.detalhes_sancao|lower %}
+                 {% endif %}
             {% endif %}
+            {% set texto_punicao = texto_punicao ~ "." %}
+        {% endif %}
+
+        <div class="processo-card">
+            <div class="titulo-termo">Termo de Justificação {{ p.id }}/{{ ano_proc }}</div>
+            
+            <p class="paragrafo-resumo">
+                {{ base_text }} 
+                3. Foi aberto prazo de 24 horas, {{ texto_defesa }}. 
+                4. Decisão: considerar o militar {{ texto_decisao }}.{{ texto_punicao }}
+            </p>
         </div>
     {% endfor %}
 
