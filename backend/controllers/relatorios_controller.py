@@ -96,7 +96,6 @@ def gerar_relatorio_horas_aula():
             instrutor_ids_raw = request.form.getlist('instrutor_ids')
             instrutor_ids_filter = [int(_id) for _id in instrutor_ids_raw if _id.isdigit()]
 
-        # Busca dados brutos com o cálculo automático de CH Anterior no Service
         dados_relatorio = RelatorioService.get_horas_aula_por_instrutor(
             data_inicio, data_fim, mode_rr, instrutor_ids_filter
         )
@@ -123,11 +122,11 @@ def gerar_relatorio_horas_aula():
             "report_type": report_type
         }
 
-        # REGRA FIXADA: Preview gera direto sem passar pela tela de edição
+        # Preview gera direto com o HTML do PDF
         if action == 'preview':
             return render_template('relatorios/pdf_template.html', **contexto)
         
-        # Se for download (XLSX ou PDF), vai para a tela de EDIÇÃO intermediária
+        # Download (XLSX ou PDF) vai para a tela de EDIÇÃO
         return render_template('relatorios/editar_mapa_horas.html', **contexto)
 
     return render_template(
@@ -139,10 +138,20 @@ def gerar_relatorio_horas_aula():
 
 
 def processar_exportacao_final(form_data):
-    """Lógica para receber os dados editados do HTML e gerar os arquivos finais"""
+    """Lógica para receber os dados editados e gerar os arquivos finais"""
+    
+    # Função de segurança para impedir que strings vazias ou com vírgula quebrem a exportação
+    def safe_float(val):
+        if not val:
+            return 0.0
+        try:
+            return float(str(val).replace(',', '.'))
+        except ValueError:
+            return 0.0
+
     action = form_data.get('action')
     dados_editados = []
-    instrutor_indices = request.form.getlist('instrutor_index')
+    instrutor_indices = form_data.getlist('instrutor_index')
     
     for idx in instrutor_indices:
         instrutor_item = {
@@ -154,18 +163,18 @@ def processar_exportacao_final(form_data):
             "disciplinas": []
         }
         
-        disc_indices = request.form.getlist(f"disciplina_index_{idx}")
+        disc_indices = form_data.getlist(f"disciplina_index_{idx}")
         for d_idx in disc_indices:
             instrutor_item["disciplinas"].append({
                 "nome_disciplina": form_data.get(f"disc_nome_{idx}_{d_idx}"),
-                "ch_anterior": float(form_data.get(f"ch_anterior_{idx}_{d_idx}", 0)),
-                "ch_mes": float(form_data.get(f"ch_mes_{idx}_{d_idx}", 0)),
-                "ch_total_disciplina": float(form_data.get(f"ch_total_{idx}_{d_idx}", 0))
+                "ch_anterior": safe_float(form_data.get(f"ch_anterior_{idx}_{d_idx}")),
+                "ch_mes": safe_float(form_data.get(f"ch_mes_{idx}_{d_idx}")),
+                "ch_total_disciplina": safe_float(form_data.get(f"ch_total_{idx}_{d_idx}"))
             })
         dados_editados.append(instrutor_item)
 
     data_fim_str = form_data.get('data_fim')
-    data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date()
+    data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date() if data_fim_str else datetime.now().date()
     valor_hora_aula = SiteConfigService.get_valor_hora_aula()
 
     contexto = {
@@ -200,19 +209,19 @@ def processar_exportacao_final(form_data):
             xlsx_bytes = gerar_mapa_gratificacao_xlsx(
                 dados=dados_editados, 
                 valor_hora_aula=valor_hora_aula, 
-                nome_mes_ano=contexto["nome_mes_ano"],
-                titulo_curso=contexto["titulo_curso"],
-                opm_nome=contexto["opm"],
-                escola_nome=contexto["escola_nome"],
+                nome_mes_ano=contexto["nome_mes_ano"] or '',
+                titulo_curso=contexto["titulo_curso"] or '',
+                opm_nome=contexto["opm"] or '',
+                escola_nome=contexto["escola_nome"] or '',
                 data_emissao=data_fim,
-                telefone=contexto["telefone"],
-                auxiliar_nome=contexto["auxiliar_nome"],
-                comandante_nome=contexto["comandante_nome"],
+                telefone=contexto["telefone"] or '',
+                auxiliar_nome=contexto["auxiliar_nome"] or '',
+                comandante_nome=contexto["comandante_nome"] or '',
                 digitador_nome=(getattr(current_user, 'nome_completo', None) or current_user.username),
-                auxiliar_funcao=contexto["auxiliar_funcao"],
-                comandante_funcao=contexto["comandante_funcao"],
+                auxiliar_funcao=contexto["auxiliar_funcao"] or '',
+                comandante_funcao=contexto["comandante_funcao"] or '',
                 data_fim=data_fim,
-                cidade_assinatura=contexto["cidade"]
+                cidade_assinatura=contexto["cidade"] or 'Santa Maria'
             )
         except Exception as e:
             flash(f'Erro ao gerar XLSX: {str(e)}', 'danger')

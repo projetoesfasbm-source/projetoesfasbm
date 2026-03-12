@@ -27,18 +27,20 @@
         <input type="hidden" name="telefone" value="{{ telefone }}">
 
         {% for instrutor in dados %}
+            {% set instrutor_idx = loop.index %}
+            
             <div class="card mb-4 shadow-sm" style="border: 1px solid var(--color-border); border-radius: 8px; margin-bottom: 2rem; background: white;">
                 <div class="card-header" style="background-color: #f8f9fa; padding: 1rem; border-bottom: 1px solid var(--color-border);">
                     <h4 style="margin: 0; color: var(--color-primary);">
                         {{ instrutor.posto }} {{ instrutor.nome }} 
                         <small class="text-muted">(Mat: {{ instrutor.matricula }})</small>
                     </h4>
-                    <input type="hidden" name="instrutor_index" value="{{ loop.index }}">
-                    <input type="hidden" name="instrutor_nome_{{ loop.index }}" value="{{ instrutor.nome }}">
-                    <input type="hidden" name="instrutor_posto_{{ loop.index }}" value="{{ instrutor.posto }}">
-                    <input type="hidden" name="instrutor_matricula_{{ loop.index }}" value="{{ instrutor.matricula }}">
-                    <input type="hidden" name="instrutor_identidade_{{ loop.index }}" value="{{ instrutor.identidade }}">
-                    <input type="hidden" name="instrutor_cpf_{{ loop.index }}" value="{{ instrutor.cpf }}">
+                    <input type="hidden" name="instrutor_index" value="{{ instrutor_idx }}">
+                    <input type="hidden" name="instrutor_nome_{{ instrutor_idx }}" value="{{ instrutor.nome }}">
+                    <input type="hidden" name="instrutor_posto_{{ instrutor_idx }}" value="{{ instrutor.posto }}">
+                    <input type="hidden" name="instrutor_matricula_{{ instrutor_idx }}" value="{{ instrutor.matricula }}">
+                    <input type="hidden" name="instrutor_identidade_{{ instrutor_idx }}" value="{{ instrutor.identidade }}">
+                    <input type="hidden" name="instrutor_cpf_{{ instrutor_idx }}" value="{{ instrutor.cpf }}">
                 </div>
                 
                 <div class="card-body" style="padding: 1rem;">
@@ -54,23 +56,24 @@
                         </thead>
                         <tbody>
                             {% for disc in instrutor.disciplinas %}
+                            {% set disc_idx = loop.index %}
                             <tr>
                                 <td>
                                     {{ disc.nome_disciplina }}
-                                    <input type="hidden" name="disciplina_index_{{ loop.parent.index }}" value="{{ loop.index }}">
-                                    <input type="hidden" name="disc_nome_{{ loop.parent.index }}_{{ loop.index }}" value="{{ disc.nome_disciplina }}">
+                                    <input type="hidden" name="disciplina_index_{{ instrutor_idx }}" value="{{ disc_idx }}">
+                                    <input type="hidden" name="disc_nome_{{ instrutor_idx }}_{{ disc_idx }}" value="{{ disc.nome_disciplina }}">
                                 </td>
                                 <td>
-                                    <input type="number" step="0.5" name="ch_total_{{ loop.parent.index }}_{{ loop.index }}" class="form-control form-control-sm" value="{{ disc.ch_total_disciplina }}" readonly>
+                                    <input type="number" step="0.5" name="ch_total_{{ instrutor_idx }}_{{ disc_idx }}" class="form-control form-control-sm" value="{{ disc.ch_total_disciplina }}" readonly>
                                 </td>
                                 <td>
-                                    <input type="number" step="0.5" name="ch_anterior_{{ loop.parent.index }}_{{ loop.index }}" class="form-control form-control-sm border-warning" value="{{ disc.ch_anterior }}" oninput="atualizarSaldo('{{ loop.parent.index }}', '{{ loop.index }}')">
+                                    <input type="number" step="0.5" name="ch_anterior_{{ instrutor_idx }}_{{ disc_idx }}" class="form-control form-control-sm border-warning" value="{{ disc.ch_anterior }}" oninput="atualizarSaldo('{{ instrutor_idx }}', '{{ disc_idx }}')">
                                 </td>
                                 <td>
-                                    <input type="number" step="0.5" name="ch_mes_{{ loop.parent.index }}_{{ loop.index }}" class="form-control form-control-sm" value="{{ disc.ch_mes }}" readonly>
+                                    <input type="number" step="0.5" name="ch_mes_{{ instrutor_idx }}_{{ disc_idx }}" class="form-control form-control-sm" value="{{ disc.ch_mes }}" readonly>
                                 </td>
                                 <td>
-                                    <span class="badge bg-secondary" id="saldo_{{ loop.parent.index }}_{{ loop.index }}">
+                                    <span class="badge bg-secondary" id="saldo_{{ instrutor_idx }}_{{ disc_idx }}">
                                         {{ disc.ch_total_disciplina - (disc.ch_anterior + disc.ch_mes) }}h
                                     </span>
                                 </td>

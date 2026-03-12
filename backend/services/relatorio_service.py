@@ -67,10 +67,7 @@ class RelatorioService:
         mode_rr: str | None, 
         instrutor_ids_filter: List[int] | None
     ) -> List[Dict[str, Any]]:
-        """
-        Busca e formata os dados de horas-aula por instrutor.
-        Cálculo de CH Anterior é feito pela tabela Horario, exatamente como no mês atual.
-        """
+        
         from ..models import db, Horario, User, Instrutor, Disciplina, Semana, Ciclo
         from ..services.user_service import UserService
 
@@ -83,7 +80,6 @@ class RelatorioService:
         Instrutor2 = aliased(Instrutor)
         User2 = aliased(User)
 
-        # 1. Query principal: Busca as aulas do período atual
         query = (
             select(
                 Horario,
@@ -112,9 +108,10 @@ class RelatorioService:
         dados_agrupados = {}
         slots_pagos = set()
 
-        def get_ch_anterior(instrutor_id, disciplina_id, data_limite):
+        def get_ch_anterior_disciplina(disciplina_id, data_limite):
             """
-            Calcula as horas passadas usando a tabela Horario, que é a fonte da verdade de duração.
+            Calcula todas as horas já dadas (desde o início do ciclo) para a disciplina, 
+            garantindo que o valor seja universal para instrutores daquela matéria.
             """
             query_ant = (
                 select(Horario, Semana)
@@ -122,10 +119,8 @@ class RelatorioService:
                 .join(Ciclo, Semana.ciclo_id == Ciclo.id)
                 .filter(
                     Horario.disciplina_id == disciplina_id,
-                    or_(Horario.instrutor_id == instrutor_id, Horario.instrutor_id_2 == instrutor_id),
                     or_(Horario.status == 'confirmado', Horario.status == 'concluido'),
-                    Ciclo.school_id == school_id,
-                    Semana.data_inicio < data_limite # Filtra apenas semanas que começaram antes do mês
+                    Ciclo.school_id == school_id
                 )
             )
             rows_ant = db.session.execute(query_ant).all()
@@ -136,9 +131,10 @@ class RelatorioService:
                 offset_dias = RelatorioService._get_dia_offset(h_ant.dia_semana)
                 data_aula_ant = s_ant.data_inicio + timedelta(days=offset_dias)
                 
+                # Conta apenas se a aula ocorreu estritamente antes do período selecionado
                 if data_aula_ant < data_limite:
                     duracao_ant = h_ant.duracao or 1
-                    chave = (instrutor_id, data_aula_ant, h_ant.periodo)
+                    chave = (data_aula_ant, h_ant.periodo, getattr(h_ant, 'pelotao', 'PADRAO'))
                     
                     if chave not in slots_ant:
                         slots_ant.add(chave)
@@ -147,25 +143,14 @@ class RelatorioService:
             return float(total_ant)
 
         def processar_instrutor(user_obj, instrutor_obj, disciplina_obj, data_aula, periodo_aula, duracao, pelotao_str):
-            if not user_obj or not instrutor_obj:
-                return
-
-            if not (data_inicio <= data_aula <= data_fim):
-                return
-
-            if mode_rr == 'only_rr' and not instrutor_obj.is_rr:
-                return 
-
-            if mode_rr == 'exclude_rr' and instrutor_obj.is_rr:
-                return 
-
-            if instrutor_ids_filter and instrutor_obj.id not in instrutor_ids_filter:
-                return
+            if not user_obj or not instrutor_obj: return
+            if not (data_inicio <= data_aula <= data_fim): return
+            if mode_rr == 'only_rr' and not instrutor_obj.is_rr: return 
+            if mode_rr == 'exclude_rr' and instrutor_obj.is_rr: return 
+            if instrutor_ids_filter and instrutor_obj.id not in instrutor_ids_filter: return
 
             chave_slot = (instrutor_obj.id, data_aula, periodo_aula)
-            if chave_slot in slots_pagos:
-                return
-
+            if chave_slot in slots_pagos: return
             slots_pagos.add(chave_slot)
 
             chave_agrupamento = user_obj.matricula or f"TEMP_{user_obj.id}"
@@ -187,8 +172,7 @@ class RelatorioService:
 
             nome_disc = disciplina_obj.materia
             if nome_disc not in dados_agrupados[chave_agrupamento]["disciplinas_map"]:
-                # Chama a nova função que calcula corretamente pela tabela Horario
-                ch_paga_historico = get_ch_anterior(instrutor_obj.id, disciplina_obj.id, data_inicio)
+                ch_paga_historico = get_ch_anterior_disciplina(disciplina_obj.id, data_inicio)
                 
                 dados_agrupados[chave_agrupamento]["disciplinas_map"][nome_disc] = {
                     "nome_disciplina": nome_disc,

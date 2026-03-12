@@ -81,20 +81,20 @@
             {% set total_geral_ch_a_pagar = namespace(valor=0) %}
             {% set total_geral_valor_a_pagar = namespace(valor=0) %}
 
-            {% for instrutor_data in dados %}
+            {% for instrutor_data in dados|sort(attribute='matricula') %}
                 {% for disciplina in instrutor_data.disciplinas %}
-                    {% set valor_a_pagar = (disciplina.ch_a_pagar|float or 0) * (valor_hora_aula|float or 0) %}
+                    {% set valor_a_pagar = (disciplina.ch_mes|float or 0) * (valor_hora_aula|float or 0) %}
                     <tr>
-                        <td>{{ instrutor_data.info.user.posto_graduacao or 'N/D' }}</td>
-                        <td>{{ instrutor_data.info.user.matricula }}</td>
-                        <td class="text-left">{{ instrutor_data.info.user.nome_completo }}</td>
-                        <td class="text-left">{{ disciplina.nome }}</td>
-                        <td>{{ disciplina.ch_total }}</td>
-                        <td>{{ disciplina.ch_paga_anteriormente }}</td>
-                        <td>{{ "%.1f"|format(disciplina.ch_a_pagar) }}</td>
+                        <td>{{ instrutor_data.posto or 'N/D' }}</td>
+                        <td>{{ instrutor_data.matricula }}</td>
+                        <td class="text-left">{{ instrutor_data.nome }}</td>
+                        <td class="text-left">{{ disciplina.nome_disciplina }}</td>
+                        <td>{{ disciplina.ch_total_disciplina }}</td>
+                        <td>{{ disciplina.ch_anterior }}</td>
+                        <td>{{ "%.1f"|format(disciplina.ch_mes) }}</td>
                         <td style="text-align: right;">R$ {{ "%.2f"|format(valor_a_pagar)|replace('.', ',') }}</td>
                     </tr>
-                    {% set total_geral_ch_a_pagar.valor = total_geral_ch_a_pagar.valor + (disciplina.ch_a_pagar or 0) %}
+                    {% set total_geral_ch_a_pagar.valor = total_geral_ch_a_pagar.valor + (disciplina.ch_mes|float or 0) %}
                     {% set total_geral_valor_a_pagar.valor = total_geral_valor_a_pagar.valor + valor_a_pagar %}
                 {% endfor %}
             {% else %}
