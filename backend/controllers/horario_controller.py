@@ -152,7 +152,7 @@ def index():
     instrutor_turmas_vinculadas = []
     priority_active = False
     priority_allowed_names = [] 
-    all_materias_names = []       
+    all_materias_names = []        
 
     if school_id:
         try:
