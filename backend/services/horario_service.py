@@ -463,71 +463,82 @@ class HorarioService:
                         f"(Período {conflict_aula.periodo})."
                     ), 409
 
-            # ---------- EDIÇÃO / EXCLUSÃO DO HORÁRIO ANTERIOR ----------
+
+            # =========================================================================
+            # =================== LÓGICA ROBUSTA DE GRAVAÇÃO/EDIÇÃO ===================
+            # =========================================================================
+            
+            periodos_solicitados = list(range(periodo_inicio, periodo_fim + 1))
+            
+            # --- 1. CHECAGEM DE CONFLITO INTERNO (MESMA TURMA) ANTES DE DELETAR ---
+            aula_original = db.session.get(Horario, horario_id) if horario_id else None
+            group_id_original = aula_original.group_id if aula_original else None
+
+            conflito_query_interno = select(Horario).where(
+                Horario.pelotao == pelotao,
+                Horario.semana_id == semana_id,
+                Horario.dia_semana == dia,
+                Horario.periodo <= periodo_fim,
+                (Horario.periodo + Horario.duracao - 1) >= periodo_inicio
+            )
+            
+            # Ignora os blocos da PRÓPRIA aula que estamos editando para evitar falso positivo
+            if group_id_original:
+                conflito_query_interno = conflito_query_interno.where(Horario.group_id != group_id_original)
+            elif horario_id:
+                conflito_query_interno = conflito_query_interno.where(Horario.id != int(horario_id))
+
+            conflito_interno = db.session.scalar(conflito_query_interno)
+            if conflito_interno:
+                return False, f"⚠️ ERRO DE MARCAÇÃO DUPLA: O {conflito_interno.periodo}º período já está ocupado por '{conflito_interno.disciplina.materia}'.", 409
+
+            # --- 2. DELEÇÃO DO HORÁRIO ANTERIOR DENTRO DA TRANSAÇÃO SEGURA ---
             if horario_id:
-                aula_original = db.session.get(Horario, horario_id)
                 if not aula_original or not HorarioService.can_edit_horario(aula_original, user):
                     return False, 'Aula não encontrada ou sem permissão para editar.', 404
 
-                if aula_original.group_id:
-                    db.session.query(Horario).filter(
-                        Horario.group_id == aula_original.group_id
-                    ).delete()
+                if group_id_original:
+                    db.session.query(Horario).filter(Horario.group_id == group_id_original).delete()
                 else:
                     db.session.delete(aula_original)
 
-                db.session.flush()
+                db.session.flush() # Aplica a deleção no banco sem finalizar, protegendo o estado
 
-            # ---------- CRIAÇÃO DOS BLOCOS DE AULA ----------
+            # --- 3. CRIAÇÃO DOS NOVOS BLOCOS DE AULA (SISTEMA DE ÍNDICES SEGURO) ---
             break_points = {3, 6, 9}
-            group_id = str(uuid.uuid4()) if duracao > 1 else None
-            periodos_restantes = list(range(periodo_inicio, periodo_fim + 1))
-
-            while periodos_restantes:
-                periodo_bloco_inicio = periodos_restantes[0]
-                periodo_bloco_fim = periodo_bloco_inicio
-
-                for i in range(1, len(periodos_restantes)):
-                    if (
-                        periodos_restantes[i] == periodo_bloco_fim + 1
-                        and periodo_bloco_fim not in break_points
-                    ):
-                        periodo_bloco_fim = periodos_restantes[i]
-                    else:
-                        break
-
-                duracao_bloco = (periodo_bloco_fim - periodo_bloco_inicio) + 1
-
-                query_conflito = select(Horario).where(
-                    Horario.pelotao == pelotao,
-                    Horario.semana_id == semana_id,
-                    Horario.dia_semana == dia,
-                    Horario.periodo <= periodo_bloco_fim,
-                    (Horario.periodo + Horario.duracao - 1) >= periodo_bloco_inicio,
-                )
-
-                if db.session.execute(query_conflito).scalars().first():
-                    return False, (
-                        f'Conflito de horário interno na turma {pelotao} '
-                        f'no período {periodo_bloco_inicio}.'
-                    ), 409
-
+            new_group_id = str(uuid.uuid4()) if duracao > 1 else None
+            
+            idx = 0
+            while idx < len(periodos_solicitados):
+                p_start = periodos_solicitados[idx]
+                p_current = p_start
+                dur_bloco = 1
+                
+                # Estica o bloco até bater no fim ou em um breakpoint
+                while (idx + 1) < len(periodos_solicitados) and \
+                      periodos_solicitados[idx+1] == p_current + 1 and \
+                      p_current not in break_points:
+                    p_current = periodos_solicitados[idx+1]
+                    dur_bloco += 1
+                    idx += 1
+                
                 nova_aula_bloco = Horario(
                     pelotao=pelotao,
                     semana_id=semana_id,
                     dia_semana=dia,
-                    periodo=periodo_bloco_inicio,
-                    duracao=duracao_bloco,
+                    periodo=p_start,
+                    duracao=dur_bloco,
                     disciplina_id=disciplina_id,
                     observacao=observacao,
                     instrutor_id=instrutor_id_1,
                     instrutor_id_2=instrutor_id_2,
                     status='confirmado' if is_admin else 'pendente',
-                    group_id=group_id,
+                    group_id=new_group_id,
                 )
                 db.session.add(nova_aula_bloco)
+                idx += 1 # Avança para o próximo bloco
 
-                periodos_restantes = periodos_restantes[duracao_bloco:]
+            # =========================================================================
 
             # ---------- NOTIFICAÇÃO ----------
             if not is_admin:
