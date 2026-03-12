@@ -123,11 +123,11 @@ def gerar_relatorio_horas_aula():
             "report_type": report_type
         }
 
-        # REGRA FIXADA: Preview gera direto. Exportações passam pela edição.
+        # REGRA FIXADA: Preview gera direto sem passar pela tela de edição
         if action == 'preview':
             return render_template('relatorios/pdf_template.html', **contexto)
         
-        # Se for download (XLSX ou PDF), vai para a tela de EDIÇÃO
+        # Se for download (XLSX ou PDF), vai para a tela de EDIÇÃO intermediária
         return render_template('relatorios/editar_mapa_horas.html', **contexto)
 
     return render_template(
@@ -139,7 +139,7 @@ def gerar_relatorio_horas_aula():
 
 
 def processar_exportacao_final(form_data):
-    """Lógica para receber os dados editados e gerar os arquivos finais"""
+    """Lógica para receber os dados editados do HTML e gerar os arquivos finais"""
     action = form_data.get('action')
     dados_editados = []
     instrutor_indices = request.form.getlist('instrutor_index')
@@ -164,7 +164,8 @@ def processar_exportacao_final(form_data):
             })
         dados_editados.append(instrutor_item)
 
-    data_fim = datetime.strptime(form_data.get('data_fim'), '%Y-%m-%d').date()
+    data_fim_str = form_data.get('data_fim')
+    data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date()
     valor_hora_aula = SiteConfigService.get_valor_hora_aula()
 
     contexto = {
@@ -185,27 +186,39 @@ def processar_exportacao_final(form_data):
 
     if action == 'download':
         rendered_html = render_template('relatorios/pdf_template.html', **contexto)
-        pdf_content = HTML(string=rendered_html, base_url=request.url_root).write_pdf()
-        return send_file(io.BytesIO(pdf_content), as_attachment=True, download_name="relatorio_horas.pdf", mimetype='application/pdf')
+        try:
+            pdf_content = HTML(string=rendered_html, base_url=request.url_root).write_pdf()
+        except Exception as e:
+            flash(f'Erro ao gerar PDF: {str(e)}', 'danger')
+            return redirect(url_for('relatorios.index'))
+            
+        pdf_name = _build_filename('relatorio_horas_aula', contexto.get("nome_mes_ano"), 'pdf')
+        return send_file(io.BytesIO(pdf_content), as_attachment=True, download_name=pdf_name, mimetype='application/pdf')
 
     elif action == 'download_xlsx':
-        xlsx_bytes = gerar_mapa_gratificacao_xlsx(
-            dados=dados_editados, 
-            valor_hora_aula=valor_hora_aula, 
-            nome_mes_ano=contexto["nome_mes_ano"],
-            titulo_curso=contexto["titulo_curso"],
-            opm_nome=contexto["opm"],
-            escola_nome=contexto["escola_nome"],
-            data_emissao=data_fim,
-            telefone=contexto["telefone"],
-            auxiliar_nome=contexto["auxiliar_nome"],
-            comandante_nome=contexto["comandante_nome"],
-            digitador_nome=current_user.username,
-            auxiliar_funcao=contexto["auxiliar_funcao"],
-            comandante_funcao=contexto["comandante_funcao"],
-            data_fim=data_fim,
-            cidade_assinatura=contexto["cidade"]
-        )
-        return send_file(io.BytesIO(xlsx_bytes), as_attachment=True, download_name="mapa_gratificacao.xlsx", mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        try:
+            xlsx_bytes = gerar_mapa_gratificacao_xlsx(
+                dados=dados_editados, 
+                valor_hora_aula=valor_hora_aula, 
+                nome_mes_ano=contexto["nome_mes_ano"],
+                titulo_curso=contexto["titulo_curso"],
+                opm_nome=contexto["opm"],
+                escola_nome=contexto["escola_nome"],
+                data_emissao=data_fim,
+                telefone=contexto["telefone"],
+                auxiliar_nome=contexto["auxiliar_nome"],
+                comandante_nome=contexto["comandante_nome"],
+                digitador_nome=(getattr(current_user, 'nome_completo', None) or current_user.username),
+                auxiliar_funcao=contexto["auxiliar_funcao"],
+                comandante_funcao=contexto["comandante_funcao"],
+                data_fim=data_fim,
+                cidade_assinatura=contexto["cidade"]
+            )
+        except Exception as e:
+            flash(f'Erro ao gerar XLSX: {str(e)}', 'danger')
+            return redirect(url_for('relatorios.index'))
+
+        xlsx_name = _build_filename('relatorio_horas_aula', contexto.get("nome_mes_ano"), 'xlsx')
+        return send_file(io.BytesIO(xlsx_bytes), as_attachment=True, download_name=xlsx_name, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
     return redirect(url_for('relatorios.index'))
