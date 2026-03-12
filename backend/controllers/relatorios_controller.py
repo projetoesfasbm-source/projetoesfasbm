@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Optional
 import io
 import locale
+import json
 
 from weasyprint import HTML
 from werkzeug.utils import secure_filename
@@ -56,7 +57,6 @@ def gerar_relatorio_horas_aula():
 
     todos_instrutores = []
     if report_type == 'por_instrutor':
-        # CORREÇÃO 1: Busca a lista COMPLETA sem paginação para o dropdown
         todos_instrutores = InstrutorService.get_all_instrutores_sem_paginacao(current_user)
 
     report_defaults = {
@@ -70,6 +70,10 @@ def gerar_relatorio_horas_aula():
     }
 
     if request.method == 'POST':
+        # Se vier da tela de edição final (Ação de exportação confirmada)
+        if request.form.get('is_final_export') == 'true':
+            return processar_exportacao_final(request.form)
+
         data_inicio_str = request.form.get('data_inicio')
         data_fim_str = request.form.get('data_fim')
         action = request.form.get('action')
@@ -81,90 +85,50 @@ def gerar_relatorio_horas_aula():
             flash('Formato de data inválido. Use AAAA-MM-DD.', 'danger')
             return redirect(url_for('relatorios.gerar_relatorio_horas_aula', tipo=report_type))
 
-        if data_fim < data_inicio:
-            flash('A data de fim não pode ser anterior à data de início.', 'warning')
-            return redirect(url_for('relatorios.gerar_relatorio_horas_aula', tipo=report_type))
-
-        # CORREÇÃO 2: Lógica refinada para o filtro RR
         mode_rr = None
         if report_type == 'mensal':
-            mode_rr = 'exclude_rr'  # Exportação Mensal: TODOS MENOS RR
+            mode_rr = 'exclude_rr'
         elif report_type == 'efetivo_rr':
-            mode_rr = 'only_rr'     # Exportação RR: SOMENTE RR
-        # Se for 'por_instrutor', mode_rr continua None (filtra apenas pelos IDs selecionados)
+            mode_rr = 'only_rr'
 
         instrutor_ids_filter = None
         if report_type == 'por_instrutor':
             instrutor_ids_raw = request.form.getlist('instrutor_ids')
-            if not instrutor_ids_raw:
-                flash('Por favor, selecione pelo menos um instrutor.', 'warning')
-                return redirect(url_for('relatorios.gerar_relatorio_horas_aula', tipo=report_type))
             instrutor_ids_filter = [int(_id) for _id in instrutor_ids_raw if _id.isdigit()]
-            if not instrutor_ids_filter:
-                flash('Seleção de instrutores inválida.', 'warning')
-                return redirect(url_for('relatorios.gerar_relatorio_horas_aula', tipo=report_type))
 
-        # Passamos mode_rr em vez de um booleano simples
+        # Busca dados brutos com o cálculo automático de CH Anterior no Service
         dados_relatorio = RelatorioService.get_horas_aula_por_instrutor(
             data_inicio, data_fim, mode_rr, instrutor_ids_filter
         )
-        valor_hora_aula = SiteConfigService.get_valor_hora_aula()
-        
+
         meses = ("Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
                  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro")
-        nome_mes_ano_pt = f"{meses[data_inicio.month - 1]} de {data_inicio.year}"
-        data_assinatura_pt = f"{data_fim.day} de {meses[data_fim.month - 1]} de {data_fim.year}"
         
-        curso_nome = (request.form.get('curso_nome') or '').strip() or report_defaults["curso_nome"]
-        opm_nome = (request.form.get('opm') or '').strip() or report_defaults["opm"]
-        escola_nome = (request.form.get('escola_nome') or '').strip() or report_defaults["escola_nome"]
-        telefone = (request.form.get('telefone') or '').strip() or report_defaults["telefone"]
-        cidade = (request.form.get('cidade') or '').strip() or report_defaults["cidade"]
-        comandante_funcao = (request.form.get('comandante_funcao') or '').strip() or report_defaults["comandante_funcao"]
-        auxiliar_funcao = (request.form.get('auxiliar_funcao') or '').strip() or report_defaults["auxiliar_funcao"]
-
         contexto = {
-            "dados": dados_relatorio, "data_inicio": data_inicio, "data_fim": data_fim, "titulo_curso": curso_nome,
-            "nome_mes_ano": nome_mes_ano_pt, "data_assinatura": data_assinatura_pt,
-            "comandante_nome": (request.form.get('comandante_nome') or '').strip(),
-            "auxiliar_nome": (request.form.get('auxiliar_nome') or '').strip(),
-            "valor_hora_aula": valor_hora_aula, "opm": opm_nome, "telefone": telefone, "cidade": cidade,
-            "auxiliar_funcao": auxiliar_funcao, "comandante_funcao": comandante_funcao, "escola_nome": escola_nome,
+            "dados": dados_relatorio,
+            "data_inicio": data_inicio_str,
+            "data_fim": data_fim_str,
+            "nome_mes_ano": f"{meses[data_inicio.month - 1]} de {data_inicio.year}",
+            "data_assinatura": f"{data_fim.day} de {meses[data_fim.month - 1]} de {data_fim.year}",
+            "titulo_curso": (request.form.get('curso_nome') or report_defaults["curso_nome"]),
+            "opm": (request.form.get('opm') or report_defaults["opm"]),
+            "escola_nome": (request.form.get('escola_nome') or report_defaults["escola_nome"]),
+            "cidade": (request.form.get('cidade') or report_defaults["cidade"]),
+            "comandante_nome": request.form.get('comandante_nome'),
+            "comandante_funcao": (request.form.get('comandante_funcao') or report_defaults["comandante_funcao"]),
+            "auxiliar_nome": request.form.get('auxiliar_nome'),
+            "auxiliar_funcao": (request.form.get('auxiliar_funcao') or report_defaults["auxiliar_funcao"]),
+            "telefone": (request.form.get('telefone') or report_defaults["telefone"]),
+            "valor_hora_aula": SiteConfigService.get_valor_hora_aula(),
+            "report_type": report_type
         }
 
+        # REGRA FIXADA: Preview gera direto. Exportações passam pela edição.
         if action == 'preview':
             return render_template('relatorios/pdf_template.html', **contexto)
         
-        elif action == 'download':
-            rendered_html = render_template('relatorios/pdf_template.html', **contexto)
-            try:
-                pdf_content = HTML(string=rendered_html, base_url=request.url_root).write_pdf()
-            except Exception as e:
-                flash(f'Erro ao gerar PDF: {str(e)}', 'danger')
-                return redirect(url_for('relatorios.gerar_relatorio_horas_aula', tipo=report_type))
-            pdf_name = _build_filename('relatorio_horas_aula', contexto.get("nome_mes_ano"), 'pdf')
-            return send_file(io.BytesIO(pdf_content), as_attachment=True, download_name=pdf_name, mimetype='application/pdf')
-
-        elif action == 'download_xlsx':
-            try:
-                xlsx_bytes = gerar_mapa_gratificacao_xlsx(
-                    dados=dados_relatorio, valor_hora_aula=valor_hora_aula, nome_mes_ano=contexto["nome_mes_ano"],
-                    titulo_curso=contexto.get("titulo_curso") or "", opm_nome=contexto.get("opm") or "",
-                    escola_nome=contexto.get("escola_nome") or escola_nome, data_emissao=data_fim, telefone=contexto.get("telefone"),
-                    auxiliar_nome=contexto.get("auxiliar_nome"), comandante_nome=contexto.get("comandante_nome"),
-                    digitador_nome=(getattr(current_user, 'nome_completo', None) or getattr(current_user, 'username', None)),
-                    auxiliar_funcao=contexto.get("auxiliar_funcao"), comandante_funcao=contexto.get("comandante_funcao"),
-                    data_fim=data_fim, cidade_assinatura=contexto.get("cidade") or report_defaults["cidade"],
-                )
-            except Exception as e:
-                flash(f'Erro ao gerar XLSX: {str(e)}', 'danger')
-                return redirect(url_for('relatorios.gerar_relatorio_horas_aula', tipo=report_type))
-
-            xlsx_name = _build_filename('relatorio_horas_aula', contexto.get("nome_mes_ano"), 'xlsx')
-            return send_file(io.BytesIO(xlsx_bytes), as_attachment=True, download_name=xlsx_name, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-
-        flash('Ação inválida.', 'warning')
-        return redirect(url_for('relatorios.gerar_relatorio_horas_aula', tipo=report_type))
+        # Se for download (XLSX ou PDF), vai para a tela de EDIÇÃO
+        return render_template('relatorios/editar_mapa_horas.html', **contexto)
 
     return render_template(
         'relatorios/horas_aula_form.html',
@@ -172,3 +136,76 @@ def gerar_relatorio_horas_aula():
         todos_instrutores=todos_instrutores,
         form_defaults=report_defaults,
     )
+
+
+def processar_exportacao_final(form_data):
+    """Lógica para receber os dados editados e gerar os arquivos finais"""
+    action = form_data.get('action')
+    dados_editados = []
+    instrutor_indices = request.form.getlist('instrutor_index')
+    
+    for idx in instrutor_indices:
+        instrutor_item = {
+            "nome": form_data.get(f"instrutor_nome_{idx}"),
+            "posto": form_data.get(f"instrutor_posto_{idx}"),
+            "matricula": form_data.get(f"instrutor_matricula_{idx}"),
+            "identidade": form_data.get(f"instrutor_identidade_{idx}"),
+            "cpf": form_data.get(f"instrutor_cpf_{idx}"),
+            "disciplinas": []
+        }
+        
+        disc_indices = request.form.getlist(f"disciplina_index_{idx}")
+        for d_idx in disc_indices:
+            instrutor_item["disciplinas"].append({
+                "nome_disciplina": form_data.get(f"disc_nome_{idx}_{d_idx}"),
+                "ch_anterior": float(form_data.get(f"ch_anterior_{idx}_{d_idx}", 0)),
+                "ch_mes": float(form_data.get(f"ch_mes_{idx}_{d_idx}", 0)),
+                "ch_total_disciplina": float(form_data.get(f"ch_total_{idx}_{d_idx}", 0))
+            })
+        dados_editados.append(instrutor_item)
+
+    data_fim = datetime.strptime(form_data.get('data_fim'), '%Y-%m-%d').date()
+    valor_hora_aula = SiteConfigService.get_valor_hora_aula()
+
+    contexto = {
+        "dados": dados_editados,
+        "titulo_curso": form_data.get('titulo_curso'),
+        "nome_mes_ano": form_data.get('nome_mes_ano'),
+        "data_assinatura": f"{data_fim.day} de {form_data.get('nome_mes_ano')}",
+        "comandante_nome": form_data.get('comandante_nome'),
+        "comandante_funcao": form_data.get('comandante_funcao'),
+        "auxiliar_nome": form_data.get('auxiliar_nome'),
+        "auxiliar_funcao": form_data.get('auxiliar_funcao'),
+        "valor_hora_aula": valor_hora_aula,
+        "opm": form_data.get('opm'),
+        "telefone": form_data.get('telefone'),
+        "cidade": form_data.get('cidade'),
+        "escola_nome": form_data.get('escola_nome'),
+    }
+
+    if action == 'download':
+        rendered_html = render_template('relatorios/pdf_template.html', **contexto)
+        pdf_content = HTML(string=rendered_html, base_url=request.url_root).write_pdf()
+        return send_file(io.BytesIO(pdf_content), as_attachment=True, download_name="relatorio_horas.pdf", mimetype='application/pdf')
+
+    elif action == 'download_xlsx':
+        xlsx_bytes = gerar_mapa_gratificacao_xlsx(
+            dados=dados_editados, 
+            valor_hora_aula=valor_hora_aula, 
+            nome_mes_ano=contexto["nome_mes_ano"],
+            titulo_curso=contexto["titulo_curso"],
+            opm_nome=contexto["opm"],
+            escola_nome=contexto["escola_nome"],
+            data_emissao=data_fim,
+            telefone=contexto["telefone"],
+            auxiliar_nome=contexto["auxiliar_nome"],
+            comandante_nome=contexto["comandante_nome"],
+            digitador_nome=current_user.username,
+            auxiliar_funcao=contexto["auxiliar_funcao"],
+            comandante_funcao=contexto["comandante_funcao"],
+            data_fim=data_fim,
+            cidade_assinatura=contexto["cidade"]
+        )
+        return send_file(io.BytesIO(xlsx_bytes), as_attachment=True, download_name="mapa_gratificacao.xlsx", mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+    return redirect(url_for('relatorios.index'))

@@ -5,8 +5,8 @@ import os
 import json
 from io import BytesIO
 from typing import Any, Dict, List, Tuple
-from datetime import date, timedelta
-from sqlalchemy import select, or_
+from datetime import date, timedelta, datetime
+from sqlalchemy import select, or_, func, and_
 from sqlalchemy.orm import aliased
 
 # Importações seguras
@@ -69,13 +69,9 @@ class RelatorioService:
     ) -> List[Dict[str, Any]]:
         """
         Busca e formata os dados de horas-aula por instrutor.
-        REGRAS MANTIDAS:
-        1. Soma CH prevista por cada turma (Ex: 10 per. x 4 turmas = 40h).
-        2. Ordenação por Matrícula (Crescente).
-        3. Separação rigorosa de Reserva Remunerada (RR).
-        4. Filtro por status 'confirmado' e 'concluido'.
+        Cálculo de CH Anterior: Soma CH de diários assinados estritamente antes de 'data_inicio'.
         """
-        from ..models import db, Horario, User, Instrutor, Disciplina, Semana, Ciclo
+        from ..models import db, Horario, User, Instrutor, Disciplina, Semana, Ciclo, DiarioClasse
         from ..services.user_service import UserService
 
         school_id = UserService.get_current_school_id()
@@ -115,16 +111,27 @@ class RelatorioService:
         dados_agrupados = {}
         slots_pagos = set()
 
+        def get_ch_anterior(instrutor_id, disciplina_id, data_limite):
+            """Busca no histórico de diários assinados a carga horária já cumprida antes do período"""
+            # Confirmado que o atributo é 'carga_horaria' conforme o modelo DiarioClasse
+            ch_anterior = db.session.query(func.sum(DiarioClasse.carga_horaria)).filter(
+                DiarioClasse.instrutor_id == instrutor_id,
+                DiarioClasse.disciplina_id == disciplina_id,
+                DiarioClasse.data_aula < data_limite,
+                DiarioClasse.assinado == True,
+                DiarioClasse.school_id == school_id
+            ).scalar()
+            return float(ch_anterior or 0.0)
+
         def processar_instrutor(user_obj, instrutor_obj, disciplina_obj, data_aula, periodo_aula, duracao, pelotao_str):
             if not user_obj or not instrutor_obj:
                 return
 
-            # Filtro rigoroso de data (Dia a Dia)
+            # Filtro de data do período solicitado
             if not (data_inicio <= data_aula <= data_fim):
                 return
 
-            # SEPARAÇÃO RR: Se estiver no modo 'exclude_rr' (Geral), pula se for RR. 
-            # Se estiver no modo 'only_rr', pula se NÃO for RR.
+            # Regras RR (Reserva Remunerada)
             if mode_rr == 'only_rr' and not instrutor_obj.is_rr:
                 return 
 
@@ -134,6 +141,7 @@ class RelatorioService:
             if instrutor_ids_filter and instrutor_obj.id not in instrutor_ids_filter:
                 return
 
+            # Evita duplicidade de pagamento no mesmo slot
             chave_slot = (instrutor_obj.id, data_aula, periodo_aula)
             if chave_slot in slots_pagos:
                 return
@@ -145,10 +153,13 @@ class RelatorioService:
             if chave_agrupamento not in dados_agrupados:
                 dados_agrupados[chave_agrupamento] = {
                     "info": {
+                        "instrutor_id": instrutor_obj.id,
                         "user": {
                             "posto_graduacao": user_obj.posto_graduacao,
                             "matricula": user_obj.matricula,
                             "nome_completo": user_obj.nome_completo,
+                            "identidade": getattr(user_obj, 'identidade', ''),
+                            "cpf": getattr(user_obj, 'cpf', '')
                         }
                     },
                     "disciplinas_map": {}
@@ -156,58 +167,60 @@ class RelatorioService:
 
             nome_disc = disciplina_obj.materia
             if nome_disc not in dados_agrupados[chave_agrupamento]["disciplinas_map"]:
+                # LOGICA NOVA: Busca automática do histórico anterior ao período
+                ch_paga_historico = get_ch_anterior(instrutor_obj.id, disciplina_obj.id, data_inicio)
+                
                 dados_agrupados[chave_agrupamento]["disciplinas_map"][nome_disc] = {
-                    "nome": nome_disc,
-                    "ch_total": 0,
-                    "ch_a_pagar": 0,
+                    "nome_disciplina": nome_disc,
+                    "ch_total_disciplina": 0,
+                    "ch_anterior": ch_paga_historico,
+                    "ch_mes": 0,
                     "_pelotoes_contabilizados": set()
                 }
 
             item_disciplina = dados_agrupados[chave_agrupamento]["disciplinas_map"][nome_disc]
             pelotao_clean = pelotao_str.strip() if pelotao_str else "PADRAO"
 
+            # Contabiliza CH total da disciplina baseada nos pelotões que o instrutor leciona
             if pelotao_clean not in item_disciplina["_pelotoes_contabilizados"]:
-                item_disciplina["ch_total"] += (disciplina_obj.carga_horaria_prevista or 0)
+                item_disciplina["ch_total_disciplina"] += (disciplina_obj.carga_horaria_prevista or 0)
                 item_disciplina["_pelotoes_contabilizados"].add(pelotao_clean)
 
-            item_disciplina["ch_a_pagar"] += duracao
+            item_disciplina["ch_mes"] += duracao
 
+        # Itera sobre os horários encontrados no período
         for row in rows:
-            horario = row[0]
-            disciplina = row[1]
-            inst1 = row[2]
-            usr1 = row[3]
-            inst2 = row[4]
-            usr2 = row[5]
-            semana = row[6]
-
+            horario, disciplina, inst1, usr1, inst2, usr2, semana = row
             duracao = horario.duracao or 1
             periodo = horario.periodo
             pelotao = getattr(horario, 'pelotao', '')
-
             offset_dias = RelatorioService._get_dia_offset(horario.dia_semana)
             data_aula = semana.data_inicio + timedelta(days=offset_dias)
 
             if inst1 and usr1:
                 processar_instrutor(usr1, inst1, disciplina, data_aula, periodo, duracao, pelotao)
-
             if inst2 and usr2:
                 if not (inst1 and inst1.id == inst2.id):
                     processar_instrutor(usr2, inst2, disciplina, data_aula, periodo, duracao, pelotao)
 
+        # Formata lista final ordenada por matrícula
         lista_final = []
         chaves_ordenadas = sorted(dados_agrupados.keys())
 
         for chave in chaves_ordenadas:
             item = dados_agrupados[chave]
             lista_disciplinas = list(item["disciplinas_map"].values())
-
             for d in lista_disciplinas:
                 if "_pelotoes_contabilizados" in d:
                     del d["_pelotoes_contabilizados"]
 
             lista_final.append({
-                "info": item["info"],
+                "instrutor_id": item["info"]["instrutor_id"],
+                "nome": item["info"]["user"]["nome_completo"],
+                "posto": item["info"]["user"]["posto_graduacao"],
+                "matricula": item["info"]["user"]["matricula"],
+                "identidade": item["info"]["user"]["identidade"],
+                "cpf": item["info"]["user"]["cpf"],
                 "disciplinas": lista_disciplinas
             })
 
@@ -216,7 +229,6 @@ class RelatorioService:
     @staticmethod
     def export_to_google_sheets(contexto: Dict[str, Any]) -> Tuple[bool, str]:
         from .xlsx_service import gerar_mapa_gratificacao_xlsx
-
         try:
             xlsx_bytes = gerar_mapa_gratificacao_xlsx(
                 dados=contexto.get("dados"),
@@ -235,14 +247,8 @@ class RelatorioService:
                 data_fim=contexto.get("data_fim"),
                 cidade_assinatura=contexto.get("cidade"),
             )
-
             nome_arquivo = f'Relatório Horas-Aula - {contexto.get("nome_mes_ano", "geral")}'
             sheet_url = _upload_xlsx_and_convert_to_sheet(nome_arquivo, xlsx_bytes)
-
-            if sheet_url:
-                return True, sheet_url
-            else:
-                return False, "Falha no upload do arquivo para o Google Drive. Verifique as credenciais da API."
+            return (True, sheet_url) if sheet_url else (False, "Falha no upload do arquivo.")
         except Exception as e:
-            print(f"ERRO CRÍTICO ao exportar para Google Sheets: {e}")
-            return False, f"Ocorreu um erro interno ao gerar ou enviar o arquivo: {e}"
+            return False, f"Erro ao exportar: {e}"

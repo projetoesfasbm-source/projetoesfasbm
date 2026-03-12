@@ -26,6 +26,7 @@ __all__ = ["gerar_mapa_gratificacao_xlsx"]
 
 # --- Helpers ---
 def _safe(obj: Any, path: str, default: Any = None) -> Any:
+    """Navega de forma segura em dicionários ou objetos"""
     cur = obj
     for part in path.split("."):
         if cur is None: return default
@@ -43,7 +44,7 @@ def _apply_border_to_range(ws, cell_range_string, border_style):
         for cell in row:
             cell.border = border_style
 
-# --- Função Principal Definitiva ---
+# --- Função Principal Atualizada ---
 def gerar_mapa_gratificacao_xlsx(
     dados: Iterable[Any], valor_hora_aula: float, nome_mes_ano: str, titulo_curso: str,
     opm_nome: str, escola_nome: str, data_emissao: Optional[date],
@@ -65,14 +66,14 @@ def gerar_mapa_gratificacao_xlsx(
     ws.page_margins = PageMargins(left=0.5, right=0.5, top=0.5, bottom=0.5)
     ws.sheet_view.showGridLines = False
     
-    ws.column_dimensions['A'].width = 20
-    ws.column_dimensions['B'].width = 12
-    ws.column_dimensions['C'].width = 35
-    ws.column_dimensions['D'].width = 35
-    ws.column_dimensions['E'].width = 9
-    ws.column_dimensions['F'].width = 14
-    ws.column_dimensions['G'].width = 9
-    ws.column_dimensions['H'].width = 15
+    ws.column_dimensions['A'].width = 18 # Posto
+    ws.column_dimensions['B'].width = 12 # Id Func
+    ws.column_dimensions['C'].width = 35 # Nome
+    ws.column_dimensions['D'].width = 30 # Disciplina
+    ws.column_dimensions['E'].width = 10 # CH Total
+    ws.column_dimensions['F'].width = 15 # CH Anterior
+    ws.column_dimensions['G'].width = 10 # CH Pagar
+    ws.column_dimensions['H'].width = 15 # Valor R$
 
     # 2. Definição de Estilos
     thin_border_side = Side(style="thin", color="000000")
@@ -91,12 +92,9 @@ def gerar_mapa_gratificacao_xlsx(
     signature_font = Font(name='Times New Roman', size=11)
 
     # 3. Construção do Cabeçalho
-    for i in range(1, 9): ws.row_dimensions[i].height = 15
-    ws.row_dimensions[5].height = 18
-
     ws.merge_cells("A1:B8")
     ws.cell(1, 1).value = f"\n\n\n\n\n________________________\n{comandante_nome or 'Nome Comandante'}\n{comandante_funcao or 'Comandante da EsFAS'}"
-    ws.cell(1, 1).font = Font(name='Times New Roman', bold=True, size=11)
+    ws.cell(1, 1).font = Font(name='Times New Roman', bold=True, size=10)
     ws.cell(1, 1).alignment = center_top_align_wrap
     _apply_border_to_range(ws, "A1:B8", border_all)
 
@@ -117,7 +115,6 @@ def gerar_mapa_gratificacao_xlsx(
 
     # 4. Cabeçalho da Tabela
     headers = ["Posto / graduação", "Id. Func.", "Nome completo do servidor", "Disciplina", "CH total", "CH paga anteriormente", "CH a pagar", "Valor em R$"]
-    ws.row_dimensions[current_row].height = 20
     for col_idx, text in enumerate(headers, 1):
         cell = ws.cell(current_row, col_idx, text)
         cell.font = table_header_font
@@ -128,76 +125,77 @@ def gerar_mapa_gratificacao_xlsx(
     # 5. Dados da Tabela
     total_ch_a_pagar_sum = 0.0
     total_valor_sum = 0.0
+    
     if dados:
-        # --- ALTERAÇÃO AQUI: ORDENAÇÃO PELA MATRÍCULA (ID. FUNC.) ---
-        # Antes ordenava por "info.user.nome_completo", agora por "info.user.matricula"
-        for instrutor in sorted(dados, key=lambda i: _safe(i, "info.user.matricula", "")):
-            user = _safe(instrutor, "info.user", {})
-            for disc in sorted(_iter_disciplinas(instrutor), key=lambda d: d.get("nome", "")):
-                ws.row_dimensions[current_row].height = 30
-                ch_a_pagar_val = float(_safe(disc, "ch_a_pagar", 0) or 0)
-                valor_a_pagar = ch_a_pagar_val * valor_hora_aula
+        # Ordenação por ID Funcional (Matrícula)
+        for instrutor in sorted(dados, key=lambda i: str(_safe(i, "matricula", ""))):
+            for disc in _iter_disciplinas(instrutor):
+                ws.row_dimensions[current_row].height = 25
+                
+                # Coleta valores (podem vir da edição manual)
+                ch_total = float(_safe(disc, "ch_total_disciplina", 0))
+                ch_anterior = float(_safe(disc, "ch_anterior", 0))
+                ch_mes = float(_safe(disc, "ch_mes", 0))
+                valor_a_pagar = ch_mes * valor_hora_aula
+
                 row_data = [
-                    _safe(user, "posto_graduacao", "N/D"), _safe(user, "matricula", ""),
-                    _safe(user, "nome_completo", ""), _safe(disc, "nome", ""),
-                    float(_safe(disc, "ch_total", 0) or 0), float(_safe(disc, "ch_paga_anteriormente", 0) or 0),
-                    ch_a_pagar_val, valor_a_pagar
+                    _safe(instrutor, "posto", "N/D"),
+                    _safe(instrutor, "matricula", ""),
+                    _safe(instrutor, "nome", ""),
+                    _safe(disc, "nome_disciplina", ""),
+                    ch_total,
+                    ch_anterior,
+                    ch_mes, # CH a pagar este mês
+                    valor_a_pagar
                 ]
+
                 for col_idx, value in enumerate(row_data, 1):
                     cell = ws.cell(row=current_row, column=col_idx, value=value)
                     cell.font = table_data_font
                     cell.border = border_all
                     if col_idx in [1, 2, 5, 6, 7]: cell.alignment = center_align_wrap
                     else: cell.alignment = left_align_wrap
-                    if col_idx == 7: cell.number_format = '0.0'
+                    
                     if col_idx == 8: cell.number_format = 'R$ #,##0.00'
-                total_ch_a_pagar_sum += ch_a_pagar_val
+                    elif col_idx in [5, 6, 7]: cell.number_format = '0.0'
+
+                total_ch_a_pagar_sum += ch_mes
                 total_valor_sum += valor_a_pagar
                 current_row += 1
     else:
         ws.merge_cells(f"A{current_row}:H{current_row}")
         cell = ws.cell(current_row, 1, "Nenhum dado encontrado.")
-        cell.font = table_data_font; cell.alignment = center_align_wrap; cell.border = border_all
+        cell.alignment = center_align_wrap; cell.border = border_all
         current_row += 1
 
     # 6. Linha de Totais
-    ws.row_dimensions[current_row].height = 18
     ws.merge_cells(f"A{current_row}:F{current_row}")
     cell = ws.cell(current_row, 1, "CARGA HORARIA TOTAL")
     cell.font = total_font; cell.alignment = right_align_wrap; cell.border = border_all
-    _apply_border_to_range(ws, f"A{current_row}:F{current_row}", border_all)
-    ws.cell(current_row, 7, total_ch_a_pagar_sum).font = total_font; ws.cell(current_row, 7).alignment = center_align_wrap; ws.cell(current_row, 7).border = border_all; ws.cell(current_row, 7).number_format = '0.0'
-    ws.cell(current_row, 8, total_valor_sum).font = total_font; ws.cell(current_row, 8).alignment = right_align_wrap; ws.cell(current_row, 8).border = border_all; ws.cell(current_row, 8).number_format = 'R$ #,##0.00'
+    
+    ws.cell(current_row, 7, total_ch_a_pagar_sum).font = total_font
+    ws.cell(current_row, 7).alignment = center_align_wrap; ws.cell(current_row, 7).border = border_all
+    
+    ws.cell(current_row, 8, total_valor_sum).font = total_font
+    ws.cell(current_row, 8).alignment = right_align_wrap; ws.cell(current_row, 8).border = border_all; ws.cell(current_row, 8).number_format = 'R$ #,##0.00'
     current_row += 2
 
-    # 7. Blocos Inferiores
+    # 7. Rodapé de Assinaturas
     bottom_block_start_row = current_row
-    for i in range(bottom_block_start_row, bottom_block_start_row + 11): ws.row_dimensions[i].height = 15
-    ws.merge_cells(f"A{bottom_block_start_row}:F{bottom_block_start_row + 10}")
-    orientacoes_text = ("ORIENTAÇÕES:\n\n" + "\n".join([
-        "1. Id. Func. em ordem crescente.", "2. Mapa deverá dar entrada no DE até o dia 05 de cada mês.",
-        "3. Mapa atrasado do mês anterior ficará para o próximo mês, cumulativamente como do mês vigente.",
-        "4. Mapas atrasados com mais de dois meses deverão ser devidamente fundamentados pelo comandante da escola, sob pena da não aceitação e restituição.",
-        "5. Nos termos do item anterior, após chegar fundamentado, será adotada a medida da letra “g”, nº 5 do Item nº 3."]))
+    ws.merge_cells(f"A{bottom_block_start_row}:F{bottom_block_start_row + 8}")
+    orientacoes_text = "ORIENTAÇÕES:\n1. Id. Func. em ordem crescente.\n2. Mapa deverá dar entrada no DE até o dia 05 de cada mês."
     cell = ws.cell(bottom_block_start_row, 1, orientacoes_text)
-    cell.font = signature_font; cell.alignment = left_top_align_wrap
-    _apply_border_to_range(ws, f"A{bottom_block_start_row}:F{bottom_block_start_row + 10}", border_all)
-    
-    ws.merge_cells(f"G{bottom_block_start_row}:H{bottom_block_start_row + 10}")
-    data_assinatura_str = data_fim.strftime('%d de %B de %Y') if data_fim else "____ de __________ de ____"
-    assinaturas_direita_text = f"Quartel em {cidade_assinatura}, {data_assinatura_str}.\n\n\n\n" \
-                               f"____________________\n" \
-                               f"{auxiliar_nome or ''}\n" \
-                               f"{auxiliar_funcao or 'Auxiliar da Seção de Ensino'}" \
-                               f"\n\n\n" \
-                               f"Em ___/___/___\n" \
-                               f"____________\n" \
-                               f"Digitador"
-    cell = ws.cell(bottom_block_start_row, 7, assinaturas_direita_text)
-    cell.font = signature_font; cell.alignment = center_top_align_wrap
-    _apply_border_to_range(ws, f"G{bottom_block_start_row}:H{bottom_block_start_row + 10}", border_all)
+    cell.alignment = left_top_align_wrap; cell.border = border_all
+    _apply_border_to_range(ws, f"A{bottom_block_start_row}:F{bottom_block_start_row + 8}", border_all)
 
-    # 8. Finalização
+    ws.merge_cells(f"G{bottom_block_start_row}:H{bottom_block_start_row + 8}")
+    data_str = data_fim.strftime('%d de %B de %Y') if data_fim else "____/____/____"
+    assinaturas_text = f"Quartel em {cidade_assinatura}, {data_str}.\n\n\n____________________\n{auxiliar_nome or 'Auxiliar'}\nDigitador: {digitador_nome or ''}"
+    cell = ws.cell(bottom_block_start_row, 7, assinaturas_text)
+    cell.alignment = center_top_align_wrap; cell.border = border_all
+    _apply_border_to_range(ws, f"G{bottom_block_start_row}:H{bottom_block_start_row + 8}", border_all)
+
+    # 8. Exportação
     out = BytesIO()
     wb.save(out)
     return out.getvalue()
