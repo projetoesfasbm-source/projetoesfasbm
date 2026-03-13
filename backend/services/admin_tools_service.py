@@ -9,6 +9,7 @@ from ..models.user import User
 from ..models.user_school import UserSchool
 from ..models.disciplina import Disciplina
 from ..models.turma import Turma
+from ..models.ciclo import Ciclo
 
 class AdminToolsService:
     
@@ -50,10 +51,11 @@ class AdminToolsService:
             },
             "escola": {},
             "turmas": [],
-            "usuarios": [],
-            "disciplinas": [],
+            "ciclos": [],
             "semanas": [],
             "horarios": [],
+            "usuarios": [],
+            "disciplinas": [],
             "diarios_classe": [],
             "frequencias": [],
             "historicos": [],
@@ -89,14 +91,20 @@ class AdminToolsService:
                 ).all()
                 backup["disciplinas"] = [serialize_model(d) for d in disciplinas_db]
                 
-                # 5. Semanas do Quadro Horário
+            # 5. Ciclos (A base para encontrar as Semanas de Horários da Escola)
+            ciclos_db = db.session.scalars(select(Ciclo).where(Ciclo.school_id == school_id)).all()
+            backup["ciclos"] = [serialize_model(c) for c in ciclos_db]
+            ciclo_ids = [c.id for c in ciclos_db] if ciclos_db else []
+
+            # 6. Semanas do Quadro Horário (Buscando através dos Ciclos da Escola)
+            if ciclo_ids:
                 semanas_db = db.session.scalars(
-                    select(Semana).where(Semana.turma_id.in_(turma_ids))
+                    select(Semana).where(Semana.ciclo_id.in_(ciclo_ids))
                 ).all()
                 backup["semanas"] = [serialize_model(s) for s in semanas_db]
                 semana_ids = [s.id for s in semanas_db] if semanas_db else []
 
-                # 6. Horários das Aulas
+                # 7. Horários das Aulas
                 if semana_ids:
                     horarios_db = db.session.scalars(
                         select(Horario).where(Horario.semana_id.in_(semana_ids))
@@ -104,7 +112,7 @@ class AdminToolsService:
                     backup["horarios"] = [serialize_model(h) for h in horarios_db]
                     horario_ids = [h.id for h in horarios_db] if horarios_db else []
 
-                    # 7. Diários de Classe (Assinaturas dos Instrutores)
+                    # 8. Diários de Classe (Assinaturas dos Instrutores)
                     if horario_ids:
                         diarios_db = db.session.scalars(
                             select(DiarioClasse).where(DiarioClasse.horario_id.in_(horario_ids))
@@ -112,14 +120,14 @@ class AdminToolsService:
                         backup["diarios_classe"] = [serialize_model(d) for d in diarios_db]
                         diario_ids = [d.id for d in diarios_db] if diarios_db else []
 
-                        # 8. Frequências (Faltas dos alunos naqueles diários)
+                        # 9. Frequências (Faltas dos alunos naqueles diários)
                         if diario_ids:
                             frequencias_db = db.session.scalars(
                                 select(FrequenciaAluno).where(FrequenciaAluno.diario_id.in_(diario_ids))
                             ).all()
                             backup["frequencias"] = [serialize_model(f) for f in frequencias_db]
 
-            # 9. Dados Individuais (Histórico de Notas e Registros de Justiça)
+            # 10. Dados Individuais (Histórico de Notas e Registros de Justiça)
             if user_ids:
                 historicos_db = db.session.scalars(
                     select(HistoricoAluno).where(HistoricoAluno.aluno_id.in_(user_ids))
