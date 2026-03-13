@@ -3,6 +3,7 @@
 from flask import Blueprint, render_template, request, flash, redirect, url_for, send_file
 from flask_login import login_required, current_user
 import io
+import json
 from datetime import datetime, timedelta
 
 from utils.decorators import admin_or_programmer_required, admin_escola_required
@@ -51,6 +52,39 @@ def mail_merge():
         )
 
     return render_template('ferramentas/mail_merge.html')
+
+@tools_bp.route('/backup')
+@login_required
+@admin_or_programmer_required
+def backup_escola():
+    """Gera e faz o download de um snapshot completo da edição atual da escola em formato JSON."""
+    school_id = UserService.get_current_school_id()
+    if not school_id:
+        flash("Nenhuma escola selecionada.", "warning")
+        return redirect(url_for('tools.index'))
+
+    try:
+        # Chama a função pesada que buscará todos os dados do banco
+        backup_data = AdminToolsService.generate_school_backup(school_id)
+        
+        # Converte o dicionário Python para uma string JSON formatada e com caracteres acentuados preservados
+        json_str = json.dumps(backup_data, ensure_ascii=False, indent=4)
+        
+        # Cria um buffer em memória para enviar como arquivo
+        buffer = io.BytesIO(json_str.encode('utf-8'))
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"backup_escola_{school_id}_edicao_{timestamp}.json"
+        
+        return send_file(
+            buffer,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='application/json'
+        )
+    except Exception as e:
+        flash(f"Ocorreu um erro ao gerar o backup da escola: {str(e)}", "danger")
+        return redirect(url_for('tools.index'))
 
 @tools_bp.route('/reset')
 @login_required

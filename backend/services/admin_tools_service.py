@@ -2,6 +2,7 @@
 
 from flask import current_app
 from sqlalchemy import select
+from datetime import datetime, date, time
 
 from ..models.database import db
 from ..models.user import User
@@ -10,6 +11,142 @@ from ..models.disciplina import Disciplina
 from ..models.turma import Turma
 
 class AdminToolsService:
+    
+    @staticmethod
+    def generate_school_backup(school_id: int) -> dict:
+        """
+        Coleta TODOS os dados da escola/edição atual e os estrutura num dicionário
+        que será exportado como um snapshot JSON.
+        """
+        # Imports locais para evitar problemas de dependência circular
+        from ..models.school import School
+        from ..models.semana import Semana
+        from ..models.horario import Horario
+        from ..models.diario_classe import DiarioClasse
+        from ..models.frequencia import FrequenciaAluno
+        from ..models.historico import HistoricoAluno
+        from ..models.processo_disciplina import ProcessoDisciplina
+        from ..models.elogio import Elogio
+        from ..models.fada_avaliacao import FadaAvaliacao
+
+        def serialize_model(obj):
+            """Converte as colunas de um objeto SQLAlchemy num dicionário limpo."""
+            if not obj:
+                return None
+            data = {}
+            for col in obj.__table__.columns:
+                val = getattr(obj, col.name)
+                # Converte tipos de tempo para string ISO, para não quebrar a geração do JSON
+                if isinstance(val, (datetime, date, time)):
+                    data[col.name] = val.isoformat()
+                else:
+                    data[col.name] = val
+            return data
+
+        backup = {
+            "meta": {
+                "generated_at": datetime.now().isoformat(),
+                "school_id": school_id
+            },
+            "escola": {},
+            "turmas": [],
+            "usuarios": [],
+            "disciplinas": [],
+            "semanas": [],
+            "horarios": [],
+            "diarios_classe": [],
+            "frequencias": [],
+            "historicos": [],
+            "justica": {
+                "processos": [],
+                "elogios": [],
+                "fadas": []
+            }
+        }
+
+        try:
+            # 1. Escola
+            school_db = db.session.get(School, school_id)
+            if school_db:
+                backup["escola"] = serialize_model(school_db)
+
+            # 2. Turmas
+            turmas_db = db.session.scalars(select(Turma).where(Turma.school_id == school_id)).all()
+            backup["turmas"] = [serialize_model(t) for t in turmas_db]
+            turma_ids = [t.id for t in turmas_db] if turmas_db else []
+
+            # 3. Usuários (Todos vinculados a esta escola: alunos, instrutores, coordenação)
+            users_db = db.session.scalars(
+                select(User).join(UserSchool).where(UserSchool.school_id == school_id)
+            ).all()
+            backup["usuarios"] = [serialize_model(u) for u in users_db]
+            user_ids = [u.id for u in users_db] if users_db else []
+
+            # 4. Disciplinas (Buscando através das turmas da escola)
+            if turma_ids:
+                disciplinas_db = db.session.scalars(
+                    select(Disciplina).where(Disciplina.turma_id.in_(turma_ids))
+                ).all()
+                backup["disciplinas"] = [serialize_model(d) for d in disciplinas_db]
+                
+                # 5. Semanas do Quadro Horário
+                semanas_db = db.session.scalars(
+                    select(Semana).where(Semana.turma_id.in_(turma_ids))
+                ).all()
+                backup["semanas"] = [serialize_model(s) for s in semanas_db]
+                semana_ids = [s.id for s in semanas_db] if semanas_db else []
+
+                # 6. Horários das Aulas
+                if semana_ids:
+                    horarios_db = db.session.scalars(
+                        select(Horario).where(Horario.semana_id.in_(semana_ids))
+                    ).all()
+                    backup["horarios"] = [serialize_model(h) for h in horarios_db]
+                    horario_ids = [h.id for h in horarios_db] if horarios_db else []
+
+                    # 7. Diários de Classe (Assinaturas dos Instrutores)
+                    if horario_ids:
+                        diarios_db = db.session.scalars(
+                            select(DiarioClasse).where(DiarioClasse.horario_id.in_(horario_ids))
+                        ).all()
+                        backup["diarios_classe"] = [serialize_model(d) for d in diarios_db]
+                        diario_ids = [d.id for d in diarios_db] if diarios_db else []
+
+                        # 8. Frequências (Faltas dos alunos naqueles diários)
+                        if diario_ids:
+                            frequencias_db = db.session.scalars(
+                                select(FrequenciaAluno).where(FrequenciaAluno.diario_id.in_(diario_ids))
+                            ).all()
+                            backup["frequencias"] = [serialize_model(f) for f in frequencias_db]
+
+            # 9. Dados Individuais (Histórico de Notas e Registros de Justiça)
+            if user_ids:
+                historicos_db = db.session.scalars(
+                    select(HistoricoAluno).where(HistoricoAluno.aluno_id.in_(user_ids))
+                ).all()
+                backup["historicos"] = [serialize_model(h) for h in historicos_db]
+
+                processos_db = db.session.scalars(
+                    select(ProcessoDisciplina).where(ProcessoDisciplina.aluno_id.in_(user_ids))
+                ).all()
+                backup["justica"]["processos"] = [serialize_model(p) for p in processos_db]
+
+                elogios_db = db.session.scalars(
+                    select(Elogio).where(Elogio.aluno_id.in_(user_ids))
+                ).all()
+                backup["justica"]["elogios"] = [serialize_model(e) for e in elogios_db]
+
+                fadas_db = db.session.scalars(
+                    select(FadaAvaliacao).where(FadaAvaliacao.aluno_id.in_(user_ids))
+                ).all()
+                backup["justica"]["fadas"] = [serialize_model(f) for f in fadas_db]
+
+            return backup
+
+        except Exception as e:
+            current_app.logger.error(f"Falha ao gerar backup completo da escola {school_id}: {e}")
+            raise e
+
     @staticmethod
     def clear_students(school_id: int):
         """
