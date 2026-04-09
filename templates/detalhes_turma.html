@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+
+{% block title %}Detalhes da Turma - {{ turma.nome }}{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <h1>{{ turma.nome }}</h1>
+    <p>Visualize os alunos e gerencie os cargos desta turma.</p>
+</div>
+
+<div class="turma-details-grid">
+    <div class="details-section">
+        <div class="section-header">
+            <h3>Alunos na Turma ({{ turma.alunos|length }})</h3>
+        </div>
+        
+        <div class="table-responsive">
+            <table class="table-styled">
+                <thead>
+                    <tr>
+                        <th>Nome Completo</th>
+                        <th>Matrícula</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for aluno in turma.alunos | sort(attribute='user.nome_completo') %}
+                    <tr>
+                        <td>{{ aluno.user.nome_completo or aluno.user.username }}</td>
+                        <td>{{ aluno.user.matricula }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="2" class="text-center">Nenhum aluno cadastrado nesta turma.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="details-section">
+        <div class="section-header">
+            <h3>Cargos da Turma</h3>
+        </div>
+        <div class="cargos-grid">
+            {% for cargo in cargos_lista %}
+            <div class="cargo-item">
+                <label>{{ cargo }}</label>
+                <div class="cargo-assignee">
+                    {% set aluno_id = cargos_atuais[cargo] %}
+                    {% if aluno_id %}
+                        {% set aluno_obj = turma.alunos|selectattr('id', 'equalto', aluno_id)|first %}
+                        {{ aluno_obj.user.nome_de_guerra if aluno_obj and aluno_obj.user.nome_de_guerra else (aluno_obj.user.nome_completo if aluno_obj else 'Aluno não encontrado') }}
+                    {% else %}
+                        <span class="text-muted">-- Vago --</span>
+                    {% endif %}
+                </div>
+                
+                {# CORREÇÃO: Usando o nome correto do método definido em user.py #}
+                {% if current_user.is_sens_in_school(turma.school_id) %}
+                <button type="button" 
+                        class="btn btn-sm btn-secondary" 
+                        data-bs-toggle="modal" 
+                        data-bs-target="#cargoModal"
+                        data-cargo="{{ cargo }}"
+                        data-aluno-id="{{ aluno_id or '' }}">
+                    Gerenciar
+                </button>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        <div class="form-actions" style="border-top: none; margin-top: 1rem;">
+            <a href="{{ url_for('turma.listar_turmas') }}" class="btn btn-secondary">Voltar</a>
+        </div>
+    </div>
+</div>
+
+<style>
+.turma-details-grid { display: grid; grid-template-columns: 1fr; gap: 2rem; }
+@media (min-width: 992px) { .turma-details-grid { grid-template-columns: 2fr 1fr; } }
+.details-section { background: var(--color-white); border-radius: var(--border-radius); padding: 2rem; box-shadow: var(--shadow-soft); border: 1px solid var(--color-border); }
+.section-header { padding-bottom: 1rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--color-border); }
+.section-header h3 { font-size: 1.5rem; font-weight: 700; margin: 0; }
+.cargos-grid { display: flex; flex-direction: column; gap: 1rem; }
+.cargo-item { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 1rem; padding: 0.75rem; border-radius: 8px; background-color: #f8fafc; border: 1px solid #e2e8f0; }
+.cargo-item label { font-weight: 600; }
+.cargo-assignee { text-align: right; font-size: 0.9rem; color: #333; }
+</style>
+{% endblock %}
+
+{% block modals %}
+<div class="modal fade" id="cargoModal" tabindex="-1" aria-labelledby="cargoModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="cargoForm" method="POST" action="{{ url_for('turma.salvar_cargos_turma', turma_id=turma.id) }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="cargoModalLabel">Gerenciar Cargo</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                
+                <div class="modal-body">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="cargo_nome" id="modalCargoNome">
+                    
+                    <div class="mb-3">
+                        <label for="modalAlunoSelect" class="form-label">Aluno Responsável</label>
+                        <select id="modalAlunoSelect" name="aluno_id" class="form-select">
+                            <option value="">-- Ninguém (Cargo Vago) --</option>
+                            {% for aluno in turma.alunos | sort(attribute='user.nome_completo') %}
+                                <option value="{{ aluno.id }}">{{ aluno.user.nome_completo }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="modalDataEvento" id="modalDataLabel" class="form-label">Data de Início/Fim</label>
+                        <input type="date" id="modalDataEvento" name="data_evento" class="form-control" required>
+                    </div>
+                </div>
+                
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar Alteração</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var cargoModal = document.getElementById('cargoModal');
+    var modalAlunoSelect = document.getElementById('modalAlunoSelect');
+    var modalDataLabel = document.getElementById('modalDataLabel');
+    var modalCargoNome = document.getElementById('modalCargoNome');
+    var modalTitle = document.getElementById('cargoModalLabel');
+    var modalDataEvento = document.getElementById('modalDataEvento');
+
+    // Atualiza o texto da data conforme a seleção
+    function updateDateLabel() {
+        modalDataLabel.textContent = (modalAlunoSelect.value === "") ? "Data de Fim da Função" : "Data de Início da Função";
+    }
+    modalAlunoSelect.addEventListener('change', updateDateLabel);
+
+    // Evento do Bootstrap que dispara quando a modal está prestes a abrir
+    cargoModal.addEventListener('show.bs.modal', function (event) {
+        // Botão que acionou a modal
+        var button = event.relatedTarget;
+        
+        // Extrai informações dos atributos data-*
+        var cargo = button.getAttribute('data-cargo');
+        var alunoId = button.getAttribute('data-aluno-id');
+
+        // Atualiza o conteúdo da modal
+        modalTitle.textContent = 'Gerenciar Cargo: ' + cargo;
+        modalCargoNome.value = cargo;
+        modalAlunoSelect.value = alunoId;
+        
+        // Define a data de hoje como padrão
+        if (!modalDataEvento.value) {
+            modalDataEvento.valueAsDate = new Date();
+        }
+        
+        updateDateLabel();
+    });
+});
+</script>
+{% endblock %}

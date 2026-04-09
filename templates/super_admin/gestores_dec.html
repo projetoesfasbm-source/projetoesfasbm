@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Gestores DEC - SisGEn{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="h3 mb-0 text-gray-800"><i class="fas fa-user-shield text-warning me-2"></i> Gestores DEC (Super Admins)</h2>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-4 mb-4">
+            <div class="card shadow-sm border-0 border-left-warning">
+                <div class="card-header bg-white border-0 pt-4 pb-0">
+                    <h6 class="m-0 font-weight-bold text-dark">Promover Usuário</h6>
+                </div>
+                <div class="card-body">
+                    <p class="small text-muted mb-4">Digite a matrícula de um usuário existente (ex: instrutor ou admin) para conceder acesso total ao sistema (Modo DEC).</p>
+                    
+                    <form method="POST" action="{{ url_for('super_admin.manage_gestores') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="add">
+                        
+                        <div class="mb-3">
+                            <label for="matricula" class="form-label fw-bold small">Matrícula do Usuário</label>
+                            <input type="text" class="form-control" id="matricula" name="matricula" placeholder="Ex: 1234567" required>
+                        </div>
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-warning fw-bold text-dark">
+                                <i class="fas fa-arrow-up me-1"></i> Promover a Super Admin
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-8">
+            <div class="card shadow-sm border-0">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Nome</th>
+                                    <th>Matrícula</th>
+                                    <th>E-mail</th>
+                                    <th class="text-end">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for gestor in gestores %}
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="bg-warning text-dark rounded-circle d-flex justify-content-center align-items-center me-3 fw-bold" style="width: 40px; height: 40px;">
+                                                {{ (gestor.nome_de_guerra or gestor.nome_completo)[0] | upper }}
+                                            </div>
+                                            <div>
+                                                <div class="fw-bold">{{ gestor.nome_de_guerra or gestor.nome_completo }}</div>
+                                                <div class="small text-muted">{{ gestor.posto_graduacao or 'Servidor' }}</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td><span class="badge bg-light text-dark border">{{ gestor.matricula }}</span></td>
+                                    <td class="text-muted small">{{ gestor.email or 'Não informado' }}</td>
+                                    <td class="text-end">
+                                        {% if gestor.id != current_user.id %}
+                                            <form method="POST" action="{{ url_for('super_admin.manage_gestores') }}" class="d-inline" onsubmit="return confirm('Tem certeza que deseja remover os privilégios de DEC de {{ gestor.nome_de_guerra }}? Ele voltará a ser apenas Instrutor.');">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                <input type="hidden" name="action" value="remove">
+                                                <input type="hidden" name="user_id" value="{{ gestor.id }}">
+                                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Remover privilégios">
+                                                    <i class="fas fa-user-minus"></i> Rebaixar
+                                                </button>
+                                            </form>
+                                        {% else %}
+                                            <span class="badge bg-success">Você</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

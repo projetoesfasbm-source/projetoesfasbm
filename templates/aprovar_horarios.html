@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+
+{% block title %}Aprovar Horários{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <h1>Aprovar Horários</h1>
+    <p>Visualize e aprove ou negue as solicitações de agendamento de aulas pendentes.</p>
+</div>
+
+<div class="table-container">
+    <div class="table-header">
+        <h3>Aulas Pendentes de Aprovação</h3>
+    </div>
+
+    <div class="table-responsive">
+        {% if aulas_pendentes %}
+            <table class="table-styled">
+                <thead>
+                    <tr>
+                        <th>Semana</th>
+                        <th>Pelotão</th>
+                        <th>Dia</th>
+                        <th>Período(s)</th>
+                        <th>Disciplina</th>
+                        <th>Instrutor</th>
+                        <th class="text-right">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in aulas_pendentes %}
+                    <tr>
+                        <td data-label="Semana">{{ item.aula.semana.nome }}</td>
+                        <td data-label="Pelotão">{{ item.aula.pelotao }}</td>
+                        <td data-label="Dia">{{ item.aula.dia_semana|capitalize }}</td>
+                        <td data-label="Período(s)">{{ item.periodo_str }}</td>
+                        <td data-label="Disciplina">{{ item.aula.disciplina.materia }}</td>
+                        <td data-label="Instrutor">{{ item.aula.instrutor.user.nome_de_guerra or item.aula.instrutor.user.username }}</td>
+                        <td data-label="Ações" class="text-right">
+                            <div class="btn-group">
+                                <button type="button" class="btn btn-sm btn-success" onclick="sendSimpleApproval('{{ item.id_para_acao }}', 'aprovar')">Aprovar</button>
+                                <button type="button" class="btn btn-sm btn-warning" 
+                                        data-modal-target="#approval-modal-overlay"
+                                        data-horario-id="{{ item.id_para_acao }}">Gerenciar</button>
+                                <button type="button" class="btn btn-sm btn-danger" onclick="sendSimpleApproval('{{ item.id_para_acao }}', 'negar')">Negar</button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <div class="empty-state">
+                <div class="empty-icon">✅</div>
+                <h2>Nenhuma Aula Pendente</h2>
+                <p>Não há nenhuma solicitação de agendamento de aula pendente no momento.</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block modals %}
+<div class="modal-overlay" id="approval-modal-overlay">
+    <div class="modal-content">
+        <h3 id="approval-modal-title">Gerenciar Aula Pendente</h3>
+        <p id="approval-modal-info" class="text-muted"></p>
+        <form id="approval-modal-form">
+            <input type="hidden" id="approval-horario-id">
+            <div id="approval-periodos-container" class="form-group"></div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" data-modal-close>Cancelar</button>
+                <button type="submit" class="btn btn-primary">Confirmar Aprovação</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+    /* --- ESTILOS PARA ALINHAMENTO DO MODAL DE APROVAÇÃO --- */
+    #approval-modal-overlay .modal-content {
+        text-align: center;
+    }
+    #approval-modal-form {
+        text-align: left;
+        margin-top: 1.5rem;
+    }
+    #approval-periodos-container {
+        background-color: #f8fafc;
+        border: 1px solid var(--color-border);
+        border-radius: 8px;
+        padding: 1rem;
+        max-height: 200px;
+        overflow-y: auto;
+    }
+    #approval-periodos-container .form-check {
+        padding: 0.75rem 1.25rem;
+        border-radius: 8px;
+        margin-bottom: 0.5rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+    }
+    #approval-periodos-container .form-check:hover { background-color: #eef5ff; }
+    #approval-periodos-container .form-check input[type="checkbox"] {
+        margin-right: 0.75rem;
+    }
+    #approval-periodos-container .form-check label {
+        margin-bottom: 0; 
+        cursor: pointer;
+    }
+    #approval-modal-form .form-actions {
+        justify-content: space-between;
+        align-items: center;
+    }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+    // Escuta o evento global para abrir o modal
+    document.addEventListener('modal:open', function(event) {
+        if (event.detail.modal.id === 'approval-modal-overlay') {
+            const horarioId = event.detail.trigger.dataset.horarioId;
+            populateApprovalModal(horarioId);
+        }
+    });
+
+    async function populateApprovalModal(horarioId) {
+        const form = document.getElementById('approval-modal-form');
+        form.reset();
+        document.getElementById('approval-horario-id').value = horarioId;
+        const modalTitle = document.getElementById('approval-modal-title');
+        const infoP = document.getElementById('approval-modal-info');
+        const periodosContainer = document.getElementById('approval-periodos-container');
+        periodosContainer.innerHTML = 'Carregando...';
+        
+        try {
+            const res = await fetch(`/horario/get-aula/${horarioId}`);
+            const data = await res.json();
+            
+            if (data.success) {
+                modalTitle.textContent = `Gerenciar Aula de ${data.materia}`;
+                infoP.textContent = `Solicitada por ${data.instrutor_nome}, com duração de ${data.duracao}h.`;
+                periodosContainer.innerHTML = '<label class="form-label">Selecione os períodos para aprovar:</label>';
+                for (let i = 0; i < data.duracao; i++) {
+                    const periodo = data.periodo + i;
+                    periodosContainer.innerHTML += `
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="periodos" value="${periodo}" id="periodo-${periodo}" checked>
+                            <label class="form-check-label" for="periodo-${periodo}">${periodo}º Período</label>
+                        </div>`;
+                }
+            } else {
+                infoP.textContent = `Erro: ${data.message}`;
+            }
+        } catch (error) {
+            infoP.textContent = "Não foi possível carregar os detalhes da aula.";
+        }
+    }
+    
+    window.sendSimpleApproval = function(horarioId, action) {
+        if (action === 'negar' && !confirm('Tem certeza que deseja NEGAR esta aula? A solicitação será removida.')) return;
+        
+        fetch(`{{ url_for('horario.aprovar_horarios') }}`, {
+            method: 'POST',
+            headers: {'Content-Type':'application/x-www-form-urlencoded', 'X-CSRFToken': csrfToken},
+            body: new URLSearchParams({
+                'horario_id': horarioId,
+                'action': action,
+                'csrf_token': csrfToken
+            })
+        }).then(res => {
+            if(res.ok) window.location.reload();
+            else alert('Ocorreu um erro ao processar a solicitação.');
+        });
+    };
+
+    document.getElementById('approval-modal-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const horarioId = document.getElementById('approval-horario-id').value;
+        const selectedPeriodos = Array.from(document.querySelectorAll('#approval-periodos-container input:checked')).map(cb => cb.value);
+        
+        fetch('/horario/aprovar-parcial', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ horario_id: horarioId, periodos: selectedPeriodos })
+        }).then(res => res.json()).then(data => {
+            if (data.success) {
+                window.location.reload();
+            } else {
+                alert('Erro: ' + data.message);
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

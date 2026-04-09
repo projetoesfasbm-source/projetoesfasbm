@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Termo de Justificação - Visualização e Exportação</title>
+    <style>
+        /* Estilos para parecer Word/A4 na tela */
+        body {
+            background: #e9ebee;
+            font-family: 'Times New Roman', Times, serif;
+            margin: 0; padding: 20px;
+            display: flex; flex-direction: column; align-items: center;
+        }
+        .page-container {
+            background: white;
+            width: 21cm; /* Largura A4 */
+            min-height: 29.7cm; /* Altura A4 */
+            padding: 2cm 2cm 2cm 2cm;
+            margin-bottom: 2cm;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            position: relative;
+        }
+        .editable {
+            border: 1px dashed transparent;
+            min-height: 1em;
+        }
+        .editable:hover { border-color: #aaa; background: #fffdf0; cursor: text; }
+
+        /* Estilos do Documento */
+        .header { text-align: center; font-weight: bold; margin-bottom: 1cm; line-height: 1.2; text-transform: uppercase; font-size: 12pt; }
+        .title { text-align: center; font-weight: bold; margin: 0.5cm 0; text-decoration: underline; text-transform: uppercase; }
+        p { text-align: justify; margin-bottom: 6pt; margin-top: 0; line-height: 1.5; font-size: 12pt; }
+        .sancao-box { border: 1px solid #000; padding: 10px; margin: 10px 0; background-color: #fafafa; }
+
+        /* Controles de Tela (Botões) */
+        .controls {
+            position: fixed; top: 10px; right: 10px; z-index: 1000;
+            background: rgba(0,0,0,0.8); padding: 10px; border-radius: 5px;
+            display: flex; gap: 10px;
+        }
+        button { cursor: pointer; padding: 8px 15px; font-size: 14px; border: none; border-radius: 4px; color: white; font-weight: bold; }
+        .btn-word { background: #2b579a; }
+        .btn-print { background: #555; }
+
+        @media print {
+            body { background: white; margin: 0; padding: 0; display: block; }
+            .page-container { box-shadow: none; margin: 0; width: 100%; height: auto; page-break-after: always; }
+            .controls, .editable:hover { display: none !important; border: none; background: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="controls">
+        <button class="btn-print" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
+        <button class="btn-word" onclick="exportHTMLtoWord()">📝 Baixar como .doc (Word)</button>
+    </div>
+
+    <div id="document-content">
+        {% for processo in processos %}
+        <div class="page-container">
+            <div class="header" contenteditable="true">
+                ESTADO DO RIO GRANDE DO SUL<br>
+                SECRETARIA DA SEGURANÇA PÚBLICA<br>
+                BRIGADA MILITAR<br>
+                DE – EsFAS
+            </div>
+
+            <div class="title" contenteditable="true">TERMO DE JUSTIFICAÇÃO Nº {{ "%03d"|format(processo.id) }} / {{ processo.data_ocorrencia.year }}</div>
+
+            <p><strong>1. DO FATO:</strong></p>
+            <div class="editable" contenteditable="true">
+                <p>No dia {{ processo.data_ocorrencia.strftime('%d/%m/%Y') }}, o(a) <strong>{{ processo.aluno.user.posto_graduacao }} {{ processo.aluno.user.nome_completo }}</strong>, Matrícula {{ processo.aluno.user.matricula }}, teve a seguinte conduta observada:</p>
+                <p style="padding-left: 1cm; font-style: italic;">"{{ processo.fato_constatado }}"</p>
+            </div>
+
+            <p><strong>2. DA DEFESA:</strong></p>
+            <div class="editable" contenteditable="true" style="border: 1px solid #ccc; padding: 10px; min-height: 2cm; margin-bottom: 10px;">
+                {% if processo.defesa %}
+                    {{ processo.defesa }}
+                {% else %}
+                    (Espaço reservado para defesa escrita)
+                    <br><br><br>
+                {% endif %}
+            </div>
+
+            <p><strong>3. DA SOLUÇÃO:</strong></p>
+            <p>Diante do exposto, o Comandante/Chefe RESOLVE:</p>
+
+            <div class="sancao-box editable" contenteditable="true">
+                <p><strong>DECISÃO:</strong> {{ processo.decisao_final or '________________' }}</p>
+
+                <p><strong>ENQUADRAMENTO:</strong> {{ processo.origem_punicao or '________________' }} {{ ('- ' + processo.codigo_infracao) if processo.codigo_infracao else '' }}</p>
+
+                <p><strong>FUNDAMENTAÇÃO:</strong> {{ processo.fundamentacao or processo.observacao_decisao or '____________________________________________________' }}</p>
+
+                {% if processo.status == 'FINALIZADO' or processo.status == 'Finalizado' %}
+                    
+                    {# CASO 1: SUSTAÇÃO (Mostra Turnos) #}
+                    {% if processo.decisao_final == 'Sustação da Dispensa' or processo.tipo_sancao == 'Sustação da Dispensa' %}
+                        <p><strong>TIPO DE SANÇÃO:</strong> Sustação da Dispensa</p>
+                        <p><strong>QUANTIDADE:</strong> {{ processo.detalhes_sancao or '____' }}</p>
+
+                    {# CASO 2: ADVERTÊNCIA OU REPREENSÃO (Sem dias) #}
+                    {% elif processo.decisao_final in ['Advertência', 'Repreensão'] %}
+                         <p><strong>TIPO DE SANÇÃO:</strong> {{ processo.decisao_final }}</p>
+                    
+                    {# CASO 3: OUTROS #}
+                    {% elif processo.decisao_final not in ['Justificado', 'Justificar', 'Absolvido', 'Absolver', 'Anular', 'Anulado'] %}
+                         <p><strong>TIPO DE SANÇÃO:</strong> {{ processo.tipo_sancao or '________________' }}</p>
+                         {% if processo.dias_sancao and processo.dias_sancao > 0 %}
+                            <p><strong>QUANTIDADE:</strong> {{ processo.dias_sancao }} dias.</p>
+                         {% endif %}
+                    {% endif %}
+
+                {% else %}
+                    <p><strong>SANÇÃO:</strong> ( ) Justificar ( ) Advertência ( ) Repreensão ( ) Sustação</p>
+                {% endif %}
+            </div>
+
+            <div class="editable" contenteditable="true" style="text-align: center; margin-top: 2cm;">
+                <p>Quartel em Santa Maria, {{ datetime.now().strftime('%d/%m/%Y') }}.</p>
+                <br><br>
+                <div style="border-top: 1px solid #000; width: 300px; display: inline-block;"></div>
+                <p><strong>COMANDANTE / CHEFE DA DIVISÃO DE ENSINO</strong></p>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <script>
+    function exportHTMLtoWord() {
+        var header = "<html xmlns:o='urn:schemas-microsoft-com:office:office' "+
+             "xmlns:w='urn:schemas-microsoft-com:office:word' "+
+             "xmlns='http://www.w3.org/TR/REC-html40'>"+
+             "<head><meta charset='utf-8'><title>Export HTML to Word Document with JavaScript</title></head><body>";
+        var footer = "</body></html>";
+        var sourceHTML = header+document.getElementById("document-content").innerHTML+footer;
+
+        var source = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(sourceHTML);
+        var fileDownload = document.createElement("a");
+        document.body.appendChild(fileDownload);
+        fileDownload.href = source;
+        fileDownload.download = 'Termos_Justificacao.doc';
+        fileDownload.click();
+        document.body.removeChild(fileDownload);
+    }
+    </script>
+</body>
+</html>

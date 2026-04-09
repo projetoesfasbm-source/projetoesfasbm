@@ -1,0 +1,306 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    /* ESTILO DOS BOTÕES (ABAS SÓLIDAS) */
+    .nav-pills .nav-link {
+        background-color: #6c757d;
+        color: white !important;
+        font-weight: bold;
+        margin-right: 10px;
+        border-radius: 8px;
+        border: 1px solid #5a6268;
+    }
+    
+    .nav-pills .nav-link:hover {
+        background-color: #5a6268;
+    }
+
+    .nav-pills .nav-link.active {
+        background-color: #0d6efd !important;
+        border-color: #0a58ca;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+
+    /* CONTAINER DA ASSINATURA RESPONSIVO */
+    .signature-wrapper {
+        position: relative;
+        width: 100%;
+        height: 0;
+        padding-bottom: 50%;
+        border: 2px solid #0d6efd;
+        background-color: #ffffff;
+        border-radius: 8px;
+        touch-action: none;
+    }
+
+    /* CANVAS PREENCHENDO O CONTAINER */
+    #signaturePad {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        border-radius: 6px;
+    }
+
+    /* ESTILO PARA OS SWITCHES DE PRESENÇA NA MATRIZ */
+    .form-switch .form-check-input {
+        width: 2.5em; 
+        height: 1.25em;
+        cursor: pointer;
+    }
+    
+    .presente-text { color: #198754; font-weight: bold; }
+    .falta-text { color: #dc3545; font-weight: bold; }
+
+    @media (max-width: 576px) {
+        .signature-wrapper {
+            padding-bottom: 65%;
+        }
+    }
+</style>
+
+<div class="container mt-4">
+    <div class="card shadow">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0"><i class="fas fa-file-contract me-2"></i>Validar Diário de Classe</h4>
+        </div>
+        <div class="card-body">
+            
+            <div class="alert alert-secondary border-0 shadow-sm text-dark mb-4">
+                <div class="row">
+                    <div class="col-md-6">
+                        <strong><i class="far fa-calendar-alt me-1"></i> Data:</strong> {{ diario.data_aula.strftime('%d/%m/%Y') }}<br>
+                        <strong><i class="fas fa-users me-1"></i> Turma:</strong> {{ diario.turma.nome }}<br>
+                        <strong><i class="fas fa-book me-1"></i> Disciplina:</strong> {{ diario.disciplina.materia }}
+                    </div>
+                    <div class="col-md-6 text-md-end mt-2 mt-md-0">
+                        <strong><i class="fas fa-user-tie me-1"></i> Instrutor:</strong><br>
+                        {{ current_user.posto_graduacao }} {{ current_user.nome_de_guerra }}
+                    </div>
+                </div>
+            </div>
+
+            {% if diario.periodo_resumo %}
+            <div class="alert alert-info border-0 shadow-sm d-flex align-items-center mb-4">
+                <i class="fas fa-info-circle fa-2x me-3"></i>
+                <div>
+                    <strong>Validação em Bloco:</strong><br>
+                    Você está editando e assinando <strong>{{ diario.total_aulas_bloco }} aulas</strong> consecutivas ({{ diario.periodo_resumo }}).
+                </div>
+            </div>
+            {% endif %}
+
+            <form method="POST" enctype="multipart/form-data" id="formAssinatura">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="tipo_assinatura" id="tipo_assinatura" value="">
+                <input type="hidden" name="assinatura_base64" id="assinatura_base64">
+
+                <div class="mb-4">
+                    <label for="conteudo_ministrado" class="form-label text-muted fw-bold">Conteúdo Ministrado:</label>
+                    <textarea class="form-control shadow-sm" id="conteudo_ministrado" name="conteudo_ministrado" rows="5" required>{{ diario.conteudo_ministrado }}</textarea>
+                    <div class="form-text">Você pode ajustar o conteúdo ministrado antes de assinar.</div>
+                </div>
+
+                <div class="card border-0 bg-light shadow-sm mb-4">
+                    <div class="card-header bg-dark text-white fw-bold d-flex justify-content-between align-items-center">
+                        <span><i class="fas fa-clipboard-list me-2"></i> Auditoria de Frequência</span>
+                        <span class="badge bg-light text-dark">{{ alunos_list|length }} Alunos</span>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                            <table class="table table-hover table-striped mb-0 align-middle text-center">
+                                <thead class="table-light sticky-top" style="z-index: 1;">
+                                    <tr>
+                                        <th class="text-start ps-3" style="width: 60px;">Nº</th>
+                                        <th class="text-start">Nome do Aluno</th>
+                                        {% for d in diarios_bloco %}
+                                        <th><span class="badge border border-secondary text-secondary">{{ d.periodo }}º Tempo</span></th>
+                                        {% endfor %}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for aluno in alunos_list %}
+                                    <tr>
+                                        <td class="text-start ps-3 fw-bold text-muted">{{ aluno.num_aluno or '--' }}</td>
+                                        <td class="text-start fw-bold">{{ aluno.user.nome_de_guerra or aluno.user.nome_completo }}</td>
+                                        
+                                        {% for d in diarios_bloco %}
+                                        <td>
+                                            <div class="form-check form-switch d-flex justify-content-center m-0 p-0">
+                                                <input class="form-check-input ms-0 shadow-sm" type="checkbox" 
+                                                       name="presenca_{{ aluno.id }}_{{ d.id }}" value="1" 
+                                                       {% if freq_map[aluno.id][d.id] %}checked{% endif %}>
+                                            </div>
+                                        </td>
+                                        {% endfor %}
+                                    </tr>
+                                    {% else %}
+                                    <tr>
+                                        <td colspan="{{ diarios_bloco|length + 2 }}" class="text-center py-4 text-muted">Nenhum aluno vinculado a este diário.</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="card-footer bg-white text-muted small">
+                        <i class="fas fa-info-circle me-1"></i> As faltas marcadas pelo chefe de turma já estão preenchidas. O instrutor pode corrigir clicando nas chaves correspondentes a cada tempo de aula.
+                    </div>
+                </div>
+                <div class="mb-4">
+                    <label for="observacoes" class="form-label text-muted fw-bold">Observações:</label>
+                    <textarea class="form-control shadow-sm" id="observacoes" name="observacoes" rows="3">{{ diario.observacoes }}</textarea>
+                    <div class="form-text">Registre ocorrências ou detalhes relevantes da aula.</div>
+                </div>
+
+                <hr class="my-4">
+
+                <h5 class="mb-3"><i class="fas fa-pen-nib me-2"></i>Assinatura do Instrutor</h5>
+                
+                <ul class="nav nav-pills mb-3" id="signTab" role="tablist">
+                    {% if instrutor.assinatura_padrao_path %}
+                    <li class="nav-item">
+                        <button class="nav-link active" id="saved-tab" data-bs-toggle="pill" data-bs-target="#saved" type="button" onclick="setTipo('padrao')">
+                            <i class="fas fa-save me-2"></i> Usar Salva
+                        </button>
+                    </li>
+                    {% endif %}
+                    
+                    <li class="nav-item">
+                        <button class="nav-link {% if not instrutor.assinatura_padrao_path %}active{% endif %}" id="draw-tab" data-bs-toggle="pill" data-bs-target="#draw" type="button" onclick="setTipo('canvas')">
+                            <i class="fas fa-pen me-2"></i> Desenhar
+                        </button>
+                    </li>
+                    
+                    <li class="nav-item">
+                        <button class="nav-link" id="upload-tab" data-bs-toggle="pill" data-bs-target="#upload" type="button" onclick="setTipo('upload')">
+                            <i class="fas fa-upload me-2"></i> Upload
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content p-3 border rounded bg-white shadow-sm">
+                    
+                    {% if instrutor.assinatura_padrao_path %}
+                    <div class="tab-pane fade show active" id="saved" role="tabpanel">
+                        <div class="text-center py-3">
+                            <p class="text-muted fw-bold">Sua assinatura salva será utilizada:</p>
+                            <div class="d-inline-block border p-2 bg-white rounded">
+                                <img src="{{ url_for('static', filename=instrutor.assinatura_padrao_path) }}" class="img-fluid" style="max-height: 120px;">
+                            </div>
+                            <div class="mt-3 text-success fw-bold">
+                                <i class="fas fa-check-circle fa-lg"></i> Pronta para uso
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="tab-pane fade {% if not instrutor.assinatura_padrao_path %}show active{% endif %}" id="draw" role="tabpanel">
+                        <div class="text-center">
+                            <p class="small text-muted mb-2"><i class="fas fa-hand-pointer"></i> Assine na caixa abaixo:</p>
+                            
+                            <div class="signature-wrapper mb-2">
+                                <canvas id="signaturePad"></canvas>
+                            </div>
+
+                            <div class="d-flex justify-content-between align-items-center mt-2">
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="clearPad()">
+                                    <i class="fas fa-eraser"></i> Limpar Tela
+                                </button>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="saveCanvas" name="salvar_padrao">
+                                    <label class="form-check-label fw-bold" for="saveCanvas">Salvar como Padrão</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane fade" id="upload" role="tabpanel">
+                        <div class="py-3">
+                            <label class="form-label fw-bold">Selecione uma imagem (PNG/JPG):</label>
+                            <input class="form-control mb-3" type="file" name="assinatura_upload" accept="image/png, image/jpeg, image/jpg">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="saveUpload" name="salvar_padrao">
+                                <label class="form-check-label fw-bold" for="saveUpload">Salvar como Padrão</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-grid gap-2 mt-4">
+                    <button type="submit" class="btn btn-success btn-lg fw-bold shadow" onclick="prepareSubmit(event)">
+                        <i class="fas fa-check-double me-2"></i> Confirmar Validação
+                    </button>
+                    <a href="{{ url_for('diario.listar_pendentes') }}" class="btn btn-outline-danger fw-bold">
+                        Cancelar
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/signature_pad@4.0.0/dist/signature_pad.umd.min.js"></script>
+<script>
+    var canvas = document.getElementById('signaturePad');
+    var signaturePad = new SignaturePad(canvas, {
+        backgroundColor: 'rgb(255, 255, 255)',
+        penColor: 'rgb(0, 0, 0)',
+        minWidth: 1.5,
+        maxWidth: 3.5
+    });
+
+    function resizeCanvas() {
+        var parentWidth = canvas.parentElement.offsetWidth;
+        var parentHeight = canvas.parentElement.offsetHeight;
+        var ratio = Math.max(window.devicePixelRatio || 1, 1);
+
+        canvas.width = parentWidth * ratio;
+        canvas.height = parentHeight * ratio;
+        canvas.getContext("2d").scale(ratio, ratio);
+        signaturePad.clear(); 
+    }
+
+    window.addEventListener("load", resizeCanvas);
+    window.addEventListener("resize", resizeCanvas);
+    document.getElementById('draw-tab').addEventListener('shown.bs.tab', resizeCanvas);
+
+    function clearPad() { signaturePad.clear(); }
+
+    var hasSaved = {{ 'true' if instrutor.assinatura_padrao_path else 'false' }};
+    document.getElementById('tipo_assinatura').value = hasSaved ? 'padrao' : 'canvas';
+
+    function setTipo(tipo) {
+        document.getElementById('tipo_assinatura').value = tipo;
+        if(tipo === 'padrao') {
+            document.querySelectorAll('input[name="salvar_padrao"]').forEach(el => el.checked = false);
+        }
+        if(tipo === 'canvas') {
+            setTimeout(resizeCanvas, 100);
+        }
+    }
+
+    function prepareSubmit(e) {
+        var tipo = document.getElementById('tipo_assinatura').value;
+        if (tipo === 'canvas') {
+            if (signaturePad.isEmpty()) {
+                e.preventDefault();
+                alert('Por favor, faça sua assinatura.');
+                return;
+            }
+            // OTIMIZAÇÃO: JPEG 0.7 garante que o pacote de dados caiba no buffer do Smartphone/Nginx
+            document.getElementById('assinatura_base64').value = canvas.toDataURL('image/jpeg', 0.7);
+        } 
+        else if (tipo === 'upload') {
+            var fileInput = document.querySelector('input[name="assinatura_upload"]');
+            if (!fileInput.files.length) {
+                e.preventDefault();
+                alert('Selecione um arquivo.');
+                return;
+            }
+        }
+    }
+</script>
+{% endblock %}

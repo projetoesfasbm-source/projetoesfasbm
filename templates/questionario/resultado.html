@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block title %}Resultados: {{ questionario.titulo }}{% endblock %}
+
+{% block content %}
+<div class="content-header d-flex justify-content-between align-items-center">
+    <div>
+        <h1>Resultados: {{ questionario.titulo }}</h1>
+        <p class="text-muted">Análise das respostas recebidas.</p>
+    </div>
+    <a href="{{ url_for('questionario.ver_questionarios') }}" class="btn btn-secondary">← Voltar para a lista</a>
+</div>
+
+<div class="charts-grid">
+    {% for pergunta in questionario.perguntas %}
+        {% if pergunta.tipo != 'texto_livre' %}
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h2 class="h5 mb-0">{{ pergunta.texto }}</h2>
+            </div>
+            <div class="card-body">
+                <div class="chart-container" style="position: relative; height:300px; width:100%">
+                    <canvas id="grafico_{{ pergunta.id }}"></canvas>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    {% endfor %}
+</div>
+
+{% if respostas_texto %}
+<div class="content-header mt-4">
+    <h2>Respostas Abertas</h2>
+</div>
+<div class="text-answers-grid">
+    {% for pergunta_id, data in respostas_texto.items() %}
+    <div class="card shadow-sm">
+        <div class="card-header">
+            <h2 class="h5 mb-0">{{ data.texto }}</h2>
+        </div>
+        <div class="card-body">
+            <ul class="list-group list-group-flush">
+                {% for resposta in data.respostas %}
+                    <li class="list-group-item">{{ resposta }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<style>
+    .charts-grid, .text-answers-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+        gap: 1.5rem;
+    }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const dadosGraficos = {{ dados_graficos | tojson }};
+
+    const backgroundColors = [
+        'rgba(59, 130, 246, 0.7)', 'rgba(239, 68, 68, 0.7)',
+        'rgba(245, 158, 11, 0.7)', 'rgba(16, 185, 129, 0.7)',
+        'rgba(139, 92, 246, 0.7)', 'rgba(236, 72, 153, 0.7)',
+        'rgba(34, 197, 94, 0.7)', 'rgba(249, 115, 22, 0.7)'
+    ];
+    const borderColors = [
+        'rgb(59, 130, 246)', 'rgb(239, 68, 68)',
+        'rgb(245, 158, 11)', 'rgb(16, 185, 129)',
+        'rgb(139, 92, 246)', 'rgb(236, 72, 153)',
+        'rgb(34, 197, 94)', 'rgb(249, 115, 22)'
+    ];
+
+    for (const perguntaId in dadosGraficos) {
+        const ctx = document.getElementById(`grafico_${perguntaId}`);
+        if (ctx) {
+            new Chart(ctx.getContext('2d'), {
+                type: 'pie',
+                data: {
+                    labels: dadosGraficos[perguntaId].labels,
+                    datasets: [{
+                        label: 'Respostas',
+                        data: dadosGraficos[perguntaId].dados,
+                        backgroundColor: backgroundColors,
+                        borderColor: borderColors,
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'top' } }
+                }
+            });
+        }
+    }
+});
+</script>
+{% endblock %}

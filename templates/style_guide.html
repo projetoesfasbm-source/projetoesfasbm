@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guia de Estilos - Sistema EsFAS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../static/style.css">
+    <style>
+        /* Estilos específicos para a página do guia de estilos */
+        body {
+            background-color: #f8fafc;
+            color: #1a232c;
+            padding: 2rem;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .section {
+            background-color: #ffffff;
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+        }
+        .section-title {
+            font-size: 2rem;
+            font-weight: 800;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 1rem;
+        }
+        .subsection-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+        }
+        .color-palette {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        .color-swatch {
+            width: 120px;
+            text-align: center;
+        }
+        .color-box {
+            width: 120px;
+            height: 120px;
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            border: 1px solid #e2e8f0;
+        }
+        .color-label {
+            font-weight: 600;
+        }
+        .color-hex {
+            font-size: 0.875rem;
+            color: #64748b;
+        }
+        .typography-showcase h1,
+        .typography-showcase h2,
+        .typography-showcase h3,
+        .typography-showcase p,
+        .typography-showcase a {
+            margin-bottom: 1rem;
+        }
+        .component-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+            align-items: flex-start;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="section-title">Guia de Estilos - Sistema EsFAS</h1>
+
+        <div class="section">
+            <h2 class="section-title">Paleta de Cores</h2>
+            <div class="color-palette">
+                <div class="color-swatch">
+                    <div class="color-box" style="background-color: #1e3a8a;"></div>
+                    <div class="color-label">Primary</div>
+                    <div class="color-hex">#1e3a8a</div>
+                </div>
+                <div class="color-swatch">
+                    <div class="color-box" style="background-color: #3b82f6;"></div>
+                    <div class="color-label">Primary Light</div>
+                    <div class="color-hex">#3b82f6</div>
+                </div>
+                <div class="color-swatch">
+                    <div class="color-box" style="background-color: #1a232c;"></div>
+                    <div class="color-label">Secondary</div>
+                    <div class="color-hex">#1a232c</div>
+                </div>
+                <div class="color-swatch">
+                    <div class="color-box" style="background-color: #f8fafc;"></div>
+                    <div class="color-label">Background</div>
+                    <div class="color-hex">#f8fafc</div>
+                </div>
+                <div class="color-swatch">
+                    <div class="color-box" style="background-color: #10b981;"></div>
+                    <div class="color-label">Success</div>
+                    <div class="color-hex">#10b981</div>
+                </div>
+                <div class="color-swatch">
+                    <div class="color-box" style="background-color: #ef4444;"></div>
+                    <div class="color-label">Danger</div>
+                    <div class="color-hex">#ef4444</div>
+                </div>
+                <div class="color-swatch">
+                    <div class="color-box" style="background-color: #f59e0b;"></div>
+                    <div class="color-label">Warning</div>
+                    <div class="color-hex">#f59e0b</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2 class="section-title">Tipografia</h2>
+            <p>Fonte Principal: <strong>Inter</strong></p>
+            <div class="typography-showcase">
+                <h1>Título H1 - Page Title (2.25rem, 800)</h1>
+                <h2>Título H2 - Card Header (1.75rem, 700)</h2>
+                <h3>Título H3 - Subsection (1.25rem, 700)</h3>
+                <p>Parágrafo de corpo de texto. (1rem, 400) Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed non risus. Suspendisse lectus tortor, dignissim sit amet, adipiscing nec, ultricies sed, dolor.</p>
+                <a href="#">Este é um link padrão.</a>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2 class="section-title">Botões</h2>
+            <div class="component-grid">
+                <button class="btn btn-primary">Botão Primário</button>
+                <button class="btn btn-secondary">Botão Secundário</button>
+                <button class="btn btn-success">Botão Success</button>
+                <button class="btn btn-danger">Botão Danger</button>
+                <button class="btn btn-warning">Botão Warning</button>
+                <button class="btn btn-info">Botão Info</button>
+            </div>
+            <h3 class="subsection-title">Tamanhos de Botão</h3>
+            <div class="component-grid">
+                <button class="btn btn-primary btn-sm">Botão Pequeno</button>
+                <button class="btn btn-primary">Botão Normal</button>
+                <button class="btn btn-primary btn-lg">Botão Grande</button>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2 class="section-title">Componentes de UI</h2>
+
+            <h3 class="subsection-title">Cards</h3>
+            <div class="component-grid">
+                <div class="card" style="width: 300px;">
+                    <div class="card-header">
+                        <h3>Título do Card</h3>
+                    </div>
+                    <div class="card-body">
+                        <p>Este é um card padrão usado para agrupar conteúdo de forma modular.</p>
+                    </div>
+                </div>
+            </div>
+
+            <h3 class="subsection-title">Alertas / Flash Messages</h3>
+            <div class="component-grid" style="flex-direction: column; width: 100%;">
+                <div class="flash success">Esta é uma mensagem de sucesso!</div>
+                <div class="flash danger">Esta é uma mensagem de erro.</div>
+                <div class="flash warning">Esta é uma mensagem de aviso.</div>
+                <div class="flash info">Esta é uma mensagem informativa.</div>
+            </div>
+
+            <h3 class="subsection-title">Formulários</h3>
+            <div class="component-grid" style="flex-direction: column; width: 50%;">
+                <div class="form-group">
+                    <label for="example-text">Campo de Texto</label>
+                    <input type="text" id="example-text" class="form-control" placeholder="Digite aqui...">
+                </div>
+                <div class="form-group">
+                    <label for="example-select">Menu Dropdown</label>
+                    <select id="example-select" class="form-control">
+                        <option>Opção 1</option>
+                        <option>Opção 2</option>
+                        <option>Opção 3</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</body>
+</html>

@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}Gerenciar Disciplina - {{ disciplina.materia }}{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <h1>Gerenciar Disciplina</h1>
+    <p>Modifique os dados da disciplina para a turma <strong>{{ disciplina.turma.nome }}</strong>.</p>
+</div>
+
+<div class="table-container" style="max-width: 800px; margin: 0 auto;">
+    <div class="table-header">
+        <h3>{{ disciplina.materia }}</h3>
+    </div>
+    
+    <form method="POST" action="{{ url_for('disciplina.editar_disciplina', disciplina_id=disciplina.id) }}">
+        {{ form.hidden_tag() }}
+        <div class="form-group">
+            {{ form.turma_id.label(class="form-label") }}
+            {{ form.turma_id(class="form-control", disabled=True) }}
+            <small class="form-text text-muted">A turma de uma disciplina não pode ser alterada após a criação.</small>
+        </div>
+        <div class="form-group">
+            {{ form.materia.label(class="form-label") }}
+            {{ form.materia(class="form-control") }}
+        </div>
+        <div class="form-group">
+            {{ form.carga_horaria_prevista.label(class="form-label") }}
+            {{ form.carga_horaria_prevista(class="form-control") }}
+        </div>
+        <div class="form-group">
+            {{ form.carga_horaria_cumprida.label(class="form-label") }}
+            {{ form.carga_horaria_cumprida(class="form-control") }}
+        </div>
+        <div class="form-group">
+            {{ form.ciclo_id.label(class="form-label") }}
+            {{ form.ciclo_id(class="form-control") }}
+        </div>
+        
+        <div class="form-actions">
+            <a href="{{ url_for('disciplina.listar_disciplinas', turma_id=disciplina.turma_id) }}" class="btn btn-secondary">Cancelar</a>
+            {{ form.submit(class="btn btn-primary") }}
+        </div>
+    </form>
+</div>
+{% endblock %}

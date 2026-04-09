@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block title %}Rascunho da Prova - {{ delegacao.disciplina.materia }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4 mb-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1">
+                    <li class="breadcrumb-item"><a href="{{ url_for('questoes.minhas_provas') }}">Minhas Provas</a></li>
+                    <li class="breadcrumb-item active">Rascunho Interativo</li>
+                </ol>
+            </nav>
+            <h2><i class="fas fa-file-alt text-primary"></i> Prova: {{ delegacao.disciplina.materia }}</h2>
+            <p class="text-muted mb-0">Escola Gestora: {{ delegacao.escola_gestora.nome }} | {{ questoes|length }} Questões Sorteadas</p>
+        </div>
+        
+        <div class="btn-group shadow-sm">
+            <button class="btn btn-outline-primary" onclick="alert('Exportação de Gabarito em desenvolvimento')">
+                <i class="fas fa-check-double"></i> Baixar Gabarito
+            </button>
+            <button class="btn btn-primary fw-bold" onclick="alert('Exportação de Prova PDF em desenvolvimento')">
+                <i class="fas fa-file-pdf"></i> Exportar Prova (PDF)
+            </button>
+        </div>
+    </div>
+
+    <div class="alert alert-warning shadow-sm border-warning d-flex align-items-center">
+        <i class="fas fa-exclamation-triangle fa-2x me-3"></i>
+        <div>
+            <strong>Modo de Revisão:</strong> Leia as questões sorteadas abaixo. Se alguma não estiver boa, os botões de "Trocar Questão" e "Edição" serão habilitados na próxima atualização do sistema.
+        </div>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            {% for q in questoes %}
+            <div class="card shadow-sm mb-4 border-start border-4 border-primary">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
+                    <span class="fw-bold text-primary fs-5">Questão {{ loop.index }}</span>
+                    <span class="badge bg-light text-muted border">ID Banco: #{{ q.id }}</span>
+                </div>
+                <div class="card-body">
+                    <p class="card-text fw-bold fs-6 mb-3" style="white-space: pre-wrap;">{{ q.enunciado }}</p>
+                    
+                    <div class="d-flex flex-column gap-2 ms-3">
+                        {% for letra, texto in q.alternativas.items() %}
+                        <div class="p-2 border rounded {% if letra == q.resposta_correta %}bg-success-subtle border-success fw-bold{% else %}bg-white text-muted{% endif %}">
+                            <span class="me-2">{{ letra }})</span> {{ texto }}
+                            {% if letra == q.resposta_correta %}
+                                <span class="badge bg-success float-end mt-1"><i class="fas fa-check"></i> Gabarito</span>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="card-footer bg-light py-2 text-end">
+                    <button class="btn btn-sm btn-outline-secondary" disabled title="Em breve"><i class="fas fa-edit"></i> Editar Texto</button>
+                    <button class="btn btn-sm btn-outline-danger" disabled title="Em breve"><i class="fas fa-sync-alt"></i> Trocar Questão</button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

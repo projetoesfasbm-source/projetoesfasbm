@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block title %}Editar {{ disciplina.materia }}{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <h1>Editar Disciplina</h1>
+    <p>Modifique o nome e carga horária da disciplina. <strong>A carga horária é fixa e será usada para controle de aulas ministradas.</strong></p>
+</div>
+
+<div class="table-container" style="max-width: 600px; margin: 0 auto;">
+    <div class="table-header">
+        <h3>{{ disciplina.materia }}</h3>
+    </div>
+    
+    <form method="POST" action="{{ url_for('disciplina.editar_nome_disciplina', disciplina_id=disciplina.id) }}" style="padding: 1rem 0;">
+        <div class="form-group">
+            <label for="materia"><strong>Nome da Disciplina</strong></label>
+            <input type="text" id="materia" name="materia" class="form-control" 
+                   value="{{ disciplina.materia }}" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="carga_horaria_prevista"><strong>Carga Horária Total (horas)</strong></label>
+            <input type="number" id="carga_horaria_prevista" name="carga_horaria_prevista" 
+                   class="form-control" value="{{ disciplina.carga_horaria_prevista }}" 
+                   min="1" required>
+            <small class="form-text text-muted">
+                💡 <strong>Importante:</strong> Esta carga horária será descontada automaticamente cada vez que uma aula for ministrada. 
+                Exemplo: 40h total - 3 aulas ministradas = 37h restantes.
+            </small>
+        </div>
+        
+        <!-- Informações sobre uso atual -->
+        <div class="info-box">
+            <h4>📊 Informações de Uso</h4>
+            <div class="usage-stats">
+                <div class="stat-item">
+                    <strong>Carga Horária Atual:</strong> {{ disciplina.carga_horaria_prevista or 0 }}h
+                </div>
+                <div class="stat-item">
+                    <strong>Aulas Agendadas:</strong> 
+                    {% set aulas_count = disciplina.horarios|length if disciplina.horarios else 0 %}
+                    {{ aulas_count }} aula(s)
+                </div>
+                <div class="stat-item">
+                    <strong>Alunos Matriculados:</strong> 
+                    {% set alunos_count = disciplina.historico_disciplinas|length if disciplina.historico_disciplinas else 0 %}
+                    {{ alunos_count }} aluno(s)
+                </div>
+            </div>
+        </div>
+        
+        <div class="form-actions">
+            <a href="{{ url_for('disciplina.listar_disciplinas') }}" class="btn btn-secondary">Cancelar</a>
+            <button type="submit" class="btn btn-primary">Salvar Alterações</button>
+        </div>
+    </form>
+</div>
+
+<style>
+.info-box {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin: 1.5rem 0;
+}
+
+.info-box h4 {
+    color: #1a202c;
+    margin-bottom: 1rem;
+    font-size: 1.1rem;
+}
+
+.usage-stats {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.stat-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.stat-item:last-child {
+    border-bottom: none;
+}
+
+.stat-item strong {
+    color: #4a5568;
+}
+
+.form-text.text-muted {
+    color: #6c757d !important;
+    font-size: 0.875rem;
+    margin-top: 0.5rem;
+    padding: 0.75rem;
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: 4px;
+}
+</style>
+{% endblock %}

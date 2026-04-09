@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
+
+    {# ATUALIZADO: v7.3 #}
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json', v='7.3') }}">
+
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="SisGEn">
+
+    <meta name="theme-color" content="{{ site_config.primary_color or '#3b82f6' }}">
+
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/brasaoappcel.png', v='7.3') }}">
+    <link rel="apple-touch-icon" sizes="152x152" href="{{ url_for('static', filename='img/brasaoappcel.png', v='7.3') }}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='img/brasaoappcel.png', v='7.3') }}">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/brasaoappcel.png', v='7.3') }}">
+
+    <title>{% block title %}SisGEn{% endblock %}</title>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bree+Serif&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
+
+    {# ATUALIZADO: v7.3 #}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='7.3') }}">
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        :root {
+            --primary-color: {{ site_config.primary_color or '#3b82f6' }};
+            --secondary-color: {{ site_config.secondary_color or '#1a232c' }};
+        }
+
+        /* --- BARRA DE ATUALIZAÇÃO DO PWA --- */
+        #pwa-update-bar {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background-color: #1e3a8a;
+            color: white;
+            z-index: 100000;
+            padding: 12px 16px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            align-items: center;
+            justify-content: space-between;
+            animation: slideDown 0.5s ease-out;
+        }
+
+        @keyframes slideDown {
+            from { transform: translateY(-100%); }
+            to { transform: translateY(0); }
+        }
+
+        #pwa-update-bar p { margin: 0; font-size: 0.9rem; font-weight: 500; }
+
+        #btn-refresh-pwa {
+            background-color: #10b981;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            cursor: pointer;
+            text-transform: uppercase;
+            margin-left: 10px;
+        }
+
+        {% if site_config is defined and site_config.site_background %}
+        body{
+            background: url('{{ site_config.site_background }}') no-repeat center center fixed !important;
+            background-size: cover !important;
+        }
+        {% endif %}
+
+        html, body { background-color: transparent !important; }
+        .page-container, .main-content, main, section, .container, .container-fluid, .row, .page, .page-content, .wrapper { background: transparent !important; }
+
+        .content-wrapper{
+            background: rgba(255,255,255,0.65) !important;
+            backdrop-filter: blur(2px);
+            -webkit-backdrop-filter: blur(2px);
+            border-radius: 12px;
+        }
+
+        .card, .panel, .box, .section .box, .table-container, .form-container, .alert, .modal-content {
+            background-color: rgba(255,255,255,0.72) !important;
+            backdrop-filter: blur(2px);
+            -webkit-backdrop-filter: blur(2px);
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+        }
+
+        .table thead th {
+            background-color: rgba(255,255,255,0.85) !important;
+        }
+
+        .notification-dropdown .dropdown-item {
+            border-bottom: 1px solid rgba(0,0,0,0.08);
+        }
+        .notification-dropdown li:last-child .dropdown-item {
+            border-bottom: none;
+        }
+
+        .select2-container--bootstrap-5 .select2-dropdown {
+            z-index: 2051;
+        }
+
+        /* --- Estilos do Topo --- */
+        .top-navbar {
+            overflow: visible !important;
+            z-index: 1040;
+        }
+        .top-navbar-content {
+            overflow: visible !important;
+        }
+        .top-navbar-title {
+            overflow: visible !important;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        /* Nome da Escola (Estático) */
+        .school-name-display {
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: inherit !important;
+            white-space: nowrap;
+        }
+
+        /* --- ESTILOS DO MODO DEC (Intervenção) --- */
+        .dec-alert-banner {
+            background-color: #ffc107;
+            color: #856404;
+            text-align: center;
+            padding: 8px 15px;
+            font-weight: bold;
+            font-size: 0.9rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            z-index: 1050;
+            border-bottom: 2px solid #e0a800;
+        }
+        .dec-alert-banner a {
+            color: #856404;
+            text-decoration: underline;
+            font-weight: 800;
+        }
+        .dec-alert-banner a:hover {
+            color: #533f03;
+        }
+    </style>
+</head>
+<body class="{% if not current_user.is_authenticated %}no-sidebar{% endif %}">
+
+    <div id="pwa-update-bar">
+        <p><i class="fas fa-sync-alt fa-spin me-2"></i> Nova versão disponível!</p>
+        <button id="btn-refresh-pwa">Atualizar</button>
+    </div>
+
+    {% if current_user.is_authenticated %}
+    
+    {# Variável de Controle Global #}
+    {% set dec_mode_active = session.get('is_dec_mode') %}
+
+    {# --- ALERTA DE MODO ESPIÃO / LOGAR COMO --- #}
+    {% if session.get('impersonator_id') %}
+    <div class="alert alert-warning text-center m-0 p-2" style="border-bottom: 2px dashed #d39e00; border-radius: 0; background-color: #fff3cd; color: #856404; z-index: 1060; position: relative;">
+        <strong><i class="fas fa-user-secret"></i> MODO ESPIÃO ATIVO</strong><br>
+        <small>Você está usando o sistema como: <b>{{ current_user.nome_de_guerra or current_user.nome_completo }}</b></small><br>
+        <a href="{{ url_for('super_admin.voltar_admin') }}" class="btn btn-sm btn-danger mt-2 fw-bold" style="border-radius: 20px;">
+            <i class="fas fa-sign-out-alt"></i> Retornar ao Admin
+        </a>
+    </div>
+    {% endif %}
+
+    {# --- BANNER DE ALERTA: MODO INTERVENÇÃO DEC --- #}
+    {% if dec_mode_active and session.get('view_as_school_id') and not session.get('impersonator_id') %}
+    <div class="dec-alert-banner">
+        <span><i class="fas fa-exclamation-triangle"></i> ATENÇÃO: Você está operando como Gestor (DEC) dentro desta escola.</span>
+        <a href="{{ url_for('super_admin.clear_school_selection') }}" class="btn btn-sm btn-outline-dark">Voltar ao Painel Global</a>
+    </div>
+    {% endif %}
+
+    <header class="top-navbar">
+        <div class="top-navbar-content">
+            <div class="top-navbar-left-items">
+                <button class="sidebar-toggle" id="sidebarToggle">☰</button>
+
+                <div class="top-navbar-title">
+                    {# --- LÓGICA DE NOME DA ESCOLA (AGORA RESPEITA O SUDO MODE) --- #}
+                    {% set full_name = '' %}
+                    
+                    {% if dec_mode_active and not session.get('view_as_school_id') %}
+                        {% set full_name = "Sistema de Gerenciamento de Ensino - DEC (Global)" %}
+                    {% elif dec_mode_active and session.get('view_as_school_name') %}
+                        {% set full_name = session.get('view_as_school_name') %}
+                    {% else %}
+                        {% set session_active_id = session.get('active_school_id') %}
+                        {% set visual_school_name = namespace(value=None) %}
+                        {% if session_active_id and current_user.user_schools %}
+                            {% for vinculo in current_user.user_schools %}
+                                {% if vinculo.school_id|string == session_active_id|string %}
+                                    {% set visual_school_name.value = vinculo.school.nome %}
+                                {% endif %}
+                            {% endfor %}
+                        {% endif %}
+
+                        {% if visual_school_name.value %}
+                            {% set full_name = visual_school_name.value %}
+                        {% elif current_school %}
+                            {% set full_name = current_school.nome %}
+                        {% elif active_school %}
+                            {% set full_name = active_school.nome %}
+                        {% else %}
+                            {% set full_name = "SisGEn" %}
+                        {% endif %}
+                    {% endif %}
+
+                    {# 1. Desktop: Mostra tudo #}
+                    <span class="school-name-display d-none d-lg-block">
+                        {{ full_name }}
+                    </span>
+
+                    {# 2. Mobile: Mostra só a sigla (depois do " - ") #}
+                    <span class="school-name-display d-lg-none">
+                        {% if ' - ' in full_name %}
+                            {{ full_name.split(' - ', 1)[1] }}
+                        {% else %}
+                            {{ full_name }}
+                        {% endif %}
+                    </span>
+                </div>
+            </div>
+
+            <div class="top-navbar-right-items">
+                <div class="dropdown">
+                    <a href="#" class="notification-bell" data-bs-toggle="dropdown" aria-expanded="false" title="Notificações">
+                        🔔
+                        <span class="notification-badge" id="notification-badge">0</span>
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-end notification-dropdown" id="notification-list">
+                        <li class="p-2 text-center text-muted">Carregando...</li>
+                    </ul>
+                </div>
+                <div class="dropdown">
+                    <a href="#" class="d-flex align-items-center text-decoration-none dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                        <div class="user-info">
+                            <strong>{{ current_user.nome_de_guerra or current_user.nome_completo }}</strong>
+                            <small>{{ current_user.matricula }}</small>
+                        </div>
+                        <div class="user-avatar">
+                            {% if current_user.role == 'aluno' and current_user.aluno_profile and current_user.aluno_profile.foto_perfil and current_user.aluno_profile.foto_perfil != 'default.png' %}
+                                <img src="{{ url_for('static', filename='uploads/profile_pics/' + current_user.aluno_profile.foto_perfil) }}" alt="Foto de Perfil">
+                            {% elif current_user.role == 'instrutor' and current_user.instrutor_profile and current_user.instrutor_profile.foto_perfil and current_user.instrutor_profile.foto_perfil != 'default.png' %}
+                                <img src="{{ url_for('static', filename='uploads/profile_pics/' + current_user.instrutor_profile.foto_perfil) }}" alt="Foto de Perfil">
+                            {% else %}
+                                <span>{{ (current_user.nome_de_guerra or current_user.username)[0] }}</span>
+                            {% endif %}
+                        </div>
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="{{ url_for('user.meu_perfil') }}">Meu Perfil</a></li>
+                        
+                        {# Botões administrativos no dropdown só aparecem se o MODO DEC estiver ligado #}
+                        {% if dec_mode_active %}
+                            {% if session.get('view_as_school_id') %}
+                                <li><a class="dropdown-item text-danger fw-bold" href="{{ url_for('super_admin.clear_school_selection') }}"><i class="fas fa-sign-out-alt"></i> Sair da Escola (Ir p/ DEC)</a></li>
+                            {% else %}
+                                <li><a class="dropdown-item" href="{{ url_for('super_admin.select_school') }}"><i class="fas fa-school"></i> Acessar uma Escola</a></li>
+                            {% endif %}
+                        {% endif %}
+                        
+                        <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#changePasswordModal">Alterar Senha</a></li>
+                    </ul>
+                </div>
+                <a href="{{ url_for('auth.logout') }}" class="btn btn-outline-danger btn-sm" title="Sair do Sistema">Sair</a>
+            </div>
+        </div>
+    </header>
+    {% endif %}
+
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <div class="page-container">
+        {% if current_user.is_authenticated %}
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <a href="{{ url_for('main.dashboard') }}" class="nav-brand">
+                    <div class="sidebar-logo-container">
+                        {% if site_config.sidebar_logo %}
+                            <img src="{{ site_config.sidebar_logo }}" alt="Logo DEC" class="sidebar-logo-img">
+                        {% else %}
+                            <div class="logo-icon-default">⚡</div>
+                        {% endif %}
+                    </div>
+                    <div class="sidebar-brand-text">
+                        <div class="sidebar-brand-title">SisGEn</div>
+                        <div class="sidebar-brand-subtitle">Sistema de Gerenciamento de Ensino - Departamento de Educação e Cultura</div>
+                    </div>
+                </a>
+            </div>
+
+            <nav class="sidebar-nav">
+                {% set active_sid = session.get('active_school_id')|int if session.get('active_school_id') else None %}
+                
+                {# Define se está no painel GLOBAL (Modo DEC ativado E sem escola selecionada) #}
+                {% set is_global_dec_view = (dec_mode_active and not session.get('view_as_school_id')) %}
+
+                <a href="{{ url_for('main.dashboard') }}" class="nav-link {% if request.endpoint == 'main.dashboard' %}active{% endif %}"><div class="nav-icon">🏠</div> Início</a>
+                
+                {# === CONTROLE DE INTERVENÇÃO === #}
+                {% if current_user.role == 'super_admin' or session.get('impersonator_id') %}
+                    <div class="nav-separator">CONTROLE DE ACESSO</div>
+                    {% if session.get('impersonator_id') %}
+                         <a href="{{ url_for('super_admin.voltar_admin') }}" class="nav-link text-danger fw-bold" style="background-color: rgba(220, 53, 69, 0.1);">
+                            <div class="nav-icon">🛑</div> Retornar ao Admin
+                        </a>
+                    {% elif not dec_mode_active %}
+                        <a href="{{ url_for('auth.ativar_modo_dec') }}" class="nav-link" style="color: #ffc107; font-weight: bold; background-color: rgba(255, 193, 7, 0.1);">
+                            <div class="nav-icon">🛡️</div> Ativar Modo DEC
+                        </a>
+                    {% else %}
+                        {# Se o DEC está ativo E ele está dentro de uma escola, mostra o botão de fuga limpo #}
+                        {% if session.get('view_as_school_id') %}
+                            <a href="{{ url_for('super_admin.clear_school_selection') }}" class="nav-link text-warning fw-bold" style="background-color: rgba(255, 193, 7, 0.1);">
+                                <div class="nav-icon">🔙</div> Sair da Escola (Ir p/ DEC)
+                            </a>
+                        {% endif %}
+                        
+                        <a href="{{ url_for('auth.desativar_modo_dec') }}" class="nav-link text-danger fw-bold" style="background-color: rgba(220, 53, 69, 0.1);">
+                            <div class="nav-icon">🛑</div> Sair do Modo DEC
+                        </a>
+                    {% endif %}
+                {% endif %}
+                {# ======================================================== #}
+
+                {# --- TUDO QUE PERTENCE A UMA ESCOLA FICA ESCONDIDO DO PAINEL GLOBAL DEC --- #}
+                {% if not is_global_dec_view %}
+                    
+                    <div class="nav-separator">GERAL</div>
+                    <a href="{{ url_for('main.safebrowser') }}" class="nav-link {% if request.endpoint == 'main.safebrowser' %}active{% endif %}"><div class="nav-icon">🛡️</div> SafeBrowser</a>
+                    <a href="#" id="btnInstalar" class="nav-link text-primary fw-bold" style="display: none;" onclick="event.preventDefault();"><div class="nav-icon">📲</div> Instalar App</a>
+
+                    {% if current_user.is_staff_in_school(active_sid) or current_user.is_instrutor_in_school(active_sid) or current_user.role in ['super_admin', 'aluno'] %}
+                        <a href="{{ url_for('aluno.listar_alunos') }}" class="nav-link {% if request.endpoint and 'aluno.' in request.endpoint and 'historico' not in request.endpoint %}active{% endif %}"><div class="nav-icon">👥</div> Alunos</a>
+                        <a href="{{ url_for('instrutor.listar_instrutores') }}" class="nav-link {% if request.endpoint and 'instrutor.' in request.endpoint %}active{% endif %}"><div class="nav-icon">🎓</div> Instrutores</a>
+                        <a href="{{ url_for('turma.listar_turmas') }}" class="nav-link {% if request.endpoint and 'turma.' in request.endpoint %}active{% endif %}"><div class="nav-icon">🏫</div> Turmas</a>
+                        <a href="{{ url_for('disciplina.listar_disciplinas') }}" class="nav-link {% if request.endpoint and 'disciplina.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📚</div> Disciplinas</a>
+                    {% endif %}
+
+                    {% if current_user.is_sens_in_school(active_sid) %}
+                        <a href="{{ url_for('vinculo.gerenciar_vinculos') }}" class="nav-link {% if request.endpoint and 'vinculo.' in request.endpoint %}active{% endif %}"><div class="nav-icon">🔗</div> Vínculos</a>
+                    {% endif %}
+
+                    {% if current_user.is_staff_in_school(active_sid) or current_user.is_instrutor_in_school(active_sid) or current_user.role in ['super_admin', 'aluno'] %}
+                        <div class="nav-separator">ACADÊMICO</div>
+                        <a href="{{ url_for('horario.index') }}" class="nav-link {% if request.endpoint and ('horario.' in request.endpoint or 'semana.' in request.endpoint) %}active{% endif %}"><div class="nav-icon">📅</div> Quadro Horário</a>
+                        
+                        {% if current_user.is_instrutor_in_school(active_sid) %}
+                            <a href="{{ url_for('questoes.tela_envio') }}" class="nav-link {% if request.endpoint == 'questoes.tela_envio' %}active{% endif %}"><div class="nav-icon">📤</div> Enviar Questões</a>
+                            <a href="{{ url_for('questoes.minhas_provas') }}" class="nav-link {% if request.endpoint == 'questoes.minhas_provas' %}active{% endif %}"><div class="nav-icon">📝</div> Montar Provas</a>
+                        {% endif %}
+
+                        {% if current_user.is_instrutor_in_school(active_sid) or current_user.is_sens_in_school(active_sid) or current_user.is_cal_in_school(active_sid) or current_user.role == 'super_admin' %}
+                            <a href="{{ url_for('diario.listar_pendentes') }}" class="nav-link {% if request.endpoint and 'diario.' in request.endpoint %}active{% endif %}"><div class="nav-icon">✍️</div> Validar Diários</a>
+                        {% endif %}
+                    {% endif %}
+
+                    {% if current_user.is_sens_in_school(active_sid) %}
+                        <a href="{{ url_for('admin_escola.espelho_diarios') }}" class="nav-link {% if request.endpoint == 'admin_escola.espelho_diarios' %}active{% endif %}"><div class="nav-icon">📖</div> Diários de Classe (Adm)</a>
+                    {% endif %}
+
+                    {% if current_user.is_cal_in_school(active_sid) or current_user.role == 'aluno' or dec_mode_active or current_user.is_programador %}
+                        <div class="nav-separator">JUSTIÇA E DISCIPLINA</div>
+                        <a href="{{ url_for('justica.index') }}" class="nav-link {% if request.endpoint and 'justica.' in request.endpoint %}active{% endif %}"><div class="nav-icon">⚖️</div> Justiça e Disciplina</a>
+                        <a href="{{ url_for('questionario.index') }}" class="nav-link {% if request.endpoint and 'questionario.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📝</div> Questionários</a>
+                    {% endif %}
+
+                    {% if current_user.is_sens_in_school(active_sid) %}
+                        <div class="nav-separator">GESTÃO DE AULAS</div>
+                        <a href="{{ url_for('horario.aprovar_horarios') }}" class="nav-link {% if request.endpoint == 'horario.aprovar_horarios' %}active{% endif %}"><div class="nav-icon">👍</div> Aprovar Aulas</a>
+                        <div class="nav-separator">RELATÓRIOS</div>
+                        <a href="{{ url_for('relatorios.index') }}" class="nav-link {% if request.endpoint and 'relatorios.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📊</div> Relatórios</a>
+                    {% endif %}
+
+                    {% if current_user.role == 'aluno' and current_user.aluno_profile %}
+                        <div class="nav-separator">PORTAL DO ALUNO</div>
+                        <a href="{{ url_for('historico.index') }}" class="nav-link {% if request.endpoint and 'historico.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📊</div> Meu CTSP</a>
+                        {% if current_user.is_chefe_turma %}
+                            <a href="{{ url_for('chefe.painel') }}" class="nav-link {% if request.endpoint and 'chefe.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📋</div> Chefe de Turma</a>
+                        {% endif %}
+                    {% endif %}
+
+                    {# ADMINISTRAÇÃO DA ESCOLA #}
+                    {% if current_user.is_admin_escola_in_school(active_sid) or current_user.is_programador or dec_mode_active %}
+                        <div class="nav-separator">ADMINISTRAÇÃO</div>
+                        <a href="{{ url_for('tools.index') }}" class="nav-link {% if request.endpoint and ('tools.' in request.endpoint or 'assets.' in request.endpoint or 'customizer.' in request.endpoint) %}active{% endif %}"><div class="nav-icon">🛠️</div> Ferramentas Admin</a>
+                        <a href="{{ url_for('user.listar_admins_escola') }}" class="nav-link {% if request.endpoint == 'user.listar_admins_escola' %}active{% endif %}"><div class="nav-icon">🛡️</div> Usuários e Permissões</a>
+                    {% endif %}
+
+                {% endif %} {# FIM DO BLOCO "NÃO É VISÃO GLOBAL" #}
+
+                {# --- MENUS GLOBAIS (SÓ APARECEM NO PAINEL DEC) --- #}
+                {% if is_global_dec_view %}
+                    <div class="nav-separator">VISÃO GLOBAL (DEC)</div>
+                    <a href="{{ url_for('super_admin.dashboard') }}" class="nav-link {% if request.endpoint and 'super_admin.' in request.endpoint and 'dashboard' in request.endpoint %}active{% endif %}"><div class="nav-icon">👑</div> Painel DEC (Global)</a>
+                    <a href="{{ url_for('super_admin.manage_gestores') }}" class="nav-link {% if request.endpoint == 'super_admin.manage_gestores' %}active{% endif %}"><div class="nav-icon">👮</div> Gestores DEC</a>
+                    <a href="{{ url_for('questoes.painel_gestao') }}" class="nav-link {% if request.endpoint and 'questoes.' in request.endpoint %}active{% endif %}"><div class="nav-icon">🗂️</div> Banco de Questões</a>
+                {% endif %}
+            </nav>
+            <div class="sidebar-footer"></div>
+        </aside>
+        {% endif %}
+
+        <main class="main-content">
+            {% block navbar_content %}
+            <nav class="navbar" {% if site_config.navbar_background_image %}style="background-image: url('{{ site_config.navbar_background_image }}');"{% endif %}>
+            </nav>
+            {% endblock %}
+
+            <div class="content-wrapper">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        <div id="flash-container" class="flash-messages">
+                            {% for category, message in messages %}
+                                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                                    {{ message }}
+                                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                {% endwith %}
+                <div id="ajax-flash-container"></div>
+                {% block content %}{% endblock %}
+            </div>
+        </main>
+    </div>
+
+    {# MANTIDO: Modais de senha #}
+    {% if current_user.is_authenticated %}
+    <div class="modal fade" id="changePasswordModal" tabindex="-1" aria-labelledby="changePasswordModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="changePasswordModalLabel">Alterar Senha</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="password-change-alert" class="alert" style="display: none;"></div>
+                    <form id="changePasswordForm">
+                        <div class="mb-3">
+                            <label for="current_password" class="form-label">Senha Atual</label>
+                            <input type="password" class="form-control" id="current_password" name="current_password" required autocomplete="current-password">
+                        </div>
+                        <div class="mb-3">
+                            <label for="new_password" class="form-label">Nova Senha</label>
+                            <input type="password" class="form-control" id="new_password" name="new_password" required autocomplete="new-password">
+                        </div>
+                        <div class="mb-3">
+                            <label for="confirm_new_password" class="form-label">Confirmar Nova Senha</label>
+                            <input type="password" class="form-control" id="confirm_new_password" name="confirm_new_password" required autocomplete="new-password">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="savePasswordBtn">Salvar Alterações</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% block modals %}{% endblock %}
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+    <script>
+        let deferredPrompt;
+        const btnInstalar = document.getElementById('btnInstalar');
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            btnInstalar.style.display = 'flex';
+        });
+
+        if (btnInstalar) {
+            btnInstalar.addEventListener('click', async () => {
+                if (deferredPrompt) {
+                    deferredPrompt.prompt();
+                    const { outcome } = await deferredPrompt.userChoice;
+                    console.log(`User response to the install prompt: ${outcome}`);
+                    deferredPrompt = null;
+                    btnInstalar.style.display = 'none';
+                }
+            });
+        }
+
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js?v=7.3').then(reg => {
+                    console.log('SW Registrado:', reg);
+
+                    if (reg.waiting) {
+                        showUpdateBar(reg.waiting);
+                        return;
+                    }
+
+                    reg.addEventListener('updatefound', () => {
+                        const newWorker = reg.installing;
+                        newWorker.addEventListener('statechange', () => {
+                            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                showUpdateBar(newWorker);
+                            }
+                        });
+                    });
+                });
+            });
+
+            let refreshing;
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                if (refreshing) return;
+                window.location.reload();
+                refreshing = true;
+            });
+        }
+
+        function showUpdateBar(worker) {
+            const bar = document.getElementById('pwa-update-bar');
+            if (bar) {
+                bar.style.display = 'flex';
+                const btn = document.getElementById('btn-refresh-pwa');
+                if (btn) {
+                    btn.onclick = () => {
+                        worker.postMessage({ type: 'SKIP_WAITING' });
+                        bar.innerHTML = '<p>Atualizando...</p>';
+                    };
+                }
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            var dropdownElementList = [].slice.call(document.querySelectorAll('.dropdown-toggle'))
+            var dropdownList = dropdownElementList.map(function (dropdownToggleEl) {
+                return new bootstrap.Dropdown(dropdownToggleEl)
+            });
+
+            const sidebar = document.getElementById('sidebar');
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            const sidebarOverlay = document.getElementById('sidebarOverlay');
+            function toggleSidebar() {
+                if (sidebar) sidebar.classList.toggle('open');
+                if (sidebarOverlay) sidebarOverlay.classList.toggle('active');
+            }
+            if (sidebarToggle) sidebarToggle.addEventListener('click', toggleSidebar);
+            if (sidebarOverlay) sidebarOverlay.addEventListener('click', toggleSidebar);
+
+            const changePasswordModal = document.getElementById('changePasswordModal');
+            if (changePasswordModal) {
+                const savePasswordBtn = document.getElementById('savePasswordBtn');
+                const passwordForm = document.getElementById('changePasswordForm');
+                const alertBox = document.getElementById('password-change-alert');
+
+                savePasswordBtn.addEventListener('click', function() {
+                    const formData = {
+                        current_password: passwordForm.current_password.value,
+                        new_password: passwordForm.new_password.value,
+                        confirm_new_password: passwordForm.confirm_new_password.value
+                    };
+                    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+                    fetch("{{ url_for('user.change_password_ajax') }}", {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrfToken
+                        },
+                        body: JSON.stringify(formData)
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        alertBox.textContent = data.message;
+                        alertBox.style.display = 'block';
+                        if (data.success) {
+                            alertBox.className = 'alert alert-success';
+                            setTimeout(() => {
+                                const modal = bootstrap.Modal.getInstance(changePasswordModal);
+                                modal.hide();
+                                location.reload();
+                            }, 2000);
+                        } else {
+                            alertBox.className = 'alert alert-danger';
+                        }
+                    })
+                    .catch(error => {
+                        alertBox.textContent = 'Erro de comunicação com o servidor.';
+                        alertBox.className = 'alert alert-danger';
+                        alertBox.style.display = 'block';
+                    });
+                });
+
+                changePasswordModal.addEventListener('hidden.bs.modal', function () {
+                    passwordForm.reset();
+                    alertBox.style.display = 'none';
+                    alertBox.className = 'alert';
+                });
+            }
+
+            const badge = document.getElementById('notification-badge');
+            const list = document.getElementById('notification-list');
+            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+            function fetchNotifications() {
+                fetch("{{ url_for('notification.get_dropdown_data') }}")
+                    .then(response => {
+                        if (!response.ok) { throw new Error('Network response was not ok'); }
+                        return response.json();
+                    })
+                    .then(data => {
+                        updateNotificationUI(data.unread_count, data.notifications);
+                    })
+                    .catch(error => {
+                        console.error('Erro ao buscar notificações:', error);
+                    });
+            }
+
+            function updateNotificationUI(unread_count, notifications) {
+                if (badge) badge.textContent = unread_count;
+                if (badge) badge.style.display = unread_count > 0 ? 'block' : 'none';
+                if (list) {
+                    list.innerHTML = '';
+                    if (notifications && notifications.length > 0) {
+                        notifications.forEach(n => {
+                            const item = document.createElement('li');
+                            const itemClass = n.is_read ? 'read' : 'unread';
+                            const markAsReadButton = n.is_read ? '' : `<button class="btn btn-sm btn-outline-primary mark-one-read-btn" data-id="${n.id}" title="Marcar como lida">✓</button>`;
+                            item.innerHTML = `<div class="dropdown-item notification-item ${itemClass}"><a href="${n.url}" class="notification-link-main"><p class="notification-message">${n.message}</p><small class="notification-date">${n.created_at}</small></a>${markAsReadButton}</div>`;
+                            list.appendChild(item);
+                        });
+                        list.innerHTML += '<li><hr class="dropdown-divider" style="margin: 0;"></li>';
+                        if (unread_count > 0) {
+                            list.innerHTML += '<li><a class="dropdown-item text-center small" href="#" id="mark-all-read-btn">Marcar todas como lidas</a></li>';
+                        }
+                        list.innerHTML += `<li><a class="dropdown-item text-center" href="{{ url_for('notification.index') }}">Ver todas</a></li>`;
+                    } else {
+                        list.innerHTML = '<li><span class="dropdown-item-text text-center text-muted p-2">Nenhuma notificação recente</span></li>';
+                    }
+                }
+            }
+
+            if (list) {
+                list.addEventListener('click', function(e) {
+                    const markOneBtn = e.target.closest('.mark-one-read-btn');
+                    const markAllBtn = e.target.closest('#mark-all-read-btn');
+                    const link = e.target.closest('a.notification-link-main');
+
+                    if (markOneBtn) {
+                        e.stopPropagation();
+                        const notificationId = markOneBtn.dataset.id;
+                        fetch(`/notifications/mark-as-read/${notificationId}`, { method: 'POST', headers: { 'X-CSRFToken': csrfToken } }).then(() => fetchNotifications());
+                    } else if (markAllBtn) {
+                        e.preventDefault();
+                        fetch("{{ url_for('notification.mark_all_as_read') }}", { method: 'POST', headers: { 'X-CSRFToken': csrfToken } }).then(() => fetchNotifications());
+                    }
+                });
+            }
+
+            if ({{ current_user.is_authenticated | tojson }}) {
+                fetchNotifications();
+                setInterval(fetchNotifications, 60000);
+            }
+        });
+    </script>
+</body>
+</html>

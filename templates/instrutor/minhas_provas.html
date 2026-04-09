@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}Minhas Provas{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-file-signature text-primary"></i> Montagem de Provas</h2>
+    </div>
+
+    {% if delegacoes %}
+        <div class="row">
+        {% for d in delegacoes %}
+            <div class="col-md-6 mb-4">
+                <div class="card shadow-sm border-primary h-100">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0"><i class="fas fa-book"></i> {{ d.disciplina.materia }}</h5>
+                    </div>
+                    <div class="card-body bg-light">
+                        <p><strong>Escola Gestora:</strong> {{ d.escola_gestora.nome }}</p>
+                        <p class="text-muted small">Você foi designado pelo Comando como responsável por confeccionar a prova unificada desta matéria.</p>
+                        
+                        <hr>
+                        
+                        <form action="{{ url_for('questoes.gerar_rascunho', delegacao_id=d.id) }}" method="POST">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Quantidade de Questões da Prova:</label>
+                                <input type="number" name="qtd_questoes" class="form-control border-primary" value="30" min="1" max="100" required>
+                                <div class="form-text">O sistema sorteará esta quantidade aleatoriamente do banco de questões ativas.</div>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-success btn-lg w-100 fw-bold shadow-sm">
+                                <i class="fas fa-random"></i> Sortear Banco e Criar Rascunho
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+        </div>
+    {% else %}
+        <div class="alert alert-info shadow-sm d-flex align-items-center">
+            <i class="fas fa-info-circle fa-2x me-3"></i>
+            <div>
+                <strong>Nenhuma delegação encontrada.</strong><br>
+                Você não foi designado pelo Super Admin para confeccionar nenhuma prova no momento.
+            </div>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

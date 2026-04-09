@@ -1,0 +1,365 @@
+{% extends "base.html" %}
+
+{% block title %}Upload Asset - Sistema EsFAS{% endblock %}
+
+{% block page_title %}Upload Asset{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="upload-header">
+        <h1>Enviar Novo Asset</h1>
+        <a href="{{ url_for('assets.manage_assets') }}" class="btn btn-secondary">
+            ← Voltar para Gerenciar Assets
+        </a>
+    </div>
+
+    <div class="upload-container">
+        <form method="POST" enctype="multipart/form-data" class="upload-form" id="upload-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            
+            <!-- Área de Drop -->
+            <div class="drop-zone" id="drop-zone">
+                <div class="drop-content">
+                    <div class="drop-icon">📁</div>
+                    <h3>Arraste e solte sua imagem aqui</h3>
+                    <p>ou clique para selecionar um arquivo</p>
+                    <div class="file-types">
+                        Formatos aceitos: PNG, JPG, JPEG, GIF, SVG, WEBP (máx. 5MB)
+                    </div>
+                </div>
+                <input type="file" id="file-input" name="file" accept=".png,.jpg,.jpeg,.gif,.svg,.webp" required>
+            </div>
+
+            <!-- Preview da Imagem -->
+            <div class="image-preview" id="image-preview" style="display: none;">
+                <img id="preview-img" src="" alt="Preview">
+                <div class="preview-info">
+                    <div id="file-name"></div>
+                    <div id="file-size"></div>
+                </div>
+                <button type="button" class="btn btn-sm btn-danger remove-preview" id="remove-preview">
+                    Remover
+                </button>
+            </div>
+
+            <!-- Campos do Formulário -->
+            <div class="form-fields">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="asset_type">Tipo do Asset:</label>
+                        <select id="asset_type" name="asset_type" class="form-control" required>
+                            <option value="">Selecione o tipo</option>
+                            <option value="icon">Ícone</option>
+                            <option value="background">Background</option>
+                            <option value="logo">Logo</option>
+                        </select>
+                        <small class="form-help">Defina o tipo de asset para organização</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="category">Categoria:</label>
+                        <select id="category" name="category" class="form-control" required>
+                            <option value="">Selecione a categoria</option>
+                            <option value="dashboard">Dashboard</option>
+                            <option value="sidebar">Sidebar</option>
+                            <option value="general">Geral</option>
+                        </select>
+                        <small class="form-help">Onde este asset será usado</small>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="description">Descrição (opcional):</label>
+                    <textarea id="description" name="description" class="form-control" rows="3" 
+                             placeholder="Descreva o asset e seu uso..."></textarea>
+                    <small class="form-help">Ajuda outros usuários a entenderem o propósito do asset</small>
+                </div>
+            </div>
+
+            <!-- Botões -->
+            <div class="form-actions">
+                <button type="submit" class="btn btn-success btn-lg">
+                    <span class="upload-text">📤 Enviar Asset</span>
+                    <span class="loading-text" style="display: none;">⏳ Enviando...</span>
+                </button>
+                <a href="{{ url_for('assets.manage_assets') }}" class="btn btn-secondary btn-lg">
+                    Cancelar
+                </a>
+            </div>
+        </form>
+
+        <!-- Dicas -->
+        <div class="upload-tips">
+            <h3>💡 Dicas para melhores resultados:</h3>
+            <ul>
+                <li><strong>Ícones:</strong> Use imagens quadradas (ex: 64x64px) em PNG com fundo transparente</li>
+                <li><strong>Backgrounds:</strong> Resolução mínima de 1920x1080px para melhor qualidade</li>
+                <li><strong>Logos:</strong> Prefira SVG ou PNG com alta resolução</li>
+                <li><strong>Otimização:</strong> Imagens são automaticamente otimizadas após upload</li>
+                <li><strong>Tamanho:</strong> Máximo de 5MB por arquivo</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<style>
+.upload-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.upload-header h1 {
+    color: #1a202c;
+    font-size: 2rem;
+    font-weight: 800;
+    margin: 0;
+}
+
+.upload-container {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.upload-form {
+    background: white;
+    border-radius: 12px;
+    padding: 2rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+    border: 1px solid #e2e8f0;
+    margin-bottom: 2rem;
+}
+
+.drop-zone {
+    border: 2px dashed #d1d5db;
+    border-radius: 12px;
+    padding: 3rem 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    margin-bottom: 2rem;
+}
+
+.drop-zone:hover,
+.drop-zone.dragover {
+    border-color: #3b82f6;
+    background: rgba(59, 130, 246, 0.05);
+}
+
+.drop-content {
+    pointer-events: none;
+}
+
+.drop-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
+.drop-zone h3 {
+    color: #1a202c;
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.drop-zone p {
+    color: #64748b;
+    margin-bottom: 1rem;
+}
+
+.file-types {
+    color: #94a3b8;
+    font-size: 0.875rem;
+}
+
+#file-input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.image-preview {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background: #f8fafc;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    margin-bottom: 2rem;
+}
+
+.image-preview img {
+    width: 80px;
+    height: 80px;
+    object-fit: cover;
+    border-radius: 8px;
+}
+
+.preview-info {
+    flex: 1;
+}
+
+.form-fields {
+    margin-bottom: 2rem;
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.form-help {
+    color: #64748b;
+    font-size: 0.8rem;
+    margin-top: 0.25rem;
+}
+
+.form-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+}
+
+.upload-tips {
+    background: white;
+    border-radius: 12px;
+    padding: 2rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+    border: 1px solid #e2e8f0;
+}
+
+.upload-tips h3 {
+    color: #1a202c;
+    margin-bottom: 1rem;
+}
+
+.upload-tips ul {
+    list-style: none;
+    padding: 0;
+}
+
+.upload-tips li {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.upload-tips li:last-child {
+    border-bottom: none;
+}
+
+@media (max-width: 768px) {
+    .upload-header {
+        flex-direction: column;
+        gap: 1rem;
+        align-items: stretch;
+    }
+    
+    .form-row {
+        grid-template-columns: 1fr;
+    }
+    
+    .form-actions {
+        flex-direction: column;
+    }
+    
+    .image-preview {
+        flex-direction: column;
+        text-align: center;
+    }
+}
+</style>
+
+<script>
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+const imagePreview = document.getElementById('image-preview');
+const previewImg = document.getElementById('preview-img');
+const fileName = document.getElementById('file-name');
+const fileSize = document.getElementById('file-size');
+const removePreview = document.getElementById('remove-preview');
+const uploadForm = document.getElementById('upload-form');
+
+// Drag and drop
+dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.classList.add('dragover');
+});
+
+dropZone.addEventListener('dragleave', () => {
+    dropZone.classList.remove('dragover');
+});
+
+dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+        fileInput.files = files;
+        handleFileSelect(files[0]);
+    }
+});
+
+// File input change
+fileInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) {
+        handleFileSelect(e.target.files[0]);
+    }
+});
+
+// Handle file selection
+function handleFileSelect(file) {
+    if (file.size > 5 * 1024 * 1024) { // 5MB
+        alert('Arquivo muito grande. Máximo de 5MB.');
+        return;
+    }
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        previewImg.src = e.target.result;
+        fileName.textContent = file.name;
+        fileSize.textContent = formatFileSize(file.size);
+        
+        dropZone.style.display = 'none';
+        imagePreview.style.display = 'flex';
+    };
+    reader.readAsDataURL(file);
+}
+
+// Remove preview
+removePreview.addEventListener('click', () => {
+    fileInput.value = '';
+    dropZone.style.display = 'block';
+    imagePreview.style.display = 'none';
+});
+
+// Format file size
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+// Form submission
+uploadForm.addEventListener('submit', (e) => {
+    const uploadText = document.querySelector('.upload-text');
+    const loadingText = document.querySelector('.loading-text');
+    
+    uploadText.style.display = 'none';
+    loadingText.style.display = 'inline';
+    
+    // Desabilitar o botão para evitar duplo clique
+    e.target.querySelector('button[type="submit"]').disabled = true;
+});
+</script>
+{% endblock %}

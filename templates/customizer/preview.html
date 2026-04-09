@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Preview - Customizações do Site</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        /* Aplicar configurações de preview */
+        :root {
+            --primary-color: {{ configs.primary_color or '#3b82f6' }};
+            --secondary-color: {{ configs.secondary_color or '#1a232c' }};
+        }
+
+        {% if configs.site_background %}
+        body::before {
+            background-image: url('{{ configs.site_background }}') !important;
+            opacity: 0.1 !important;
+        }
+        {% endif %}
+
+        /* Ícones dinâmicos */
+        .card-icon.alunos::before { content: '{{ configs.dashboard_card_alunos_icon or "👥" }}'; }
+        .card-icon.instrutores::before { content: '{{ configs.dashboard_card_instrutores_icon or "🎓" }}'; }
+        .card-icon.disciplinas::before { content: '{{ configs.dashboard_card_disciplinas_icon or "📚" }}'; }
+        .card-icon.historico::before { content: '{{ configs.dashboard_card_historico_icon or "📊" }}'; }
+        .card-icon.assets::before { content: '{{ configs.dashboard_card_assets_icon or "🎨" }}'; }
+
+        /* Cores dinâmicas */
+        .btn-primary,
+        .login-btn {
+            background: var(--primary-color) !important;
+        }
+
+        .sidebar {
+            background: linear-gradient(180deg, var(--secondary-color), #2d3748) !important;
+        }
+
+        /* Estilos específicos do preview */
+        .preview-header {
+            background: white;
+            padding: 1rem 2rem;
+            border-bottom: 1px solid #e2e8f0;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .preview-badge {
+            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+
+        .preview-actions {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .preview-content {
+            padding: 2rem;
+        }
+
+        .preview-section {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e2e8f0;
+        }
+
+        .preview-section h3 {
+            color: #1a202c;
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+        }
+
+        .config-preview {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+        }
+
+        .config-item {
+            padding: 1rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            background: #f8fafc;
+        }
+
+        .config-key {
+            font-weight: 600;
+            color: #374151;
+            font-size: 0.875rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .config-value {
+            color: #64748b;
+            font-size: 0.9rem;
+        }
+
+        .config-value.image {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .config-value img {
+            width: 30px;
+            height: 30px;
+            object-fit: cover;
+            border-radius: 4px;
+        }
+
+        .sample-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .sample-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e2e8f0;
+            text-align: center;
+        }
+
+        .sample-card .card-icon {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, var(--primary-color), #1d4ed8);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1rem auto;
+            color: white;
+            font-size: 1.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="preview-header">
+        <div>
+            <h2>👁️ Preview das Customizações</h2>
+            <span class="preview-badge">Modo Preview</span>
+        </div>
+        <div class="preview-actions">
+            <button onclick="window.close()" class="btn btn-secondary">Fechar</button>
+            <button onclick="window.opener.location.reload(); window.close();" class="btn btn-success">
+                Aplicar e Fechar
+            </button>
+        </div>
+    </div>
+
+    <div class="preview-content">
+        <!-- Preview das Configurações -->
+        <div class="preview-section">
+            <h3>📋 Configurações Atuais</h3>
+            <div class="config-preview">
+                {% for key, value in configs.items() %}
+                <div class="config-item">
+                    <div class="config-key">{{ key.replace('_', ' ').title() }}</div>
+                    <div class="config-value {% if key.endswith('_icon') or 'image' in key %}image{% endif %}">
+                        {% if 'image' in key and value %}
+                            <img src="{{ value }}" alt="Preview">
+                            <span>{{ value.split('/')[-1] }}</span>
+                        {% elif key.endswith('_icon') %}
+                            <span style="font-size: 1.5rem;">{{ value or '📋' }}</span>
+                        {% elif 'color' in key %}
+                            <div style="width: 20px; height: 20px; background: {{ value or '#3b82f6' }}; border-radius: 4px; display: inline-block; vertical-align: middle;"></div>
+                            <span>{{ value or '#3b82f6' }}</span>
+                        {% else %}
+                            {{ value or 'Não definido' }}
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Preview dos Cards do Dashboard -->
+        <div class="preview-section">
+            <h3>📊 Preview dos Cards do Dashboard</h3>
+            <div class="sample-cards">
+                <div class="sample-card">
+                    <div class="card-icon alunos"></div>
+                    <h4>Alunos</h4>
+                    <p>Card de gerenciamento de alunos</p>
+                </div>
+                
+                <div class="sample-card">
+                    <div class="card-icon instrutores"></div>
+                    <h4>Instrutores</h4>
+                    <p>Card de gerenciamento de instrutores</p>
+                </div>
+                
+                <div class="sample-card">
+                    <div class="card-icon disciplinas"></div>
+                    <h4>Disciplinas</h4>
+                    <p>Card de gerenciamento de disciplinas</p>
+                </div>
+                
+                <div class="sample-card">
+                    <div class="card-icon assets"></div>
+                    <h4>Assets</h4>
+                    <p>Card de gerenciamento de assets</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Preview da Sidebar -->
+        <div class="preview-section">
+            <h3>📂 Preview da Sidebar</h3>
+            <div class="sidebar-preview" style="width: 260px; height: 300px; background: linear-gradient(180deg, var(--secondary-color), #2d3748); border-radius: 12px; color: white; padding: 1rem;">
+                <div class="sidebar-header" style="padding: 1rem 0; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        {% if configs.sidebar_logo %}
+                            <img src="{{ configs.sidebar_logo }}" alt="Logo" style="width: 32px; height: 32px; border-radius: 50%;">
+                        {% else %}
+                            <div style="width: 32px; height: 32px; background: var(--primary-color); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold;">⚡</div>
+                        {% endif %}
+                        <span style="font-weight: 700;">EsFAS</span>
+                    </div>
+                </div>
+                <nav style="padding: 1rem 0;">
+                    <div style="padding: 0.5rem 0; color: #cbd5e1;">🏠 Dashboard</div>
+                    <div style="padding: 0.5rem 0; color: #cbd5e1;">👥 Alunos</div>
+                    <div style="padding: 0.5rem 0; color: #cbd5e1;">🎓 Instrutores</div>
+                    <div style="padding: 0.5rem 0; color: #cbd5e1;">📚 Disciplinas</div>
+                </nav>
+            </div>
+        </div>
+
+        <!-- Informações do Sistema -->
+        <div class="preview-section">
+            <h3>ℹ️ Informações</h3>
+            <div class="info-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                <div style="padding: 1rem; background: #f0f9ff; border-radius: 8px; border-left: 4px solid #0ea5e9;">
+                    <strong>Total de Configurações:</strong><br>
+                    {{ configs|length }} itens configurados
+                </div>
+                <div style="padding: 1rem; background: #f0fdf4; border-radius: 8px; border-left: 4px solid #22c55e;">
+                    <strong>Background:</strong><br>
+                    {% if configs.site_background %}Personalizado{% else %}Padrão{% endif %}
+                </div>
+                <div style="padding: 1rem; background: #fefce8; border-radius: 8px; border-left: 4px solid #eab308;">
+                    <strong>Logo:</strong><br>
+                    {% if configs.sidebar_logo %}Personalizado{% else %}Padrão{% endif %}
+                </div>
+                <div style="padding: 1rem; background: #faf5ff; border-radius: 8px; border-left: 4px solid #a855f7;">
+                    <strong>Cores:</strong><br>
+                    Personalizadas
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Auto-refresh a cada 2 segundos para mostrar mudanças em tempo real
+        setInterval(() => {
+            if (window.opener && !window.opener.closed) {
+                // Verifica se há mudanças no customizador
+                // Se necessário, recarrega o preview
+            }
+        }, 2000);
+
+        // Permitir fechar com ESC
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                window.close();
+            }
+        });
+    </script>
+</body>
+</html>

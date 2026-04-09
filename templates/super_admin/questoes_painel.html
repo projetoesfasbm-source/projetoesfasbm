@@ -1,0 +1,283 @@
+{% extends "base.html" %}
+
+{% block title %}Gestão de Questões e Provas{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-database text-primary"></i> Gestão do Banco de Questões</h2>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <div class="card shadow-sm mb-4 border-primary">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-filter"></i> 1. Filtros de Seleção</h5>
+                </div>
+                <div class="card-body bg-light">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold">Selecione a Escola</label>
+                            <select id="select-escola" class="form-select border-primary shadow-sm">
+                                <option value="" selected disabled>Escolha uma escola...</option>
+                                {% for e in escolas %}
+                                <option value="{{ e.id }}">{{ e.nome }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold">Selecione a Disciplina Unificada</label>
+                            <select id="select-disciplina" class="form-select border-primary shadow-sm" disabled>
+                                <option value="" selected disabled>Aguardando escola...</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="painel-acoes" style="display: none;">
+                <div class="row">
+                    <div class="col-md-5 mb-4">
+                        <div class="card shadow-sm h-100 border-dark text-center">
+                            <div class="card-header bg-dark text-white">
+                                <h5 class="mb-0"><i class="fas fa-tasks"></i> Status do Banco</h5>
+                            </div>
+                            <div class="card-body d-flex flex-column justify-content-center align-items-center">
+                                <p class="text-muted small mb-3">Gerencie a permissão de envio de novos itens pelos instrutores desta matéria.</p>
+                                
+                                <div class="input-group mb-4 w-75 shadow-sm">
+                                    <span class="input-group-text bg-dark text-white fw-bold"><i class="fas fa-bookmark"></i> Edição:</span>
+                                    <input type="text" id="input-edicao" class="form-control border-dark text-center fw-bold" value="Geral" placeholder="Ex: CTSP - 6ª Edição">
+                                </div>
+
+                                <div class="form-check form-switch fs-4 mb-4">
+                                    <input class="form-check-input" type="checkbox" id="toggle-envio">
+                                    <label class="form-check-label ms-2 fw-bold" for="toggle-envio" id="label-toggle">Verificando...</label>
+                                </div>
+
+                                <a href="#" id="btn-acessar-banco" class="btn btn-info text-white fw-bold w-100 py-2 shadow-sm">
+                                    <i class="fas fa-search"></i> Visualizar Questões
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-7 mb-4">
+                        <div class="card shadow-sm h-100 border-warning">
+                            <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0"><i class="fas fa-user-shield"></i> Instrutores Autorizados para Prova</h5>
+                            </div>
+                            <div class="card-body">
+                                <form id="form-delegar" class="mb-4">
+                                    <div class="mb-2">
+                                        <select id="select-instrutor" class="form-select border-warning" multiple="multiple" disabled>
+                                        </select>
+                                    </div>
+                                    <button type="submit" id="btn-delegar" class="btn btn-warning fw-bold w-100 shadow-sm" disabled>
+                                        Autorizar Selecionados
+                                    </button>
+                                    <small class="text-muted mt-2 d-block text-center">Você pode selecionar vários instrutores ao mesmo tempo.</small>
+                                </form>
+
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-hover border">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Nome do Instrutor</th>
+                                                <th class="text-center">Ação</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="lista-delegacoes">
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const csrfToken = "{{ csrf_token() }}";
+    
+    // 1. Inicializa o plugin de Múltipla Escolha elegante
+    $('#select-instrutor').select2({
+        theme: 'bootstrap-5',
+        placeholder: "Selecione um ou mais instrutores...",
+        width: '100%',
+        language: { noResults: function() { return "Nenhum instrutor encontrado"; } }
+    });
+
+    const els = {
+        escola: document.getElementById('select-escola'),
+        disciplina: document.getElementById('select-disciplina'),
+        painel: document.getElementById('painel-acoes'),
+        toggle: document.getElementById('toggle-envio'),
+        edicao: document.getElementById('input-edicao'),
+        label: document.getElementById('label-toggle'),
+        btnBanco: document.getElementById('btn-acessar-banco'),
+        btnDelegar: document.getElementById('btn-delegar'),
+        tabelaDel: document.getElementById('lista-delegacoes')
+    };
+
+    function verificarStatusEdicao() {
+        const sid = els.escola.value;
+        const mat = els.disciplina.value;
+        const ed = els.edicao.value.trim() || 'Geral';
+        if (!sid || !mat) return;
+
+        els.label.textContent = "Sincronizando...";
+        fetch(`/questoes/api/configuracao?school_id=${sid}&materia=${encodeURIComponent(mat)}&edicao=${encodeURIComponent(ed)}`)
+            .then(res => res.json())
+            .then(data => {
+                els.toggle.checked = data.envio_ativo;
+                updateToggleUI(data.envio_ativo);
+                // Se a edição mudou, recarrega a tabela para mostrar os instrutores daquela edição específica
+                refreshDelegations(sid, mat);
+            });
+    }
+
+    els.edicao.addEventListener('change', verificarStatusEdicao);
+
+    els.escola.addEventListener('change', function() {
+        const sid = this.value;
+        els.painel.style.display = 'none';
+        els.disciplina.disabled = true;
+        els.disciplina.innerHTML = '<option disabled selected>Carregando...</option>';
+
+        fetch(`/questoes/api/disciplinas/${sid}`)
+            .then(res => res.json())
+            .then(data => {
+                els.disciplina.innerHTML = '<option value="" selected disabled>Selecione a Disciplina...</option>';
+                data.forEach(m => { els.disciplina.innerHTML += `<option value="${m}">${m}</option>`; });
+                els.disciplina.disabled = false;
+            });
+    });
+
+    els.disciplina.addEventListener('change', function() {
+        const sid = els.escola.value;
+        const mat = this.value;
+        
+        els.btnBanco.href = `/questoes/banco/${sid}/${encodeURIComponent(mat)}`;
+        verificarStatusEdicao();
+
+        fetch(`/questoes/api/instrutores?school_id=${sid}&materia=${encodeURIComponent(mat)}`)
+            .then(res => res.json())
+            .then(data => {
+                const select = $('#select-instrutor');
+                select.empty(); 
+                if(data.length > 0) {
+                    data.forEach(i => { select.append(new Option(i.nome, i.id, false, false)); });
+                    select.prop('disabled', false);
+                } else {
+                    select.prop('disabled', true);
+                }
+                select.trigger('change'); 
+            });
+
+        els.painel.style.display = 'block';
+    });
+
+    // Habilita/Desabilita o botão Autorizar dependendo de quantos estão selecionados
+    $('#select-instrutor').on('change', function() {
+        const selecionados = $(this).val();
+        els.btnDelegar.disabled = !selecionados || selecionados.length === 0;
+    });
+
+    els.toggle.addEventListener('change', function() {
+        const status = this.checked;
+        const ed = els.edicao.value.trim() || 'Geral';
+        els.label.textContent = "Salvando...";
+        
+        fetch(`/questoes/api/configuracao?school_id=${els.escola.value}&materia=${encodeURIComponent(els.disciplina.value)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ envio_ativo: status, edicao: ed })
+        })
+        .then(res => res.json())
+        .then(data => { updateToggleUI(status); })
+        .catch(err => {
+            els.toggle.checked = !status; 
+            updateToggleUI(!status);
+        });
+    });
+
+    function updateToggleUI(status) {
+        els.label.textContent = status ? 'Envio Aberto' : 'Envio Fechado';
+        els.label.className = status ? 'ms-3 fw-bold text-success' : 'ms-3 fw-bold text-danger';
+    }
+
+    // --- NOVA LÓGICA DE DELEGAÇÃO SEM RECARREGAR A TELA ---
+    document.getElementById('form-delegar').addEventListener('submit', function(e) {
+        e.preventDefault(); // Impede a tela de piscar/recarregar
+        
+        const sid = els.escola.value;
+        const mat = els.disciplina.value;
+        const ed = els.edicao.value.trim() || 'Geral';
+        const selecionados = $('#select-instrutor').val();
+
+        if(!selecionados || selecionados.length === 0) return;
+
+        els.btnDelegar.disabled = true;
+        els.btnDelegar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Autorizando...';
+
+        fetch(`/questoes/api/delegar-prova`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({
+                escola_id: sid,
+                materia: mat,
+                edicao: ed,
+                instrutor_ids: selecionados // Manda todos de uma vez
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            els.btnDelegar.disabled = false;
+            els.btnDelegar.innerHTML = 'Autorizar Selecionados';
+            if(data.success) {
+                $('#select-instrutor').val(null).trigger('change'); // Limpa a caixinha
+                refreshDelegations(sid, mat); // Atualiza a tabela na mesma hora
+            } else {
+                alert("Erro: " + data.message);
+            }
+        });
+    });
+
+    function refreshDelegations(sid, mat) {
+        const ed = els.edicao.value.trim() || 'Geral';
+        fetch(`/questoes/api/delegacoes/listar?school_id=${sid}&materia=${encodeURIComponent(mat)}&edicao=${encodeURIComponent(ed)}`)
+            .then(res => res.json())
+            .then(data => {
+                els.tabelaDel.innerHTML = data.length ? '' : '<tr><td colspan="2" class="text-center text-muted">Nenhuma delegação ativa para esta edição.</td></tr>';
+                data.forEach(d => {
+                    els.tabelaDel.innerHTML += `
+                        <tr>
+                            <td class="align-middle fw-bold">${d.instrutor}</td>
+                            <td class="text-end">
+                                <button type="button" class="btn btn-sm btn-outline-danger" onclick="revokePermission(${d.id})">
+                                    <i class="fas fa-user-times"></i> Revogar
+                                </button>
+                            </td>
+                        </tr>`;
+                });
+            });
+    }
+
+    window.revokePermission = function(id) {
+        if(confirm('Deseja remover o acesso deste instrutor à confecção da prova?')) {
+            fetch(`/questoes/api/delegacao/revogar/${id}`, {
+                method: 'POST',
+                headers: {'X-CSRFToken': csrfToken}
+            })
+            .then(() => refreshDelegations(els.escola.value, els.disciplina.value));
+        }
+    };
+});
+</script>
+{% endblock %}

@@ -1,0 +1,51 @@
+# backend/controllers/notification_controller.py
+from flask import Blueprint, render_template, jsonify, redirect, url_for, request
+from flask_login import login_required, current_user
+from ..services.notification_service import NotificationService
+from ..models.database import db
+
+notification_bp = Blueprint('notification', __name__, url_prefix='/notifications')
+
+@notification_bp.route('/')
+@login_required
+def index():
+    """Página que exibe todas as notificações do usuário."""
+    page = request.args.get('page', 1, type=int)
+    notifications = NotificationService.get_all_notifications(current_user.id, page=page)
+    return render_template('notifications/index.html', notifications=notifications)
+
+@notification_bp.route('/api/dropdown-data')
+@login_required
+def get_dropdown_data():
+    """Endpoint da API para buscar dados para o dropdown de notificações."""
+    unread_count, notifications = NotificationService.get_notifications_for_dropdown(current_user.id)
+    
+    return jsonify({
+        'unread_count': unread_count,
+        'notifications': [{
+            'id': n.id,
+            'message': n.message,
+            'url': n.url or '#',
+            'created_at': n.created_at.strftime('%d/%m %H:%M'),
+            'is_read': n.is_read
+        } for n in notifications]
+    })
+
+@notification_bp.route('/mark-as-read/<int:notification_id>', methods=['POST'])
+@login_required
+def mark_as_read(notification_id):
+    """Endpoint da API para marcar uma notificação como lida."""
+    success = NotificationService.mark_as_read(notification_id, current_user.id)
+    if success:
+        db.session.commit()
+        return jsonify({'success': True})
+    return jsonify({'success': False}), 404
+
+@notification_bp.route('/api/mark-all-as-read', methods=['POST'])
+@login_required
+def mark_all_as_read():
+    """Endpoint da API para marcar todas as notificações como lidas."""
+    success = NotificationService.mark_all_as_read(current_user.id)
+    if success:
+        db.session.commit()
+    return jsonify({'success': success})

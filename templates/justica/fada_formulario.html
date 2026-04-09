@@ -1,0 +1,308 @@
+<div class="fada-page shadow">
+
+    <div id="painel-controle" class="alert alert-secondary d-print-none mb-3" style="display: none;">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <strong>Etapa Atual:</strong> <span id="badge-etapa" class="badge bg-dark ms-1">RASCUNHO</span>
+            </div>
+
+            <button type="button" id="btn-enviar-comissao" class="btn btn-warning btn-sm fw-bold shadow-sm" onclick="enviarParaComissao()" style="display: none;">
+                <i class="fas fa-paper-plane"></i> Enviar p/ Assinatura da Comissão
+            </button>
+
+            <form id="formAssinarMembro" method="POST" style="display: none;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-success btn-sm fw-bold shadow-sm">
+                    <i class="fas fa-file-signature"></i> ASSINAR DIGITALMENTE
+                </button>
+            </form>
+        </div>
+
+        <div id="area-selecao-comissao" class="mt-2 border-top pt-2" style="display: none;">
+            <div class="row g-1">
+                <div class="col-4"><label class="small fw-bold">Presidente (Min. 2º Ten)</label><select id="sel_presidente" name="presidente_id" form="formFada" class="form-select form-select-sm fada-select" required onchange="atualizarNomes()"></select></div>
+                <div class="col-4"><label class="small fw-bold">Membro 1 (Min. 2º Sgt)</label><select id="sel_membro1" name="membro1_id" form="formFada" class="form-select form-select-sm fada-select" required onchange="atualizarNomes()"></select></div>
+                <div class="col-4"><label class="small fw-bold">Membro 2 (Min. 2º Sgt)</label><select id="sel_membro2" name="membro2_id" form="formFada" class="form-select form-select-sm fada-select" required onchange="atualizarNomes()"></select></div>
+            </div>
+        </div>
+    </div>
+
+    <form id="formFada" method="POST" action="{{ url_for('justica.salvar_fada') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="aluno_id" id="fada_aluno_id" value="">
+        <input type="hidden" id="fada_id_atual" value="">
+
+        <div class="text-center mb-3 font-serif lh-1">
+            <img src="{{ url_for('static', filename='img/brasao_rs.png') }}" alt="" style="height: 50px; display: none;" class="d-print-block mx-auto mb-1">
+            <h6 class="fw-bold mb-0">ESTADO DO RIO GRANDE DO SUL</h6>
+            <h6 class="fw-bold mb-0">SECRETARIA DA SEGURANÇA PÚBLICA</h6>
+            <h6 class="fw-bold mb-0">BRIGADA MILITAR</h6>
+            <h6 class="fw-bold mb-0 mt-2">DEPARTAMENTO DE EDUCAÇÃO E CULTURA</h6>
+            <h5 class="fw-bold mt-3 text-decoration-underline">FICHA DE AVALIAÇÃO DE DESEMPENHO ATITUDINAL</h5>
+        </div>
+
+        <div class="border border-dark p-2 mb-2 font-serif small">
+            <div class="row">
+                <div class="col-8"><strong>ALUNO:</strong> <span id="fada_nome_aluno_display">...</span></div>
+                <div class="col-4"><strong>QUALIFICAÇÃO:</strong> Sd PM</div>
+            </div>
+            <div class="row mt-1">
+                <div class="col-8"><strong>OPM:</strong> <span id="fada_opm_display">EsFES/PoA (SisGEn)</span></div>
+                <div class="col-4"><strong>DATA DA AVALIAÇÃO:</strong> <span id="fada_data_display"></span></div>
+            </div>
+        </div>
+
+        <table class="table table-bordered border-dark align-middle fada-table mb-2">
+            <thead class="bg-light text-center">
+                <tr>
+                    <th style="width: 5%;">ITEM</th>
+                    <th style="width: 70%;">ATRIBUTOS AVALIADOS</th>
+                    <th style="width: 10%;">GRAU</th>
+                    <th style="width: 15%;">CONCEITO</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% set atributos = [
+                    ('Expressão oral e escrita', 'Verbalizar com clareza, precisão e correção de ideias ou fatos. Expressar o pensamento, coerentemente, através da escrita ou de forma verbal.'),
+                    ('Planejamento e método', 'Prever e propor soluções para situações futuras com objetivo. Proceder de forma ordenada, lógica e sistemática, sem desviar da proposta inicial.'),
+                    ('Perseverança e Tenacidade', 'Manter a continuidade na execução de uma tarefa, mesmo que implique em esforço físico e mental prolongados.'),
+                    ('Apresentação pessoal', 'Manter, em todos os momentos, aparência condizente com os padrões militares.'),
+                    ('Lealdade', 'Capacidade revelada pelo indivíduo no tocante à sinceridade e franqueza de atitudes e opiniões.'),
+                    ('Tato', 'Agir com prudência e habilidade, com relação a pessoas e/ou assuntos evitando situações embaraçosas.'),
+                    ('Equilíbrio emocional', 'Controle da impulsividade e precipitação, enfrentando quaisquer situações com serenidade e firmeza.'),
+                    ('Disciplina', 'Submeter-se de forma consciente às leis, normas e regulamentos vigentes na instituição a que pertence.'),
+                    ('Responsabilidade', 'Responder pelas próprias ações e atos, bem como de outrem. Assumir compromissos e obrigações funcionais.'),
+                    ('Maturidade', 'Adaptabilidade diante de situações, respeitando e acreditando no cumprimento das normas vigentes.'),
+                    ('Assiduidade', 'Capacidade de, mediante ação da vontade, estar presente em todos os trabalhos e eventos programados, nas datas e horários previstos.'),
+                    ('Pontualidade', 'Capacidade de estar presente aos trabalhos e eventos programados nos horários previstos.'),
+                    ('Dicção de voz e comando', 'Capacidade de emprego da voz impondo-se perante um grupo ou uma situação, demonstrando energia e firmeza.'),
+                    ('Liderança', 'Capacidade de coordenar, direcionar, orientar as atitudes dos membros de um grupo.'),
+                    ('Relacionamento interpessoal', 'Relaciona-se com todos, sem distinção, de forma amistosa no trato, demonstrando estima e respeito com os outros.'),
+                    ('Ética', 'Apresenta os valores policiais, nos termos do Estatuto dos Militares Estaduais, destacando o sentimento do dever, da dignidade, o brio e o decoro da classe.'),
+                    ('Produtividade', 'Grau de qualidade na apresentação do trabalho do servidor. Capacidade para desempenhar suas funções. Capacidade em assimilar os ensinamentos e aplicá-los na execução de suas atividades.'),
+                    ('Eficiência', 'Grau de conhecimento que o servidor demonstra no exercício das atribuições de seu cargo. Modo como o servidor executa suas atividades e como utiliza e conserva o material e equipamentos disponíveis para a realização de seu trabalho.')
+                ] %}
+
+                {% for titulo, desc in atributos %}
+                <tr>
+                    <td class="text-center fw-bold">{{ loop.index }}</td>
+                    <td style="font-size: 0.8rem; text-align: justify;">
+                        <strong>{{ titulo }}:</strong> {{ desc }}
+                        <div id="badge_desc_{{ loop.index0 }}" class="mt-1 d-print-none"></div>
+                    </td>
+                    <td class="p-1">
+                        <input type="number" step="0.01" min="0" max="10"
+                               class="form-control text-center fw-bold fada-input border-0 bg-transparent p-0"
+                               id="attr_{{ loop.index0 }}" name="notas[]" value="8.00"
+                               onchange="atualizarConceito({{ loop.index0 }})">
+                    </td>
+                    <td class="text-center fw-bold small" id="conc_{{ loop.index0 }}">APROVADO</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="row mx-0 border border-dark p-1 mb-2 align-items-center">
+            <div class="col-8 text-end fw-bold">MÉDIA FINAL FADA:</div>
+            <div class="col-4 text-center fw-bold fs-5" id="displayMediaFada">8.00</div>
+        </div>
+
+        <div class="border border-dark p-2 mb-2 font-serif small">
+            <strong>LEGENDA:</strong>
+            <span class="mx-3">APROVADO (Nota 7 a 10)</span>
+            <span class="mx-3">REPROVADO (Abaixo de 7)</span>
+            <span class="mx-3">NÃO OBSERVADO</span>
+        </div>
+
+        <div class="border border-dark p-2 mb-2 font-serif small">
+            <div class="fw-bold mb-1">OBSERVAÇÕES / JUSTIFICATIVA PARA GRAUS ABAIXO DE 7 E ACIMA DE 9:</div>
+            <textarea class="form-control border-0 p-0 font-serif" name="observacao" id="obs_justificativa" rows="4"
+                      style="font-size: 0.9rem; resize: none; background: transparent;"></textarea>
+        </div>
+
+        <div class="border border-dark p-2 mb-2 font-serif small bg-light bg-opacity-10">
+            <div class="fw-bold mb-2 text-decoration-underline">COMISSÃO DE AVALIAÇÃO:</div>
+
+            <div class="row align-items-end mt-2 text-center g-3">
+                <div class="col-4">
+                    <div id="box_ass_m1" class="mb-1 text-muted fst-italic small" style="height: 20px;"></div>
+                    <div class="border-top border-dark pt-1 mx-2">
+                        <span id="lbl_membro1" class="d-block fw-bold">Membro 1</span>
+                        <span class="small text-muted d-block" style="font-size: 0.7rem;">Membro</span>
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div id="box_ass_pres" class="mb-1 text-muted fst-italic small" style="height: 20px;"></div>
+                    <div class="border-top border-dark pt-1 mx-2">
+                        <span id="lbl_presidente" class="d-block fw-bold">Presidente</span>
+                        <span class="small text-muted d-block" style="font-size: 0.7rem;">Presidente</span>
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div id="box_ass_m2" class="mb-1 text-muted fst-italic small" style="height: 20px;"></div>
+                    <div class="border-top border-dark pt-1 mx-2">
+                        <span id="lbl_membro2" class="d-block fw-bold">Membro 2</span>
+                        <span class="small text-muted d-block" style="font-size: 0.7rem;">Membro</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="area-aluno-final" class="border border-dark p-2 mb-2 font-serif small">
+            <div class="fw-bold mb-1">CIENTE DO ALUNO:</div>
+            <div id="status-aluno-ass" class="text-center py-2 text-muted fst-italic">Aguardando liberação da comissão...</div>
+
+            <div id="botoes-aluno" class="mt-2 d-none d-print-none">
+                <form action="" id="formAssAluno" method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                    <input type="hidden" name="acao" id="acao_aluno_input">
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-success btn-sm w-100 mb-1" onclick="assinarAluno('assinar')">CONCORDO E ASSINO</button>
+                        <button type="button" class="btn btn-outline-danger btn-sm w-100" onclick="assinarAluno('recorrer')">RECORRER</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-end gap-2 mt-4 d-print-none">
+            <button type="button" class="btn btn-secondary" onclick="fecharFadaModal()">Fechar</button>
+            <button type="submit" class="btn btn-primary fw-bold px-4" id="btn-salvar-fada">Salvar Rascunho</button>
+        </div>
+    </form>
+</div>
+
+<style>
+    .fada-page { width: 210mm; min-height: 297mm; background: white; padding: 15mm; margin: 0 auto; font-family: "Times New Roman", Times, serif; color: #000; }
+    .fada-table th, .fada-table td { padding: 2px 5px !important; font-size: 0.85rem; border-color: #000 !important; }
+    .fada-input { box-shadow: none; font-size: 1rem; }
+    @media print { .fada-page { margin: 0; box-shadow: none !important; width: 100%; } .d-print-none { display: none !important; } input, textarea { border: none !important; resize: none; } }
+</style>
+
+<script>
+const currentUserId = {{ current_user.id }};
+
+window.abrirFadaModalInterno = function(alunoId, nomeAluno, fadaId, etapa, dadosFada) {
+    document.getElementById('formFada').reset();
+    document.getElementById('fada_aluno_id').value = alunoId;
+    document.getElementById('fada_id_atual').value = fadaId || '';
+    document.getElementById('fada_nome_aluno_display').innerText = nomeAluno;
+    document.getElementById('fada_data_display').innerText = new Date().toLocaleDateString('pt-BR');
+
+    const pControl = document.getElementById('painel-controle');
+    const pComissao = document.getElementById('area-selecao-comissao');
+    const badge = document.getElementById('badge-etapa');
+    const btnSalvar = document.getElementById('btn-salvar-fada');
+
+    pControl.style.display = 'block';
+    badge.innerText = etapa || 'RASCUNHO';
+
+    popularSelectsComissao(dadosFada);
+
+    renderHash('box_ass_pres', dadosFada?.hash_pres);
+    renderHash('box_ass_m1', dadosFada?.hash_m1);
+    renderHash('box_ass_m2', dadosFada?.hash_m2);
+
+    if (etapa === 'RASCUNHO' || !etapa) {
+        pComissao.style.display = 'block';
+        btnSalvar.style.display = 'inline-block';
+        document.getElementById('btn-enviar-comissao').style.display = fadaId ? 'inline-block' : 'none';
+        document.querySelectorAll('.fada-input, .fada-select, textarea').forEach(el => el.disabled = false);
+    } else {
+        bloquearEdicao();
+        pComissao.style.display = 'none';
+        btnSalvar.style.display = 'none';
+        document.getElementById('btn-enviar-comissao').style.display = 'none';
+
+        if (etapa === 'COMISSAO') {
+            const souPres = (dadosFada?.presidente_id == currentUserId && !dadosFada?.hash_pres);
+            const souM1 = (dadosFada?.membro1_id == currentUserId && !dadosFada?.hash_m1);
+            const souM2 = (dadosFada?.membro2_id == currentUserId && !dadosFada?.hash_m2);
+
+            if (souPres || souM1 || souM2) {
+                const formAss = document.getElementById('formAssinarMembro');
+                formAss.style.display = 'inline-block';
+                formAss.action = `/justica-e-disciplina/fada/assinar-membro/${fadaId}`;
+            }
+        }
+
+        if (etapa === 'ALUNO') {
+            document.getElementById('status-aluno-ass').innerText = "Documento liberado. Assine abaixo.";
+            if ("{{ current_user.role }}" === "aluno") {
+                document.getElementById('botoes-aluno').classList.remove('d-none');
+                document.getElementById('formAssAluno').action = `/justica-e-disciplina/fada/assinar-aluno/${fadaId}`;
+            }
+        }
+
+        if (etapa === 'FINALIZADO') {
+            document.getElementById('status-aluno-ass').innerHTML = `<span class="text-success fw-bold">ASSINADO EM ${dadosFada?.data_assinatura || ''}</span>`;
+        }
+    }
+};
+
+function popularSelectsComissao(dados) {
+    const selects = ['sel_presidente', 'sel_membro1', 'sel_membro2'];
+    const values = [dados?.presidente_id, dados?.membro1_id, dados?.membro2_id];
+
+    selects.forEach((id, idx) => {
+        const sel = document.getElementById(id);
+        sel.innerHTML = '<option value="">Selecione...</option>';
+        if(window.listaAvaliadores) {
+            window.listaAvaliadores.forEach(user => {
+                const opt = document.createElement('option');
+                opt.value = user.id;
+                opt.text = `${user.posto || ''} ${user.nome}`;
+                if (values[idx] == user.id) opt.selected = true;
+                sel.appendChild(opt);
+            });
+        }
+        sel.onchange = atualizarNomes;
+    });
+    atualizarNomes();
+}
+
+function atualizarNomes() {
+    const p = document.getElementById('sel_presidente');
+    const m1 = document.getElementById('sel_membro1');
+    const m2 = document.getElementById('sel_membro2');
+
+    document.getElementById('lbl_presidente').innerText = p.options[p.selectedIndex]?.text.replace('Selecione...', 'Presidente') || "Presidente";
+    document.getElementById('lbl_membro1').innerText = m1.options[m1.selectedIndex]?.text.replace('Selecione...', 'Membro 1') || "Membro 1";
+    document.getElementById('lbl_membro2').innerText = m2.options[m2.selectedIndex]?.text.replace('Selecione...', 'Membro 2') || "Membro 2";
+}
+
+function renderHash(elId, hash) {
+    if(hash) document.getElementById(elId).innerHTML = `<span class="text-success fw-bold" style="font-size: 0.6rem;">ASSINADO DIGITALMENTE<br>${hash.substring(0,10)}...</span>`;
+    else document.getElementById(elId).innerHTML = "";
+}
+
+function bloquearEdicao() {
+    document.querySelectorAll('.fada-input, .fada-select, textarea').forEach(el => el.disabled = true);
+}
+
+function enviarParaComissao() {
+    const id = document.getElementById('fada_id_atual').value;
+    if(confirm("Enviar para a comissão assinar? O documento será travado para edição.")) {
+        fetch(`/justica-e-disciplina/fada/enviar-comissao/${id}`, {method: 'POST', headers: {'X-CSRFToken': '{{ csrf_token() }}'}})
+        .then(r=>r.json()).then(d => { if(d.success) location.reload(); else alert(d.error); });
+    }
+}
+
+function assinarAluno(acao) {
+    document.getElementById('acao_aluno_input').value = acao;
+    document.getElementById('formAssAluno').submit();
+}
+
+function atualizarConceito(idx) {
+    const v = parseFloat(document.getElementById(`attr_${idx}`).value);
+    const el = document.getElementById(`conc_${idx}`);
+    if (v >= 7) { el.innerText = "APROVADO"; el.className = "text-center fw-bold small text-success"; }
+    else { el.innerText = "REPROVADO"; el.className = "text-center fw-bold small text-danger"; }
+    calcularMediaFada();
+}
+
+function calcularMediaFada() {
+    let s = 0; document.querySelectorAll('.fada-input').forEach(i => s += parseFloat(i.value||0));
+    document.getElementById('displayMediaFada').innerText = (s/18.0).toFixed(2);
+}
+</script>

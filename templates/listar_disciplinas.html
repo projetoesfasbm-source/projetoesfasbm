@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+
+{% block title %}Lista de Disciplinas{% endblock %}
+
+{% block content %}
+<div class="content-header d-flex justify-content-between align-items-center">
+    <div>
+        <h1>Disciplinas</h1>
+        <p>Gerencie as matérias e acompanhe o andamento pelo Quadro de Horários.</p>
+    </div>
+
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('disciplina.dashboard_disciplinas', ciclo_id=request.args.get('ciclo_id')|int if request.args.get('ciclo_id') else None) }}" class="btn btn-warning shadow-sm btn-lg text-dark">
+            <i class="fas fa-chart-line me-1"></i> Dashboard Inteligente
+        </a>
+
+        {% if current_user.is_sens or current_user.role in ['programador', 'admin_escola'] %}
+        <a href="{{ url_for('disciplina.adicionar_disciplina') }}" class="btn btn-primary shadow-sm btn-lg">
+            <i class="fas fa-plus me-1"></i> Adicionar Disciplina
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="table-filters mt-3">
+    <form method="GET" action="{{ url_for('disciplina.listar_disciplinas') }}" id="filter-form" class="d-flex flex-wrap align-items-end gap-3">
+        <div class="filter-group flex-grow-1" style="max-width: 400px;">
+            <label for="turma_select" class="form-label"><strong>Selecione uma Turma:</strong></label>
+            <select name="turma_id" id="turma_select" class="form-select shadow-sm" onchange="this.form.submit()">
+                <option value="">-- Selecione para filtrar --</option>
+                {% for t in turmas %}
+                <option value="{{ t.id }}" {% if t.id == turma_selecionada_id %}selected{% endif %}>{{ t.nome }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </form>
+</div>
+
+{% if turma_selecionada_id %}
+<div class="table-container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3>
+            {% set turma_atual = turmas|selectattr('id', 'equalto', turma_selecionada_id)|first %}
+            <i class="fas fa-chalkboard-teacher me-2"></i>{{ turma_atual.nome if turma_atual else '' }}
+        </h3>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                {% if disciplinas_com_progresso %}
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="bg-light">
+                            <tr>
+                                <th style="width: 30%;" class="ps-4">Matéria</th>
+                                <th style="width: 10%;" class="text-center">Carga Total</th>
+                                <th style="width: 40%;">Progresso Detalhado</th>
+                                {% if current_user.is_sens or current_user.role in ['programador', 'admin_escola'] %}
+                                <th style="width: 20%;" class="text-end pe-4">Ações</th>
+                                {% endif %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in disciplinas_com_progresso %}
+                            <tr>
+                                <td class="ps-4">
+                                    <div class="fw-bold" style="font-size: 1.1rem;">
+                                        <a href="{{ url_for('disciplina.detalhes_disciplina', disciplina_id=item.disciplina.id) }}" class="text-dark text-decoration-none hover-link" title="Ver detalhes">
+                                            {{ item.disciplina.materia }} <i class="fas fa-search-plus small ms-1 text-primary"></i>
+                                        </a>
+                                    </div>
+                                    <div class="text-muted small">
+                                        <i class="far fa-calendar me-1"></i>Ciclo: {{ item.disciplina.ciclo.nome if item.disciplina.ciclo else '-' }}
+                                    </div>
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge bg-dark rounded-pill" style="font-size: 1em;">{{ item.progresso.previsto }}h</span>
+                                </td>
+                                <td>
+                                    <div class="d-flex flex-column gap-1">
+                                        <div class="progress" style="height: 25px; border-radius: 8px; background-color: #dee2e6; overflow: hidden; display: flex;">
+                                            <div class="progress-bar bg-success" role="progressbar" 
+                                                 style="width: {{ item.progresso.pct_realizado }}%;" 
+                                                 title="Ministradas: {{ item.progresso.realizado }}h">
+                                                 {% if item.progresso.pct_realizado > 7 %}{{ item.progresso.realizado }}h{% endif %}
+                                            </div>
+                                            
+                                            <div class="progress-bar bg-primary" role="progressbar" 
+                                                 style="width: {{ item.progresso.pct_agendado }}%; border-left: 1px solid rgba(255,255,255,0.3);" 
+                                                 title="Agendadas: {{ item.progresso.agendado }}h">
+                                                 {% if item.progresso.pct_agendado > 7 %}{{ item.progresso.agendado }}h{% endif %}
+                                            </div>
+
+                                            <div class="progress-bar" role="progressbar" 
+                                                 style="width: {{ item.progresso.pct_restante }}%; background-color: transparent;" 
+                                                 title="Restantes: {{ item.progresso.restante_para_planejar }}h">
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="d-flex justify-content-between px-1" style="font-size: 0.75rem; font-weight: 600;">
+                                            <span class="text-success" title="Horas já confirmadas no diário">
+                                                <i class="fas fa-check-circle"></i> MINISTRADAS: {{ item.progresso.realizado }}h
+                                            </span>
+                                            <span class="text-primary" title="Horas futuras no quadro de horários">
+                                                <i class="fas fa-calendar-alt"></i> AGENDADAS: {{ item.progresso.agendado }}h
+                                            </span>
+                                            <span class="text-secondary" title="Horas ainda não distribuídas">
+                                                <i class="fas fa-clock"></i> RESTANTES: {{ item.progresso.restante_para_planejar }}h
+                                            </span>
+                                        </div>
+                                    </div>
+                                </td>
+                                
+                                {% if current_user.is_sens or current_user.role in ['programador', 'admin_escola'] %}
+                                <td class="text-end pe-4 text-nowrap align-middle">
+                                    <div class="d-flex justify-content-end gap-2">
+                                        <a href="{{ url_for('disciplina.editar_disciplina', disciplina_id=item.disciplina.id) }}" 
+                                           class="btn btn-warning text-dark fw-bold shadow-sm" 
+                                           title="Editar Disciplina">
+                                            <i class="fas fa-edit"></i> Editar
+                                        </a>
+                                        
+                                        <form method="POST" action="{{ url_for('disciplina.excluir_disciplina', disciplina_id=item.disciplina.id) }}" 
+                                              onsubmit="return confirm('Tem certeza que deseja excluir a disciplina {{ item.disciplina.materia }}?');"
+                                              class="d-inline-block m-0">
+                                            {{ delete_form.hidden_tag() }}
+                                            <button type="submit" class="btn btn-danger fw-bold shadow-sm" title="Excluir">
+                                                <i class="fas fa-trash"></i> Excluir
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                                {% endif %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <div class="text-center py-5">
+                        <div class="text-muted mb-3" style="font-size: 3rem;"><i class="fas fa-folder-open"></i></div>
+                        <h4>Nenhuma Disciplina Encontrada</h4>
+                        <p class="text-muted">Esta turma ainda não possui disciplinas cadastradas.</p>
+                        {% if current_user.is_sens or current_user.role in ['programador', 'admin_escola'] %}
+                        <a href="{{ url_for('disciplina.adicionar_disciplina') }}" class="btn btn-primary mt-2">Cadastrar Agora</a>
+                        {% endif %}
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="alert alert-info mt-4 shadow-sm text-center p-5">
+    <h4><i class="fas fa-info-circle me-2"></i>Nenhuma Turma Selecionada</h4>
+    <p>Por favor, selecione uma turma no menu acima para gerenciar as disciplinas.</p>
+</div>
+{% endif %}
+
+<style>
+    .progress {
+        box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
+    }
+    .progress-bar {
+        font-weight: bold;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: width 0.6s ease;
+    }
+    .hover-link:hover {
+        color: #0d6efd !important;
+        text-decoration: underline !important;
+    }
+    .table-hover tbody tr:hover {
+        background-color: rgba(0,0,0,0.02);
+    }
+</style>
+{% endblock %}

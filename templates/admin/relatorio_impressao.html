@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Relatório de Diário de Classe - {{ turma.nome }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        @page { size: A4; margin: 1.5cm; }
+        body { font-family: "Times New Roman", serif; background: white; color: black; font-size: 11pt; }
+        .header-doc { text-align: center; margin-bottom: 30px; border-bottom: 2px solid black; padding-bottom: 10px; }
+        .info-table { width: 100%; margin-bottom: 20px; border-collapse: collapse; }
+        .info-table td { padding: 5px; border: 1px solid #000; }
+        .label-doc { font-weight: bold; background-color: #f0f0f0; width: 140px; }
+        .main-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        .main-table th, .main-table td { border: 1px solid black; padding: 6px; vertical-align: top; }
+        .main-table th { background-color: #e9ecef; text-align: center; font-weight: bold; }
+        .sig-img { max-height: 35px; display: block; margin: 0 auto; }
+        .footer-doc { margin-top: 40px; text-align: center; font-size: 9pt; }
+        @media print { .no-print { display: none !important; } }
+    </style>
+</head>
+<body>
+    <div class="container mt-3 mb-4 no-print">
+        <div class="d-flex justify-content-between align-items-center alert alert-info">
+            <strong><i class="fas fa-print"></i> Visualização de Impressão (Oficial)</strong>
+            <div>
+                <button onclick="window.print()" class="btn btn-primary fw-bold">Imprimir / PDF</button>
+                <button onclick="window.close()" class="btn btn-secondary">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="header-doc">
+        <h5 class="mb-0 text-uppercase fw-bold">Brigada Militar - Estado do Rio Grande do Sul</h5>
+        <h6 class="mb-0">{{ school.name }}</h6>
+        <p class="mb-0 small">Relatório Oficial de Ministração de Aulas</p>
+    </div>
+
+    <table class="info-table">
+        <tr>
+            <td class="label-doc">Turma:</td><td>{{ turma.nome }}</td>
+            <td class="label-doc">Data Emissão:</td><td>{{ data_emissao.strftime('%d/%m/%Y') }}</td>
+        </tr>
+        <tr>
+            <td class="label-doc">Disciplina:</td><td colspan="3"><strong>{{ disciplina.materia }}</strong></td>
+        </tr>
+        <tr>
+            <td class="label-doc">Carga Horária:</td><td>{{ disciplina.carga_horaria_prevista or '-' }} h/a</td>
+            <td class="label-doc">Total Listado:</td><td>{{ total_aulas }} h/a</td>
+        </tr>
+    </table>
+
+    <table class="main-table">
+        <thead>
+            <tr>
+                <th style="width: 10%;">Data</th>
+                <th style="width: 10%;">Períodos</th>
+                <th style="width: 5%;">Qtd.</th>
+                <th style="width: 20%;">Instrutor</th>
+                <th style="width: 35%;">Conteúdo Ministrado</th>
+                <th style="width: 20%;">Visto do Instrutor</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for diario in diarios %}
+            
+            {# --- TRAVA DE SEGURANÇA: Busca os dados reais do instrutor/responsável --- #}
+            {% set instrutor_obj = diario.instrutor_assinante or diario.responsavel %}
+            {% if instrutor_obj %}
+                {% set posto = instrutor_obj.posto_graduacao ~ ' ' if instrutor_obj.posto_graduacao else '' %}
+                {% set nome = instrutor_obj.nome_de_guerra or instrutor_obj.nome_completo or '' %}
+                {% set instrutor_display = posto ~ nome %}
+            {% else %}
+                {% set instrutor_display = 'Não Identificado' %}
+            {% endif %}
+
+            <tr>
+                <td class="text-center">{{ diario.data_aula.strftime('%d/%m/%Y') }}</td>
+                <td class="text-center small">{{ diario.periodo_resumo }}</td>
+                <td class="text-center">{{ diario.total_aulas_bloco }}</td>
+                
+                <td class="text-center" style="font-size: 10pt; vertical-align: middle;">
+                    <b>{{ instrutor_display }}</b>
+                </td>
+
+                <td style="font-size: 10pt; text-align: justify; vertical-align: top;">
+                    {{ diario.conteudo_ministrado }}
+                    {% if diario.observacoes %}<br><em class="small text-muted">Obs: {{ diario.observacoes }}</em>{% endif %}
+                </td>
+                
+                <td class="text-center">
+                    {% if diario.status == 'assinado' %}
+                        {% if diario.assinatura_path %}
+                            <img src="{{ url_for('static', filename=diario.assinatura_path) }}" class="sig-img">
+                        {% else %}
+                            <div class="small fw-bold mt-2">[Assinado Digitalmente]</div>
+                        {% endif %}
+                        <div style="font-size: 9pt; margin-top: 2px;">
+                            {{ instrutor_display }}
+                        </div>
+                    {% else %}
+                        <div class="text-danger fw-bold small mt-3">[PENDENTE]</div>
+                        <div style="font-size: 9pt; margin-top: 2px; color: gray;">
+                            {{ instrutor_display }}
+                        </div>
+                    {% endif %}
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" class="text-center py-4">Nenhum registro encontrado.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="footer-doc">
+        <p>Documento gerado eletronicamente pelo Sistema SisGEN.</p>
+        <br>
+        <p>_______________________________________________________<br>Visto da Seção de Ensino</p>
+    </div>
+</body>
+</html>

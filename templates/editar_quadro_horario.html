@@ -1,0 +1,562 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Quadro Horário{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3 position-relative" style="z-index: 100;">
+        <div>
+            <h2 class="mb-0">
+                {% if is_admin %}
+                Editando: <span class="text-primary">{{ pelotao_selecionado }}</span>
+                {% else %}
+                Agendamento: <span class="text-primary">{{ pelotao_selecionado }}</span>
+                {% endif %}
+            </h2>
+            <p class="text-muted">
+                Semana: <strong>{{ semana_selecionada.nome }}</strong> ({{ semana_selecionada.data_inicio.strftime('%d/%m') }} a {{ semana_selecionada.data_fim.strftime('%d/%m') }})
+            </p>
+        </div>
+        <div>
+            <a href="{{ url_for('horario.exportar_pdf', pelotao=pelotao_selecionado, semana_id=semana_selecionada.id) }}" class="btn btn-danger me-2" target="_blank">
+                <i class="fas fa-file-pdf me-1"></i> Exportar PDF
+            </a>
+            <button type="button" class="btn btn-secondary me-2" onclick="window.history.back()">Voltar</button>
+            <button type="button" class="btn btn-info me-2" data-bs-toggle="modal" data-bs-target="#ajudaModal">
+                <i class="fas fa-question-circle"></i> Ajuda
+            </button>
+        </div>
+    </div>
+
+    <div class="card mb-3 shadow-sm" style="border: 1px solid #000;">
+        <div class="card-body py-2">
+            <div class="d-flex gap-4 align-items-center flex-wrap">
+                <span class="badge bg-white text-dark border border-dark"><strong style="font-size: 1.2em; vertical-align: middle;">+</strong> Disponível</span>
+                <span class="badge bg-success border border-dark">Confirmado (Seu/Admin)</span>
+                <span class="badge bg-warning text-dark border border-dark">Pendente (Aguardando)</span>
+                <span class="badge bg-danger border border-dark">Bloqueado (Outro Instrutor)</span>
+            </div>
+        </div>
+    </div>
+
+    {% set max_periodo_semana = 12 %}
+    {% if semana_selecionada.mostrar_periodo_15 %}
+        {% set max_periodo_semana = 15 %}
+    {% elif semana_selecionada.mostrar_periodo_14 %}
+        {% set max_periodo_semana = 14 %}
+    {% elif semana_selecionada.mostrar_periodo_13 %}
+        {% set max_periodo_semana = 13 %}
+    {% endif %}
+
+    {% set chaves_dias = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'] %}
+
+    <div class="table-responsive">
+        <table class="table table-bordered table-bordered-black text-center align-middle horario-grid-editor" id="tabelaHorario">
+            <thead style="background-color: #f8f9fa; color: #000;">
+                <tr>
+                    <th style="width: 100px; border: 1px solid #000 !important; background-color: #e9ecef !important; color: #000 !important;">Horário</th>
+                    
+                    <th style="border: 1px solid #000 !important; background-color: #f8f9fa !important; color: #000 !important;">
+                        Segunda<br><span style="font-weight: normal; font-size: 0.9em;">{{ datas_semana.segunda }}</span>
+                    </th>
+                    <th style="border: 1px solid #000 !important; background-color: #f8f9fa !important; color: #000 !important;">
+                        Terça<br><span style="font-weight: normal; font-size: 0.9em;">{{ datas_semana.terca }}</span>
+                    </th>
+                    <th style="border: 1px solid #000 !important; background-color: #f8f9fa !important; color: #000 !important;">
+                        Quarta<br><span style="font-weight: normal; font-size: 0.9em;">{{ datas_semana.quarta }}</span>
+                    </th>
+                    <th style="border: 1px solid #000 !important; background-color: #f8f9fa !important; color: #000 !important;">
+                        Quinta<br><span style="font-weight: normal; font-size: 0.9em;">{{ datas_semana.quinta }}</span>
+                    </th>
+                    <th style="border: 1px solid #000 !important; background-color: #f8f9fa !important; color: #000 !important;">
+                        Sexta<br><span style="font-weight: normal; font-size: 0.9em;">{{ datas_semana.sexta }}</span>
+                    </th>
+
+                    {% if semana_selecionada.mostrar_sabado %}
+                    <th style="border: 1px solid #000 !important; background-color: #f8f9fa !important; color: #000 !important;">
+                        Sábado<br><span style="font-weight: normal; font-size: 0.9em;">{{ datas_semana.sabado }}</span>
+                    </th>
+                    {% endif %}
+
+                    {% if semana_selecionada.mostrar_domingo %}
+                    <th style="border: 1px solid #000 !important; background-color: #f8f9fa !important; color: #000 !important;">
+                        Domingo<br><span style="font-weight: normal; font-size: 0.9em;">{{ datas_semana.domingo }}</span>
+                    </th>
+                    {% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row_idx in range(15) %}
+                
+                {% set periodo_atual = row_idx + 1 %}
+                {% if periodo_atual <= max_periodo_semana %}
+                
+                <tr>
+                    <td class="bg-light fw-bold text-dark" style="border: 1px solid #000 !important; background-color: #e9ecef !important;">
+                        <div class="small">{{ tempos[row_idx][0] }}</div>
+                        <div class="text-muted" style="font-size: 0.75rem; color: #333 !important;">{{ tempos[row_idx][1] }}</div>
+                    </td>
+
+                    {% set dias_count = 5 %}
+                    {% if semana_selecionada.mostrar_sabado %}{% set dias_count = dias_count + 1 %}{% endif %}
+                    {% if semana_selecionada.mostrar_domingo %}{% set dias_count = dias_count + 1 %}{% endif %}
+
+                    {% for col_idx in range(dias_count) %} 
+                        {% set aula = horario_matrix[row_idx][col_idx] %}
+                        
+                        {% if aula == 'SKIP' %}
+                            <td style="display: none;"></td>
+                        
+                        {% else %}
+                            {% set cell_class = '' %}
+                            {% set cell_type = '' %}
+                            {% set rowspan_val = aula.duracao %}
+                            
+                            {% set dia_chave = chaves_dias[col_idx] %}
+                            {% set data_formatada = datas_semana[dia_chave] %}
+                            
+                            {% if aula.is_disposicao %}
+                                {% set cell_class = 'cell-disponivel' %}
+                                {% set cell_type = 'add' %}
+                            {% else %}
+                                {% if aula.can_edit %}
+                                    {% set cell_type = 'edit' %}
+                                    {% if aula.status == 'pendente' %}
+                                        {% set cell_class = 'cell-pendente' %}
+                                    {% else %}
+                                        {% set cell_class = 'cell-confirmada' %}
+                                    {% endif %}
+                                {% else %}
+                                    {% set cell_class = 'cell-bloqueada' %}
+                                    {% set cell_type = 'locked' %}
+                                {% endif %}
+                            {% endif %}
+
+                            <td rowspan="{{ rowspan_val }}" 
+                                class="{{ cell_class }} slot-interativo" 
+                                style="cursor: pointer; height: 50px; border: 1px solid #000 !important;"
+                                data-type="{{ cell_type }}"
+                                data-dia-nome="{{ dia_chave }}"
+                                data-data-formatada="{{ data_formatada }}"
+                                data-periodo="{{ row_idx + 1 }}"
+                                data-aula-id="{{ aula.id or '' }}"
+                                >
+                                <div class="cell-content">
+                                    {% if cell_type == 'add' %}
+                                        <span style="font-size: 28px; font-weight: 900; color: #000000; line-height: 1; display: block;">+</span>
+                                    {% elif cell_type == 'edit' or cell_type == 'locked' %}
+                                        <div style="font-weight: bold;">{{ aula.materia }}</div>
+                                        {% if aula.status == 'pendente' %}
+                                            <small style="color: #664d03;">(Pendente)</small>
+                                        {% elif not aula.can_edit %}
+                                            <small style="color: #000;">{{ aula.instrutor or 'Outro' }}</small>
+                                        {% endif %}
+                                    {% endif %}
+                                </div>
+                            </td>
+                        {% endif %}
+                    {% endfor %}
+                </tr>
+                
+                {% if row_idx == 2 or row_idx == 5 or row_idx == 8 %}
+                <tr class="intervalo-row">
+                    <td colspan="{{ dias_count + 1 }}" class="bg-secondary text-white py-1 border-black" style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; font-weight: bold; border: 1px solid #000 !important; background-color: #6c757d !important; color: #fff !important;">
+                        {% if row_idx == 2 %}Intervalo Manhã ({{ intervalos.intervalo_1 }}){% endif %}
+                        {% if row_idx == 5 %}Almoço ({{ intervalos.almoco }}){% endif %}
+                        {% if row_idx == 8 %}Intervalo Tarde ({{ intervalos.intervalo_2 }}){% endif %}
+                    </td>
+                </tr>
+                {% endif %}
+                
+                {% endif %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="modal fade" id="aulaModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="aulaModalLabel">Gerenciar Aula</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formAula">
+                    <input type="hidden" id="horario_id" name="horario_id">
+                    <input type="hidden" id="pelotao" name="pelotao">
+                    <input type="hidden" id="semana_id" name="semana_id">
+                    <input type="hidden" id="dia" name="dia">
+                    <input type="hidden" id="periodo" name="periodo"> 
+                    <input type="hidden" id="duracao" name="duracao"> 
+
+                    <div class="mb-3">
+                        <label for="disciplina_id" class="form-label fw-bold">Disciplina</label>
+                        <select class="form-select" id="disciplina_id" name="disciplina_id" required onchange="carregarInstrutoresVinculados()">
+                            <option value="">Selecione...</option>
+                            {% for disc in disciplinas_disponiveis %}
+                            <option value="{{ disc.id }}" data-restantes="{{ disc.restantes }}">
+                                {{ disc.nome }} (Restam: {{ disc.restantes }}h)
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    {% if is_admin %}
+                    <div class="mb-3">
+                        <label for="instrutor_id" class="form-label fw-bold">Instrutor (Admin)</label>
+                        <select class="form-select" id="instrutor_id" name="instrutor_id" required>
+                            <option value="">Selecione a Disciplina primeiro...</option>
+                        </select>
+                        <small class="text-muted">Mostrando apenas instrutores vinculados à turma para esta disciplina.</small>
+                    </div>
+                    {% else %}
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Instrutor</label>
+                        <input type="text" class="form-control" value="Você" disabled readonly>
+                    </div>
+                    {% endif %}
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Períodos da Aula</label>
+                        <div class="p-3 border rounded bg-light" style="max-height: 300px; overflow-y: auto;">
+                            <small class="d-block mb-2 text-muted">Marque os tempos que deseja incluir nesta aula:</small>
+                            <div class="row g-2">
+                                {% for i in range(1, 16) %}
+                                <div class="col-6 col-sm-4 periodo-check-wrapper" id="check_wrapper_{{ i }}" 
+                                     {% if i > max_periodo_semana %}style="display:none;"{% endif %}>
+                                    <div class="form-check">
+                                        <input class="form-check-input periodo-checkbox" type="checkbox" value="{{ i }}" id="periodo_check_{{ i }}"
+                                               {% if i > max_periodo_semana %}disabled{% endif %}>
+                                        <label class="form-check-label" for="periodo_check_{{ i }}">
+                                            <strong>{{ i }}º Tempo</strong>
+                                            <div style="font-size: 0.75rem; color: #666;">
+                                                {{ tempos[i-1][1] }}
+                                            </div>
+                                        </label>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="observacao" class="form-label">Observação (Opcional)</label>
+                        <textarea class="form-control" id="observacao" name="observacao" rows="2"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer justify-content-between">
+                <button type="button" class="btn btn-danger" id="btnRemover" style="display: none;">
+                    <i class="fas fa-trash"></i> Remover Aula
+                </button>
+                <div class="ms-auto">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="btnSalvar">Salvar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="ajudaModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Como usar o Agendador</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <ul>
+                    <li><strong>Agendar:</strong> Clique no símbolo <strong>+</strong> para adicionar uma aula.</li>
+                    <li><strong>Editar/Remover:</strong> Clique na aula colorida.</li>
+                    <li><strong>Períodos:</strong> Use as caixas de seleção para escolher exatamente quais horários fazem parte da aula. Se deixar espaços vazios, serão criadas aulas separadas.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* ESTILOS DE BORDA FORTE */
+    .table-bordered-black, .table-bordered-black th, .table-bordered-black td { border: 1px solid #000 !important; }
+    .horario-grid-editor th, .horario-grid-editor td { vertical-align: middle; position: relative; }
+    .cell-disponivel { background-color: #fff !important; transition: background-color 0.2s; } 
+    .cell-disponivel:hover { background-color: #e9ecef !important; }
+    .cell-confirmada { background-color: #d1e7dd !important; color: #0f5132 !important; }
+    .cell-pendente { background-color: #fff3cd !important; color: #664d03 !important; }
+    .cell-bloqueada { background-color: #f8d7da !important; color: #842029 !important; opacity: 0.9; cursor: not-allowed; }
+    .cell-content { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100%; width: 100%; min-height: 40px; font-weight: 500; }
+    .intervalo-row td { border-top: 2px solid #000 !important; border-bottom: 2px solid #000 !important; background-color: #6c757d !important; color: #fff !important; }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const modalElement = document.getElementById('aulaModal');
+    if (!modalElement) return;
+
+    document.body.appendChild(modalElement);
+    const modalAula = new bootstrap.Modal(modalElement, { backdrop: 'static', keyboard: false });
+
+    const formAula = document.getElementById('formAula');
+    const btnSalvar = document.getElementById('btnSalvar');
+    const btnRemover = document.getElementById('btnRemover');
+    const modalTitle = document.getElementById('aulaModalLabel');
+    const instrutorSelect = document.getElementById('instrutor_id');
+    const disciplinaSelect = document.getElementById('disciplina_id');
+    
+    // Lista de todas as checkboxes
+    const allCheckboxes = document.querySelectorAll('.periodo-checkbox');
+    
+    const isAdmin = {{ 'true' if is_admin else 'false' }};
+    const pelotaoAtual = "{{ pelotao_selecionado|escape }}";
+    const semanaIdAtual = "{{ semana_selecionada.id }}";
+    const maxPeriodoSemana = {{ max_periodo_semana }};
+
+    function capitalize(string) {
+        if(!string) return "";
+        return string.charAt(0).toUpperCase() + string.slice(1);
+    }
+
+    // Marca as checkboxes (Limpa tudo antes)
+    function setCheckboxes(periodoInicial, duracao) {
+        allCheckboxes.forEach(cb => cb.checked = false);
+        
+        const periodoFinal = periodoInicial + duracao - 1;
+        for (let i = periodoInicial; i <= periodoFinal; i++) {
+            if (i > maxPeriodoSemana) continue;
+            const cb = document.getElementById(`periodo_check_${i}`);
+            if (cb && !cb.disabled) {
+                cb.checked = true;
+            }
+        }
+    }
+
+    // Algoritmo para separar as checkboxes marcadas em BLOCOS CONTÍNUOS
+    function getSelectedBlocks() {
+        let selecionados = [];
+        allCheckboxes.forEach(cb => {
+            if (cb.checked && !cb.disabled) {
+                selecionados.push(parseInt(cb.value));
+            }
+        });
+
+        if (selecionados.length === 0) return [];
+
+        selecionados.sort((a, b) => a - b);
+        
+        let blocks = [];
+        let currentStart = selecionados[0];
+        let currentLength = 1;
+
+        for (let i = 1; i < selecionados.length; i++) {
+            if (selecionados[i] === selecionados[i-1] + 1) {
+                // É contínuo (ex: 1 e 2)
+                currentLength++;
+            } else {
+                // Buraco detectado (ex: 1 e 3) - Finaliza o bloco anterior
+                blocks.push({ periodo: currentStart, duracao: currentLength });
+                currentStart = selecionados[i];
+                currentLength = 1;
+            }
+        }
+        // Adiciona o último bloco
+        blocks.push({ periodo: currentStart, duracao: currentLength });
+        
+        return blocks;
+    }
+
+    window.carregarInstrutoresVinculados = function(instrutorSelecionadoId = null) {
+        if (!isAdmin) return; 
+        const discId = disciplinaSelect.value;
+        instrutorSelect.innerHTML = '<option value="">Carregando...</option>';
+
+        if (!discId) {
+            instrutorSelect.innerHTML = '<option value="">Selecione a Disciplina primeiro...</option>';
+            return;
+        }
+
+        fetch(`/horario/api/instrutores-vinculados/${pelotaoAtual}/${discId}`)
+            .then(r => r.json())
+            .then(data => {
+                instrutorSelect.innerHTML = ''; 
+                if (data.length === 0) {
+                    instrutorSelect.innerHTML = '<option value="">Nenhum instrutor vinculado encontrado</option>';
+                } else {
+                    data.forEach(item => {
+                        let opt = new Option(item.nome, item.id);
+                        instrutorSelect.add(opt);
+                    });
+                    if (instrutorSelecionadoId) {
+                        instrutorSelect.value = instrutorSelecionadoId;
+                    } else {
+                        instrutorSelect.value = data[data.length - 1].id;
+                    }
+                }
+            })
+            .catch(err => {
+                console.error("Erro:", err);
+                instrutorSelect.innerHTML = '<option value="">Erro ao carregar</option>';
+            });
+    }
+
+    const tabela = document.getElementById('tabelaHorario');
+    
+    tabela.addEventListener('click', function(e) {
+        const cell = e.target.closest('.slot-interativo');
+        if (!cell) return;
+
+        const type = cell.dataset.type;
+        const dia = cell.dataset.diaNome;
+        const dataFormatada = cell.dataset.dataFormatada;
+        const periodo = parseInt(cell.dataset.periodo);
+        const aulaId = cell.dataset.aulaId;
+
+        if (type === 'locked') {
+            alert('Este horário pertence a outro instrutor e você não pode editá-lo.');
+            return;
+        }
+
+        formAula.reset();
+        
+        document.getElementById('pelotao').value = pelotaoAtual;
+        document.getElementById('semana_id').value = semanaIdAtual;
+        document.getElementById('dia').value = dia;
+        
+        const tituloComData = `${capitalize(dia)} (${dataFormatada})`;
+
+        if (type === 'add') {
+            modalTitle.innerText = `Novo Agendamento - ${tituloComData}`;
+            btnRemover.style.display = 'none';
+            document.getElementById('horario_id').value = '';
+            
+            // Marca APENAS o período clicado
+            setCheckboxes(periodo, 1);
+            
+            if(isAdmin) instrutorSelect.innerHTML = '<option value="">Selecione a Disciplina primeiro...</option>';
+            modalAula.show();
+
+        } else if (type === 'edit') {
+            fetch(`/horario/get-aula/${aulaId}`)
+                .then(r => r.json())
+                .then(data => {
+                    if(data.success) {
+                        modalTitle.innerText = `Editar Agendamento - ${tituloComData}`;
+                        btnRemover.style.display = 'block';
+
+                        document.getElementById('horario_id').value = aulaId;
+                        
+                        // --- CORREÇÃO: Marca apenas os períodos exatos retornados ---
+                        
+                        // 1. Limpa todas as checkboxes primeiro
+                        allCheckboxes.forEach(cb => cb.checked = false);
+
+                        // 2. Se o backend mandou a lista exata (nova lógica)
+                        if (data.periodos && Array.isArray(data.periodos)) {
+                            data.periodos.forEach(p => {
+                                const cb = document.getElementById(`periodo_check_${p}`);
+                                if (cb && !cb.disabled) {
+                                    cb.checked = true;
+                                }
+                            });
+                        } else {
+                            // Fallback para lógica antiga (caso o cache do navegador segure o JS velho)
+                            setCheckboxes(data.periodo, data.duracao);
+                        }
+                        // -----------------------------------------------------------
+
+                        document.getElementById('disciplina_id').value = data.disciplina_id;
+                        document.getElementById('observacao').value = data.observacao || '';
+
+                        if(isAdmin) {
+                            carregarInstrutoresVinculados(data.instrutor_value);
+                        }
+                        modalAula.show();
+                    } else {
+                        alert('Erro ao carregar: ' + data.message);
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert('Erro de comunicação.');
+                });
+        }
+    });
+
+    btnSalvar.addEventListener('click', function() {
+        const blocks = getSelectedBlocks();
+        if (blocks.length === 0) {
+            alert("Selecione pelo menos um período.");
+            return;
+        }
+
+        const formData = new FormData(formAula);
+        // Cria um objeto base com os dados do formulário
+        const baseData = Object.fromEntries(formData.entries());
+        baseData.semana_id = parseInt(baseData.semana_id);
+        
+        if (!baseData.disciplina_id) {
+            alert('Selecione a disciplina.');
+            return;
+        }
+
+        // Prepara uma lista de promessas (requisições)
+        const promises = blocks.map((block, index) => {
+            const data = { ...baseData }; // Copia os dados
+            data.periodo = block.periodo;
+            data.duracao = block.duracao;
+            
+            // Lógica IMPORTANTE para Edição:
+            // Se estamos editando (temos um ID original), o PRIMEIRO bloco usa esse ID para substituir a aula antiga.
+            // Os DEMAIS blocos (se o usuário dividiu a aula) são criados como novos (ID nulo).
+            // Se estamos criando do zero, todos os blocos têm ID nulo.
+            
+            if (index > 0) {
+                data.horario_id = null; // Força criação de nova aula para os blocos extras
+            }
+            // (Para o index 0, ele mantém o horario_id que estava no form, seja ele preenchido ou vazio)
+
+            return fetch('/horario/salvar-aula', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}'},
+                body: JSON.stringify(data)
+            }).then(r => r.json());
+        });
+
+        // Envia todas as requisições
+        Promise.all(promises)
+            .then(results => {
+                // Verifica se alguma falhou
+                const errors = results.filter(r => !r.success);
+                if (errors.length > 0) {
+                    alert('Alguns blocos não puderam ser salvos: ' + errors[0].message);
+                } else {
+                    location.reload();
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert('Erro de comunicação ao salvar.');
+            });
+    });
+
+    btnRemover.addEventListener('click', function() {
+        if(!confirm('Tem certeza que deseja remover esta aula?')) return;
+        const id = document.getElementById('horario_id').value;
+        
+        fetch('/horario/remover-aula', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}'},
+            body: JSON.stringify({ horario_id: id })
+        })
+        .then(r => r.json())
+        .then(result => {
+            if (result.success) location.reload();
+            else alert(result.message);
+        });
+    });
+});
+</script>
+{% endblock %}

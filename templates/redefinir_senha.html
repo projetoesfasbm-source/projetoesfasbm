@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}Redefinir Senha{% endblock %}
+
+{% block navbar_content %}{% endblock %}
+
+{% block content %}
+<div class="auth-page-container">
+    <div class="auth-card">
+        <div class="card-logo-container">
+            <img src="{{ url_for('static', filename='img/brasao.png') }}" alt="Brasão da Escola">
+        </div>
+        <h2>Crie uma Nova Senha</h2>
+        
+        <form method="POST" action="{{ url_for('auth.redefinir_senha', token=token) }}">
+            {{ form.hidden_tag() }}
+            
+            <div class="form-group">
+                {{ form.password.label(class="form-label") }}
+                {{ form.password(class="form-control", autocomplete="new-password") }}
+            </div>
+            
+            <div class="form-group">
+                {{ form.password2.label(class="form-label") }}
+                {{ form.password2(class="form-control", autocomplete="new-password") }}
+            </div>
+            
+            <div class="password-rules">
+                <small>A senha deve ter no mínimo 8 caracteres, com letras maiúsculas, minúsculas, números e símbolos.</small>
+            </div>
+            
+            {{ form.submit(class="btn btn-primary") }}
+        </form>
+    </div>
+</div>
+{% endblock %}

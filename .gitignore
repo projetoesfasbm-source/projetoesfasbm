@@ -1,0 +1,86 @@
+# ─────────────────────────────────────────────────────────────
+# Projeto SisGEn — .gitignore (Segurança Máxima)
+# ─────────────────────────────────────────────────────────────
+
+# Ambiente virtual
+.venv/
+venv/
+env/
+.virtualenvs/
+
+# Bytecode/artefatos Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Logs
+*.log
+
+# Banco de dados / instância Flask
+instance/
+*.db
+*.sqlite3
+
+# Variáveis de ambiente e Cofres (NUNCA versionar)
+.env
+.env.local
+.flaskenv
+
+# Credenciais e chaves (NUNCA versionar)
+*.key
+*.pem
+*.p12
+*.pfx
+*.cer
+*.crt
+*.der
+backend/credentials.json
+**/credentials.json
+
+# Caches de ferramentas / testes / cobertura
+.mypy_cache/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+pip-wheel-metadata/
+.cache/
+
+# Editor/IDE
+.vscode/
+.idea/
+
+# SO
+.DS_Store
+Thumbs.db
+
+# Build/Distribuição
+build/
+dist/
+*.egg-info/
+
+# Arquivos grandes/temporários/backup
+*.zip
+*.tar
+*.gz
+*.bak
+*.old
+*.tmp
+*.swp
+*.swo
+
+# Dumps de banco
+*.sql
+*.dump
+
+# ─────────────────────────────────────────────────────────────
+# Uploads de Usuários (NUNCA versionar fotos e documentos)
+# ─────────────────────────────────────────────────────────────
+backend/static/uploads/
+*.pdf
+*.jpeg
+*.jpg
+*.png
+
+# Exceção: Permite que as imagens fixas do sistema (logos, brasão) subam para o GitHub
+!backend/static/img/

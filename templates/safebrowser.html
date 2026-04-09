@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block title %}SafeBrowser | EsFAS{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2 class="mb-3 d-flex align-items-center">
+                <span class="me-2">🛡️</span> SafeExamBrowser (SafeBrowser)
+            </h2>
+            <p class="text-muted">
+                Para a realização das avaliações no sistema, é obrigatório o uso do <strong>SafeExamBrowser</strong>. 
+                Siga os passos abaixo para instalar e configurar seu ambiente.
+            </p>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body text-center">
+                    <div class="mb-3 display-4 text-primary">1</div>
+                    <h5 class="card-title fw-bold">Baixar o SafeBrowser</h5>
+                    <p class="card-text text-muted mb-4">
+                        Faça o download e instale o SafeExamBrowser oficial para o seu sistema operacional (Windows, macOS ou iOS).
+                    </p>
+                    <a href="https://safeexambrowser.org/download_en.html" target="_blank" class="btn btn-outline-primary w-100">
+                        🔗 CLIQUE AQUI PARA BAIXAR O SAFEBROWSER (Download)
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body text-center">
+                    <div class="mb-3 display-4 text-primary">2</div>
+                    <h5 class="card-title fw-bold">Baixar Arquivo Teste</h5>
+                    <p class="card-text text-muted mb-4">
+                        Este arquivo irá testar se o SafeBrowser esta funcionando. 
+                        <strong>Após Finalizar a parte 1 baixe e execute.</strong>
+                    </p>
+                    
+                    {# 
+                       IMPORTANTE: 
+                       Certifique-se de que o arquivo "configuracao_prova.seb" 
+                       esteja na pasta "static/seb/" do seu projeto. 
+                    #}
+                    <a href="{{ url_for('static', filename='seb/configuracao_prova.seb') }}" class="btn btn-primary w-100" download>
+                        ⬇️ Baixar Arquivo (.seb)
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-12 col-lg-4">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body text-center">
+                    <div class="mb-3 display-4 text-success">3</div>
+                    <h5 class="card-title fw-bold">Como Acessar</h5>
+                    <p class="card-text text-muted text-start">
+                        <ol class="text-start ps-3">
+                            <li>Instale o SafeExamBrowser (Passo 1).</li>
+                            <li>Localize o arquivo <code>.seb</code> baixado (Passo 2).</li>
+                            <li>Dê um clique duplo no arquivo <code>.seb</code>.</li>
+                            <li>O navegador abrirá automaticamente na página teste.
+                            </li> 🚨<strong>Para sair do SafeBrowser Digite CTRL+Q🚨</strong>
+                        </ol>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="alert alert-info d-flex align-items-center" role="alert">
+                <div class="me-3 fs-3">ℹ️</div>
+                <div>
+                    <strong>Dica:</strong> Ao Executar o arquivo teste poderá Surgir a Mensagem "Configuration Sucessful", Clique em <strong>NÃO</strong>.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

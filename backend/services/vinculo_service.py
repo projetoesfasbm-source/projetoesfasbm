@@ -1,0 +1,170 @@
+from flask import current_app
+from sqlalchemy import select, or_
+from sqlalchemy.orm import joinedload
+
+from ..models.database import db
+from ..models.disciplina_turma import DisciplinaTurma
+from ..models.turma import Turma
+from ..models.instrutor import Instrutor
+from ..models.disciplina import Disciplina
+# Adicionado para podermos alterar os agendamentos futuros
+from ..models.horario import Horario
+
+
+class VinculoService:
+    @staticmethod
+    def get_all_vinculos(turma_filtrada_id: int = None, school_id: int = None):
+        """
+        Busca vínculos. 
+        - Se turma_filtrada_id for fornecido, filtra por ela.
+        - Se school_id for fornecido, garante que só traga vínculos dessa escola (segurança/filtro geral).
+        """
+        query = db.select(DisciplinaTurma).options(
+            joinedload(DisciplinaTurma.instrutor_1).joinedload(Instrutor.user),
+            joinedload(DisciplinaTurma.instrutor_2).joinedload(Instrutor.user),
+            joinedload(DisciplinaTurma.disciplina).joinedload(Disciplina.ciclo),
+            joinedload(DisciplinaTurma.disciplina).joinedload(Disciplina.turma)
+        )
+
+        query = query.join(DisciplinaTurma.disciplina).join(Disciplina.turma)
+
+        if turma_filtrada_id:
+            query = query.where(Turma.id == turma_filtrada_id)
+        
+        if school_id:
+            query = query.where(Turma.school_id == school_id)
+
+        query = query.order_by(DisciplinaTurma.id.desc())
+        return db.session.scalars(query).all()
+
+    @staticmethod
+    def add_vinculo(data: dict):
+        disciplina_id = data.get('disciplina_id')
+        instrutor_id_1 = data.get('instrutor_id_1')
+        instrutor_id_2 = data.get('instrutor_id_2')
+
+        if not disciplina_id:
+            return False, 'A disciplina é obrigatória.'
+        
+        if not instrutor_id_1 and not instrutor_id_2:
+            return False, 'Pelo menos um instrutor deve ser selecionado.'
+
+        instrutor_1 = int(instrutor_id_1) if instrutor_id_1 else 0
+        instrutor_2 = int(instrutor_id_2) if instrutor_id_2 else 0
+
+        if instrutor_1 > 0 and instrutor_1 == instrutor_2:
+            return False, 'Os instrutores 1 e 2 não podem ser a mesma pessoa.'
+
+        disciplina = db.session.get(Disciplina, disciplina_id)
+        if not disciplina or not disciplina.turma:
+            return False, 'Disciplina ou turma associada não encontrada.'
+        
+        pelotao_nome = disciplina.turma.nome
+
+        vinculo_existente = db.session.scalars(select(DisciplinaTurma).filter_by(
+            disciplina_id=disciplina_id,
+            pelotao=pelotao_nome
+        )).first()
+
+        try:
+            if vinculo_existente:
+                return False, 'Já existe um vínculo para esta disciplina nesta turma. Edite o vínculo existente na lista.'
+            else:
+                novo_vinculo = DisciplinaTurma(
+                    pelotao=pelotao_nome,
+                    disciplina_id=disciplina_id,
+                    instrutor_id_1=instrutor_1 if instrutor_1 > 0 else None,
+                    instrutor_id_2=instrutor_2 if instrutor_2 > 0 else None
+                )
+                db.session.add(novo_vinculo)
+                message = 'Vínculo criado com sucesso!'
+            
+            db.session.commit()
+            return True, message
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Erro ao adicionar vínculo: {e}")
+            return False, f"Erro ao adicionar vínculo: {str(e)}"
+
+    @staticmethod
+    def edit_vinculo(vinculo_id: int, data: dict):
+        vinculo = db.session.get(DisciplinaTurma, vinculo_id)
+        if not vinculo:
+            return False, 'Vínculo não encontrado.'
+
+        # Salva o id antigo da disciplina para procurar os horários correspondentes
+        old_disciplina_id = vinculo.disciplina_id
+        old_pelotao = vinculo.pelotao
+
+        disciplina_id = data.get('disciplina_id')
+        instrutor_id_1 = data.get('instrutor_id_1')
+        instrutor_id_2 = data.get('instrutor_id_2')
+
+        if not disciplina_id:
+            return False, 'A disciplina é obrigatória.'
+            
+        if not instrutor_id_1 and not instrutor_id_2:
+            return False, 'Pelo menos um instrutor deve ser selecionado.'
+        
+        instrutor_1 = int(instrutor_id_1) if instrutor_id_1 else 0
+        instrutor_2 = int(instrutor_id_2) if instrutor_id_2 else 0
+
+        if instrutor_1 > 0 and instrutor_1 == instrutor_2:
+            return False, 'Os instrutores 1 e 2 não podem ser a mesma pessoa.'
+
+        disciplina = db.session.get(Disciplina, disciplina_id)
+        if not disciplina or not disciplina.turma:
+            return False, 'Disciplina ou turma associada não encontrada.'
+        
+        pelotao_nome = disciplina.turma.nome
+
+        try:
+            # 1. Atualiza o Vínculo Central
+            vinculo.pelotao = pelotao_nome
+            vinculo.disciplina_id = disciplina_id
+            vinculo.instrutor_id_1 = instrutor_1 if instrutor_1 > 0 else None
+            vinculo.instrutor_id_2 = instrutor_2 if instrutor_2 > 0 else None
+            
+            # 2. NOVA REGRA: Altera apenas os horários pendentes para entrarem pro novo instrutor
+            horarios_pendentes = db.session.scalars(
+                select(Horario).filter_by(
+                    disciplina_id=old_disciplina_id,
+                    pelotao=old_pelotao,
+                    status='pendente'  # Garante que aulas concluídas fiquem com o instrutor antigo!
+                )
+            ).all()
+
+            for horario in horarios_pendentes:
+                # Mantém a disciplina igual, a não ser que tenha sido corrigida no formulário
+                horario.disciplina_id = disciplina_id
+                horario.pelotao = pelotao_nome
+                
+                # Atualiza os instrutores no horário futuro
+                if instrutor_1 > 0:
+                    horario.instrutor_id = instrutor_1
+                elif instrutor_2 > 0:
+                    horario.instrutor_id = instrutor_2
+                
+                horario.instrutor_id_2 = instrutor_2 if instrutor_2 > 0 else None
+
+            db.session.commit()
+            return True, 'Vínculo atualizado! Os próximos agendamentos pendentes já estão com o novo instrutor.'
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Erro ao editar vínculo: {e}")
+            return False, f"Erro ao editar vínculo: {str(e)}"
+
+    @staticmethod
+    def delete_vinculo(vinculo_id: int):
+        vinculo = db.session.get(DisciplinaTurma, vinculo_id)
+        if not vinculo:
+            return False, 'Vínculo não encontrado.'
+
+        try:
+            db.session.delete(vinculo)
+            db.session.commit()
+            return True, 'Vínculo excluído com sucesso!'
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Erro ao excluir vínculo: {e}")
+            return False, f"Erro ao excluir vínculo: {str(e)}"

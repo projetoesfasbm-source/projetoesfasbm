@@ -1,0 +1,38 @@
+{% if orphans %}
+<div class="table-responsive">
+    <table class="table table-striped align-middle" id="orphans-table">
+        <thead>
+            <tr>
+                <th scope="col">Nome Completo</th>
+                <th scope="col">Matrícula</th>
+                <th scope="col">Papel Padrão</th>
+                <th scope="col">Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for u in orphans %}
+            <tr>
+                <td>{{ u.nome_completo or u.username }}</td>
+                <td>{{ u.matricula }}</td>
+                <td>{{ u.role }}</td>
+                <td>
+                    <div style="display: flex; flex-wrap: nowrap; gap: 0.5rem;">
+                        <button class="btn btn-primary btn-sm" onclick="document.getElementById('user_id').value = '{{ u.id }}'; document.getElementById('role').value = '{{ u.role }}';">Atribuir Escola</button>
+                        <form class="m-0" method="POST"
+                              action="{{ url_for('super_admin.delete_user', user_id=u.id, filter='orphans') }}"
+                              onsubmit="return confirm('EXCLUIR PERMANENTEMENTE o usuário órfão \'{{ u.nome_completo or u.username }}\'?');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                            <button type="submit" class="btn btn-danger btn-sm">Excluir</button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="text-center p-4">
+    <p>Nenhum usuário órfão (sem vínculo com escola) foi encontrado.</p>
+</div>
+{% endif %}

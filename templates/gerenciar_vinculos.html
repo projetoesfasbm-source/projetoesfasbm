@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+
+{% block title %}Gerenciar Vínculos{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <h1>Gerenciar Vínculos</h1>
+    <p>Vincule instrutores a turmas e disciplinas.</p>
+</div>
+
+<div class="table-container">
+    <div class="table-header">
+        <h3>Vínculos Existentes</h3>
+
+        {# Se o usuário tem permissão (verificado no controller), mostra botão de adicionar #}
+        {% if can_manage_vinculos %}
+        <a href="{{ url_for('vinculo.adicionar_vinculo') }}" class="btn btn-primary">
+            <span>+</span> Inserir Novo Vínculo
+        </a>
+        {% endif %}
+    </div>
+
+    <form method="GET" action="{{ url_for('vinculo.gerenciar_vinculos') }}" class="table-filters" id="filter-form">
+        <div class="filter-group">
+            <label for="turma_id"><strong>Filtrar por Turma:</strong></label>
+            <select name="turma_id" id="turma_id" class="form-control" onchange="this.form.submit()">
+                <option value="">Todas as Turmas</option>
+                {% for t in turmas %}
+                <option value="{{ t.id }}" {% if t.id == turma_filtrada_id %}selected{% endif %}>{{ t.nome }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        {% if turma_filtrada_id %}
+        <a href="{{ url_for('vinculo.gerenciar_vinculos') }}" class="btn btn-sm btn-danger">Limpar Filtros</a>
+        {% endif %}
+    </form>
+
+    <div class="table-responsive">
+        {% if vinculos %}
+            <table class="table-styled">
+                <thead>
+                    <tr>
+                        <th>Turma</th>
+                        <th>Disciplina</th>
+                        <th>Ciclo</th>
+                        <th>Instrutores Vinculados</th>
+                        <th class="text-right">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for vinculo in vinculos %}
+                    <tr>
+                        <td data-label="Turma">{{ vinculo.pelotao }}</td>
+                        <td data-label="Disciplina">{{ vinculo.disciplina.materia }}</td>
+                        <td data-label="Ciclo">{{ vinculo.disciplina.ciclo.nome if vinculo.disciplina.ciclo else 'N/A' }}</td>
+                        <td data-label="Instrutor">
+                            {% if vinculo.instrutor_1 %}
+                                <div><strong>1:</strong> {{ (vinculo.instrutor_1.user.nome_de_guerra or vinculo.instrutor_1.user.nome_completo) }}{% if vinculo.instrutor_1.user.posto_graduacao %} - {{ vinculo.instrutor_1.user.posto_graduacao }}{% endif %}</div>
+                            {% endif %}
+                            {% if vinculo.instrutor_2 %}
+                                <div><strong>2:</strong> {{ (vinculo.instrutor_2.user.nome_de_guerra or vinculo.instrutor_2.user.nome_completo) }}{% if vinculo.instrutor_2.user.posto_graduacao %} - {{ vinculo.instrutor_2.user.posto_graduacao }}{% endif %}</div>
+                            {% endif %}
+                            {% if not vinculo.instrutor_1 and not vinculo.instrutor_2 %}
+                                <span style="color: #aaa;">Não atribuído</span>
+                            {% endif %}
+                        </td>
+                        <td data-label="Ações" class="text-right">
+                            <div class="btn-group">
+
+                                {% if can_manage_vinculos %}
+                                    <a href="{{ url_for('vinculo.editar_vinculo', vinculo_id=vinculo.id) }}" class="btn btn-sm btn-warning" title="Editar Vínculo">
+                                        Editar
+                                    </a>
+                                    
+                                    <form method="POST" action="{{ url_for('vinculo.excluir_vinculo', vinculo_id=vinculo.id) }}" onsubmit="return confirm('Tem certeza que deseja deletar este vínculo?');" style="display: inline;">
+                                        {{ delete_form.hidden_tag() }}
+                                        <button type="submit" class="btn btn-sm btn-danger">Excluir</button>
+                                    </form>
+                                {% else %}
+                                    <span class="text-muted"><i class="fas fa-lock"></i> Bloqueado</span>
+                                {% endif %}
+
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <div class="empty-state">
+                <div class="empty-icon">🔗</div>
+                <h2>Nenhum Vínculo Encontrado</h2>
+                <p>Não há vínculos que correspondam aos filtros selecionados.</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<style>
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.table-filters {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+    align-items: end;
+}
+.btn-group {
+    display: flex;
+    gap: 5px;
+    justify-content: flex-end;
+}
+</style>
+{% endblock %}

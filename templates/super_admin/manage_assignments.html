@@ -1,0 +1,123 @@
+{% extends 'base.html' %}
+
+{% block title %}Gerenciar Atribuições{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">Gerenciar Atribuições de Papéis</h1>
+
+    {# Formulário de Atribuição #}
+    <div class="card mb-4">
+        <div class="card-header">
+            Atribuir Papel a Usuário em uma Escola
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('super_admin.manage_assignments', school_id=selected_school_id, filter=selected_filter) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <input type="hidden" name="action" value="assign">
+                
+                <div class="row g-3 align-items-end">
+                    <div class="col-md">
+                        <label for="user_id" class="form-label">Usuário</label>
+                        <select id="user_id" name="user_id" class="form-control" required>
+                            <option value="" disabled selected>-- Selecione um Usuário --</option>
+                            {% for user in users %}
+                                <option value="{{ user.id }}">{{ user.nome_completo or user.username or user.matricula }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md">
+                        <label for="school_id" class="form-label">Escola</label>
+                        <select id="school_id" name="school_id" class="form-control" required>
+                            <option value="" disabled selected>-- Selecione uma Escola --</option>
+                            {% for school in schools %}
+                                <option value="{{ school.id }}">{{ school.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md">
+                        <label for="role" class="form-label">Papel</label>
+                        <select id="role" name="role" class="form-control" required>
+                            <option value="admin_escola" selected>Admin da Escola</option>
+                            <option value="instrutor">Instrutor</option>
+                            <option value="aluno">Aluno</option>
+                        </select>
+                    </div>
+                    <div class="col-md-auto">
+                        <button type="submit" class="btn btn-primary w-100">Atribuir</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {# Tabela Unificada de Gerenciamento de Usuários #}
+    <div class="card">
+        <div class="card-header">
+            Atribuições e Gerenciamento de Usuários
+        </div>
+        <div class="card-body">
+            
+            <div class="card bg-light p-3 mb-4 border">
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-4">
+                        <label for="school-filter" class="form-label fw-bold">Filtrar por Escola:</label>
+                        <select id="school-filter" class="form-select" onchange="window.location.href = '{{ url_for('super_admin.manage_assignments') }}?school_id=' + this.value + '&filter={{ selected_filter or '' }}';">
+                            <option value="">-- Todas as Escolas --</option>
+                            {% for school in schools %}
+                                <option value="{{ school.id }}" {% if school.id == selected_school_id %}selected{% endif %}>
+                                    {{ school.nome }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label fw-bold">Filtrar por Status/Papel:</label>
+                        <div class="btn-group w-100">
+                            <a href="{{ url_for('super_admin.manage_assignments', school_id=selected_school_id) }}" class="btn {% if not selected_filter %}btn-primary{% else %}btn-outline-primary{% endif %}">Todos</a>
+                            <a href="{{ url_for('super_admin.manage_assignments', school_id=selected_school_id, filter='admin_escola') }}" class="btn {% if selected_filter == 'admin_escola' %}btn-primary{% else %}btn-outline-primary{% endif %}">Admins</a>
+                            <a href="{{ url_for('super_admin.manage_assignments', school_id=selected_school_id, filter='instrutor') }}" class="btn {% if selected_filter == 'instrutor' %}btn-primary{% else %}btn-outline-primary{% endif %}">Instrutores</a>
+                            <a href="{{ url_for('super_admin.manage_assignments', school_id=selected_school_id, filter='aluno') }}" class="btn {% if selected_filter == 'aluno' %}btn-primary{% else %}btn-outline-primary{% endif %}">Alunos</a>
+                            <a href="{{ url_for('super_admin.manage_assignments', school_id=selected_school_id, filter='preregistered') }}" class="btn {% if selected_filter == 'preregistered' %}btn-warning{% else %}btn-outline-warning{% endif %}">Pré-Cadastrados</a>
+                            <a href="{{ url_for('super_admin.manage_assignments', school_id=selected_school_id, filter='orphans') }}" class="btn {% if selected_filter == 'orphans' %}btn-danger{% else %}btn-outline-danger{% endif %}">Órfãos</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                <input type="text" id="user-search-input" class="form-control" placeholder="Digite um nome ou matrícula para refinar a busca na lista atual...">
+            </div>
+
+            {% if selected_filter == 'orphans' %}
+                {% include 'super_admin/partials/_orphans_table.html' %}
+            {% else %}
+                {% include 'super_admin/partials/_assignments_table.html' %}
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('user-search-input');
+    const table = document.getElementById('assignments-table') || document.getElementById('orphans-table');
+    if (!searchInput || !table) return;
+
+    const tableRows = table.querySelectorAll('tbody tr');
+
+    searchInput.addEventListener('input', function() {
+        const searchTerm = this.value.toLowerCase().trim();
+
+        tableRows.forEach(function(row) {
+            const rowText = row.textContent.toLowerCase();
+            if (rowText.includes(searchTerm)) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

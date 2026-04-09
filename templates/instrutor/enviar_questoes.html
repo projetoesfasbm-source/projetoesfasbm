@@ -1,0 +1,308 @@
+{% extends "base.html" %}
+
+{% block title %}Envio de Questões{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-file-upload text-success"></i> Envio de Questões ao Banco</h2>
+    </div>
+
+    <div id="etapa-1-colagem" class="card shadow-sm mb-4 border-success">
+        <div class="card-header bg-success text-white">
+            <h5 class="mb-0"><i class="fas fa-paste"></i> 1. Cole suas questões</h5>
+        </div>
+        <div class="card-body">
+            
+            <div class="alert alert-warning border-warning shadow-sm mb-4">
+                <h5 class="alert-heading text-dark"><i class="fas fa-exclamation-triangle text-danger"></i> <strong>Atenção às Regras de Formatação</strong></h5>
+                <hr>
+                <p class="mb-2 text-dark">Para que o sistema consiga fatiar e entender suas questões automaticamente, <strong>obedeça às 3 regras abaixo no seu texto (Word/PDF):</strong></p>
+                <ul class="mb-2 text-dark">
+                    <li><strong>1. Início da Questão:</strong> Toda questão DEVE começar com o número seguido de ponto, traço ou parêntese. Exemplo: <code>1.</code> ou <code>1)</code> ou <code>1-</code>. (Sem letras junto do número).</li>
+                    <li><strong>2. Alternativas:</strong> Cada alternativa DEVE começar com a Letra seguida de ponto, traço ou parêntese. Exemplo: <code>A)</code> ou <code>b.</code> ou <code>C-</code>.</li>
+                    <li><strong>3. Gabarito:</strong> A resposta certa deve estar escrita em qualquer lugar dentro do bloco da questão contendo a palavra-chave. Exemplo: <code>Gabarito: C</code> ou <code>Resp: C</code> ou <code>Correta - C</code>.</li>
+                </ul>
+                <p class="mb-0 text-danger fw-bold"><i class="fas fa-ban"></i> Evite colocar numerações como "1)" no meio do texto do enunciado, pois o sistema pode achar que é o início de outra questão.</p>
+            </div>
+
+            <div class="mb-3 w-50">
+                <label for="disciplina_selecionada" class="form-label fw-bold">Disciplina Destino (Unificada):</label>
+                <select id="disciplina_selecionada" class="form-select border-success" required>
+                    <option value="" selected disabled>Selecione a disciplina...</option>
+                    {% for m in materias %}
+                        <option value="{{ m }}">{{ m }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <textarea id="texto_bruto" class="form-control" rows="15" placeholder="Cole as suas questões aqui respeitando as regras acima..."></textarea>
+            </div>
+
+            <button id="btn-analisar" class="btn btn-success btn-lg shadow-sm">
+                <i class="fas fa-magic"></i> Analisar e Formatar Questões
+            </button>
+            <div id="loading-spinner" class="spinner-border text-success ms-3" role="status" style="display: none; vertical-align: middle;">
+                <span class="visually-hidden">Processando...</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="etapa-2-auditoria" class="card shadow-sm mb-4 border-primary" style="display: none;">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-check-double"></i> 2. Revisão e Correção</h5>
+            <span id="contador-questoes" class="badge bg-light text-primary fs-6">0 encontradas</span>
+        </div>
+        <div class="card-body bg-light">
+            <div id="alerta-sucesso" class="alert alert-info">
+                <strong><i class="fas fa-edit"></i> Modo Edição Livre:</strong> O sistema fatiou as questões abaixo. Se notar algum erro de digitação, falta de letra ou o gabarito errado, <strong>você pode clicar nos textos e corrigi-los agora mesmo antes de salvar!</strong>
+            </div>
+
+            <form id="form-salvar-banco">
+                <div id="container-cards-questoes"></div>
+
+                <div class="d-flex justify-content-between mt-4">
+                    <button type="button" id="btn-voltar" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left"></i> Voltar à Colagem
+                    </button>
+                    <button type="button" id="btn-salvar-banco" class="btn btn-primary btn-lg fw-bold shadow-sm">
+                        <i class="fas fa-save"></i> Confirmar e Enviar ao Banco
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="etapa-3-sucesso" class="card shadow-sm mb-4 border-success" style="display: none;">
+        <div class="card-body text-center py-5">
+            <i class="fas fa-check-circle text-success" style="font-size: 5rem;"></i>
+            <h3 class="mt-4 text-success fw-bold">Procedimento Concluído!</h3>
+            <p class="fs-5 text-muted mt-3" id="msg-resultado-sucesso"></p>
+            
+            <div class="mt-5">
+                <a href="{{ url_for('main.dashboard') }}" class="btn btn-secondary btn-lg">
+                    <i class="fas fa-home"></i> Voltar ao Início
+                </a>
+                <a href="{{ url_for('questoes.tela_envio') }}" class="btn btn-outline-success btn-lg ms-3">
+                    <i class="fas fa-plus"></i> Enviar Novas Questões
+                </a>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+    const btnAnalisar = document.getElementById('btn-analisar');
+    const btnVoltar = document.getElementById('btn-voltar');
+    const btnSalvarBanco = document.getElementById('btn-salvar-banco');
+
+    const etapa1 = document.getElementById('etapa-1-colagem');
+    const etapa2 = document.getElementById('etapa-2-auditoria');
+    const etapa3 = document.getElementById('etapa-3-sucesso');
+    const loadingSpinner = document.getElementById('loading-spinner');
+
+    btnAnalisar.addEventListener('click', function() {
+        const textoBruto = document.getElementById('texto_bruto').value.trim();
+        const materia = document.getElementById('disciplina_selecionada').value;
+
+        if (!materia) {
+            alert("Por favor, selecione a disciplina antes de analisar.");
+            return;
+        }
+        if (!textoBruto) {
+            alert("Por favor, cole o texto das questões.");
+            return;
+        }
+
+        btnAnalisar.disabled = true;
+        loadingSpinner.style.display = 'inline-block';
+
+        fetch("{{ url_for('questoes.processar_texto') }}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({ texto_bruto: textoBruto })
+        })
+        .then(response => response.json())
+        .then(data => {
+            btnAnalisar.disabled = false;
+            loadingSpinner.style.display = 'none';
+
+            if (data.success) {
+                renderizarCardsAuditoria(data.questoes);
+
+                document.getElementById('contador-questoes').textContent = `${data.total} identificadas`;
+                
+                etapa1.style.display = 'none';
+                etapa2.style.display = 'block';
+            } else {
+                alert("Erro: " + data.message);
+            }
+        })
+        .catch(error => {
+            btnAnalisar.disabled = false;
+            loadingSpinner.style.display = 'none';
+            alert("Erro de comunicação com o servidor. Tente novamente.");
+            console.error(error);
+        });
+    });
+
+    btnVoltar.addEventListener('click', function() {
+        etapa2.style.display = 'none';
+        etapa1.style.display = 'block';
+    });
+
+    function renderizarCardsAuditoria(questoes) {
+        const container = document.getElementById('container-cards-questoes');
+        container.innerHTML = '';
+
+        questoes.forEach((q, index) => {
+            let avisosHtml = '';
+            if (q.avisos && q.avisos.length > 0) {
+                avisosHtml = `<div class="alert alert-warning py-1 px-2 mb-2 small"><i class="fas fa-exclamation-triangle"></i> <strong>Aviso do Motor:</strong> ${q.avisos[0]}</div>`;
+            }
+
+            const qId = index; // Identificador único pra vincular os inputs de rádio
+
+            const card = document.createElement('div');
+            card.className = 'card mb-4 border-secondary shadow-sm questao-card';
+            card.dataset.index = index;
+            card.innerHTML = `
+                <div class="card-header bg-white border-bottom-0 pt-3 pb-0">
+                    <h6 class="text-secondary fw-bold">Questão ${index + 1}</h6>
+                    ${avisosHtml}
+                </div>
+                <div class="card-body pt-2">
+                    <div class="mb-3">
+                        <textarea class="form-control fw-bold q-enunciado border-primary bg-light" rows="4" placeholder="Edite o enunciado aqui se necessário...">${q.enunciado}</textarea>
+                    </div>
+                    
+                    <p class="mb-1 fw-bold text-muted small">Marque a bolinha verde na resposta correta:</p>
+                    <div class="row">
+                        <div class="col-md-12 mb-2">
+                            <div class="input-group">
+                                <div class="input-group-text bg-white">
+                                    <input class="form-check-input mt-0 q-gabarito" type="radio" name="gabarito_${qId}" value="A" ${q.resposta_correta === 'A' ? 'checked' : ''}>
+                                    <span class="ms-2 fw-bold">A)</span>
+                                </div>
+                                <input type="text" class="form-control q-alt-A" value="${q.alternativas.A}">
+                            </div>
+                        </div>
+                        <div class="col-md-12 mb-2">
+                            <div class="input-group">
+                                <div class="input-group-text bg-white">
+                                    <input class="form-check-input mt-0 q-gabarito" type="radio" name="gabarito_${qId}" value="B" ${q.resposta_correta === 'B' ? 'checked' : ''}>
+                                    <span class="ms-2 fw-bold">B)</span>
+                                </div>
+                                <input type="text" class="form-control q-alt-B" value="${q.alternativas.B}">
+                            </div>
+                        </div>
+                        <div class="col-md-12 mb-2">
+                            <div class="input-group">
+                                <div class="input-group-text bg-white">
+                                    <input class="form-check-input mt-0 q-gabarito" type="radio" name="gabarito_${qId}" value="C" ${q.resposta_correta === 'C' ? 'checked' : ''}>
+                                    <span class="ms-2 fw-bold">C)</span>
+                                </div>
+                                <input type="text" class="form-control q-alt-C" value="${q.alternativas.C}">
+                            </div>
+                        </div>
+                        <div class="col-md-12 mb-2">
+                            <div class="input-group">
+                                <div class="input-group-text bg-white">
+                                    <input class="form-check-input mt-0 q-gabarito" type="radio" name="gabarito_${qId}" value="D" ${q.resposta_correta === 'D' ? 'checked' : ''}>
+                                    <span class="ms-2 fw-bold">D)</span>
+                                </div>
+                                <input type="text" class="form-control q-alt-D" value="${q.alternativas.D}">
+                            </div>
+                        </div>
+                        <div class="col-md-12 mb-2">
+                            <div class="input-group">
+                                <div class="input-group-text bg-white">
+                                    <input class="form-check-input mt-0 q-gabarito" type="radio" name="gabarito_${qId}" value="E" ${q.resposta_correta === 'E' ? 'checked' : ''}>
+                                    <span class="ms-2 fw-bold">E)</span>
+                                </div>
+                                <input type="text" class="form-control q-alt-E" value="${q.alternativas.E}">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            container.appendChild(card);
+        });
+    }
+
+    btnSalvarBanco.addEventListener('click', function() {
+        const materia = document.getElementById('disciplina_selecionada').value;
+        const cards = document.querySelectorAll('.questao-card');
+        let questoesParaSalvar = [];
+
+        // Coleta reversa: Lê a tela inteira (pegando todas as edições manuais que o usuário fez)
+        cards.forEach(card => {
+            const enunciadoAtualizado = card.querySelector('.q-enunciado').value.trim();
+            const altA = card.querySelector('.q-alt-A').value.trim();
+            const altB = card.querySelector('.q-alt-B').value.trim();
+            const altC = card.querySelector('.q-alt-C').value.trim();
+            const altD = card.querySelector('.q-alt-D').value.trim();
+            const altE = card.querySelector('.q-alt-E').value.trim();
+            
+            // Descobre qual rádio button está marcado
+            let gabaritoMarcado = 'A';
+            const radios = card.querySelectorAll('.q-gabarito');
+            radios.forEach(r => {
+                if(r.checked) gabaritoMarcado = r.value;
+            });
+
+            questoesParaSalvar.push({
+                enunciado: enunciadoAtualizado,
+                alternativas: {
+                    'A': altA, 'B': altB, 'C': altC, 'D': altD, 'E': altE
+                },
+                resposta_correta: gabaritoMarcado
+            });
+        });
+
+        const payload = {
+            materia: materia,
+            questoes: questoesParaSalvar
+        };
+
+        btnSalvarBanco.disabled = true;
+        btnSalvarBanco.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando no Banco...';
+
+        fetch("{{ url_for('questoes.salvar_questoes') }}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Remove tela de auditoria e Mostra a tela de Sucesso (Fim de fluxo)
+                etapa2.style.display = 'none';
+                etapa3.style.display = 'block';
+                document.getElementById('msg-resultado-sucesso').textContent = data.message;
+            } else {
+                alert("Erro ao salvar: " + data.message);
+                btnSalvarBanco.disabled = false;
+                btnSalvarBanco.innerHTML = '<i class="fas fa-save"></i> Confirmar e Enviar ao Banco';
+            }
+        })
+        .catch(error => {
+            alert("Erro ao salvar no banco de dados.");
+            btnSalvarBanco.disabled = false;
+            btnSalvarBanco.innerHTML = '<i class="fas fa-save"></i> Confirmar e Enviar ao Banco';
+        });
+    });
+});
+</script>
+{% endblock %}

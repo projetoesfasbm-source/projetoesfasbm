@@ -1,0 +1,555 @@
+{% extends "base.html" %}
+
+{% block title %}Gestão Acadêmica e Diários{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    
+    <div class="row mb-4 align-items-center">
+        <div class="col-md-7">
+            <h2 class="mb-0 text-danger fw-bold"><i class="fas fa-radiation me-2"></i>Painel de Risco Acadêmico</h2>
+            <p class="text-muted mb-0">Monitoramento automático de frequência. <span class="badge bg-danger">30% Faltas = Reprovação</span></p>
+        </div>
+        <div class="col-md-5">
+            <div class="input-group shadow-sm">
+                <span class="input-group-text bg-white"><i class="fas fa-search"></i></span>
+                <input type="text" id="searchAluno" class="form-control" placeholder="Buscar aluno no painel..." onkeyup="filtrarAlunos()">
+            </div>
+        </div>
+    </div>
+
+    <div id="painelAlertas">
+        {% if not alunos_alertas %}
+            <div class="card border-success border-2 shadow-sm mb-4">
+                <div class="card-body text-center py-5 text-success">
+                    <i class="fas fa-graduation-cap fa-4x mb-3"></i>
+                    <h4>Situação Regular!</h4>
+                    <p class="mb-0">Nenhum aluno atingiu níveis críticos ou de alerta nas faltas até o momento.</p>
+                </div>
+            </div>
+        {% else %}
+            <div class="row g-3" id="cardsContainer">
+                {% for aluno in alunos_alertas %}
+                <div class="col-12 col-md-6 col-lg-4 col-xl-3 aluno-card-item" data-search="{{ aluno.nome }} {{ aluno.matricula }} {{ aluno.turma }}">
+                    <div class="card h-100 shadow-sm border-0 position-relative alert-card-{{ aluno.gravidade }}">
+                        <div class="card-body pb-0">
+                            <div class="d-flex align-items-center mb-3">
+                                <div class="flex-shrink-0 position-relative">
+                                    {% if aluno.foto %}
+                                        <img src="{{ url_for('static', filename='uploads/profile_pics/' + aluno.foto) }}" class="rounded-circle border border-2 border-white shadow-sm" style="width: 55px; height: 55px; object-fit: cover;">
+                                    {% else %}
+                                        <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center fw-bold shadow-sm" style="width: 55px; height: 55px;">{{ aluno.nome[:2].upper() }}</div>
+                                    {% endif %}
+                                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-dark border border-white">{{ aluno.total_faltas }}</span>
+                                </div>
+                                <div class="ms-3 overflow-hidden">
+                                    <h6 class="card-title mb-0 text-truncate fw-bold">{{ aluno.nome }}</h6>
+                                    <small class="text-muted d-block">{{ aluno.turma }}</small>
+                                </div>
+                            </div>
+                            {% if aluno.riscos %}
+                                <div class="alert-section mt-2 bg-white rounded p-2 border">
+                                    <small class="text-uppercase fw-bold text-muted" style="font-size: 0.7rem;">Disciplinas Críticas:</small>
+                                    {% for risco in aluno.riscos %}
+                                        <div class="mt-2 mb-1">
+                                            <div class="d-flex justify-content-between align-items-end" style="font-size: 0.8rem;">
+                                                <span class="fw-bold text-truncate" style="max-width: 65%;">{{ risco.materia }}</span>
+                                                <span class="{% if risco.status == 'reprovado' %}text-danger fw-bold{% else %}text-warning{% endif %}">{{ risco.porcentagem }}%</span>
+                                            </div>
+                                            <div class="progress" style="height: 6px;">
+                                                <div class="progress-bar {% if risco.status == 'reprovado' %}bg-danger{% else %}bg-warning{% endif %}" role="progressbar" style="width: {{ risco.porcentagem }}%;"></div>
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                        <div class="card-footer bg-transparent border-0 pt-2 pb-3">
+                            <button class="btn btn-outline-dark btn-sm w-100 rounded-pill" onclick="verDetalhesFaltas({{ aluno.id }})"><i class="fas fa-list-alt me-1"></i> Ver Histórico</button>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    </div>
+
+    <div class="mt-3 mb-5">
+        <button class="btn btn-light border text-muted w-100" type="button" data-bs-toggle="collapse" data-bs-target="#listaCompleta">
+            <i class="fas fa-users me-2"></i> Visualizar Situação de Todos os Alunos
+        </button>
+        <div class="collapse mt-3" id="listaCompleta">
+            <div class="card shadow-sm border-0">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light"><tr><th class="ps-3">Aluno</th><th>Turma</th><th class="text-center">Total Faltas</th><th>Ação</th></tr></thead>
+                            <tbody id="tabelaTodosAlunos"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <hr class="my-5 border-secondary">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="mb-0 text-primary fw-bold"><i class="fas fa-book-reader me-2"></i>Gerenciamento de Diários</h3>
+            <p class="text-muted mb-0">Auditoria, Edição, Devolução e Impressão.</p>
+        </div>
+        <div class="d-flex align-items-center gap-2 bg-white p-2 rounded shadow-sm border">
+            <label class="mb-0 small text-muted fw-bold ms-2">Consulta de Faltas:</label>
+            <input type="date" id="dataFaltasDiarias" class="form-control form-control-sm" style="width: auto;">
+            <button class="btn btn-danger btn-sm fw-bold" onclick="consultarFaltasDia()">
+                <i class="fas fa-user-times me-1"></i> Faltas
+            </button>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 mb-4 bg-light">
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('admin_escola.espelho_diarios') }}" class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label fw-bold small text-uppercase">Turma</label>
+                    <select class="form-select" name="turma_id" onchange="this.form.submit()">
+                        <option value="">-- Todas as Turmas --</option>
+                        {% for t in turmas %}
+                        <option value="{{ t.id }}" {% if turma_id == t.id %}selected{% endif %}>{{ t.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="col-md-3">
+                    <label class="form-label fw-bold small text-uppercase">Disciplina</label>
+                    <select class="form-select" name="disciplina_id" onchange="this.form.submit()">
+                        <option value="">-- Todas as Disciplinas --</option>
+                        {% for d in disciplinas %}
+                        <option value="{{ d.id }}" {% if disciplina_id == d.id %}selected{% endif %}>{{ d.materia }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label fw-bold small text-uppercase">Data</label>
+                    <input type="date" class="form-control" name="data" value="{{ data_selecionada }}" onchange="this.form.submit()">
+                </div>
+
+                <div class="col-md-2">
+                    {% if turma_id and disciplina_id %}
+                        <a href="{{ url_for('admin_escola.imprimir_relatorio', turma_id=turma_id, disciplina_id=disciplina_id) }}" 
+                           target="_blank" class="btn btn-dark w-100 shadow-sm" title="Gerar Relatório Oficial (PDF)">
+                            <i class="fas fa-print me-1"></i> Imprimir
+                        </a>
+                    {% else %}
+                        <button type="button" class="btn btn-secondary w-100 disabled" disabled title="Selecione Turma e Disciplina para Imprimir">
+                            <i class="fas fa-print me-1"></i> Imprimir
+                        </button>
+                    {% endif %}
+                </div>
+
+                <div class="col-md-2">
+                    <a href="{{ url_for('admin_escola.espelho_diarios') }}" class="btn btn-outline-secondary w-100">
+                        <i class="fas fa-eraser me-1"></i> Limpar
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 bg-white border-bottom">
+            <h6 class="m-0 font-weight-bold text-primary">Diários Lançados</h6>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover table-striped mb-0 align-middle">
+                    <thead class="table-light text-uppercase small">
+                        <tr>
+                            <th class="ps-3">Data/Período</th>
+                            <th>Turma</th>
+                            <th>Disciplina</th>
+                            <th>Instrutor</th> 
+                            <th>Conteúdo</th>
+                            <th>Validação</th>
+                            <th class="text-center" style="width: 290px;">Ações</th> 
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for diario in diarios %}
+                        <tr>
+                            <td class="ps-3 text-nowrap">
+                                <div class="fw-bold">{{ diario.data_aula.strftime('%d/%m/%Y') }}</div>
+                                <span class="badge bg-light text-dark border">{{ diario.periodo }}º Período</span>
+                            </td>
+                            <td><span class="badge bg-light text-dark border">{{ diario.turma.nome }}</span></td>
+                            <td class="fw-bold text-primary">{{ diario.disciplina.materia }}</td>
+                            
+                            <td>
+                                {# 
+                                   DIAGNÓSTICO: 
+                                   1. diario.instrutor_assinante é uma relação direta com o modelo User.
+                                   2. diario.disciplina.vinculos aponta para DisciplinaTurma.
+                                   3. DisciplinaTurma possui instrutor_1 e instrutor_2 (tipo Instrutor).
+                                   4. O modelo Instrutor possui a relação 'user' que aponta para User.
+                                #}
+                                {% if diario.status == 'assinado' and diario.instrutor_assinante %}
+                                    <div class="fw-bold text-success text-nowrap" style="font-size: 0.9rem;" title="Assinado por">
+                                        <i class="fas fa-user-check me-1 small"></i>
+                                        {% if diario.instrutor_assinante.posto_graduacao %}{{ diario.instrutor_assinante.posto_graduacao }} {% endif %}
+                                        {{ diario.instrutor_assinante.nome_de_guerra or diario.instrutor_assinante.nome_completo }}
+                                    </div>
+                                {% elif diario.disciplina.vinculos %}
+                                    {% set vinculo = diario.disciplina.vinculos[0] %}
+                                    <div class="text-dark small lh-sm">
+                                        {% if vinculo.instrutor_1 and vinculo.instrutor_1.user %}
+                                            <span class="text-muted" style="font-size: 0.7rem; text-transform: uppercase; font-weight: bold;">Vinculado:</span><br>
+                                            {{ vinculo.instrutor_1.user.posto_graduacao }} {{ vinculo.instrutor_1.user.nome_de_guerra }}
+                                        {% endif %}
+                                        
+                                        {% if vinculo.instrutor_2 and vinculo.instrutor_2.user %}
+                                            <br><small class="text-muted">Subst: {{ vinculo.instrutor_2.user.nome_de_guerra }}</small>
+                                        {% endif %}
+                                    </div>
+                                {% else %}
+                                    <span class="text-muted small fst-italic">Sem vínculo</span>
+                                {% endif %}
+                            </td>
+
+                            <td>
+                                <div class="text-truncate" style="max-width: 250px;" title="{{ diario.conteudo_ministrado }}">
+                                    {{ diario.conteudo_ministrado or 'Não informado' }}
+                                </div>
+                            </td>
+                            <td>
+                                {% if diario.status == 'assinado' %}
+                                    <div class="text-success small fw-bold">
+                                        <i class="fas fa-check-circle me-1"></i> Validado
+                                    </div>
+                                {% else %}
+                                    <span class="badge bg-warning text-dark">Pendente</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <div class="d-flex justify-content-center gap-2">
+                                    <a href="{{ url_for('admin_escola.editar_diario_bloco', diario_id=diario.id) }}" 
+                                       class="btn btn-primary btn-sm px-3 fw-bold shadow-sm">
+                                        <i class="fas fa-edit me-1"></i> Editar
+                                    </a>
+                                    
+                                    <button type="button" 
+                                            class="btn btn-warning btn-sm px-3 fw-bold shadow-sm text-dark"
+                                            onclick="abrirModalDevolucao({{ diario.id }})">
+                                        <i class="fas fa-undo me-1"></i> Devolver
+                                    </button>
+
+                                    <button type="button" 
+                                            class="btn btn-danger btn-sm px-3 fw-bold shadow-sm"
+                                            onclick="abrirModalExcluir({{ diario.id }}, '{{ diario.disciplina.materia }}')">
+                                        <i class="fas fa-trash-alt me-1"></i> Excluir
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center py-5 text-muted">
+                                <i class="fas fa-inbox fa-3x mb-3 d-block"></i>
+                                Nenhum diário encontrado com os filtros selecionados.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            {% if pagination and pagination.pages > 1 %}
+            <div class="card-footer bg-white py-3">
+                <nav aria-label="Navegação de página">
+                    <ul class="pagination justify-content-center mb-0">
+                        {% if pagination.has_prev %}
+                        <li class="page-item"><a class="page-link" href="{{ url_for('admin_escola.espelho_diarios', page=pagination.prev_num, turma_id=turma_id, disciplina_id=disciplina_id, data=data_selecionada) }}">Anterior</a></li>
+                        {% endif %}
+                        <li class="page-item disabled"><span class="page-link">Página {{ pagination.page }} de {{ pagination.pages }}</span></li>
+                        {% if pagination.has_next %}
+                        <li class="page-item"><a class="page-link" href="{{ url_for('admin_escola.espelho_diarios', page=pagination.next_num, turma_id=turma_id, disciplina_id=disciplina_id, data=data_selecionada) }}">Próxima</a></li>
+                        {% endif %}
+                    </ul>
+                </nav>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalDetalhesFaltas" tabindex="-1" aria-hidden="true" style="z-index: 1060;">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content" id="modalConteudo"></div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalDevolucao" tabindex="-1" aria-hidden="true" style="z-index: 1060;">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <form action="{{ url_for('admin_escola.retornar_diario') }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                
+                <input type="hidden" name="diario_id" id="inputDiarioId">
+                <div class="modal-header bg-warning text-dark">
+                    <h5 class="modal-title fw-bold"><i class="fas fa-undo me-2"></i>Devolver Diário</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body bg-white text-dark">
+                    <div class="alert alert-warning border-0 d-flex align-items-center">
+                        <i class="fas fa-exclamation-triangle fa-2x me-3 text-warning"></i>
+                        <div>
+                            <strong>Atenção!</strong> Você está devolvendo esta aula.
+                        </div>
+                    </div>
+                    <ul class="small text-muted mb-3">
+                        <li>A assinatura do instrutor será <strong>removida</strong>.</li>
+                        <li>O status voltará para <strong>Pendente</strong>.</li>
+                        <li>O instrutor verá o motivo abaixo.</li>
+                    </ul>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Motivo da Devolução (Obrigatório):</label>
+                        <textarea class="form-control" name="motivo_devolucao" rows="3" required placeholder="Ex: Conteúdo incompleto, falta lançada incorretamente..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-warning fw-bold text-dark">
+                        <i class="fas fa-check me-1"></i> Confirmar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalExcluirDiario" tabindex="-1" aria-hidden="true" style="z-index: 1060;">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <form id="formExcluirDiario" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title fw-bold"><i class="fas fa-trash-alt me-2"></i>Excluir Diário</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body bg-white text-dark text-center py-4">
+                    <i class="fas fa-exclamation-circle text-danger fa-4x mb-3"></i>
+                    <h5 class="fw-bold">Tem certeza?</h5>
+                    <p class="mb-1 text-muted">Você está prestes a excluir permanentemente a aula de <strong><span id="nomeDisciplinaExclusao"></span></strong>.</p>
+                    <p class="small text-danger fw-bold mt-3 border p-2 bg-light rounded">
+                        Todos os períodos deste bloco e as frequências lançadas serão apagados do sistema de forma irreversível.
+                    </p>
+                </div>
+                <div class="modal-footer bg-light justify-content-center">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-danger fw-bold px-4">
+                        <i class="fas fa-trash-alt me-1"></i> Sim, Excluir
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalFaltasDia" tabindex="-1" aria-hidden="true" style="z-index: 1060;">
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+        <div class="modal-content shadow-lg border-0">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title fw-bold">
+                    <i class="fas fa-user-times me-2"></i> Relatório de Faltas Diárias
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body bg-light">
+                
+                <div class="mb-3">
+                    <h6 class="mb-0 text-secondary fw-bold text-uppercase" id="displayDataFaltas">Buscando...</h6>
+                </div>
+
+                <div id="resultadoFaltasDia">
+                    <div class="text-center py-5 text-muted">
+                        <div class="spinner-border text-danger mb-3" role="status"></div>
+                        <p>Buscando informações no banco de dados...</p>
+                    </div>
+                </div>
+                
+            </div>
+            <div class="modal-footer bg-white border-top">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const todosAlunosData = {{ todos_alunos|tojson if todos_alunos else '[]' }};
+    let modalInstance = null;
+    let modalDevolucaoInstance = null;
+    let modalFaltasDiaInstance = null;
+    let modalExcluirInstance = null;
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const modais = ['modalDevolucao', 'modalFaltasDia', 'modalExcluirDiario'];
+        modais.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) document.body.appendChild(el);
+        });
+        
+        renderizarTabelaCompleta();
+
+        const dataInput = document.getElementById('dataFaltasDiarias');
+        if(dataInput && !dataInput.value) {
+            const hoje = new Date();
+            const yyyy = hoje.getFullYear();
+            const mm = String(hoje.getMonth() + 1).padStart(2, '0');
+            const dd = String(hoje.getDate()).padStart(2, '0');
+            dataInput.value = `${yyyy}-${mm}-${dd}`;
+        }
+    });
+
+    function renderizarTabelaCompleta() {
+        const tbody = document.getElementById('tabelaTodosAlunos');
+        if(!tbody || !todosAlunosData) return;
+        let html = '';
+        todosAlunosData.forEach(aluno => {
+            let badgeInfo = aluno.faltas > 0 ? `<span class="badge bg-secondary">${aluno.faltas}</span>` : `<span class="badge bg-success">100%</span>`;
+            html += `<tr class="aluno-row-item" data-search="${aluno.nome.toLowerCase()} ${aluno.matricula} ${aluno.turma.toLowerCase()}"><td class="ps-3"><div class="fw-bold text-dark">${aluno.nome}</div><small class="text-muted">${aluno.matricula}</small></td><td>${aluno.turma}</td><td class="text-center">${badgeInfo}</td><td><button class="btn btn-sm btn-link" onclick="verDetalhesFaltas(${aluno.id})">Detalhes</button></td></tr>`;
+        });
+        tbody.innerHTML = html;
+    }
+
+    function filtrarAlunos() {
+        const termo = document.getElementById('searchAluno').value.toLowerCase();
+        document.querySelectorAll('.aluno-card-item').forEach(card => {
+            card.style.display = card.getAttribute('data-search').toLowerCase().includes(termo) ? 'block' : 'none';
+        });
+    }
+
+    function verDetalhesFaltas(alunoId) {
+        const modalEl = document.getElementById('modalDetalhesFaltas');
+        if (modalEl.parentElement !== document.body) {
+            document.body.appendChild(modalEl);
+        }
+        
+        if (!modalInstance) modalInstance = new bootstrap.Modal(modalEl);
+        document.getElementById('modalConteudo').innerHTML = '<div class="text-center py-5"><div class="spinner-border text-danger"></div></div>';
+        modalInstance.show();
+        fetch(`/admin-escola/detalhe-faltas/${alunoId}`).then(r => r.text()).then(html => document.getElementById('modalConteudo').innerHTML = html);
+    }
+
+    function abrirModalDevolucao(diarioId) {
+        document.getElementById('inputDiarioId').value = diarioId;
+        const modalEl = document.getElementById('modalDevolucao');
+        if (!modalDevolucaoInstance) modalDevolucaoInstance = new bootstrap.Modal(modalEl);
+        modalDevolucaoInstance.show();
+    }
+
+    function abrirModalExcluir(diarioId, disciplinaNome) {
+        document.getElementById('nomeDisciplinaExclusao').innerText = disciplinaNome;
+        document.getElementById('formExcluirDiario').action = `/admin-escola/excluir-diario/${diarioId}`;
+        
+        const modalEl = document.getElementById('modalExcluirDiario');
+        if (!modalExcluirInstance) modalExcluirInstance = new bootstrap.Modal(modalEl);
+        modalExcluirInstance.show();
+    }
+
+    function consultarFaltasDia() {
+        const dataSelecionada = document.getElementById('dataFaltasDiarias').value;
+        if (!dataSelecionada) {
+            alert('Por favor, selecione uma data primeiro.');
+            return;
+        }
+
+        const partesData = dataSelecionada.split('-');
+        const dataFormatada = `${partesData[2]}/${partesData[1]}/${partesData[0]}`;
+        
+        document.getElementById('displayDataFaltas').innerText = `Data: ${dataFormatada}`;
+
+        const divResultado = document.getElementById('resultadoFaltasDia');
+        divResultado.innerHTML = `
+            <div class="text-center py-5 text-muted">
+                <div class="spinner-border text-danger mb-3" role="status"></div>
+                <p>Buscando faltas registradas em ${dataFormatada}...</p>
+            </div>
+        `;
+
+        const modalEl = document.getElementById('modalFaltasDia');
+        if (!modalFaltasDiaInstance) modalFaltasDiaInstance = new bootstrap.Modal(modalEl);
+        modalFaltasDiaInstance.show();
+
+        fetch(`/diario-classe/faltas-por-dia?data=${dataSelecionada}`)
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) {
+                    divResultado.innerHTML = `<div class="alert alert-danger"><i class="fas fa-exclamation-circle me-2"></i> ${data.message}</div>`;
+                    return;
+                }
+
+                const faltasAgrupadas = data.faltas;
+                const turmas = Object.keys(faltasAgrupadas);
+
+                if (turmas.length === 0) {
+                    divResultado.innerHTML = `
+                        <div class="alert alert-success border-0 text-center py-4">
+                            <i class="fas fa-check-circle fa-3x mb-3 d-block text-success"></i>
+                            <h5 class="mb-0">Nenhuma falta registrada!</h5>
+                            <p class="text-muted small mt-1">Todos os alunos presentes nos diários lançados nesta data.</p>
+                        </div>`;
+                    return;
+                }
+
+                let html = '';
+                turmas.forEach(turma => {
+                    html += `
+                        <div class="card border border-dark shadow-sm mb-3">
+                            <div class="card-header bg-dark text-white fw-bold py-2">
+                                <i class="fas fa-layer-group me-2"></i> ${turma} 
+                                <span class="badge bg-light text-dark float-end">${faltasAgrupadas[turma].length} faltas</span>
+                            </div>
+                            <ul class="list-group list-group-flush">
+                    `;
+                    
+                    faltasAgrupadas[turma].forEach(aluno => {
+                        let periodo = aluno.periodo ? `(${aluno.periodo}º Período)` : '';
+                        let justif = aluno.justificativa ? `<br><small class="text-muted fst-italic"><i class="fas fa-info-circle"></i> Justificativa: ${aluno.justificativa}</small>` : '';
+                        let materia = aluno.materia ? `<br><small class="text-primary fw-bold"><i class="fas fa-book me-1"></i> ${aluno.materia}</small>` : '';
+                        
+                        html += `
+                            <li class="list-group-item d-flex justify-content-between align-items-center py-2" style="border-bottom: 1px solid #eee;">
+                                <div>
+                                    <span class="fw-bold text-dark">${aluno.nome_guerra || aluno.nome_completo}</span>
+                                    ${materia}
+                                    ${justif}
+                                </div>
+                                <span class="badge border border-secondary text-secondary small">${periodo}</span>
+                            </li>
+                        `;
+                    });
+
+                    html += `</ul></div>`;
+                });
+
+                divResultado.innerHTML = html;
+            })
+            .catch(err => {
+                console.error("Erro ao buscar faltas:", err);
+                divResultado.innerHTML = `<div class="alert alert-danger"><i class="fas fa-exclamation-triangle me-2"></i> Erro ao processar a requisição. Tente novamente.</div>`;
+            });
+    }
+</script>
+
+<style>
+    .modal { z-index: 1055 !important; }
+    .modal-backdrop { z-index: 1050 !important; }
+
+    .alert-card-critico { border-left: 5px solid #dc3545 !important; background: linear-gradient(to right, #fff5f5, #fff); }
+    .alert-card-atencao { border-left: 5px solid #ffc107 !important; background: linear-gradient(to right, #fff9f2, #fff); }
+    .alert-card-moderado { border-left: 5px solid #6c757d !important; }
+    .aluno-card-item .card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important; }
+</style>
+{% endblock %}

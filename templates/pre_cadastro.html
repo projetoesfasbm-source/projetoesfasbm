@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}Pré-Cadastro de Usuário{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <h1>Pré-Cadastro de Usuário</h1>
+    <p>Insira a Matrícula para permitir que um novo usuário ative sua conta.</p>
+</div>
+
+<div class="table-container" style="max-width: 600px; margin: 0 auto;">
+    <div class="table-header">
+        <h3>Novo Pré-Cadastro de {{ role_predefinido|title if role_predefinido else 'Usuário' }}</h3>
+    </div>
+    
+    <form method="POST" action="{{ url_for('main.pre_cadastro', role=role_predefinido) }}" style="padding: 1rem 0;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        {% if role_predefinido %}
+        <input type="hidden" name="role" value="{{ role_predefinido }}">
+        {% endif %}
+
+        {% if current_user.role in ['super_admin', 'programador'] %}
+        <div class="form-group mb-3">
+            <label for="school_id">Selecione a Escola</label>
+            <select id="school_id" name="school_id" class="form-control" required>
+                <option value="" disabled selected>-- Escolha uma Escola --</option>
+                {% for school in schools %}
+                    <option value="{{ school.id }}">{{ school.nome }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div class="form-group mb-3">
+            <label for="role_select">Função dos Usuários</label>
+            <select id="role_select" name="role" class="form-control" required>
+                <option value="aluno" {% if role_predefinido == 'aluno' %}selected{% endif %}>Aluno</option>
+                <option value="instrutor" {% if role_predefinido == 'instrutor' %}selected{% endif %}>Instrutor</option>
+                <option value="admin_escola">Admin da Escola</option>
+            </select>
+        </div>
+        {% endif %}
+
+        <div class="form-group">
+            <label for="matriculas">Matrículas</label>
+            <textarea id="matriculas" name="matriculas" class="form-control" rows="5" 
+                      placeholder="Digite ou cole as Matrículas. Separe por espaço, vírgula ou quebra de linha." required></textarea>
+            <small class="form-text text-muted">Você pode pré-cadastrar vários usuários de uma vez.</small>
+        </div>
+        
+        <div class="form-actions mt-3">
+            <a href="{{ url_for('main.dashboard') }}" class="btn btn-secondary">Cancelar</a>
+            <button type="submit" class="btn btn-primary">Salvar Pré-Cadastros</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

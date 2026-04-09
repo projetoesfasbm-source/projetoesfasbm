@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}Questionários{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <h1>Questionários e Pesquisas</h1>
+    <p>Gerenciamento de avaliações institucionais e pesquisas de satisfação.</p>
+</div>
+
+<div class="table-container">
+    <div class="table-header">
+        <h3>Questionários Disponíveis</h3>
+        
+        {# --- TRAVA DE SEGURANÇA: CAL e ADMINS podem CRIAR --- #}
+        {% if current_user.is_cal or current_user.is_admin_escola or current_user.is_programador or current_user.is_super_admin %}
+            <a href="{{ url_for('questionario.novo') }}" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Novo Questionário
+            </a>
+        {% endif %}
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Título</th>
+                    <th>Público Alvo</th>
+                    <th>Status</th>
+                    <th>Respostas</th>
+                    <th class="text-end">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for q in questionarios %}
+                <tr>
+                    <td><strong>{{ q.titulo }}</strong></td>
+                    <td>
+                        <span class="badge bg-secondary">{{ q.publico_alvo|upper }}</span>
+                    </td>
+                    <td>
+                        {% if q.ativo %}
+                            <span class="badge bg-success">Ativo</span>
+                        {% else %}
+                            <span class="badge bg-danger">Encerrado</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="badge bg-light text-dark border">{{ q.respostas|length }}</span>
+                    </td>
+                    <td class="text-end">
+                        <div class="btn-group">
+                            {# Botão REALIZAR (Para usuários comuns) #}
+                            {% if q.ativo and not (current_user.is_cal or current_user.is_admin_escola) %}
+                                <a href="{{ url_for('questionario.realizar', id=q.id) }}" class="btn btn-sm btn-success" title="Responder">
+                                    <i class="fas fa-pen"></i>
+                                </a>
+                            {% endif %}
+
+                            {# Botão VER RESULTADOS (SENS, CAL, Admin) #}
+                            {% if current_user.is_staff or current_user.is_cal or current_user.is_sens %}
+                            <a href="{{ url_for('questionario.resultado', id=q.id) }}" class="btn btn-sm btn-info" title="Ver Resultados">
+                                <i class="fas fa-chart-bar"></i>
+                            </a>
+                            {% endif %}
+
+                            {# --- TRAVA DE GESTÃO: Apenas CAL e Admins --- #}
+                            {% if current_user.is_cal or current_user.is_admin_escola or current_user.is_programador or current_user.is_super_admin %}
+                                {# Botão Ligar/Desligar #}
+                                <a href="{{ url_for('questionario.alternar_status', id=q.id) }}" class="btn btn-sm btn-{{ 'warning' if q.ativo else 'success' }}" title="{{ 'Encerrar' if q.ativo else 'Ativar' }}">
+                                    <i class="fas fa-{{ 'pause' if q.ativo else 'play' }}"></i>
+                                </a>
+                                {# Botão Participantes #}
+                                <a href="{{ url_for('questionario.participantes', questionario_id=q.id) }}" class="btn btn-sm btn-secondary" title="Participantes">
+                                    <i class="fas fa-users"></i>
+                                </a>
+                                {# Botão Excluir #}
+                                <a href="{{ url_for('questionario.excluir', id=q.id) }}" class="btn btn-sm btn-danger" onclick="return confirm('Tem certeza? Isso apagará todas as respostas.')" title="Excluir">
+                                    <i class="fas fa-trash"></i>
+                                </a>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" class="text-center py-4 text-muted">
+                        Nenhum questionário cadastrado.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-header bg-warning text-dark">
+                    <h4 class="mb-0"><i class="fas fa-edit"></i> Editar Turma: {{ turma.nome }}</h4>
+                </div>
+                <div class="card-body">
+                    
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for category, message in messages %}
+                                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                                    {{ message }}
+                                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
+
+                    <form method="POST" action="{{ url_for('turma.editar_turma', turma_id=turma.id) }}">
+                        {{ form.hidden_tag() }}
+
+                        <div class="mb-3">
+                            {{ form.nome.label(class="form-label fw-bold") }}
+                            {{ form.nome(class="form-control") }}
+                            {% if form.nome.errors %}
+                                <div class="text-danger small mt-1">{{ form.nome.errors[0] }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                {{ form.ano.label(class="form-label fw-bold") }}
+                                {{ form.ano(class="form-control") }}
+                                {% if form.ano.errors %}
+                                    <div class="text-danger small mt-1">{{ form.ano.errors[0] }}</div>
+                                {% endif %}
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                {{ form.status.label(class="form-label fw-bold") }}
+                                {{ form.status(class="form-select") }}
+                                {% if form.status.errors %}
+                                    <div class="text-danger small mt-1">{{ form.status.errors[0] }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Gerenciar Alunos</label>
+                            <small class="text-muted d-block mb-2">Marque os alunos para incluí-los nesta turma. Desmarque para remover.</small>
+                            <div class="card p-3 bg-light" style="max-height: 200px; overflow-y: auto;">
+                                {% if form.alunos_ids.choices %}
+                                    {% for value, label in form.alunos_ids.choices %}
+                                        <div class="form-check">
+                                            {# Verifica se o ID está na lista de dados pré-selecionados (form.alunos_ids.data) #}
+                                            <input class="form-check-input" type="checkbox" name="alunos_ids" value="{{ value }}" id="aluno_{{ value }}"
+                                                {% if value in form.alunos_ids.data %}checked{% endif %}>
+                                            <label class="form-check-label" for="aluno_{{ value }}">
+                                                {{ label }}
+                                            </label>
+                                        </div>
+                                    {% endfor %}
+                                {% else %}
+                                    <p class="text-muted mb-0">Nenhum aluno disponível.</p>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <a href="{{ url_for('turma.listar_turmas') }}" class="btn btn-secondary me-md-2">Cancelar</a>
+                            <button type="submit" class="btn btn-primary">Salvar Alterações</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

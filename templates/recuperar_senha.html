@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}Recuperar Senha{% endblock %}
+
+{% block navbar_content %}{% endblock %}
+
+{% block content %}
+<div class="auth-page-container">
+    <div class="auth-card">
+        <div class="card-logo-container">
+            <img src="{{ url_for('static', filename='img/brasao.png') }}" alt="Brasão da Escola">
+        </div>
+        <h2>Recuperar Senha</h2>
+        <p style="font-size: 0.9rem; opacity: 0.8; margin-top: -15px; margin-bottom: 20px;">
+            Digite seu e-mail cadastrado e enviaremos um link para redefinir sua senha.
+        </p>
+
+        <form method="POST" action="{{ url_for('auth.recuperar_senha') }}">
+            {{ form.hidden_tag() }}
+            <div class="form-group">
+                {{ form.email.label(class="form-label") }}
+                {{ form.email(class="form-control", placeholder="seu.email@bm.rs.gov.br") }}
+            </div>
+            {{ form.submit(class="btn btn-primary") }}
+        </form>
+        
+        <div class="auth-link" style="margin-top: 1.5rem;">
+            <a href="{{ url_for('auth.login') }}">Lembrou a senha? Voltar para o Login</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

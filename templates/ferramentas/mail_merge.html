@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}Gerador de Documentos (Mala Direta){% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <h1>Gerador de Documentos (Mala Direta)</h1>
+    <p>Crie documentos em massa a partir de um template Word e uma planilha Excel.</p>
+</div>
+
+<div class="alert alert-info" role="alert">
+    <h4 class="alert-heading">Instruções de Uso</h4>
+    {% raw %}
+    <p>1. **Prepare seu Template (.docx):** Crie um documento no Word. Nos locais onde a informação deve ser personalizada, use placeholders com chaves duplas. Exemplo: `{{nome}}`, `{{Id Func}}`, `{{posto/grad}}`.</p>
+    {% endraw %}
+    <p>2. **Prepare sua Planilha (.xlsx):** Crie uma planilha no Excel onde o nome de cada coluna corresponde exatamente ao texto dentro dos placeholders do seu template (sem as chaves).</p>
+    <p>3. **Faça o Upload:** Envie os dois arquivos abaixo, selecione o formato de saída e clique em "Gerar Documentos". O sistema irá gerar um arquivo .zip com todos os documentos preenchidos.</p>
+</div>
+
+<div class="table-container" style="max-width: 800px; margin: 0 auto;">
+    <form method="POST" enctype="multipart/form-data" action="{{ url_for('tools.mail_merge') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="form-group mb-4">
+            <label for="template_file" class="form-label"><strong>1. Template do Documento (.docx)</strong></label>
+            <input type="file" name="template_file" id="template_file" class="form-control" accept=".docx" required>
+        </div>
+
+        <div class="form-group mb-4">
+            <label for="data_file" class="form-label"><strong>2. Planilha de Dados (.xlsx)</strong></label>
+            <input type="file" name="data_file" id="data_file" class="form-control" accept=".xlsx" required>
+        </div>
+
+        <div class="form-group mb-4">
+            <label class="form-label"><strong>3. Formato de Saída</strong></label>
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="output_format" id="format_docx" value="docx" checked>
+                <label class="form-check-label" for="format_docx">
+                    Word (.docx) - Rápido e editável
+                </label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="output_format" id="format_pdf" value="pdf" disabled>
+                <label class="form-check-label" for="format_pdf">
+                    PDF (.pdf) - (Funcionalidade em desenvolvimento)
+                </label>
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <a href="{{ url_for('tools.index') }}" class="btn btn-secondary">Cancelar</a>
+            <button type="submit" class="btn btn-primary">Gerar Documentos</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

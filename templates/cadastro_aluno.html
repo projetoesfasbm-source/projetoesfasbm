@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}Completar Perfil de Aluno - Sistema Escolar{% endblock %}
+
+{% block content %}
+
+<div class="form-page-container">
+
+    <div class="cadastro-container">
+        <h2>Completar Perfil de Aluno</h2>
+        <p style="text-align: center; margin-top: -1rem; margin-bottom: 1.5rem; color: #64748b;">Preencha os dados abaixo para finalizar seu cadastro.</p>
+        <hr style="margin-bottom: 25px;">
+
+        <form method="POST" action="{{ url_for('aluno.completar_cadastro') }}" enctype="multipart/form-data">
+            {{ form.hidden_tag() }}
+
+            <div class="form-group">
+                {{ form.nome_completo.label(class="form-label") }}
+                {{ form.nome_completo(class="form-control") }}
+            </div>
+
+            <div class="form-group">
+                {{ form.opm.label(class="form-label") }}
+                {{ form.opm(class="form-control") }}
+            </div>
+
+            <div class="form-group">
+                {{ form.turma_id.label(class="form-label") }}
+                {{ form.turma_id(class="form-control") }}
+            </div>
+
+            <div class="form-group">
+                {{ form.foto_perfil.label(class="form-label") }}
+                {{ form.foto_perfil(class="form-control-file") }}
+            </div>
+
+            {{ form.submit(class="btn btn-primary", style="margin-top: 20px; width: 100%;") }}
+    </div>
+</div>
+{% endblock %}

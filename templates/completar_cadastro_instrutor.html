@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Completar Perfil de Instrutor{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+  <div class="auth-card">
+    <h2>Completar Perfil de Instrutor</h2>
+
+    <form method="POST" action="{{ url_for('instrutor.completar_cadastro') }}">
+      {{ form.hidden_tag() }}
+
+      <div class="form-row" style="display:flex; gap:1rem;">
+        <div class="form-group" style="flex:1;">
+          <label for="posto_graduacao_select">Posto/Graduação</label>
+          {{ form.posto_graduacao_select(class="form-control", id="posto_graduacao_select") }}
+        </div>
+        <div class="form-group" id="posto_graduacao_outro_div" style="flex:1; display:none;">
+          <label for="posto_graduacao_outro">Outro Posto/Graduação</label>
+          {{ form.posto_graduacao_outro(class="form-control", id="posto_graduacao_outro") }}
+        </div>
+      </div>
+
+      <div class="form-group">
+          <label for="telefone">Telefone</label>
+          {{ form.telefone(class="form-control", id="telefone", placeholder="(xx) xxxxx-xxxx") }}
+      </div>
+
+      <div class="form-group">
+        <label>Efetivo da Reserva Remunerada?</label><br>
+        {{ form.is_rr(class="form-check-input") }}
+      </div>
+
+      <div class="form-actions" style="display:flex; gap:0.5rem;">
+        {{ form.submit(class="btn btn-primary") }}
+        <a href="{{ url_for('main.dashboard') }}" class="btn btn-secondary">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const selectEl = document.getElementById('posto_graduacao_select');
+  const outroDiv = document.getElementById('posto_graduacao_outro_div');
+  function toggleOutro() {
+    if (selectEl && outroDiv) {
+      outroDiv.style.display = (selectEl.value === 'Outro') ? 'block' : 'none';
+    }
+  }
+  if (selectEl) {
+    selectEl.addEventListener('change', toggleOutro);
+    toggleOutro();
+  }
+});
+</script>
+{% endblock %}

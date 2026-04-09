@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}Visualizar Questionários{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <h1>Visualizar Questionários</h1>
+    <p>Selecione um questionário para gerir os seus dados.</p>
+</div>
+
+<div class="table-container">
+    <div class="table-responsive">
+        {% if questionarios %}
+            <table class="table-styled">
+                <thead>
+                    <tr>
+                        <th>Título do Questionário</th>
+                        <th class="text-right">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for questionario in questionarios %}
+                    <tr>
+                        <td data-label="Título">{{ questionario.titulo }}</td>
+                        <td data-label="Ações" class="text-right">
+                            <div class="btn-group">
+                                <a href="{{ url_for('questionario.resultado_questionario', questionario_id=questionario.id) }}" class="btn btn-sm btn-info">Ver Resultados</a>
+                                {# --- CORREÇÃO APLICADA AQUI --- #}
+                                <a href="{{ url_for('questionario.ver_participantes', questionario_id=questionario.id) }}" class="btn btn-sm btn-success">Ver Participantes</a>
+                                <form method="POST" action="{{ url_for('questionario.excluir_questionario', questionario_id=questionario.id) }}" onsubmit="return confirm('ATENÇÃO: Tem a certeza de que deseja excluir este questionário? Todas as respostas associadas serão permanentemente perdidas.');" style="display: inline;">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-danger">Excluir</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <div class="empty-state">
+                <div class="empty-icon">📝</div>
+                <h2>Nenhum Questionário Criado</h2>
+                <p>Ainda não há questionários para visualizar. <a href="{{ url_for('questionario.novo_questionario') }}">Crie o primeiro agora</a>.</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

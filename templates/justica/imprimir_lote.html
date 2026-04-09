@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Impressão de Processos Disciplinares</title>
+    <style>
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            background-color: #fff;
+            color: #000;
+            margin: 0;
+            padding: 20px;
+        }
+        .header-impressao {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #000;
+            padding-bottom: 10px;
+        }
+        .header-impressao h3 { margin: 5px 0; font-size: 18px; text-transform: uppercase; }
+        .header-impressao h4 { margin: 5px 0; font-size: 16px; font-weight: normal; }
+        
+        .processo-card {
+            margin-bottom: 25px;
+            padding: 15px 20px;
+            border: 1px solid #000;
+            border-radius: 5px;
+            page-break-inside: avoid;
+        }
+        
+        .titulo-termo {
+            font-size: 15px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-align: center;
+            text-decoration: underline;
+        }
+
+        .paragrafo-resumo {
+            font-size: 14px;
+            line-height: 1.5;
+            text-align: justify;
+            text-indent: 40px; /* Recuo padrão de ofício militar */
+            margin: 0;
+        }
+        
+        @media print {
+            body { padding: 0; }
+            .no-print { display: none !important; }
+            .processo-card { margin-bottom: 20px; }
+        }
+        
+        .btn-imprimir {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            background-color: #0d6efd;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .btn-imprimir:hover { background-color: #0b5ed7; }
+    </style>
+</head>
+<body onload="window.print()">
+
+    <button class="no-print btn-imprimir" onclick="window.print()">Imprimir Documento</button>
+
+    <div class="header-impressao">
+        <h3>Polícia Militar / Brigada Militar</h3>
+        <h4>Extrato de Publicação de Processos Disciplinares</h4>
+        {% if num_boletim %}
+            <p style="margin-top: 10px; font-weight: bold;">Publicado no Boletim Nº {{ num_boletim }}</p>
+        {% endif %}
+    </div>
+
+    {% for p in processos %}
+        {% set ano_proc = p.data_ocorrencia.strftime('%Y') if p.data_ocorrencia else '2026' %}
+        
+        {# 1. TEXTO BASE DO BANCO DE DADOS #}
+        {% set obs_raw = p.observacao or '' %}
+        {% set obs_limpa = obs_raw | replace('\n', ' ') | replace('\r', ' ') | replace('  ', ' ') %}
+        {% set obs_limpa = obs_limpa | replace('Termo de Justificação: Tendo em vista', 'Tendo em vista') %}
+        
+        {# 2. MÁGICA: TRANSFORMAÇÃO DE TERMO COLETIVO EM INDIVIDUAL #}
+        {% if 'Termo Coletivo para' in obs_limpa %}
+            {% set partes_fato = obs_limpa.split('Fato:') %}
+            {% if partes_fato|length > 1 %}
+                {% set texto_apos_fato = partes_fato[1] %}
+                {% set matricula = p.aluno.user.matricula or 'Não Informada' %}
+                {% set nome_completo = (p.aluno.user.posto_graduacao ~ ' ' ~ p.aluno.user.nome_completo) | trim %}
+                {% set intro = "Tendo em vista as informações constantes em Parte, evidenciando a existência, em tese, de infração das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação: " %}
+                
+                {% set obs_limpa = intro ~ "1. Justificante: " ~ nome_completo ~ ", Id Func. " ~ matricula ~ ". 2. Descrição da conduta infracional: " ~ texto_apos_fato %}
+            {% endif %}
+        {% endif %}
+
+        {# 3. ISOLAR A BASE DO FATO E REMOVER SUJEIRA DE CÓDIGO [SISTEMA] #}
+        {% set base_text = obs_limpa.split('3. Cientifico-lhe')[0] %}
+        {% set base_text = base_text.split('[SISTEMA]')[0] %}
+        {% set base_text = base_text | trim %}
+        
+        {# Correção de pontuação final #}
+        {% if not base_text.endswith('.') and not base_text.endswith(';') %}
+            {% set base_text = base_text ~ '.' %}
+        {% endif %}
+
+        {# Fallback de segurança se o texto original do banco estiver corrompido #}
+        {% if base_text|length < 10 %}
+            {% set matricula = p.aluno.user.matricula or 'Não Informada' %}
+            {% set nome_completo = (p.aluno.user.posto_graduacao ~ ' ' ~ p.aluno.user.nome_completo) | trim %}
+            {% set intro = "Tendo em vista as informações constantes em Parte, evidenciando a existência, em tese, de infração das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação: " %}
+            {% set base_text = intro ~ "1. Justificante: " ~ nome_completo ~ ", Id Func. " ~ matricula ~ ". 2. Descrição da conduta infracional: O militar " ~ (p.fato_constatado or '') ~ ". Enquadramento: " ~ (p.codigo_infracao or '') ~ "." %}
+        {% endif %}
+
+        {# 4. CONSTRUÇÃO DINÂMICA DO ITEM 3 (A Defesa) #}
+        {% set texto_defesa = "apresentou defesa por escrito" if p.defesa else "não apresentou defesa, sendo julgado à revelia" %}
+        
+        {# 5. CONSTRUÇÃO DINÂMICA DO ITEM 4 (A Decisão) #}
+        {% set texto_decisao = "justificado" if p.decisao_final == 'Justificado' else "não justificado" %}
+        
+        {# 6. CONSTRUÇÃO DINÂMICA DO ITEM 5 (A Punição) #}
+        {% set texto_punicao = "" %}
+        {% if p.decisao_final != 'Justificado' %}
+            {% set texto_punicao = " 5. Punir com " ~ p.decisao_final|lower %}
+            {% if p.detalhes_sancao %}
+                 {% if p.decisao_final|lower not in p.detalhes_sancao|lower %}
+                     {% set texto_punicao = texto_punicao ~ " de " ~ p.detalhes_sancao|lower %}
+                 {% else %}
+                     {% set texto_punicao = " 5. Punir com " ~ p.detalhes_sancao|lower %}
+                 {% endif %}
+            {% endif %}
+            {% set texto_punicao = texto_punicao ~ "." %}
+        {% endif %}
+
+        <div class="processo-card">
+            <div class="titulo-termo">Termo de Justificação {{ p.id }}/{{ ano_proc }}</div>
+            
+            <p class="paragrafo-resumo">
+                {{ base_text }} 
+                3. Foi aberto prazo de 24 horas, {{ texto_defesa }}. 
+                4. Decisão: considerar o militar {{ texto_decisao }}.{{ texto_punicao }}
+            </p>
+        </div>
+    {% endfor %}
+
+</body>
+</html>

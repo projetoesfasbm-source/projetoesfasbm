@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block title %}Banco de Questões - {{ materia }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1">
+                    <li class="breadcrumb-item"><a href="{{ url_for('questoes.painel_gestao') }}">Gestão de Questões</a></li>
+                    <li class="breadcrumb-item active">{{ escola.nome }}</li>
+                </ol>
+            </nav>
+            <h2><i class="fas fa-list-ul text-primary"></i> Banco: {{ materia }}</h2>
+        </div>
+        <a href="{{ url_for('questoes.painel_gestao') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar ao Painel
+        </a>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-lg-11">
+            {% if questoes %}
+                <div class="alert alert-info d-flex align-items-center shadow-sm">
+                    <i class="fas fa-info-circle fa-2x me-3"></i>
+                    <div>
+                        <strong>Auditoria do Banco:</strong> Abaixo constam as questões enviadas pelos instrutores. 
+                        Você pode editar o conteúdo ou desativar questões que não estejam em conformidade.
+                    </div>
+                </div>
+
+                <div id="lista-questoes-banco">
+                    {% for q in questoes %}
+                    <div class="card shadow-sm mb-4 border-start border-4 {% if q.ativo %}border-primary{% else %}border-danger{% endif %}">
+                        <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+                            <div>
+                                <span class="badge bg-dark">ID: #{{ q.id }}</span>
+                                <span class="badge bg-secondary ms-2"><i class="fas fa-user-edit"></i> {{ q.instrutor.user.nome_de_guerra or q.instrutor.user.nome_completo }}</span>
+                                <span class="badge bg-light text-dark border ms-2"><i class="fas fa-calendar-alt"></i> {{ q.criado_em.strftime('%d/%m/%Y') }}</span>
+                            </div>
+                            <div class="btn-group">
+                                <button class="btn btn-sm btn-outline-warning" onclick="alert('Funcionalidade de edição em desenvolvimento')">
+                                    <i class="fas fa-edit"></i> Editar
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="excluirQuestaoBanco({{ q.id }})">
+                                    <i class="fas fa-trash-alt"></i> Excluir
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <h5 class="card-title fw-bold mb-3">{{ q.enunciado }}</h5>
+                            
+                            <div class="row g-2">
+                                {% for letra, texto in q.alternativas.items() %}
+                                <div class="col-12">
+                                    <div class="p-2 border rounded {% if letra == q.resposta_correta %}bg-success-subtle border-success fw-bold{% else %}bg-white{% endif %}">
+                                        <span class="me-2">{{ letra }})</span> {{ texto }}
+                                        {% if letra == q.resposta_correta %}
+                                            <span class="badge bg-success float-end mt-1"><i class="fas fa-check"></i> Correta</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% if q.assunto %}
+                        <div class="card-footer bg-light py-1 text-muted small">
+                            <i class="fas fa-tag"></i> Assunto: {{ q.assunto }}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+
+            {% else %}
+                <div class="card shadow-sm border-0 text-center py-5">
+                    <div class="card-body">
+                        <i class="fas fa-folder-open fa-5x text-muted mb-4"></i>
+                        <h4 class="text-muted">Nada foi enviado ainda.</h4>
+                        <p class="text-muted">Ainda não existem questões cadastradas para a disciplina <strong>{{ materia }}</strong> nesta escola.</p>
+                        <a href="{{ url_for('questoes.painel_gestao') }}" class="btn btn-primary mt-3">
+                            <i class="fas fa-filter"></i> Alterar Filtros
+                        </a>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+    // Função para Excluir (Soft Delete)
+    function excluirQuestaoBanco(id) {
+        if(confirm('Tem certeza que deseja remover esta questão do banco?')) {
+            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+            
+            fetch(`/questoes/api/questao/remover/${id}`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.success) {
+                    location.reload();
+                } else {
+                    alert('Erro ao remover questão.');
+                }
+            })
+            .catch(err => alert('Erro na comunicação com o servidor.'));
+        }
+    }
+</script>
+{% endblock %}

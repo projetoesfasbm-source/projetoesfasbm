@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}Novo Questionário{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <h1>Novo Questionário</h1>
+    <p>Crie um título, adicione perguntas e defina os tipos e as opções de resposta.</p>
+</div>
+
+<div class="table-container">
+    <form method="POST" action="{{ url_for('questionario.novo_questionario') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="form-group">
+            <label for="titulo"><strong>Título do Questionário</strong></label>
+            <input type="text" id="titulo" name="titulo" class="form-control" required placeholder="Ex: Pesquisa de Satisfação do Curso">
+        </div>
+        <hr>
+        <div id="perguntas-container">
+            </div>
+        <button type="button" id="add-pergunta" class="btn btn-secondary mt-3">
+            <span class="btn-icon">➕</span> Adicionar Pergunta
+        </button>
+        <div class="form-actions">
+            <a href="{{ url_for('questionario.index') }}" class="btn btn-secondary">Cancelar</a>
+            <button type="submit" class="btn btn-primary">Salvar Questionário</button>
+        </div>
+    </form>
+</div>
+
+<template id="pergunta-template">
+    <div class="pergunta-bloco card mb-4">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">Pergunta</h5>
+                <button type="button" class="btn-close" aria-label="Close" onclick="this.closest('.pergunta-bloco').remove()"></button>
+            </div>
+            <hr>
+            <div class="form-group">
+                <label>Texto da Pergunta</label>
+                <input type="text" name="pergunta_text" class="form-control pergunta-texto" required placeholder="Ex: Qual o seu nível de satisfação?">
+            </div>
+            <div class="form-group">
+                <label>Tipo de Resposta</label>
+                <select name="pergunta_tipo" class="form-control pergunta-tipo">
+                    <option value="unica">Resposta Única (Radio)</option>
+                    <option value="multipla">Múltipla Escolha (Checkbox)</option>
+                    <option value="texto_livre">Texto Livre (Caixa de Texto)</option>
+                </select>
+            </div>
+            <div class="opcoes-container-wrapper">
+                <div class="opcoes-container">
+                    </div>
+                <button type="button" class="btn btn-info btn-sm add-opcao">
+                    <span class="btn-icon">➕</span> Adicionar Opção
+                </button>
+                <div class="form-check mt-2 outro-check-wrapper">
+                    <input class="form-check-input" type="checkbox" name="outro_check" value="true">
+                    <label class="form-check-label">
+                        Incluir opção "Outro" (campo de texto)
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+
+<template id="opcao-template">
+    <div class="input-group mb-2 opcao-bloco">
+        <input type="text" name="opcao_text" class="form-control opcao-texto" required placeholder="Texto da opção de resposta">
+        <button class="btn btn-outline-danger" type="button" onclick="this.closest('.opcao-bloco').remove()">Remover</button>
+    </div>
+</template>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let perguntaCount = 0;
+
+    document.getElementById('add-pergunta').addEventListener('click', function() {
+        perguntaCount++;
+        const template = document.getElementById('pergunta-template');
+        const clone = template.content.cloneNode(true);
+        
+        const perguntaBloco = clone.querySelector('.pergunta-bloco');
+        perguntaBloco.dataset.id = perguntaCount;
+
+        clone.querySelector('.card-title').textContent = `Pergunta ${perguntaCount}`;
+        clone.querySelector('.pergunta-texto').name = `pergunta_${perguntaCount}`;
+        clone.querySelector('.pergunta-tipo').name = `tipo_${perguntaCount}`;
+        clone.querySelector('.add-opcao').dataset.perguntaId = perguntaCount;
+        clone.querySelector('.opcoes-container').id = `opcoes-container-${perguntaCount}`;
+        clone.querySelector('.form-check-input').name = `outro_${perguntaCount}`;
+
+        document.getElementById('perguntas-container').appendChild(clone);
+    });
+
+    document.getElementById('perguntas-container').addEventListener('click', function(e) {
+        if (e.target.classList.contains('add-opcao')) {
+            const perguntaId = e.target.dataset.perguntaId;
+            const opcoesContainer = document.getElementById(`opcoes-container-${perguntaId}`);
+            const opcaoCount = opcoesContainer.children.length + 1;
+            
+            const template = document.getElementById('opcao-template');
+            const clone = template.content.cloneNode(true);
+            
+            clone.querySelector('.opcao-texto').name = `opcao_${perguntaId}_${opcaoCount}`;
+            
+            opcoesContainer.appendChild(clone);
+        }
+    });
+
+    document.getElementById('perguntas-container').addEventListener('change', function(e) {
+        if (e.target.classList.contains('pergunta-tipo')) {
+            const perguntaBloco = e.target.closest('.pergunta-bloco');
+            const opcoesWrapper = perguntaBloco.querySelector('.opcoes-container-wrapper');
+            if (e.target.value === 'texto_livre') {
+                opcoesWrapper.style.display = 'none';
+            } else {
+                opcoesWrapper.style.display = 'block';
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block title %}Ferramentas do Administrador{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <h1>Ferramentas do Administrador</h1>
+    <p>Acesse ferramentas de gerenciamento avançado e personalização do sistema.</p>
+</div>
+
+<div class="modules-grid">
+    <a href="{{ url_for('tools.logs_admin') }}" class="module-card-link">
+        <div class="module-card">
+            <div class="card-content">
+                <div class="card-icon">📜</div>
+                <h3 class="card-title">Logs de Auditoria</h3>
+                <p class="card-description">Visualize o histórico de ações críticas realizadas por administradores e instrutores.</p>
+            </div>
+        </div>
+    </a>
+
+    <a href="{{ url_for('tools.backup_escola') }}" class="module-card-link">
+        <div class="module-card" style="border: 2px solid #4CAF50;">
+            <div class="card-content">
+                <div class="card-icon">💾</div>
+                <h3 class="card-title">Backup da Escola</h3>
+                <p class="card-description">Gere um arquivo de segurança contendo TODOS os dados da Edição (Alunos, Instrutores, Notas, Horários). <b>Sempre faça isso antes do Reset.</b></p>
+            </div>
+        </div>
+    </a>
+
+    <a href="{{ url_for('tools.preview_backup') }}" class="module-card-link">
+        <div class="module-card" style="border: 2px solid #2196F3;">
+            <div class="card-content">
+                <div class="card-icon">👁️</div>
+                <h3 class="card-title">Ler Backup</h3>
+                <p class="card-description">Faça o upload de um backup gerado anteriormente para pré-visualizar e conferir os dados gravados.</p>
+            </div>
+        </div>
+    </a>
+
+    <a href="{{ url_for('tools.reset_escola') }}" class="module-card-link">
+        <div class="module-card">
+            <div class="card-content">
+                <div class="card-icon">🔄</div>
+                <h3 class="card-title">Reset de Escola</h3>
+                <p class="card-description">Exclua em massa todos os alunos, instrutores ou disciplinas para iniciar um novo ciclo de curso.</p>
+            </div>
+        </div>
+    </a>
+    
+    <a href="{{ url_for('customizer.index') }}" class="module-card-link">
+        <div class="module-card">
+            <div class="card-content">
+                <div class="card-icon">🎨</div>
+                <h3 class="card-title">Personalizar Site</h3>
+                <p class="card-description">Altere as cores, logos e imagens de fundo do sistema para se adequar à identidade visual da sua escola.</p>
+            </div>
+        </div>
+    </a>
+    
+    <a href="{{ url_for('assets.manage_assets') }}" class="module-card-link">
+        <div class="module-card">
+            <div class="card-content">
+                <div class="card-icon">📁</div>
+                <h3 class="card-title">Gerenciar Assets</h3>
+                <p class="card-description">Faça o upload e gerencie as imagens (logos, ícones, fundos) que serão usadas na personalização do site.</p>
+            </div>
+        </div>
+    </a>
+
+    <a href="{{ url_for('tools.mail_merge') }}" class="module-card-link">
+        <div class="module-card">
+            <div class="card-content">
+                <div class="card-icon">✉️</div>
+                <h3 class="card-title">Mala Direta</h3>
+                <p class="card-description">Gere documentos em massa (certificados, ofícios) a partir de um template Word e uma planilha Excel.</p>
+            </div>
+        </div>
+    </a>
+</div>
+
+<style>
+.module-card-link {
+    text-decoration: none;
+    color: inherit;
+}
+</style>
+{% endblock %}

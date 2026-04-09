@@ -1,0 +1,432 @@
+{% extends "base.html" %}
+
+{% block title %}Leitor Avançado de Backup{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <h1>Auditoria e Leitura de Backup</h1>
+    <p>Carregue um arquivo de backup (.json) para inspecionar todo o ciclo da escola de forma detalhada e relacional.</p>
+</div>
+
+<div class="card" style="margin-bottom: 20px; padding: 20px;">
+    <form method="POST" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <div class="form-group">
+            <label for="backup_file"><strong>Selecione o arquivo JSON do Sisgen:</strong></label>
+            <input type="file" name="backup_file" id="backup_file" accept=".json" class="form-control" required style="margin-top: 10px; margin-bottom: 15px; border: 1px solid #ccc; padding: 5px; width: 100%;">
+        </div>
+        <button type="submit" class="btn btn-primary">Analisar Arquivo</button>
+        <a href="{{ url_for('tools.index') }}" class="btn btn-secondary">Voltar</a>
+    </form>
+</div>
+
+{% if data %}
+<div class="card" style="padding: 20px;">
+    <h2>Resumo da Edição: <span style="color: #666; font-size: 18px;">{{ file_name }}</span></h2>
+    <p><strong>🕒 Gerado em:</strong> {{ data.meta.generated_at[:19].replace('T', ' ') }}</p>
+    <hr style="margin: 20px 0;">
+    
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 30px;">
+        <div class="summary-box" style="border-left: 4px solid #4CAF50;"><h3>Turmas</h3><p>{{ data.turmas | length }}</p></div>
+        <div class="summary-box" style="border-left: 4px solid #2196F3;"><h3>Usuários</h3><p>{{ data.usuarios | length }}</p></div>
+        <div class="summary-box" style="border-left: 4px solid #9C27B0;"><h3>Disciplinas</h3><p>{{ data.disciplinas | length }}</p></div>
+        <div class="summary-box" style="border-left: 4px solid #FF9800;"><h3>Diários</h3><p>{{ data.diarios_classe | length }}</p></div>
+        <div class="summary-box" style="border-left: 4px solid #F44336;"><h3>Faltas Reais</h3><p id="total-faltas-badge"><span style="font-size:14px;color:#999">calculando...</span></p></div>
+        <div class="summary-box" style="border-left: 4px solid #607D8B;"><h3>Processos</h3><p>{{ data.justica.processos | length }}</p></div>
+    </div>
+
+    <h3 style="margin-bottom: 15px;">Inspeção Relacional de Dados</h3>
+    
+    <div class="tab">
+        <button class="tablinks active" onclick="openTab(event, 'tab-alunos')">👥 Alunos & Dossiê</button>
+        <button class="tablinks" onclick="openTab(event, 'tab-diarios')">📚 Diários & Frequência</button>
+        <button class="tablinks" onclick="openTab(event, 'tab-justica')">⚖️ Justiça & Disciplina</button>
+        <button class="tablinks" onclick="openTab(event, 'tab-raw')">⚙️ Dados Brutos</button>
+    </div>
+
+    <div id="tab-alunos" class="tabcontent" style="display: block;">
+        <div class="split-view">
+            <div class="split-left">
+                <input type="text" id="search-aluno" placeholder="Buscar aluno por nome ou matrícula..." onkeyup="filterAlunos()" class="search-input">
+                <ul id="lista-alunos" class="item-list"></ul>
+            </div>
+            <div class="split-right" id="detalhe-aluno">
+                <div class="empty-state">Selecione um aluno na lista para ver seu dossiê completo (Faltas, Processos, Elogios, etc).</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="tab-diarios" class="tabcontent">
+        <div class="split-view">
+            <div class="split-left">
+                <input type="text" id="search-diario" placeholder="Buscar por disciplina ou turma..." onkeyup="filterDiarios()" class="search-input">
+                <ul id="lista-diarios-agrupados" class="item-list"></ul>
+            </div>
+            <div class="split-right" id="detalhe-diario-agrupado">
+                <div class="empty-state">Selecione uma disciplina para ver o histórico de aulas e presenças.</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="tab-justica" class="tabcontent" style="padding: 20px;">
+        <h4 style="margin-top:0;">Processos Disciplinares (Clique para expandir e ler o processo completo)</h4>
+        <div id="justica-accordion" style="margin-top: 15px;">
+        </div>
+        
+        <h4 style="margin-top:40px; border-bottom: 2px solid #00BCD4; display: inline-block;">Elogios</h4>
+        <div class="table-responsive">
+            <table class="table-styled table-hover" id="table-elogios">
+                <thead><tr><th>Data</th><th>Aluno</th><th>Matrícula</th><th>Motivo</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="tab-raw" class="tabcontent">
+        <p style="padding: 15px;">Visão geral técnica das tabelas para exportação e cruzamento externo.</p>
+        <div style="padding: 0 15px;">
+            <select id="raw-selector" class="form-control" style="width: 300px; margin-bottom: 15px;" onchange="renderRawTable()">
+                <option value="escola">Escola</option>
+                <option value="turmas">Turmas</option>
+                <option value="disciplinas">Disciplinas/Vínculos</option>
+                <option value="usuarios">Todos os Usuários</option>
+                <option value="diarios_classe">Diários</option>
+            </select>
+            <div class="table-responsive" id="raw-table-container"></div>
+        </div>
+    </div>
+
+</div>
+
+<style>
+    .summary-box { background: #f8f9fa; padding: 15px; border-radius: 6px; text-align: center; border: 1px solid #ddd; }
+    .summary-box h3 { margin: 0; font-size: 14px; color: #555; text-transform: uppercase; }
+    .summary-box p { font-size: 24px; font-weight: bold; color: #333; margin: 5px 0 0 0; }
+    
+    .tab { overflow: hidden; border: 1px solid #ccc; background-color: #e9ecef; border-radius: 5px 5px 0 0; display: flex; }
+    .tab button { flex: 1; background-color: inherit; border: none; outline: none; cursor: pointer; padding: 14px 16px; transition: 0.3s; font-size: 15px; font-weight: 600; color: #555; border-right: 1px solid #ddd; }
+    .tab button:last-child { border-right: none; }
+    .tab button:hover { background-color: #ddd; }
+    .tab button.active { background-color: #fff; border-bottom: 3px solid #2196F3; color: #2196F3; }
+    
+    .tabcontent { display: none; padding: 0; border: 1px solid #ccc; border-top: none; background: #fff; border-radius: 0 0 5px 5px; min-height: 500px; }
+    
+    .split-view { display: flex; height: 600px; }
+    .split-left { width: 35%; border-right: 1px solid #ccc; display: flex; flex-direction: column; background: #fafafa; }
+    .split-right { width: 65%; padding: 20px; overflow-y: auto; background: #fff; }
+    
+    .search-input { padding: 12px; border: none; border-bottom: 1px solid #ccc; width: 100%; outline: none; font-size: 14px; }
+    .item-list { list-style: none; padding: 0; margin: 0; overflow-y: auto; flex: 1; }
+    .item-list li { padding: 12px 15px; border-bottom: 1px solid #eee; cursor: pointer; transition: background 0.2s; }
+    .item-list li:hover { background: #e3f2fd; }
+    .item-list li.active { background: #bbdefb; border-left: 4px solid #2196F3; font-weight: bold; }
+    .item-title { display: block; font-size: 15px; color: #333; }
+    .item-subtitle { display: block; font-size: 12px; color: #777; margin-top: 4px; }
+    
+    .empty-state { text-align: center; color: #999; margin-top: 100px; font-size: 16px; }
+    
+    .dossie-section { margin-bottom: 25px; padding-bottom: 15px; border-bottom: 1px solid #eee; }
+    .dossie-section h4 { color: #2196F3; border-bottom: 2px solid #2196F3; display: inline-block; padding-bottom: 5px; margin-top: 0; }
+    
+    .table-responsive { overflow-x: auto; padding: 15px; }
+    .table-styled { width: 100%; border-collapse: collapse; font-size: 14px; }
+    .table-styled th, .table-styled td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+    .table-styled th { background-color: #f4f4f4; color: #333; }
+    
+    .table-hover tbody tr:hover { background-color: #f1f8ff; transition: background 0.2s; }
+    .link-aluno { color: #2196F3; cursor: pointer; text-decoration: underline; font-weight: 600; }
+    .link-aluno:hover { color: #0b7dda; }
+
+    .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; color: #fff; }
+    .badge-danger { background-color: #F44336; }
+    .badge-warning { background-color: #FF9800; }
+    .badge-success { background-color: #4CAF50; }
+    .badge-info { background-color: #2196F3; }
+
+    /* Estilo para Acordeão de Processos */
+    .proc-card { border: 1px solid #ddd; border-radius: 8px; margin-bottom: 15px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    .proc-header { background: #f8f9fa; padding: 15px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; }
+    .proc-header:hover { background: #f1f1f1; }
+    .proc-content { display: none; padding: 20px; background: #fff; }
+    .proc-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-bottom: 20px; padding: 10px; background: #fcfcfc; border-radius: 5px; }
+    .proc-label { font-weight: bold; color: #666; font-size: 11px; text-transform: uppercase; display: block; }
+    .proc-value { color: #333; font-size: 14px; font-weight: 600; }
+    .proc-box { margin-bottom: 20px; }
+    .proc-box-title { font-weight: bold; color: #2196F3; border-bottom: 1px solid #eee; margin-bottom: 8px; padding-bottom: 4px; display: block; }
+    .proc-box-text { white-space: pre-wrap; font-size: 14px; line-height: 1.5; color: #444; background: #f9f9f9; padding: 12px; border-radius: 4px; border-left: 4px solid #ddd; }
+
+    /* Estilo para Acordeão de Aulas no Diário */
+    .aula-item { border: 1px solid #eee; margin-bottom: 10px; border-radius: 4px; }
+    .aula-header { padding: 10px; background: #fafafa; cursor: pointer; font-weight: bold; display: flex; justify-content: space-between; }
+    .aula-content { display: none; padding: 15px; border-top: 1px solid #eee; }
+</style>
+
+<script>
+    const rawData = {{ data | tojson | safe }};
+    
+    if(rawData.usuarios) {
+        rawData.usuarios.forEach(u => {
+            delete u.password_hash;
+            delete u.reset_token;
+        });
+    }
+
+    const maps = { users: {}, turmas: {}, disciplinas: {}, diarios: {} };
+    
+    (rawData.usuarios || []).forEach(u => maps.users[String(u.id)] = u);
+    (rawData.turmas || []).forEach(t => maps.turmas[String(t.id)] = t);
+    (rawData.disciplinas || []).forEach(d => maps.disciplinas[String(d.id)] = d);
+    (rawData.diarios_classe || []).forEach(d => maps.diarios[String(d.id)] = d);
+
+    const getName = (id) => {
+        const u = maps.users[String(id)];
+        if(!u) return `Desconhecido`;
+        return u.nome_completo || u.nome_de_guerra || u.username || 'Sem Nome';
+    };
+    
+    const getMatricula = (id) => {
+        const u = maps.users[String(id)];
+        if(!u) return 'Não Informada';
+        return u.id_func || u.matricula || 'Não Informada';
+    };
+    
+    const getDisciplinaFromDiario = (diarioId) => {
+        const diario = maps.diarios[String(diarioId)];
+        if(!diario) return "Disciplina Desconhecida";
+        return diario.injected_disciplina_nome || diario.disciplina_nome || "Disciplina Sem Nome";
+    };
+
+    const getTurmaFromDiario = (diarioId) => {
+        const diario = maps.diarios[String(diarioId)];
+        if(!diario) return "Turma Desconhecida";
+        return diario.injected_turma_nome || "Turma Sem Nome";
+    };
+
+    const formatDate = (isoString) => {
+        if(!isoString) return '-';
+        return new Date(isoString).toLocaleDateString('pt-BR');
+    };
+
+    document.addEventListener("DOMContentLoaded", () => {
+        const totalFaltasReais = (rawData.frequencias || []).filter(f => f.presente === false || f.presente === 0 || f.presente === "0" || f.presente === null || f.status === 'falta').length;
+        document.getElementById('total-faltas-badge').innerText = totalFaltasReais;
+
+        initAlunos();
+        initDiarios();
+        initJustica();
+        renderRawTable();
+    });
+
+    function openTab(evt, tabName) {
+        document.querySelectorAll(".tabcontent").forEach(el => el.style.display = "none");
+        document.querySelectorAll(".tablinks").forEach(el => el.classList.remove("active"));
+        document.getElementById(tabName).style.display = "block";
+        if(evt && evt.currentTarget) {
+            evt.currentTarget.classList.add("active");
+        }
+    }
+
+    // --- MÓDULO: ALUNOS ---
+    let alunosList = [];
+    function initAlunos() {
+        alunosList = (rawData.usuarios || []).filter(u => u.role === 'aluno' || !u.role); 
+        renderAlunosList(alunosList);
+    }
+
+    function renderAlunosList(list) {
+        const ul = document.getElementById('lista-alunos');
+        ul.innerHTML = '';
+        list.forEach(aluno => {
+            const li = document.createElement('li');
+            li.dataset.id = aluno.id;
+            li.innerHTML = `<span class="item-title">${getName(aluno.id)}</span>
+                            <span class="item-subtitle">Matrícula: ${getMatricula(aluno.id)}</span>`;
+            li.onclick = () => {
+                document.querySelectorAll('#lista-alunos li').forEach(e => e.classList.remove('active'));
+                li.classList.add('active');
+                showAlunoDossie(aluno.id);
+            };
+            ul.appendChild(li);
+        });
+    }
+
+    function filterAlunos() {
+        const term = document.getElementById('search-aluno').value.toLowerCase();
+        const filtered = alunosList.filter(a => 
+            getName(a.id).toLowerCase().includes(term) || 
+            getMatricula(a.id).toLowerCase().includes(term)
+        );
+        renderAlunosList(filtered);
+    }
+
+    function showAlunoDossie(alunoId) {
+        const aluno = maps.users[String(alunoId)];
+        if(!aluno) return;
+        const panel = document.getElementById('detalhe-aluno');
+        const faltas = (rawData.frequencias || []).filter(f => String(f.aluno_id) === String(alunoId) && (f.presente === false || f.presente === 0 || f.presente === "0" || f.presente === null || f.status === 'falta'));
+        let totalPeriodosPerdidos = 0;
+        let faltasHTML = '';
+
+        if(faltas.length === 0) {
+            faltasHTML = '<div class="alert alert-success" style="padding:10px; border-radius:5px; background:#dff0d8; color:#3c763d;">Este aluno tem 100% de frequência.</div>';
+        } else {
+            let trs = faltas.map(f => {
+                const diario = maps.diarios[String(f.diario_id)];
+                const dataAula = diario ? formatDate(diario.data_aula) : 'Desconhecida';
+                const discName = getDisciplinaFromDiario(f.diario_id);
+                const periodoInfo = (diario && diario.periodo) ? `${diario.periodo}º Período` : '1 Período';
+                totalPeriodosPerdidos += 1;
+                const justificada = (f.justificada === true || f.justificada === 1 || f.justificada === "1") ? `<span class="badge badge-warning">Justificada</span>` : '<span class="badge badge-danger">Não Justificada</span>';
+                return `<tr><td>${dataAula}</td><td>${discName}</td><td>${periodoInfo}</td><td>${justificada}</td></tr>`;
+            }).join('');
+            faltasHTML = `<div style="background:#fff3cd; color:#856404; padding:10px; border-radius:5px; margin-bottom:10px; border:1px solid #ffeeba;"><strong>Total:</strong> ${totalPeriodosPerdidos} períodos.</div><table class="table-styled"><tr><th>Data</th><th>Disciplina</th><th>Período</th><th>Status</th></tr>${trs}</table>`;
+        }
+
+        const processos = (rawData.justica.processos || []).filter(p => String(p.aluno_id) === String(alunoId));
+        let procHTML = processos.length === 0 ? '<p>Nenhum processo disciplinar.</p>' : `
+            <table class="table-styled">
+                <tr><th>Data</th><th>Fato</th><th>Sanção</th></tr>
+                ${processos.map(p => `<tr><td>${formatDate(p.data_ocorrencia)}</td><td>${(p.fato_constatado || '').substring(0, 50)}...</td><td><span class="badge badge-danger">${p.decisao_final || p.status}</span></td></tr>`).join('')}
+            </table>`;
+
+        panel.innerHTML = `
+            <h2>${getName(alunoId)}</h2>
+            <p><strong>MATRÍCULA:</strong> ${getMatricula(alunoId)} | <strong>Email:</strong> ${aluno.email || '-'}</p>
+            <div class="dossie-section"><h4>Frequência Escolar</h4>${faltasHTML}</div>
+            <div class="dossie-section"><h4>Justiça e Disciplina</h4>${procHTML}</div>
+        `;
+    }
+
+    window.jumpToAluno = function(alunoId) {
+        document.querySelectorAll(".tabcontent").forEach(el => el.style.display = "none");
+        document.querySelectorAll(".tablinks").forEach(el => el.classList.remove("active"));
+        document.getElementById('tab-alunos').style.display = "block";
+        document.querySelector("button[onclick*='tab-alunos']").classList.add("active");
+        document.getElementById('search-aluno').value = '';
+        renderAlunosList(alunosList); 
+        const lis = document.querySelectorAll('#lista-alunos li');
+        for(let li of lis) {
+            if(li.dataset.id == String(alunoId)) {
+                li.click();
+                li.scrollIntoView({behavior: "smooth", block: "center"});
+                break;
+            }
+        }
+    };
+
+    // --- MÓDULO: DIÁRIOS (AGRUPADOS) ---
+    let gruposDiarios = {};
+    function initDiarios() {
+        gruposDiarios = {};
+        (rawData.diarios_classe || []).forEach(d => {
+            const discNome = getDisciplinaFromDiario(d.id);
+            const turmaNome = getTurmaFromDiario(d.id);
+            const key = `${discNome} | ${turmaNome}`;
+            if(!gruposDiarios[key]) gruposDiarios[key] = [];
+            gruposDiarios[key].push(d);
+        });
+        renderDiariosAgrupados();
+    }
+
+    function renderDiariosAgrupados(filtro = "") {
+        const ul = document.getElementById('lista-diarios-agrupados');
+        ul.innerHTML = '';
+        Object.keys(gruposDiarios).sort().forEach(key => {
+            if(filtro && !key.toLowerCase().includes(filtro.toLowerCase())) return;
+            const li = document.createElement('li');
+            li.innerHTML = `<span class="item-title">${key}</span><span class="item-subtitle">${gruposDiarios[key].length} aula(s) registradas</span>`;
+            li.onclick = () => {
+                document.querySelectorAll('#lista-diarios-agrupados li').forEach(e => e.classList.remove('active'));
+                li.classList.add('active');
+                showGrupoDiario(key);
+            };
+            ul.appendChild(li);
+        });
+    }
+
+    function filterDiarios() {
+        const term = document.getElementById('search-diario').value;
+        renderDiariosAgrupados(term);
+    }
+
+    function showGrupoDiario(key) {
+        const panel = document.getElementById('detalhe-diario-agrupado');
+        const aulas = gruposDiarios[key].sort((a,b) => new Date(b.data_aula) - new Date(a.data_aula));
+        
+        let html = `<h2>${key}</h2><hr>`;
+        aulas.forEach(d => {
+            const faltas = (rawData.frequencias || []).filter(f => String(f.diario_id) === String(d.id) && (f.presente === false || f.presente === 0 || f.status === 'falta'));
+            html += `
+                <div class="aula-item">
+                    <div class="aula-header" onclick="toggleAccordion(this)">
+                        <span>Data: ${formatDate(d.data_aula)} | Período: ${d.periodo || '1'}º</span>
+                        <span class="badge ${faltas.length > 0 ? 'badge-danger' : 'badge-success'}">${faltas.length} ausente(s)</span>
+                    </div>
+                    <div class="aula-content">
+                        <p><strong>Conteúdo:</strong></p>
+                        <div class="proc-box-text">${d.conteudo_ministrado || 'Nenhum conteúdo registrado.'}</div>
+                        <p style="margin-top:15px;"><strong>Alunos Ausentes:</strong></p>
+                        ${faltas.length === 0 ? 'Todos presentes.' : `<ul>${faltas.map(f => `<li class="link-aluno" onclick="jumpToAluno(${f.aluno_id})">${getName(f.aluno_id)} (${getMatricula(f.aluno_id)})</li>`).join('')}</ul>`}
+                    </div>
+                </div>`;
+        });
+        panel.innerHTML = html;
+    }
+
+    // --- MÓDULO: JUSTIÇA ---
+    function initJustica() {
+        const container = document.getElementById('justica-accordion');
+        container.innerHTML = '';
+        (rawData.justica.processos || []).forEach(p => {
+            const card = document.createElement('div');
+            card.className = 'proc-card';
+            card.innerHTML = `
+                <div class="proc-header" onclick="toggleAccordion(this)">
+                    <div>
+                        <span style="font-weight:bold; font-size:16px;">${getName(p.aluno_id)}</span><br>
+                        <small style="color:#666">Fato ocorrido em: ${formatDate(p.data_ocorrencia)}</small>
+                    </div>
+                    <div><span class="badge ${p.status === 'FINALIZADO' ? 'badge-success' : 'badge-warning'}">${p.status}</span></div>
+                </div>
+                <div class="proc-content">
+                    <div class="proc-row">
+                        <div><span class="proc-label">Matrícula</span><span class="proc-value">${getMatricula(p.aluno_id)}</span></div>
+                        <div><span class="proc-label">Status Atual</span><span class="proc-value">${p.status}</span></div>
+                        <div><span class="proc-label">Pontuação</span><span class="proc-value">${p.pontos || 0}</span></div>
+                    </div>
+                    <div class="proc-box"><span class="proc-box-title">1. Fato Constatado</span><div class="proc-box-text">${p.fato_constatado || 'Não informado'}</div></div>
+                    <div class="proc-box"><span class="proc-box-title">2. Defesa Apresentada</span><div class="proc-box-text">${p.defesa || '<i>Nenhuma defesa registrada no backup.</i>'}</div></div>
+                    <div class="proc-box"><span class="proc-box-title">3. Decisão e Fundamentação</span><div class="proc-box-text"><strong>Resultado: ${p.decisao_final || 'Pendente'}</strong><br><br>${p.fundamentacao || 'Aguardando fundamentação.'}</div></div>
+                    <div class="proc-box"><span class="proc-box-title">4. Detalhes da Sanção</span><div class="proc-box-text" style="background:#fff5f5; border-left-color:#f44336;">${p.tipo_sancao || 'Nenhuma'} ${p.dias_sancao ? '- '+p.dias_sancao+' dias' : ''}<br><small>${p.detalhes_sancao || ''}</small></div></div>
+                    <div style="text-align:right;"><small style="color:#999">Relator: ${p.injected_relator_nome || 'N/A'}</small></div>
+                </div>`;
+            container.appendChild(card);
+        });
+
+        const tbodyE = document.querySelector('#table-elogios tbody');
+        tbodyE.innerHTML = ''; 
+        (rawData.justica.elogios || []).forEach(e => {
+            tbodyE.innerHTML += `<tr><td>${formatDate(e.data_registro)}</td><td class="link-aluno" onclick="jumpToAluno(${e.aluno_id})">${getName(e.aluno_id)}</td><td>${getMatricula(e.aluno_id)}</td><td>${e.motivo || e.descricao}</td></tr>`;
+        });
+    }
+
+    window.toggleAccordion = function(header) {
+        const content = header.nextElementSibling;
+        content.style.display = content.style.display === "block" ? "none" : "block";
+    };
+
+    // --- MÓDULO: RAW ---
+    function renderRawTable() {
+        const key = document.getElementById('raw-selector').value;
+        const container = document.getElementById('raw-table-container');
+        let subset = rawData[key];
+        if (!Array.isArray(subset) && typeof subset === 'object') { subset = [subset]; }
+        if (!subset || subset.length === 0 || !subset[0]) { container.innerHTML = '<p>Vazio.</p>'; return; }
+        const headers = Object.keys(subset[0]);
+        let html = `<table class="table-styled"><thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>`;
+        subset.forEach(row => { html += `<tr>${headers.map(h => `<td>${row[h] || ''}</td>`).join('')}</tr>`; });
+        container.innerHTML = html + `</tbody></table>`;
+    }
+</script>
+{% endif %}
+{% endblock %}

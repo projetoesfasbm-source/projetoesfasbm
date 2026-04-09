@@ -1,0 +1,159 @@
+<div class="card process-card mb-3 status-{{ (processo.status or 'AGUARDANDO_CIENCIA') | string | lower | replace(' ', '-') }}">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start mb-3">
+            <div>
+                <span class="status-badge bg-secondary text-white">
+                    {{ (processo.status or 'AGUARDANDO CIÊNCIA') | string | replace('_', ' ') }}
+                </span>
+                <h5 class="process-title mt-2 mb-1">
+                    {{ processo.aluno.user.posto_graduacao }} {{ processo.aluno.user.nome_completo }}
+                </h5>
+                <span class="process-id">ID: {{ processo.id }} | Turma: {{ processo.aluno.turma.nome }}</span>
+            </div>
+
+            <div class="btn-group">
+                {# Botão Excluir (Só se aguardando) #}
+                {% if (processo.status or 'AGUARDANDO_CIENCIA') == 'AGUARDANDO_CIENCIA' %}
+                <form action="{{ url_for('justica.deletar_processo', pid=processo.id) }}" method="POST" onsubmit="return confirm('Excluir este processo?');" class="ms-2">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fas fa-trash"></i></button>
+                </form>
+                {% endif %}
+
+                {# Botão Analisar (Para Chefe CAL) #}
+                {% if processo.status in ['ALUNO_NOTIFICADO', 'DEFESA_ENVIADA', 'EM_ANALISE', 'AGUARDANDO_CIENCIA'] or processo.status is none %}
+                <button class="btn btn-sm btn-success js-toggle-analise-form" data-target-form="#analise-form-{{ processo.id }}">
+                    <i class="fas fa-gavel me-1"></i> Analisar/Decidir
+                </button>
+                {% endif %}
+            </div>
+        </div>
+
+        {# ALERTA DE PRAZOS EXPIRADOS (ADMIN) #}
+        {% if processo.status == 'AGUARDANDO_CIENCIA' %}
+             {% set horas_passadas = ((agora - processo.data_registro).total_seconds() / 3600) | int %}
+             {% if horas_passadas > 24 %}
+                <div class="alert alert-danger py-1 px-2 mb-2 small">
+                    <i class="fas fa-clock"></i> <strong>ATENÇÃO CHEFE:</strong> O aluno não deu ciência em 24h. ({{ horas_passadas }}h decorridas).
+                </div>
+             {% endif %}
+        {% endif %}
+
+        <hr class="my-1">
+
+        <p class="mb-1"><strong>Fato:</strong> {{ processo.fato_constatado }}</p>
+        <p class="text-muted small mb-2">Relator: {{ processo.relator.nome_completo }} | Data: {{ processo.data_ocorrencia.strftime('%d/%m/%Y') }}</p>
+
+        {# Defesa do Aluno #}
+        {% if processo.defesa %}
+            <div class="bg-light p-2 rounded border mb-2">
+                <strong>Defesa:</strong> <em class="text-muted">{{ processo.defesa }}</em>
+            </div>
+        {% endif %}
+
+        {# Decisão do Chefe #}
+        {% if processo.decisao_final %}
+            <div class="alert alert-secondary py-2 mb-2">
+                <strong>Decisão Chefe:</strong> {{ processo.decisao_final }} 
+                {% if processo.tipo_sancao %}({{ processo.tipo_sancao }}){% endif %}
+                <br><small>{{ processo.fundamentacao }}</small>
+            </div>
+        {% endif %}
+
+        {# ÁREA DO RECURSO (COMANDANTE) #}
+        {% if processo.status == 'EM_RECURSO' %}
+            <div class="alert alert-warning border-warning mt-2">
+                <h6><i class="fas fa-envelope-open-text"></i> Recurso Interposto</h6>
+                <p class="bg-white p-2 border rounded mb-2"><em>"{{ processo.texto_recurso }}"</em></p>
+                <small class="text-muted">Data: {{ processo.data_recurso.strftime('%d/%m %H:%M') if processo.data_recurso else '' }}</small>
+
+                {% if current_user.role == 'super_admin' or current_user.is_programador %}
+                    <hr>
+                    <h6 class="text-danger">Decisão do Comandante:</h6>
+                    <form action="{{ url_for('justica.julgar_recurso', pid=processo.id) }}" method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        
+                        <div class="mb-2">
+                            <textarea name="fundamentacao_recurso" class="form-control" placeholder="Parecer do Comandante..." required></textarea>
+                        </div>
+                        
+                        <div class="d-flex gap-2">
+                            <button type="submit" name="decisao_recurso" value="DEFERIDO" class="btn btn-success flex-grow-1">
+                                Deferir (Anular Punição)
+                            </button>
+                            <button type="submit" name="decisao_recurso" value="INDEFERIDO" class="btn btn-danger flex-grow-1">
+                                Indeferir (Manter Punição)
+                            </button>
+                        </div>
+                    </form>
+                {% else %}
+                    <div class="mt-2 text-center text-muted border-top pt-2">
+                        <i class="fas fa-lock"></i> Aguardando decisão do Comandante.
+                    </div>
+                {% endif %}
+            </div>
+        {% elif processo.decisao_recurso %}
+            <div class="alert alert-dark mt-2">
+                <strong>Recurso Julgado:</strong> {{ processo.decisao_recurso }}
+                <br><small>Parecer: {{ processo.fundamentacao_recurso }}</small>
+            </div>
+        {% endif %}
+
+        {# Formulário de Análise do Chefe (Oculto) #}
+        <div class="analise-form-container border p-3 mt-3 rounded bg-light" id="analise-form-{{ processo.id }}" style="display: none;">
+            <h5 class="mb-3">Decisão do Chefe CAL</h5>
+            <form action="{{ url_for('justica.finalizar_processo', pid=processo.id) }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                
+                <div class="mb-2">
+                    <label>Decisão:</label>
+                    <select name="decisao" id="decisao-{{ processo.id }}" class="form-select" onchange="toggleFormularioSancao('{{ processo.id }}')" required>
+                        <option value="" disabled selected>Selecione...</option>
+                        <option value="Justificado">Justificado</option>
+                        <option value="Advertência">Advertência</option>
+                        <option value="Repreensão">Repreensão</option>
+                        <option value="Sustação da Dispensa">Sustação da Dispensa</option>
+                    </select>
+                </div>
+
+                <div class="mb-2" id="div-turnos-{{ processo.id }}" style="display: none;">
+                    <label class="text-danger">Turnos:</label>
+                    <select name="turnos_sustacao" id="turnos_sustacao-{{ processo.id }}" class="form-select">
+                        <option value="">Selecione...</option>
+                        <option value="01 turno (6H)">01 turno (6H)</option>
+                        <option value="02 turnos (12H)">02 turnos (12H)</option>
+                        <option value="03 turnos (18H)">03 turnos (18H)</option>
+                        <option value="04 turnos (24H)">04 turnos (24H)</option>
+                        <option value="05 turnos (30H)">05 turnos (30H)</option>
+                        <option value="06 turnos (36H)">06 turnos (36H)</option>
+                        <option value="07 turnos (42H)">07 turnos (42H)</option>
+                        <option value="08 turnos (48H)">08 turnos (48H)</option>
+                    </select>
+                </div>
+
+                <div class="mb-2">
+                    <label>Fundamentação:</label>
+                    <textarea name="observacao_decisao" class="form-control" rows="3" required></textarea>
+                </div>
+                
+                <input type="hidden" name="pontos_finais" value="{{ processo.pontos }}">
+
+                <div class="d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-secondary js-toggle-analise-form" data-target-form="#analise-form-{{ processo.id }}">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Emitir Decisão</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    function toggleFormularioSancao(pid) {
+        var decisao = document.getElementById('decisao-' + pid).value;
+        var div = document.getElementById('div-turnos-' + pid);
+        var select = document.getElementById('turnos_sustacao-' + pid);
+        
+        if (div) div.style.display = (decisao === 'Sustação da Dispensa') ? 'block' : 'none';
+        if (select) select.required = (decisao === 'Sustação da Dispensa');
+    }
+</script>

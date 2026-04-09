@@ -1,0 +1,326 @@
+{% extends "base.html" %}
+
+{% block title %}Gerenciar Equipe e Permissões{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm border-0">
+                <div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-3">
+                    <div>
+                        <h4 class="card-title text-primary mb-1">
+                            <i class="fas fa-user-shield me-2"></i>Gerenciar Equipe e Permissões
+                        </h4>
+                        <p class="text-muted mb-0 small">
+                            Defina os papéis de acesso da equipe nesta escola. A lista abaixo exibe <strong>todos</strong> os usuários vinculados.
+                        </p>
+                    </div>
+                    <div>
+                        <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-arrow-left me-1"></i> Voltar
+                        </a>
+                        <a href="{{ url_for('user.criar_admin_escola') }}" class="btn btn-success ms-2">
+                            <i class="fas fa-plus me-1"></i> Novo Admin
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-md-8 col-12 d-flex gap-2">
+            <div class="input-group shadow-sm flex-grow-1">
+                <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted"></i></span>
+                <input type="text" id="searchInput" class="form-control border-start-0" placeholder="Buscar por nome, matrícula, posto ou e-mail..." onkeyup="filterTable()">
+            </div>
+            
+            <div class="input-group shadow-sm" style="max-width: 250px;">
+                <span class="input-group-text bg-white border-end-0"><i class="fas fa-filter text-muted"></i></span>
+                <select id="roleFilter" class="form-select border-start-0" onchange="filterTable()">
+                    <option value="all">Todos os Acessos</option>
+                    <option value="admin_escola">Comandante / Admin Geral</option>
+                    <option value="admin_sens">Chefe SENS (Ensino)</option>
+                    <option value="admin_cal">Chefe CAL (Justiça)</option>
+                    <option value="instrutor">Instrutor</option>
+                    <option value="aluno">Aluno / Acesso Básico</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" id="usersTable">
+                    <thead class="bg-light text-secondary">
+                        <tr>
+                            <th class="ps-4">Usuário</th>
+                            <th>Identificação</th>
+                            <th>Cargo NA ESCOLA</th>
+                            <th>Acesso no Sistema</th>
+                            <th class="text-end pe-4">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if usuarios_com_role %}
+                            {% for usuario, vinculo in usuarios_com_role %}
+                            <tr data-role="{{ vinculo.role }}">
+                                <td class="ps-4">
+                                    <div class="d-flex align-items-center">
+                                        <div class="avatar-circle me-3 bg-light text-primary d-flex align-items-center justify-content-center rounded-circle border" style="width: 40px; height: 40px; font-weight: bold;">
+                                            {% if usuario.instrutor_profile and usuario.instrutor_profile.foto_perfil %}
+                                                <img src="{{ url_for('static', filename='uploads/profile_pics/' + usuario.instrutor_profile.foto_perfil) }}" class="rounded-circle" style="width: 40px; height: 40px; object-fit: cover;">
+                                            {% else %}
+                                                {{ (usuario.nome_completo or usuario.username or '?')[:1] }}
+                                            {% endif %}
+                                        </div>
+                                        <div>
+                                            <div class="fw-bold text-dark user-name">{{ usuario.nome_completo or usuario.username }}</div>
+                                            <small class="text-muted user-email">{{ usuario.email or 'Sem e-mail' }}</small>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="d-block text-dark fw-medium user-posto">{{ usuario.posto_graduacao or '-' }}</span>
+                                    <small class="text-muted">Matrícula: <span class="user-matricula">{{ usuario.matricula or '-' }}</span></small>
+                                </td>
+                                <td>
+                                    {% if vinculo.role == 'admin_escola' %}
+                                        <span class="badge bg-dark">Comandante / Admin Geral</span>
+                                    {% elif usuario.role == 'programador' %}
+                                        <span class="badge bg-danger">Programador</span>
+                                    {% elif vinculo.role == 'admin_cal' %}
+                                        <span class="badge bg-warning text-dark border border-warning">Chefe CAL (Justiça)</span>
+                                    {% elif vinculo.role == 'admin_sens' %}
+                                        <span class="badge bg-info text-dark border border-info">Chefe SENS (Ensino)</span>
+                                    {% elif vinculo.role == 'instrutor' %}
+                                        <span class="badge bg-secondary">Instrutor</span>
+                                    {% else %}
+                                        <span class="badge bg-light text-dark border">Aluno / Básico</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if vinculo.role == 'admin_escola' or usuario.role == 'programador' %}
+                                        <div class="text-success small"><i class="fas fa-check-double me-1"></i> Acesso Total</div>
+                                    {% elif vinculo.role == 'admin_cal' %}
+                                        <div class="text-dark small"><i class="fas fa-balance-scale me-1"></i> Apenas Justiça/Disciplina</div>
+                                    {% elif vinculo.role == 'admin_sens' %}
+                                        <div class="text-dark small"><i class="fas fa-book me-1"></i> Ensino, Turmas e Horários</div>
+                                    {% elif vinculo.role == 'instrutor' %}
+                                        <div class="text-secondary small"><i class="fas fa-chalkboard-teacher me-1"></i> Aulas e Diários</div>
+                                    {% else %}
+                                        <div class="text-muted small">Acesso Básico</div>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end pe-4">
+                                    {% if usuario.id != current_user.id and usuario.role != 'programador' %}
+                                        <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalRole{{ usuario.id }}">
+                                            <i class="fas fa-user-cog me-1"></i> Alterar Permissão
+                                        </button>
+                                    {% else %}
+                                        <button class="btn btn-sm btn-outline-secondary disabled" title="Não é possível alterar este usuário">
+                                            <i class="fas fa-lock"></i>
+                                        </button>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr id="noResultsRow">
+                                <td colspan="5" class="text-center py-5">
+                                    <div class="text-muted opacity-50 mb-3">
+                                        <i class="fas fa-users fa-3x"></i>
+                                    </div>
+                                    <h5>Nenhum usuário encontrado nesta escola</h5>
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+                <div id="searchNoResults" class="text-center py-5 d-none">
+                    <div class="text-muted opacity-50 mb-3">
+                        <i class="fas fa-search fa-3x"></i>
+                    </div>
+                    <h5>Nenhum resultado encontrado para os filtros aplicados</h5>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if usuarios_com_role %}
+    {% for usuario, vinculo in usuarios_com_role %}
+        {% if usuario.id != current_user.id and usuario.role != 'programador' %}
+        <div class="modal fade permission-modal" id="modalRole{{ usuario.id }}" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content shadow-lg">
+                    <form action="{{ url_for('user.alterar_papel_usuario', user_id=usuario.id) }}" method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <div class="modal-header bg-light">
+                            <h5 class="modal-title">
+                                <i class="fas fa-user-edit me-2 text-primary"></i>
+                                Definir Função na Escola
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="mb-3">Selecione o nível de acesso para: <br><strong>{{ usuario.nome_completo or usuario.username }}</strong></p>
+                            
+                            <div class="list-group">
+                                <label class="list-group-item d-flex gap-3 align-items-center list-group-item-action p-3">
+                                    <input class="form-check-input flex-shrink-0" type="radio" name="novo_role" value="admin_escola" {{ 'checked' if vinculo.role == 'admin_escola' else '' }}>
+                                    <div class="w-100">
+                                        <div class="d-flex justify-content-between">
+                                            <strong>Comandante / Admin Geral</strong>
+                                            <i class="fas fa-user-shield text-dark"></i>
+                                        </div>
+                                        <small class="text-muted d-block">Acesso total a todas as funcionalidades.</small>
+                                    </div>
+                                </label>
+
+                                <label class="list-group-item d-flex gap-3 align-items-center list-group-item-action p-3">
+                                    <input class="form-check-input flex-shrink-0" type="radio" name="novo_role" value="admin_sens" {{ 'checked' if vinculo.role == 'admin_sens' else '' }}>
+                                    <div class="w-100">
+                                        <div class="d-flex justify-content-between">
+                                            <strong>Chefe SENS (Seção de Ensino)</strong>
+                                            <i class="fas fa-book text-info"></i>
+                                        </div>
+                                        <small class="text-muted d-block">Gerencia Quadro Horário, Turmas, Alunos e Notas.</small>
+                                    </div>
+                                </label>
+
+                                <label class="list-group-item d-flex gap-3 align-items-center list-group-item-action p-3">
+                                    <input class="form-check-input flex-shrink-0" type="radio" name="novo_role" value="admin_cal" {{ 'checked' if vinculo.role == 'admin_cal' else '' }}>
+                                    <div class="w-100">
+                                        <div class="d-flex justify-content-between">
+                                            <strong>Chefe CAL (Corpo de Alunos)</strong>
+                                            <i class="fas fa-balance-scale text-warning"></i>
+                                        </div>
+                                        <small class="text-muted d-block">Gerencia Justiça, Disciplina e Questionários.</small>
+                                    </div>
+                                </label>
+
+                                <label class="list-group-item d-flex gap-3 align-items-center list-group-item-action p-3">
+                                    <input class="form-check-input flex-shrink-0" type="radio" name="novo_role" value="instrutor" {{ 'checked' if vinculo.role == 'instrutor' else '' }}>
+                                    <div class="w-100">
+                                        <div class="d-flex justify-content-between">
+                                            <strong>Instrutor</strong>
+                                            <i class="fas fa-chalkboard-teacher text-secondary"></i>
+                                        </div>
+                                        <small class="text-muted d-block">Apenas visualiza suas aulas e lança chamadas/conteúdos.</small>
+                                    </div>
+                                </label>
+
+                                <label class="list-group-item d-flex gap-3 align-items-center list-group-item-action p-3">
+                                    <input class="form-check-input flex-shrink-0" type="radio" name="novo_role" value="aluno" {{ 'checked' if vinculo.role == 'aluno' else '' }}>
+                                    <div class="w-100">
+                                        <div class="d-flex justify-content-between">
+                                            <strong>Aluno / Usuário Básico</strong>
+                                            <i class="fas fa-user text-muted"></i>
+                                        </div>
+                                        <small class="text-muted d-block">Sem permissões administrativas.</small>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="modal-footer bg-light">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="submit" class="btn btn-primary px-4">Salvar Alteração</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    {% endfor %}
+{% endif %}
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // Move os modais para o final do body para evitar problemas de z-index/backdrop
+        let modals = document.querySelectorAll('.permission-modal');
+        modals.forEach(modal => document.body.appendChild(modal));
+    });
+
+    function filterTable() {
+        // Obter valores dos inputs
+        let textInput = document.getElementById("searchInput");
+        let textFilter = textInput.value.toUpperCase();
+        
+        let roleSelect = document.getElementById("roleFilter");
+        let roleFilter = roleSelect.value; // 'all', 'admin_escola', etc.
+
+        let table = document.getElementById("usersTable");
+        let tr = table.getElementsByTagName("tr");
+        let hasVisibleRow = false;
+
+        // Loop pelas linhas (começando de 1 para pular o cabeçalho)
+        for (let i = 1; i < tr.length; i++) { 
+            let row = tr[i];
+            
+            // Pular se for a linha de "Nenhum resultado" original (id="noResultsRow")
+            if (row.id === "noResultsRow") continue;
+
+            let nameEl = row.querySelector(".user-name");
+            let emailEl = row.querySelector(".user-email");
+            let matriculaEl = row.querySelector(".user-matricula");
+            let postoEl = row.querySelector(".user-posto");
+            
+            // Obter o role da linha via data attribute
+            let rowRole = row.getAttribute('data-role');
+
+            if (nameEl) {
+                let nameValue = nameEl.textContent || nameEl.innerText;
+                let emailValue = emailEl ? (emailEl.textContent || emailEl.innerText) : "";
+                let matriculaValue = matriculaEl ? (matriculaEl.textContent || matriculaEl.innerText) : "";
+                let postoValue = postoEl ? (postoEl.textContent || postoEl.innerText) : "";
+
+                // Verifica correspondência de texto
+                let textMatch = (
+                    nameValue.toUpperCase().indexOf(textFilter) > -1 || 
+                    emailValue.toUpperCase().indexOf(textFilter) > -1 ||
+                    matriculaValue.toUpperCase().indexOf(textFilter) > -1 ||
+                    postoValue.toUpperCase().indexOf(textFilter) > -1
+                );
+
+                // Verifica correspondência de role
+                let roleMatch = (roleFilter === 'all' || rowRole === roleFilter);
+
+                // Exibe apenas se AMBOS corresponderem
+                if (textMatch && roleMatch) {
+                    row.style.display = "";
+                    hasVisibleRow = true;
+                } else {
+                    row.style.display = "none";
+                }
+            }
+        }
+
+        // Lógica de "Nenhum resultado encontrado"
+        let noResultDiv = document.getElementById("searchNoResults");
+        let tableHead = table.getElementsByTagName("thead")[0];
+        let noResultsRowOriginal = document.getElementById("noResultsRow"); // A linha que vem do backend quando a lista está vazia
+        
+        if (noResultDiv) {
+            // Se filtrou e não sobrou nada
+            if (!hasVisibleRow) {
+                // Se a tabela original já estava vazia (noResultsRow visível), não mostramos o aviso de busca
+                if (noResultsRowOriginal && noResultsRowOriginal.style.display !== "none") {
+                     noResultDiv.classList.add("d-none");
+                } else {
+                     // Caso contrário (tinha dados, mas o filtro escondeu tudo), mostra o aviso
+                     noResultDiv.classList.remove("d-none");
+                     if(tableHead) tableHead.style.display = "none"; 
+                }
+            } else {
+                // Tem resultados visíveis
+                noResultDiv.classList.add("d-none");
+                if(tableHead) tableHead.style.display = "";
+                if(noResultsRowOriginal) noResultsRowOriginal.style.display = "none";
+            }
+        }
+    }
+</script>
+{% endblock %}

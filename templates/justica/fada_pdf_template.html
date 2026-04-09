@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Relatório de Avaliação Atitudinal</title>
+    <style>
+        @page { size: A4; margin: 1.5cm; }
+        body { font-family: Arial, sans-serif; font-size: 11pt; }
+        .header { text-align: center; font-weight: bold; margin-bottom: 20px; text-transform: uppercase; }
+        .title { text-align: center; font-size: 14pt; font-weight: bold; margin: 20px 0; border: 1px solid #000; padding: 5px; background: #eee; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 10pt; }
+        th, td { border: 1px solid #000; padding: 6px; text-align: center; }
+        th { background-color: #f0f0f0; }
+        .text-left { text-align: left; }
+        
+        .footer { margin-top: 30px; font-size: 10pt; text-align: center; }
+        .signature-line { border-top: 1px solid #000; width: 40%; margin: 40px auto 5px auto; }
+        
+        @media print { .no-print { display: none; } }
+    </style>
+</head>
+<body>
+    <div class="no-print" style="text-align: right; margin-bottom: 10px;">
+        <button onclick="window.print()" style="padding: 10px;">Imprimir Relatório</button>
+    </div>
+
+    <div class="header">
+        ESTADO DO RIO GRANDE DO SUL<br>
+        SECRETARIA DA SEGURANÇA PÚBLICA<br>
+        BRIGADA MILITAR - DE - EsFAS
+    </div>
+
+    <div class="title">ATA DE RESULTADOS FINAIS - AVALIAÇÃO ATITUDINAL</div>
+
+    <p><strong>Referência:</strong> Regulamento de Ensino - CBFPM/CSPM</p>
+    <p><strong>Data de Emissão:</strong> {{ hoje }}</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 5%;">Nº</th>
+                <th style="width: 45%;">Nome Completo</th>
+                <th style="width: 15%;">NDisc<br><small>(Base 20)</small></th>
+                <th style="width: 15%;">FADA<br><small>(Base 8)</small></th>
+                <th style="width: 15%;">AAt Final<br><small>(Média)</small></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in dados %}
+            <tr>
+                <td>{{ item.aluno.num_aluno or '-' }}</td>
+                <td class="text-left">
+                    {{ item.aluno.user.posto_graduacao }} {{ item.aluno.user.nome_completo }}
+                </td>
+                <td>{{ "{:.2f}".format(item.ndisc) }}</td>
+                <td>{{ "{:.2f}".format(item.fada) }}</td>
+                <td style="font-weight: bold; background-color: #f9f9f9;">{{ "{:.2f}".format(item.aat) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="footer">
+        <div style="display: flex; justify-content: space-between; margin-top: 50px;">
+            <div style="width: 45%;">
+                <div class="signature-line"></div>
+                Chefe da Divisão de Ensino
+            </div>
+            <div style="width: 45%;">
+                <div class="signature-line"></div>
+                Comandante da Escola
+            </div>
+        </div>
+    </div>
+</body>
+</html>
