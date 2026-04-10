@@ -3,9 +3,9 @@
 import os
 basedir = os.path.abspath(os.path.dirname(__file__))
 
-# Este bloco carrega o arquivo .env, tornando as variáveis disponíveis para 'os.environ.get'
+# Este bloco carrega o arquivo .env.local, tornando as variáveis disponíveis para 'os.environ.get'
 from dotenv import load_dotenv
-dotenv_path = os.path.join(os.path.dirname(basedir), '.env')
+dotenv_path = os.path.join(os.path.dirname(basedir), '.env.local')
 if os.path.exists(dotenv_path):
     load_dotenv(dotenv_path)
 
