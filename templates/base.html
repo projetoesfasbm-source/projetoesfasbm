@@ -397,8 +397,7 @@
                     {% if current_user.is_sens_in_school(active_sid) %}
                         <div class="nav-separator">GESTÃO DE AULAS</div>
                         <a href="{{ url_for('horario.aprovar_horarios') }}" class="nav-link {% if request.endpoint == 'horario.aprovar_horarios' %}active{% endif %}"><div class="nav-icon">👍</div> Aprovar Aulas</a>
-                        {# <a href="{{ url_for('horario.proximas_aulas_admin') }}" class="nav-link {% if request.endpoint == 'horario.proximas_aulas_admin' %}active{% endif %}"><div class="nav-icon">🗓️</div> Próximas Aulas (Admin)</a> #}
-                        <div class="nav-separator">RELATÓRIOS</div>
+                        <a href="{{ url_for('horario.proximas_aulas_admin') }}" class="nav-link {% if request.endpoint == 'horario.proximas_aulas_admin' %}active{% endif %}"><div class="nav-icon">🗓️</div> Próximas Aulas (Admin)</a>                <div class="nav-separator">RELATÓRIOS</div>
                         <a href="{{ url_for('relatorios.index') }}" class="nav-link {% if request.endpoint and 'relatorios.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📊</div> Relatórios</a>
                     {% endif %}
 
