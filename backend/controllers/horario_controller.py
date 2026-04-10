@@ -527,7 +527,7 @@ def aprovar_parcial():
     else:
         return jsonify({'success': False, 'message': message}), 400
     
-    @horario_bp.route('/proximas_aulas_admin')
+@horario_bp.route('/proximas_aulas_admin')
 @login_required
 @admin_or_programmer_required
 def proximas_aulas_admin():
@@ -536,17 +536,98 @@ def proximas_aulas_admin():
         flash("Selecione uma escola primeiro.", "warning")
         return redirect(url_for('main.dashboard'))
 
-    hoje = date.today()
-    
-    aulas_futuras = db.session.scalars(
-        select(Horario)
-        .join(Turma, Turma.nome == Horario.pelotao)
-        .join(Semana)
-        .where(
-            Turma.school_id == school_id,
-            Horario.status == 'aprovado'
-        )
-        .order_by(Semana.data_inicio, Horario.dia_semana, Horario.periodo)
+    # 1. Carregar Dados para os Filtros do Form HTML
+    ciclos = db.session.scalars(
+        select(Ciclo).where(Ciclo.school_id == school_id).order_by(Ciclo.nome)
     ).all()
+    ciclo_selecionado = request.args.get('ciclo', type=int)
+    
+    # 2. Carregar Instrutores
+    instrutores_query = db.session.scalars(
+        select(Instrutor).where(Instrutor.school_id == school_id)
+    ).all()
+    instrutores = []
+    for inst in instrutores_query:
+        nome_exib = f"{inst.user.posto_graduacao or ''} {inst.user.nome_de_guerra or inst.user.username}".strip()
+        instrutores.append({'id': inst.id, 'nome': nome_exib})
+    
+    instrutor_selecionado = request.args.get('instrutor_id', type=int)
 
-    return render_template('horario/proximas_aulas_admin.html', aulas=aulas_futuras, hoje=hoje)
+    # 3. Carregar Disciplinas
+    disciplinas_query = db.session.scalars(
+        select(Disciplina).join(Turma).where(Turma.school_id == school_id).order_by(Disciplina.materia)
+    ).all()
+    disciplinas = [{'id': d.id, 'nome': f"{d.materia} ({d.turma.nome})"} for d in disciplinas_query]
+    
+    disciplina_selecionada = request.args.get('disciplina_id', type=int)
+
+    aulas_futuras_formatadas = []
+    aulas_passadas_formatadas = []
+    info_vinculos = None
+
+    # 4. Lógica de Busca: Só mostra as aulas se o usuário filtrar por algo (como manda o HTML)
+    if instrutor_selecionado or disciplina_selecionada:
+        query = select(Horario).join(Turma, Turma.nome == Horario.pelotao).join(Semana).where(
+            Turma.school_id == school_id
+        )
+
+        if instrutor_selecionado:
+            query = query.where(or_(Horario.instrutor_id == instrutor_selecionado, Horario.instrutor_id_2 == instrutor_selecionado))
+        if disciplina_selecionada:
+            query = query.where(Horario.disciplina_id == disciplina_selecionada)
+        if ciclo_selecionado:
+            query = query.where(Semana.ciclo_id == ciclo_selecionado)
+
+        todas_aulas = db.session.scalars(query.order_by(Semana.data_inicio, Horario.dia_semana, Horario.periodo)).all()
+
+        hoje = date.today()
+        mapa_dias = {'Segunda-feira': 0, 'Terça-feira': 1, 'Quarta-feira': 2, 'Quinta-feira': 3, 'Sexta-feira': 4, 'Sábado': 5, 'Domingo': 6}
+
+        for aula in todas_aulas:
+            # Calcular data exata da aula
+            try:
+                delta = mapa_dias.get(aula.dia_semana, 0)
+                data_real = aula.semana.data_inicio + timedelta(days=delta) if aula.semana and aula.semana.data_inicio else hoje
+            except:
+                data_real = hoje
+
+            inst1 = f"{aula.instrutor.user.posto_graduacao or ''} {aula.instrutor.user.nome_de_guerra or ''}".strip() if aula.instrutor else ""
+            inst2 = f" e {aula.instrutor_2.user.posto_graduacao or ''} {aula.instrutor_2.user.nome_de_guerra or ''}".strip() if aula.instrutor_2 else ""
+            
+            info = {
+                'data_formatada': data_real.strftime('%d/%m/%Y'),
+                'data_real': data_real,
+                'dia_semana': aula.dia_semana,
+                'turma': aula.pelotao,
+                'semana_id': aula.semana_id,
+                'hora_str': f"{aula.hora_inicio} - {aula.hora_fim}",
+                'status': aula.status,
+                'disciplina': getattr(aula.disciplina, 'materia', 'N/D'),
+                'instrutores': f"{inst1}{inst2}" or "N/D",
+                'observacao': aula.observacao,
+                'periodo_str': f"{aula.periodo}º Período",
+                'duracao': aula.duracao
+            }
+
+            if data_real >= hoje:
+                aulas_futuras_formatadas.append(info)
+            else:
+                aulas_passadas_formatadas.append(info)
+
+        # Ordenar: Futuras crescente, Passadas decrescente (mais recentes primeiro)
+        aulas_futuras_formatadas.sort(key=lambda x: (x['data_real'], x['periodo_str']))
+        aulas_passadas_formatadas.sort(key=lambda x: (x['data_real'], x['periodo_str']), reverse=True)
+
+    # 5. Enviar todas as variáveis necessárias para o arquivo HTML
+    return render_template(
+        'horario/proximas_aulas_admin.html',
+        ciclos=ciclos,
+        ciclo_selecionado=ciclo_selecionado,
+        instrutores=instrutores,
+        instrutor_selecionado=instrutor_selecionado,
+        disciplinas=disciplinas,
+        disciplina_selecionada=disciplina_selecionada,
+        info_vinculos=info_vinculos,
+        aulas=aulas_futuras_formatadas,
+        aulas_passadas=aulas_passadas_formatadas
+    )
