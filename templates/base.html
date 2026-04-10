@@ -373,8 +373,7 @@
 
                     {% if current_user.is_staff_in_school(active_sid) or current_user.is_instrutor_in_school(active_sid) or current_user.role in ['super_admin', 'aluno'] %}
                         <div class="nav-separator">ACADÊMICO</div>
-                        <a href="{{ url_for('horario.index') }}" class="nav-link {% if request.endpoint and ('horario.' in request.endpoint or 'semana.' in request.endpoint) %}active{% endif %}"><div class="nav-icon">📅</div> Quadro Horário</a>
-                        
+                        <a href="{{ url_for('horario.index') }}" class="nav-link {% if request.endpoint and ('horario.' in request.endpoint or 'semana.' in request.endpoint) and request.endpoint != 'horario.proximas_aulas_admin' %}active{% endif %}"><div class="nav-icon">📅</div> Quadro Horário</a>                        
                         {% if current_user.is_instrutor_in_school(active_sid) %}
                             <a href="{{ url_for('questoes.tela_envio') }}" class="nav-link {% if request.endpoint == 'questoes.tela_envio' %}active{% endif %}"><div class="nav-icon">📤</div> Enviar Questões</a>
                             <a href="{{ url_for('questoes.minhas_provas') }}" class="nav-link {% if request.endpoint == 'questoes.minhas_provas' %}active{% endif %}"><div class="nav-icon">📝</div> Montar Provas</a>
@@ -398,6 +397,7 @@
                     {% if current_user.is_sens_in_school(active_sid) %}
                         <div class="nav-separator">GESTÃO DE AULAS</div>
                         <a href="{{ url_for('horario.aprovar_horarios') }}" class="nav-link {% if request.endpoint == 'horario.aprovar_horarios' %}active{% endif %}"><div class="nav-icon">👍</div> Aprovar Aulas</a>
+                        <a href="{{ url_for('horario.proximas_aulas_admin') }}" class="nav-link {% if request.endpoint == 'horario.proximas_aulas_admin' %}active{% endif %}"><div class="nav-icon">🗓️</div> Próximas Aulas (Admin)</a>
                         <div class="nav-separator">RELATÓRIOS</div>
                         <a href="{{ url_for('relatorios.index') }}" class="nav-link {% if request.endpoint and 'relatorios.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📊</div> Relatórios</a>
                     {% endif %}
