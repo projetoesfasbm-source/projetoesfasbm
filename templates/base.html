@@ -177,7 +177,7 @@
     </div>
 
     {% if current_user.is_authenticated %}
-    
+
     {# Variável de Controle Global #}
     {% set dec_mode_active = session.get('is_dec_mode') %}
 
@@ -208,7 +208,7 @@
                 <div class="top-navbar-title">
                     {# --- LÓGICA DE NOME DA ESCOLA (AGORA RESPEITA O SUDO MODE) --- #}
                     {% set full_name = '' %}
-                    
+
                     {% if dec_mode_active and not session.get('view_as_school_id') %}
                         {% set full_name = "Sistema de Gerenciamento de Ensino - DEC (Global)" %}
                     {% elif dec_mode_active and session.get('view_as_school_name') %}
@@ -279,7 +279,7 @@
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end">
                         <li><a class="dropdown-item" href="{{ url_for('user.meu_perfil') }}">Meu Perfil</a></li>
-                        
+
                         {# Botões administrativos no dropdown só aparecem se o MODO DEC estiver ligado #}
                         {% if dec_mode_active %}
                             {% if session.get('view_as_school_id') %}
@@ -288,7 +288,7 @@
                                 <li><a class="dropdown-item" href="{{ url_for('super_admin.select_school') }}"><i class="fas fa-school"></i> Acessar uma Escola</a></li>
                             {% endif %}
                         {% endif %}
-                        
+
                         <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#changePasswordModal">Alterar Senha</a></li>
                     </ul>
                 </div>
@@ -321,12 +321,12 @@
 
             <nav class="sidebar-nav">
                 {% set active_sid = session.get('active_school_id')|int if session.get('active_school_id') else None %}
-                
+
                 {# Define se está no painel GLOBAL (Modo DEC ativado E sem escola selecionada) #}
                 {% set is_global_dec_view = (dec_mode_active and not session.get('view_as_school_id')) %}
 
                 <a href="{{ url_for('main.dashboard') }}" class="nav-link {% if request.endpoint == 'main.dashboard' %}active{% endif %}"><div class="nav-icon">🏠</div> Início</a>
-                
+
                 {# === CONTROLE DE INTERVENÇÃO === #}
                 {% if current_user.role == 'super_admin' or session.get('impersonator_id') %}
                     <div class="nav-separator">CONTROLE DE ACESSO</div>
@@ -345,7 +345,7 @@
                                 <div class="nav-icon">🔙</div> Sair da Escola (Ir p/ DEC)
                             </a>
                         {% endif %}
-                        
+
                         <a href="{{ url_for('auth.desativar_modo_dec') }}" class="nav-link text-danger fw-bold" style="background-color: rgba(220, 53, 69, 0.1);">
                             <div class="nav-icon">🛑</div> Sair do Modo DEC
                         </a>
@@ -355,7 +355,7 @@
 
                 {# --- TUDO QUE PERTENCE A UMA ESCOLA FICA ESCONDIDO DO PAINEL GLOBAL DEC --- #}
                 {% if not is_global_dec_view %}
-                    
+
                     <div class="nav-separator">GERAL</div>
                     <a href="{{ url_for('main.safebrowser') }}" class="nav-link {% if request.endpoint == 'main.safebrowser' %}active{% endif %}"><div class="nav-icon">🛡️</div> SafeBrowser</a>
                     <a href="#" id="btnInstalar" class="nav-link text-primary fw-bold" style="display: none;" onclick="event.preventDefault();"><div class="nav-icon">📲</div> Instalar App</a>
@@ -373,7 +373,7 @@
 
                     {% if current_user.is_staff_in_school(active_sid) or current_user.is_instrutor_in_school(active_sid) or current_user.role in ['super_admin', 'aluno'] %}
                         <div class="nav-separator">ACADÊMICO</div>
-                        <a href="{{ url_for('horario.index') }}" class="nav-link {% if request.endpoint and ('horario.' in request.endpoint or 'semana.' in request.endpoint) and request.endpoint != 'horario.proximas_aulas_admin' %}active{% endif %}"><div class="nav-icon">📅</div> Quadro Horário</a>                        
+                        <a href="{{ url_for('horario.index') }}" class="nav-link {% if request.endpoint and ('horario.' in request.endpoint or 'semana.' in request.endpoint) and request.endpoint != 'horario.proximas_aulas_admin' %}active{% endif %}"><div class="nav-icon">📅</div> Quadro Horário</a>
                         {% if current_user.is_instrutor_in_school(active_sid) %}
                             <a href="{{ url_for('questoes.tela_envio') }}" class="nav-link {% if request.endpoint == 'questoes.tela_envio' %}active{% endif %}"><div class="nav-icon">📤</div> Enviar Questões</a>
                             <a href="{{ url_for('questoes.minhas_provas') }}" class="nav-link {% if request.endpoint == 'questoes.minhas_provas' %}active{% endif %}"><div class="nav-icon">📝</div> Montar Provas</a>
@@ -397,7 +397,7 @@
                     {% if current_user.is_sens_in_school(active_sid) %}
                         <div class="nav-separator">GESTÃO DE AULAS</div>
                         <a href="{{ url_for('horario.aprovar_horarios') }}" class="nav-link {% if request.endpoint == 'horario.aprovar_horarios' %}active{% endif %}"><div class="nav-icon">👍</div> Aprovar Aulas</a>
-                        <a href="{{ url_for('horario.proximas_aulas_admin') }}" class="nav-link {% if request.endpoint == 'horario.proximas_aulas_admin' %}active{% endif %}"><div class="nav-icon">🗓️</div> Próximas Aulas (Admin)</a>
+                        {# <a href="{{ url_for('horario.proximas_aulas_admin') }}" class="nav-link {% if request.endpoint == 'horario.proximas_aulas_admin' %}active{% endif %}"><div class="nav-icon">🗓️</div> Próximas Aulas (Admin)</a> #}
                         <div class="nav-separator">RELATÓRIOS</div>
                         <a href="{{ url_for('relatorios.index') }}" class="nav-link {% if request.endpoint and 'relatorios.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📊</div> Relatórios</a>
                     {% endif %}
