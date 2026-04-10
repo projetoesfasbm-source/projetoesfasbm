@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block title %}Próximas Aulas (Admin) - SisGEn{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-bold text-dark"><i class="fas fa-calendar-alt text-primary me-2"></i> Próximas Aulas Aprovadas</h2>
+        <a href="{{ url_for('horario.index') }}" class="btn btn-outline-secondary"><i class="fas fa-arrow-left"></i> Voltar</a>
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-3">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Dia da Semana</th>
+                            <th>Período</th>
+                            <th>Turma</th>
+                            <th>Disciplina</th>
+                            <th>Instrutor</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for aula in aulas %}
+                        <tr>
+                            <td><span class="badge bg-info text-dark">{{ aula.dia_semana }}</span></td>
+                            <td>
+                                <strong>{{ aula.periodo }}º Período</strong><br>
+                                <small class="text-muted">{{ aula.hora_inicio }} - {{ aula.hora_fim }}</small>
+                            </td>
+                            <td><span class="fw-bold text-primary">{{ aula.pelotao }}</span></td>
+                            <td>{{ aula.disciplina.materia if aula.disciplina else 'N/D' }}</td>
+                            <td>
+                                {% if aula.instrutor %}
+                                    {{ aula.instrutor.user.posto_graduacao }} {{ aula.instrutor.user.nome_de_guerra }}
+                                {% else %}
+                                    N/D
+                                {% endif %}
+                            </td>
+                            <td><span class="badge bg-success"><i class="fas fa-check-circle"></i> Aprovado</span></td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center py-4 text-muted">
+                                <i class="fas fa-inbox fa-2x mb-3"></i><br>
+                                Nenhuma aula aprovada ou agendada para os próximos dias.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

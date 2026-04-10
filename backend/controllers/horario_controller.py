@@ -526,3 +526,27 @@ def aprovar_parcial():
         return jsonify({'success': True, 'message': message})
     else:
         return jsonify({'success': False, 'message': message}), 400
+    
+    @horario_bp.route('/proximas_aulas_admin')
+@login_required
+@admin_or_programmer_required
+def proximas_aulas_admin():
+    school_id = UserService.get_current_school_id()
+    if not school_id:
+        flash("Selecione uma escola primeiro.", "warning")
+        return redirect(url_for('main.dashboard'))
+
+    hoje = date.today()
+    
+    aulas_futuras = db.session.scalars(
+        select(Horario)
+        .join(Turma, Turma.nome == Horario.pelotao)
+        .join(Semana)
+        .where(
+            Turma.school_id == school_id,
+            Horario.status == 'aprovado'
+        )
+        .order_by(Semana.data_inicio, Horario.dia_semana, Horario.periodo)
+    ).all()
+
+    return render_template('horario/proximas_aulas_admin.html', aulas=aulas_futuras, hoje=hoje)
