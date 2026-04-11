@@ -15,10 +15,9 @@
     <div class="card shadow-sm border-0 mb-4">
         <div class="card-body p-4">
             <form method="GET" action="{{ url_for('horario.proximas_aulas_admin') }}" class="row g-3 align-items-end">
-                
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label for="ciclo" class="form-label fw-bold text-secondary small"><i class="fas fa-sync-alt me-1"></i> Ciclo</label>
-                    <select class="form-select" id="ciclo" name="ciclo">
+                    <select class="form-select" id="ciclo" name="ciclo" style="height: 42px;">
                         {% for c in ciclos %}
                             <option value="{{ c.id }}" {% if ciclo_selecionado == c.id %}selected{% endif %}>{{ c.nome }}</option>
                         {% endfor %}
@@ -38,21 +37,27 @@
                 </div>
                 
                 <div class="col-md-3">
-                    <label for="disciplina_id" class="form-label fw-bold text-secondary small"><i class="fas fa-book me-1"></i> Por Disciplina</label>
-                    <select class="form-select select2-basic" id="disciplina_id" name="disciplina_id">
+                    <label for="turma_nome" class="form-label fw-bold text-secondary small"><i class="fas fa-users me-1"></i> Por Turma</label>
+                    <select class="form-select select2-basic" id="turma_nome" name="turma_nome">
                         <option value="">-- Todas --</option>
-                        {% for disc in disciplinas %}
-                            <option value="{{ disc.id }}" {% if disciplina_selecionada == disc.id %}selected{% endif %}>
-                                {{ disc.nome }}
+                        {% for t in turmas %}
+                            <option value="{{ t.id }}" {% if turma_selecionada == t.id %}selected{% endif %}>
+                                {{ t.nome }}
                             </option>
                         {% endfor %}
                     </select>
                 </div>
 
-                <div class="col-md-2 d-grid gap-2">
-                    <button type="submit" class="btn btn-primary fw-bold shadow-sm" style="height: 42px;">
-                        <i class="fas fa-search me-1"></i> Filtrar
+                <div class="col-md-3 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary fw-bold shadow-sm w-100 d-flex align-items-center justify-content-center" style="height: 42px;">
+                        <i class="fas fa-search me-2"></i> Filtrar
                     </button>
+                    
+                    {% if instrutor_selecionado or turma_selecionada %}
+                    <a href="{{ url_for('horario.proximas_aulas_admin', ciclo=ciclo_selecionado) }}" class="btn btn-outline-danger fw-bold shadow-sm w-100 d-flex align-items-center justify-content-center transition-all" style="height: 42px;">
+                        <i class="fas fa-times me-2"></i> Limpar
+                    </a>
+                    {% endif %}
                 </div>
             </form>
         </div>
@@ -63,7 +68,7 @@
             <div class="card-body">
                 {% if info_vinculos.tipo == 'instrutor' %}
                     <h5 class="fw-bold text-info-emphasis mb-3">
-                        <i class="fas fa-link me-2"></i> Resumo de Vínculos do Instrutor Selecionado
+                        <i class="fas fa-link me-2"></i> Grade de Atuação do Instrutor
                     </h5>
                     <div class="row g-3">
                         {% for turma, materias in info_vinculos.dados.items() %}
@@ -81,35 +86,38 @@
                             </div>
                         {% endfor %}
                     </div>
-                {% elif info_vinculos.tipo == 'disciplina' %}
+                {% elif info_vinculos.tipo == 'turma' %}
                     <h5 class="fw-bold text-info-emphasis mb-3">
-                        <i class="fas fa-link me-2"></i> Resumo de Vínculos da Disciplina Selecionada
+                        <i class="fas fa-clipboard-list me-2"></i> Quadro de Instrutores da Turma: <span class="text-primary">{{ info_vinculos.turma_nome }}</span>
                     </h5>
-                    <div class="row g-3">
-                        {% for item in info_vinculos.dados %}
-                            <div class="col-md-6 col-lg-4">
-                                <div class="p-3 bg-white rounded border h-100 shadow-sm">
-                                    <h6 class="fw-bold text-primary mb-2 text-uppercase">
-                                        <i class="fas fa-users me-1"></i> {{ item.turma }}
-                                    </h6>
-                                    <p class="mb-0 small text-secondary">
-                                        <i class="fas fa-chalkboard-teacher text-info me-2"></i><strong>Instrutor(es):</strong><br>
-                                        {{ item.instrutores }}
-                                    </p>
-                                </div>
-                            </div>
-                        {% endfor %}
+                    <div class="table-responsive bg-white rounded shadow-sm border">
+                        <table class="table table-hover table-sm mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="py-2 px-3"><i class="fas fa-book text-secondary me-1"></i> Disciplina</th>
+                                    <th class="py-2 px-3"><i class="fas fa-chalkboard-teacher text-secondary me-1"></i> Instrutor(es) Escala</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in info_vinculos.dados %}
+                                <tr>
+                                    <td class="align-middle fw-bold text-dark px-3 py-2">{{ item.disciplina }}</td>
+                                    <td class="align-middle text-secondary px-3 py-2">{{ item.instrutores }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
                     </div>
                 {% endif %}
             </div>
         </div>
     {% endif %}
 
-    {% if not instrutor_selecionado and not disciplina_selecionada %}
+    {% if not instrutor_selecionado and not turma_selecionada %}
         <div class="alert alert-info d-flex align-items-center shadow-sm border-0 rounded-3 p-4">
             <i class="fas fa-info-circle fa-2x me-3"></i>
             <div class="fs-5">
-                <strong>Dica:</strong> Para visualizar a grade, selecione um Instrutor ou uma Disciplina acima e clique em Filtrar.
+                <strong>Dica:</strong> Para visualizar as aulas agendadas, selecione um Instrutor ou uma Turma acima e clique em Filtrar.
             </div>
         </div>
     {% elif aulas %}
@@ -161,14 +169,24 @@
 
                             <hr class="my-3 border-secondary opacity-25">
 
-                            <div class="d-flex align-items-center mb-4">
-                                <div class="rounded-circle bg-light border d-flex justify-content-center align-items-center me-3 shadow-sm" style="width: 45px; height: 45px;">
-                                    <i class="fas fa-chalkboard-teacher text-secondary fs-5"></i>
-                                </div>
-                                <div>
-                                    <p class="mb-0 fw-bold text-dark lh-1 fs-6">{{ aula.instrutores }}</p>
-                                    <span class="text-muted small">Instrutor(es)</span>
-                                </div>
+                            <div class="d-flex flex-column gap-2 mb-4">
+                                <span class="text-muted small border-bottom pb-1 mb-1">Instrutor(es) Escala</span>
+                                {% if aula.instrutores_data %}
+                                    {% for inst in aula.instrutores_data %}
+                                        <div class="d-flex align-items-center">
+                                            {% if inst.foto and inst.foto != 'default.png' %}
+                                                <img src="{{ url_for('static', filename='uploads/profile_pics/' + inst.foto) }}" alt="Foto de {{ inst.nome_exibicao }}" class="rounded-circle border shadow-sm me-2 bg-white" style="width: 38px; height: 38px; object-fit: cover;">
+                                            {% else %}
+                                                <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center me-2 shadow-sm" style="width: 38px; height: 38px; font-size: 1.2rem; font-weight: bold;">
+                                                    {{ inst.nome_guerra[0]|upper }}
+                                                </div>
+                                            {% endif %}
+                                            <p class="mb-0 fw-bold text-dark lh-1 fs-6">{{ inst.nome_exibicao }}</p>
+                                        </div>
+                                    {% endfor %}
+                                {% else %}
+                                    <p class="mb-0 fw-bold text-muted small"><i class="fas fa-exclamation-circle me-1"></i> Nenhum instrutor definido.</p>
+                                {% endif %}
                             </div>
                             
                             <div class="mt-auto">
@@ -199,7 +217,7 @@
                 <i class="fas fa-calendar-check fa-4x opacity-25"></i>
             </div>
             <h4 class="fw-bold text-secondary">Nenhuma aula agendada para o futuro.</h4>
-            <p class="text-muted">A busca para os filtros selecionados não retornou agendamentos novos.</p>
+            <p class="text-muted">A busca para os filtros selecionados não retornou horários marcados.</p>
         </div>
     {% endif %}
 
@@ -242,19 +260,33 @@
                                         <i class="fas fa-users me-1"></i>{{ aula.turma }}
                                     </h5>
                                     
-                                    <p class="card-title fw-bold text-dark mb-2">
+                                    <p class="card-title fw-bold text-dark mb-3">
                                         {{ aula.disciplina }}
                                     </p>
 
                                     <div class="d-flex justify-content-between align-items-end mt-auto pt-2">
-                                        <div>
-                                            <p class="mb-0 fw-bold text-secondary lh-1" style="font-size: 0.85rem;">{{ aula.instrutores }}</p>
-                                            <span class="text-muted" style="font-size: 0.7rem;">Instrutor(es)</span>
+                                        <div class="d-flex flex-column gap-1">
+                                            <span class="text-muted mb-1" style="font-size: 0.7rem;">Instrutor(es)</span>
+                                            {% if aula.instrutores_data %}
+                                                {% for inst in aula.instrutores_data %}
+                                                    <div class="d-flex align-items-center">
+                                                        {% if inst.foto and inst.foto != 'default.png' %}
+                                                            <img src="{{ url_for('static', filename='uploads/profile_pics/' + inst.foto) }}" alt="Foto" class="rounded-circle border border-secondary me-2 bg-white" style="width: 26px; height: 26px; object-fit: cover;">
+                                                        {% else %}
+                                                            <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center me-2 shadow-sm" style="width: 26px; height: 26px; font-size: 0.8rem; font-weight: bold;">
+                                                                {{ inst.nome_guerra[0]|upper }}
+                                                            </div>
+                                                        {% endif %}
+                                                        <p class="mb-0 fw-bold text-secondary lh-1" style="font-size: 0.85rem;">{{ inst.nome_exibicao }}</p>
+                                                    </div>
+                                                {% endfor %}
+                                            {% endif %}
                                         </div>
-                                        <span class="badge bg-secondary text-white">
+                                        <span class="badge bg-secondary text-white mb-1">
                                             {{ aula.duracao }} h/a
                                         </span>
                                     </div>
+
                                 </div>
                             </a>
                         </div>
@@ -273,7 +305,7 @@
     .hover-lift:hover {
         transform: translateY(-5px);
         box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important;
-        opacity: 1 !important; /* Para iluminar o card de histórico no hover */
+        opacity: 1 !important;
     }
     .cursor-pointer {
         cursor: pointer;

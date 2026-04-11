@@ -1,5 +1,6 @@
 # backend/services/horario_service.py
 
+import os
 from flask import current_app, url_for
 from flask_login import current_user
 from sqlalchemy import select, func, or_, and_
@@ -27,7 +28,6 @@ class HorarioService:
 
     @staticmethod
     def can_edit_horario(horario, user):
-        """Regras de edição de um horário por perfil."""
         if not horario or not user:
             return False
 
@@ -47,14 +47,10 @@ class HorarioService:
 
     @staticmethod
     def get_aula_details(horario_id, user):
-        """
-        Retorna os detalhes de uma aula específica para o modal de edição/exclusão.
-        """
         aula = db.session.get(Horario, int(horario_id))
         if not aula:
             return None
 
-        # Verifica permissão (opcional, mas recomendado para segurança)
         if not HorarioService.can_edit_horario(aula, user):
             pass
 
@@ -79,10 +75,8 @@ class HorarioService:
 
     @staticmethod
     def construir_matriz_horario(pelotao, semana_id, user):
-        # 1. Carregar Semana
         semana = db.session.get(Semana, semana_id)
 
-        # 2. Estrutura padrão para célula vazia
         a_disposicao = {
             'materia': 'A disposição do C Al /S Ens',
             'instrutor': None,
@@ -96,7 +90,6 @@ class HorarioService:
         horario_matrix = [[dict(a_disposicao) for _ in range(7)] for _ in range(15)]
         dias = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo']
 
-        # 3. Buscar e Preencher Aulas Existentes
         aulas_query = (
             select(Horario)
             .options(
@@ -114,9 +107,6 @@ class HorarioService:
                 periodo_idx = aula.periodo - 1
 
                 can_see_pending_details = HorarioService.can_edit_horario(aula, user)
-
-                # CORREÇÃO DO BUG DE VISUALIZAÇÃO:
-                # Se não é pendente, é aprovado/confirmado, logo deve ser exibido.
                 show_details = aula.status != 'pendente' or can_see_pending_details
 
                 instrutores_display_list = []
@@ -146,7 +136,6 @@ class HorarioService:
                     'is_continuation': False,
                     'group_id': aula.group_id,
                     'blocked': False,
-                    # --- NOVOS CAMPOS PARA DESTAQUE VISUAL ---
                     'raw_instrutor_id': aula.instrutor_id,
                     'raw_instrutor_id_2': aula.instrutor_id_2
                 }
@@ -162,7 +151,7 @@ class HorarioService:
 
     @staticmethod
     def get_semana_selecionada(semana_id_str, ciclo_id):
-        if semana_id_str and semana_id_str.isdigit():
+        if semana_id_str and str(semana_id_str).isdigit():
             return db.session.get(Semana, int(semana_id_str))
 
         today = date.today()
@@ -305,7 +294,6 @@ class HorarioService:
             if not semana:
                 return False, "Semana não encontrada.", 404
 
-            # ---------- VALIDAÇÕES DE CALENDÁRIO ----------
             if not is_admin:
                 if dia == 'sabado' and not semana.mostrar_sabado:
                     return False, "⚠️ AGENDAMENTO BLOQUEADO: O Sábado não está habilitado nesta semana.", 403
@@ -329,7 +317,6 @@ class HorarioService:
 
             disciplina = db.session.get(Disciplina, disciplina_id)
 
-            # ---------- LIMITE DE CARGA HORÁRIA ----------
             if disciplina and not is_admin:
                 total_agendado = db.session.scalar(
                     select(func.sum(Horario.duracao))
@@ -357,9 +344,6 @@ class HorarioService:
                         f"Você tentou agendar {duracao}h."
                     ), 400
 
-            # ===============================================
-            # >>> PRIORIDADE DE DISCIPLINA (MANTIDO)
-            # ===============================================
             if semana and not is_admin:
                 if getattr(semana, 'priority_active', False):
                     raw_priority = getattr(semana, 'priority_disciplines', '[]') or '[]'
@@ -377,9 +361,7 @@ class HorarioService:
                             "⚠️ AGENDAMENTO BLOQUEADO: "
                             "Apenas disciplinas prioritárias podem agendar nesta semana."
                         ), 403
-            # <<< FIM PRIORIDADE >>>
 
-            # ---------- DEFINIÇÃO DE INSTRUTORES ----------
             instrutor_id_1, instrutor_id_2 = None, None
 
             if is_admin:
@@ -387,7 +369,7 @@ class HorarioService:
                 if not instrutor_id_from_form:
                     return False, 'Como administrador, você deve selecionar um instrutor.', 400
 
-                if '-' in instrutor_id_from_form:
+                if '-' in str(instrutor_id_from_form):
                     id1, id2 = instrutor_id_from_form.split('-')
                     instrutor_id_1, instrutor_id_2 = int(id1), int(id2)
                 else:
@@ -439,7 +421,6 @@ class HorarioService:
                     elif vinculo_dt.instrutor_id_2 == instrutor_id_1 and vinculo_dt.instrutor_id_1:
                         instrutor_id_2 = vinculo_dt.instrutor_id_1
 
-            # ---------- CONFLITO CROSS-TURMA ----------
             instructors_to_check = [i for i in [instrutor_id_1, instrutor_id_2] if i is not None]
 
             if instructors_to_check:
@@ -463,14 +444,8 @@ class HorarioService:
                         f"(Período {conflict_aula.periodo})."
                     ), 409
 
-
-            # =========================================================================
-            # =================== LÓGICA ROBUSTA DE GRAVAÇÃO/EDIÇÃO ===================
-            # =========================================================================
-            
             periodos_solicitados = list(range(periodo_inicio, periodo_fim + 1))
             
-            # --- 1. CHECAGEM DE CONFLITO INTERNO (MESMA TURMA) ANTES DE DELETAR ---
             aula_original = db.session.get(Horario, horario_id) if horario_id else None
             group_id_original = aula_original.group_id if aula_original else None
 
@@ -482,7 +457,6 @@ class HorarioService:
                 (Horario.periodo + Horario.duracao - 1) >= periodo_inicio
             )
             
-            # Ignora os blocos da PRÓPRIA aula que estamos editando para evitar falso positivo
             if group_id_original:
                 conflito_query_interno = conflito_query_interno.where(Horario.group_id != group_id_original)
             elif horario_id:
@@ -492,7 +466,6 @@ class HorarioService:
             if conflito_interno:
                 return False, f"⚠️ ERRO DE MARCAÇÃO DUPLA: O {conflito_interno.periodo}º período já está ocupado por '{conflito_interno.disciplina.materia}'.", 409
 
-            # --- 2. DELEÇÃO DO HORÁRIO ANTERIOR DENTRO DA TRANSAÇÃO SEGURA ---
             if horario_id:
                 if not aula_original or not HorarioService.can_edit_horario(aula_original, user):
                     return False, 'Aula não encontrada ou sem permissão para editar.', 404
@@ -502,9 +475,8 @@ class HorarioService:
                 else:
                     db.session.delete(aula_original)
 
-                db.session.flush() # Aplica a deleção no banco sem finalizar, protegendo o estado
+                db.session.flush() 
 
-            # --- 3. CRIAÇÃO DOS NOVOS BLOCOS DE AULA (SISTEMA DE ÍNDICES SEGURO) ---
             break_points = {3, 6, 9}
             new_group_id = str(uuid.uuid4()) if duracao > 1 else None
             
@@ -514,7 +486,6 @@ class HorarioService:
                 p_current = p_start
                 dur_bloco = 1
                 
-                # Estica o bloco até bater no fim ou em um breakpoint
                 while (idx + 1) < len(periodos_solicitados) and \
                       periodos_solicitados[idx+1] == p_current + 1 and \
                       p_current not in break_points:
@@ -536,11 +507,8 @@ class HorarioService:
                     group_id=new_group_id,
                 )
                 db.session.add(nova_aula_bloco)
-                idx += 1 # Avança para o próximo bloco
+                idx += 1 
 
-            # =========================================================================
-
-            # ---------- NOTIFICAÇÃO ----------
             if not is_admin:
                 turma = db.session.scalar(select(Turma).where(Turma.nome == pelotao))
 
@@ -571,7 +539,6 @@ class HorarioService:
 
     @staticmethod
     def _consolidar_aulas_adjacentes(pelotao, semana_id, dia):
-        """Método auxiliar para tentar unir aulas iguais que ficaram fragmentadas."""
         pass
 
     @staticmethod
@@ -729,3 +696,207 @@ class HorarioService:
     @staticmethod
     def aprovar_horario_parcialmente(horario_id, periodos_aprovados):
         return False, "Funcionalidade não implementada neste contexto."
+
+
+    # =========================================================================
+    # CÉREBRO CORRIGIDO: EXTRAÇÃO DE FOTO BLINDADA E VARIAVEIS SINCRONIZADAS
+    # =========================================================================
+    @staticmethod
+    def get_aulas_painel_admin(school_id, ciclo_id, instrutor_id=None, turma_nome=None):
+        hoje = date.today()
+        
+        query = (
+            select(Horario)
+            .join(Semana)
+            .join(Turma, Turma.nome == Horario.pelotao)
+            .options(
+                joinedload(Horario.disciplina),
+                joinedload(Horario.instrutor).joinedload(Instrutor.user),
+                joinedload(Horario.instrutor_2).joinedload(Instrutor.user),
+                joinedload(Horario.semana)
+            )
+            .where(
+                Turma.school_id == school_id,
+                Semana.ciclo_id == ciclo_id
+            )
+        )
+
+        if instrutor_id:
+            query = query.where(or_(
+                Horario.instrutor_id == instrutor_id,
+                Horario.instrutor_id_2 == instrutor_id
+            ))
+        
+        if turma_nome:
+            query = query.where(Horario.pelotao == turma_nome)
+
+        aulas = db.session.scalars(
+            query.order_by(Semana.data_inicio.asc(), Horario.dia_semana, Horario.periodo.asc())
+        ).all()
+
+        mapa_dias = {
+            'segunda': 0, 'terca': 1, 'quarta': 2,
+            'quinta': 3, 'sexta': 4, 'sabado': 5, 'domingo': 6
+        }
+
+        aulas_raw = []
+        for aula in aulas:
+            try:
+                dia_lower = str(aula.dia_semana).lower().replace('-feira', '')
+                data_aula = aula.semana.data_inicio + timedelta(days=mapa_dias.get(dia_lower, 0))
+            except:
+                continue
+
+            instrutores_data = []
+            
+            # --- PROCESSAMENTO DO INSTRUTOR 1 ---
+            if aula.instrutor and aula.instrutor.user:
+                u = aula.instrutor.user
+                posto = u.posto_graduacao or ''
+                nome_guerra = u.nome_de_guerra or u.username or 'U'
+                
+                # EXTRAÇÃO BLINDADA DA FOTO
+                foto_final = 'default.png'
+                
+                # 1. Checa a foto do perfil específico vinculado à aula
+                foto_aula = getattr(aula.instrutor, 'foto_perfil', None)
+                if foto_aula and str(foto_aula).strip() not in ['', 'None', 'default.png']:
+                    foto_final = str(foto_aula).strip()
+                else:
+                    # 2. Faz o fallback para o perfil principal (onde o upload ocorre no 'Meu Perfil')
+                    primary_prof = getattr(u, 'instrutor_profile', None)
+                    if primary_prof:
+                        foto_primaria = getattr(primary_prof, 'foto_perfil', None)
+                        if foto_primaria and str(foto_primaria).strip() not in ['', 'None', 'default.png']:
+                            foto_final = str(foto_primaria).strip()
+
+                # 3. Varredura física: Se não existe na pasta, volta para o default para não gerar ERRO 404
+                if foto_final != 'default.png':
+                    caminho_foto = os.path.join(current_app.static_folder, 'uploads', 'profile_pics', foto_final)
+                    if not os.path.exists(caminho_foto):
+                        foto_final = 'default.png'
+
+                instrutores_data.append({
+                    'nome_exibicao': f"{posto} {nome_guerra}".strip(),
+                    'nome_guerra': nome_guerra,
+                    'foto': foto_final
+                })
+                
+            # --- PROCESSAMENTO DO INSTRUTOR 2 ---
+            if aula.instrutor_2 and aula.instrutor_2.user:
+                u2 = aula.instrutor_2.user
+                posto2 = u2.posto_graduacao or ''
+                nome_guerra2 = u2.nome_de_guerra or u2.username or 'U'
+                
+                # EXTRAÇÃO BLINDADA DA FOTO
+                foto_final2 = 'default.png'
+                
+                foto_aula2 = getattr(aula.instrutor_2, 'foto_perfil', None)
+                if foto_aula2 and str(foto_aula2).strip() not in ['', 'None', 'default.png']:
+                    foto_final2 = str(foto_aula2).strip()
+                else:
+                    primary_prof2 = getattr(u2, 'instrutor_profile', None)
+                    if primary_prof2:
+                        foto_primaria2 = getattr(primary_prof2, 'foto_perfil', None)
+                        if foto_primaria2 and str(foto_primaria2).strip() not in ['', 'None', 'default.png']:
+                            foto_final2 = str(foto_primaria2).strip()
+
+                if foto_final2 != 'default.png':
+                    caminho_foto2 = os.path.join(current_app.static_folder, 'uploads', 'profile_pics', foto_final2)
+                    if not os.path.exists(caminho_foto2):
+                        foto_final2 = 'default.png'
+
+                instrutores_data.append({
+                    'nome_exibicao': f"{posto2} {nome_guerra2}".strip(),
+                    'nome_guerra': nome_guerra2,
+                    'foto': foto_final2
+                })
+
+            aulas_raw.append({
+                'id': aula.id,
+                'data_raw': data_aula,
+                'data_formatada': data_aula.strftime('%d/%m/%Y'),
+                'dia_semana': str(aula.dia_semana).capitalize(),
+                'semana_id': aula.semana_id, 
+                'periodo_inicio': aula.periodo,
+                'periodo_final': aula.periodo + aula.duracao - 1,
+                'duracao': aula.duracao,
+                'disciplina': aula.disciplina.materia if aula.disciplina else 'N/D',
+                'disciplina_id': aula.disciplina_id,
+                'instrutores_data': instrutores_data, 
+                'instrutores': " / ".join([i['nome_exibicao'] for i in instrutores_data]) if instrutores_data else 'N/D',
+                'instrutor_ids': f"{aula.instrutor_id}-{aula.instrutor_id_2}",
+                'turma': aula.pelotao,
+                'status': aula.status,
+                'observacao': aula.observacao,
+                'is_passada': data_aula < hoje 
+            })
+
+        # Ordenar e Agrupar
+        aulas_raw.sort(key=lambda x: (x['data_raw'], x['turma'], x['periodo_inicio']))
+
+        grouped_aulas = []
+        for aula in aulas_raw:
+            if not grouped_aulas:
+                grouped_aulas.append(aula)
+                continue
+            
+            prev = grouped_aulas[-1]
+            
+            is_same_context = (
+                prev['data_raw'] == aula['data_raw'] and
+                prev['turma'] == aula['turma'] and
+                prev['disciplina_id'] == aula['disciplina_id'] and
+                prev['instrutor_ids'] == aula['instrutor_ids'] and
+                prev['status'] == aula['status'] and
+                prev['is_passada'] == aula['is_passada']
+            )
+            
+            is_contiguous = (aula['periodo_inicio'] == prev['periodo_final'] + 1)
+            
+            if is_same_context and is_contiguous:
+                prev['periodo_final'] = aula['periodo_final']
+                prev['duracao'] += aula['duracao']
+                if aula['observacao'] and prev['observacao'] != aula['observacao']:
+                    if prev['observacao']:
+                        prev['observacao'] += f" | {aula['observacao']}"
+                    else:
+                        prev['observacao'] = aula['observacao']
+            else:
+                grouped_aulas.append(aula)
+
+        # Formatação
+        horarios_inicio = {
+            1: "07:45", 2: "08:35", 3: "09:40", 4: "10:30",
+            5: "13:30", 6: "14:20", 7: "15:25", 8: "16:15"
+        }
+        horarios_fim = {
+            1: "08:35", 2: "09:25", 3: "10:30", 4: "11:20",
+            5: "14:20", 6: "15:10", 7: "16:15", 8: "17:05"
+        }
+
+        futuras = []
+        passadas = []
+
+        for g in grouped_aulas:
+            hora_i = horarios_inicio.get(g['periodo_inicio'], f"{g['periodo_inicio']}º T")
+            hora_f = horarios_fim.get(g['periodo_final'], f"{g['periodo_final']}º T")
+
+            g['hora_str'] = f"{hora_i} Até {hora_f}"
+            if g['duracao'] > 1:
+                g['periodo_str'] = f"Períodos {g['periodo_inicio']}º - {g['periodo_final']}º"
+            else:
+                g['periodo_str'] = f"Período {g['periodo_inicio']}º"
+            
+            if g['is_passada']:
+                passadas.append(g)
+            else:
+                futuras.append(g)
+
+        futuras.sort(key=lambda x: (x['data_raw'], x['periodo_inicio']))
+        passadas.sort(key=lambda x: (x['data_raw'], x['periodo_inicio']), reverse=True)
+
+        return {
+            'futuras': futuras,
+            'passadas': passadas
+        }

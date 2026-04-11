@@ -14,74 +14,93 @@
         <form method="POST" action="{{ url_for('user.meu_perfil') }}" enctype="multipart/form-data">
             {{ form.hidden_tag() }}
 
-            {# --- SEÇÃO DE FOTO UNIFICADA --- #}
-            {% if current_user.role in ['aluno', 'instrutor'] %}
+            {# --- SEÇÃO DE FOTO UNIFICADA COM ORIENTAÇÕES SIGBM --- #}
+            {# CORREÇÃO: Agora checa a existência do perfil, não a Role de acesso #}
+            {% set tem_perfil_aluno = current_user.aluno_profile is defined and current_user.aluno_profile %}
+            {% set tem_perfil_instrutor = current_user.instrutor_profile is defined and current_user.instrutor_profile %}
+            
+            {% if tem_perfil_aluno or tem_perfil_instrutor %}
             <div class="mb-4 text-center">
+                
+                <div class="alert alert-warning text-start shadow-sm border-start border-warning border-4 mb-4" role="alert" style="font-size: 0.9rem;">
+                    <h6 class="alert-heading fw-bold mb-1"><i class="fas fa-exclamation-triangle me-2"></i>Atenção: Padrão de Foto</h6>
+                    <p class="mb-0">
+                        É <strong>obrigatório</strong> o uso da foto no padrão Funcional da Identidade (a mesma utilizada no <strong>SIGBM</strong>).
+                        Fotos informais, sem fardamento, com óculos de sol ou fora do padrão militar serão removidas pelos administradores do sistema e o usuário poderá ser advertido.
+                    </p>
+                </div>
+
                 {% set foto_perfil = '' %}
-                {% if current_user.role == 'aluno' and current_user.aluno_profile %}
+                {% if tem_perfil_aluno %}
                     {% set foto_perfil = current_user.aluno_profile.foto_perfil %}
-                {% elif current_user.role == 'instrutor' and current_user.instrutor_profile %}
+                {% elif tem_perfil_instrutor %}
                     {% set foto_perfil = current_user.instrutor_profile.foto_perfil %}
                 {% endif %}
 
-                {% if foto_perfil and foto_perfil != 'default.png' %}
-                    <img src="{{ url_for('static', filename='uploads/profile_pics/' + foto_perfil) }}" alt="Foto de Perfil" class="rounded-circle" style="width: 120px; height: 120px; object-fit: cover; border: 3px solid #eee;">
-                {% else %}
-                    <div class="rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 120px; height: 120px; background-color: var(--color-primary-light); color: white; font-size: 3rem;">
-                        {{ (current_user.nome_de_guerra or current_user.username or 'U')[0] }}
-                    </div>
-                {% endif %}
-                <div class="form-group mt-3">
-                    {{ form.foto_perfil.label(class="form-label") }}
-                    {{ form.foto_perfil(class="form-control") }}
+                <div class="position-relative d-inline-block mb-3">
+                    {% if foto_perfil and foto_perfil != 'default.png' %}
+                        <img src="{{ url_for('static', filename='uploads/profile_pics/' + foto_perfil) }}" alt="Foto de Perfil" class="rounded-circle shadow" style="width: 140px; height: 140px; object-fit: cover; border: 4px solid #fff;">
+                    {% else %}
+                        <div class="rounded-circle d-inline-flex align-items-center justify-content-center shadow" style="width: 140px; height: 140px; background-color: var(--primary-color); color: white; font-size: 4rem; border: 4px solid #fff;">
+                            {{ (current_user.nome_de_guerra or current_user.username or 'U')[0] }}
+                        </div>
+                    {% endif %}
+                </div>
+                
+                <div class="form-group mt-1 text-start">
+                    <label class="form-label fw-bold text-secondary small"><i class="fas fa-camera me-1"></i> Atualizar Foto de Perfil (Max 5MB)</label>
+                    {{ form.foto_perfil(class="form-control form-control-sm border-primary border-opacity-25", accept="image/*") }}
+                    <small class="text-muted d-block mt-1">A imagem será redimensionada automaticamente para o tamanho ideal pelo sistema.</small>
                 </div>
             </div>
+            <hr class="border-secondary opacity-25 mb-4">
             {% endif %}
+            {# --------------------------------------------------- #}
 
             <div class="form-group">
-                <label for="matricula">Matrícula</label>
-                <input type="text" id="matricula" name="matricula" class="form-control" value="{{ current_user.matricula }}" readonly>
+                <label for="matricula" class="fw-bold small text-secondary">Matrícula</label>
+                <input type="text" id="matricula" name="matricula" class="form-control bg-light" value="{{ current_user.matricula }}" readonly>
             </div>
 
             <div class="form-group">
-                {{ form.nome_completo.label }}
+                <label for="nome_completo" class="fw-bold small text-secondary">{{ form.nome_completo.label.text }}</label>
                 {{ form.nome_completo(class="form-control") }}
             </div>
             
             <div class="form-group">
-                <label for="nome_de_guerra">Nome de Guerra</label>
+                <label for="nome_de_guerra" class="fw-bold small text-secondary">Nome de Guerra</label>
                 <input type="text" id="nome_de_guerra" name="nome_de_guerra" class="form-control" value="{{ current_user.nome_de_guerra or '' }}" required>
             </div>
 
             <div class="row">
                 <div class="col-md-6">
                     <div class="form-group">
-                        {{ form.posto_categoria.label(class="form-label") }}
-                        {{ form.posto_categoria(class="form-control", id="posto_categoria") }}
+                        <label for="posto_categoria" class="fw-bold small text-secondary">{{ form.posto_categoria.label.text }}</label>
+                        {{ form.posto_categoria(class="form-select", id="posto_categoria") }}
                     </div>
                 </div>
                 <div class="col-md-6">
                     <div class="form-group">
-                        {{ form.posto_graduacao.label(class="form-label") }}
-                        {{ form.posto_graduacao(class="form-control", id="posto_graduacao") }}
+                        <label for="posto_graduacao" class="fw-bold small text-secondary">{{ form.posto_graduacao.label.text }}</label>
+                        {{ form.posto_graduacao(class="form-select", id="posto_graduacao") }}
                     </div>
                 </div>
             </div>
 
             <div class="form-group">
-                {{ form.email.label }}
+                <label for="email" class="fw-bold small text-secondary">{{ form.email.label.text }}</label>
                 {{ form.email(class="form-control") }}
             </div>
 
-            {% if current_user.role == 'aluno' and current_user.aluno_profile %}
+            {% if tem_perfil_aluno %}
             <div class="form-group">
-                {{ form.turma_id.label(class="form-label") }}
-                {{ form.turma_id(class="form-control") }}
+                <label for="turma_id" class="fw-bold small text-secondary">{{ form.turma_id.label.text }}</label>
+                {{ form.turma_id(class="form-select") }}
             </div>
-            {% elif current_user.role == 'instrutor' %}
+            {% elif tem_perfil_instrutor %}
             <div class="form-group">
-                {{ form.is_rr.label(class="form-label") }}
-                <div class="btn-group" role="group">
+                <label class="form-label fw-bold small text-secondary d-block">{{ form.is_rr.label.text }}</label>
+                <div class="btn-group w-100" role="group">
                     {% for subfield in form.is_rr %}
                         <input type="radio" class="btn-check" name="{{ subfield.name }}" id="{{ subfield.id }}" value="{{ subfield.data }}" {% if subfield.checked %}checked{% endif %}>
                         <label class="btn btn-outline-primary" for="{{ subfield.id }}">{{ subfield.label.text }}</label>
@@ -90,9 +109,9 @@
             </div>
             {% endif %}
 
-            <div class="form-actions" style="justify-content: flex-end;">
-                 <a href="{{ url_for('main.dashboard') }}" class="btn btn-secondary">Voltar</a>
-                {{ form.submit(class="btn btn-primary") }}
+            <div class="form-actions mt-4 d-flex justify-content-end gap-2">
+                <a href="{{ url_for('main.dashboard') }}" class="btn btn-secondary px-4">Voltar</a>
+                {{ form.submit(class="btn btn-primary px-4 fw-bold shadow-sm") }}
             </div>
         </form>
     </div>
@@ -123,7 +142,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (categoriaSelect) {
         categoriaSelect.addEventListener('change', updatePostoOptions);
-        // Garante que a inicialização ocorra
+        
         const initialPosto = "{{ form.posto_graduacao.data or current_user.posto_graduacao or '' }}";
         let initialCategoria = "{{ form.posto_categoria.data or 'Praças' }}";
         
@@ -135,8 +154,8 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         
         categoriaSelect.value = initialCategoria;
-        updatePostoOptions(); // Popula o segundo select
-        postoSelect.value = initialPosto; // Define o valor correto
+        updatePostoOptions(); 
+        postoSelect.value = initialPosto; 
     }
 });
 </script>

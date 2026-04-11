@@ -1,4 +1,3 @@
-# backend/controllers/user_controller.py
 from __future__ import annotations
 
 import os
@@ -106,14 +105,16 @@ def meu_perfil():
     if request.method == 'GET':
         form.posto_graduacao.data = current_user.posto_graduacao
 
-    if current_user.role == 'aluno' and current_user.aluno_profile:
+    # CORREÇÃO: Liberar visualização baseada na existência do perfil, não da ROLE.
+    if hasattr(current_user, 'aluno_profile') and current_user.aluno_profile:
         school_id = current_user.aluno_profile.turma.school_id if current_user.aluno_profile.turma else None
         if school_id:
             turmas = db.session.scalars(select(Turma).filter_by(school_id=school_id).order_by(Turma.nome)).all()
             form.turma_id.choices = [(t.id, t.nome) for t in turmas]
             if request.method == 'GET':
                  form.turma_id.data = current_user.aluno_profile.turma_id
-    elif current_user.role == 'instrutor' and hasattr(current_user, 'instrutor_profile') and current_user.instrutor_profile:
+                 
+    elif hasattr(current_user, 'instrutor_profile') and current_user.instrutor_profile:
         if request.method == 'GET':
             form.is_rr.data = current_user.instrutor_profile.is_rr
 
@@ -137,17 +138,16 @@ def meu_perfil():
                     current_user.must_change_password = False
                     flash("Senha alterada com sucesso.", "success")
 
-            if current_user.role == 'aluno' and current_user.aluno_profile:
+            # CORREÇÃO: Liberar salvamento da foto baseada na existência do perfil
+            if hasattr(current_user, 'aluno_profile') and current_user.aluno_profile:
                 current_user.aluno_profile.turma_id = form.turma_id.data
                 if form.foto_perfil.data:
-                    # O serviço agora cuida da compressão
                     success, message = AlunoService.update_profile_picture(current_user.aluno_profile.id, form.foto_perfil.data)
                     flash(message, 'success' if success else 'danger')
 
-            if current_user.role == 'instrutor' and hasattr(current_user, 'instrutor_profile') and current_user.instrutor_profile:
+            elif hasattr(current_user, 'instrutor_profile') and current_user.instrutor_profile:
                 current_user.instrutor_profile.is_rr = form.is_rr.data
                 if form.foto_perfil.data:
-                    # O serviço agora cuida da compressão
                     success, message = InstrutorService.update_profile_picture(current_user.instrutor_profile.id, form.foto_perfil.data)
                     flash(message, 'success' if success else 'danger')
 

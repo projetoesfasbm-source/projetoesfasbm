@@ -167,6 +167,14 @@
         .dec-alert-banner a:hover {
             color: #533f03;
         }
+
+        /* Garantir que o avatar fique redondo e com a imagem correta */
+        .user-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 50%;
+        }
     </style>
 </head>
 <body class="{% if not current_user.is_authenticated %}no-sidebar{% endif %}">
@@ -268,10 +276,14 @@
                             <small>{{ current_user.matricula }}</small>
                         </div>
                         <div class="user-avatar">
-                            {% if current_user.role == 'aluno' and current_user.aluno_profile and current_user.aluno_profile.foto_perfil and current_user.aluno_profile.foto_perfil != 'default.png' %}
-                                <img src="{{ url_for('static', filename='uploads/profile_pics/' + current_user.aluno_profile.foto_perfil) }}" alt="Foto de Perfil">
-                            {% elif current_user.role == 'instrutor' and current_user.instrutor_profile and current_user.instrutor_profile.foto_perfil and current_user.instrutor_profile.foto_perfil != 'default.png' %}
-                                <img src="{{ url_for('static', filename='uploads/profile_pics/' + current_user.instrutor_profile.foto_perfil) }}" alt="Foto de Perfil">
+                            {# VERIFICAÇÃO INTELIGENTE DO AVATAR #}
+                            {% set tem_perfil_aluno = current_user.aluno_profile is defined and current_user.aluno_profile %}
+                            {% set tem_perfil_instrutor = current_user.instrutor_profile is defined and current_user.instrutor_profile %}
+                            
+                            {% if tem_perfil_aluno and current_user.aluno_profile.foto_perfil and current_user.aluno_profile.foto_perfil != 'default.png' %}
+                                <img src="{{ url_for('static', filename='uploads/profile_pics/' + current_user.aluno_profile.foto_perfil) }}" alt="Foto de Perfil" onerror="this.src=''; this.parentElement.innerHTML='<span>{{ (current_user.nome_de_guerra or current_user.username)[0] }}</span>';">
+                            {% elif tem_perfil_instrutor and current_user.instrutor_profile.foto_perfil and current_user.instrutor_profile.foto_perfil != 'default.png' %}
+                                <img src="{{ url_for('static', filename='uploads/profile_pics/' + current_user.instrutor_profile.foto_perfil) }}" alt="Foto de Perfil" onerror="this.src=''; this.parentElement.innerHTML='<span>{{ (current_user.nome_de_guerra or current_user.username)[0] }}</span>';">
                             {% else %}
                                 <span>{{ (current_user.nome_de_guerra or current_user.username)[0] }}</span>
                             {% endif %}
@@ -397,7 +409,8 @@
                     {% if current_user.is_sens_in_school(active_sid) %}
                         <div class="nav-separator">GESTÃO DE AULAS</div>
                         <a href="{{ url_for('horario.aprovar_horarios') }}" class="nav-link {% if request.endpoint == 'horario.aprovar_horarios' %}active{% endif %}"><div class="nav-icon">👍</div> Aprovar Aulas</a>
-                        <a href="{{ url_for('horario.proximas_aulas_admin') }}" class="nav-link {% if request.endpoint == 'horario.proximas_aulas_admin' %}active{% endif %}"><div class="nav-icon">🗓️</div> Próximas Aulas (Admin)</a>                <div class="nav-separator">RELATÓRIOS</div>
+                        <a href="{{ url_for('horario.proximas_aulas_admin') }}" class="nav-link {% if request.endpoint == 'horario.proximas_aulas_admin' %}active{% endif %}"><div class="nav-icon">🗓️</div> Próximas Aulas (Admin)</a>
+                        <div class="nav-separator">RELATÓRIOS</div>
                         <a href="{{ url_for('relatorios.index') }}" class="nav-link {% if request.endpoint and 'relatorios.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📊</div> Relatórios</a>
                     {% endif %}
 
