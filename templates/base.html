@@ -178,6 +178,7 @@
     </style>
 </head>
 <body class="{% if not current_user.is_authenticated %}no-sidebar{% endif %}">
+<body class="{% if not current_user.is_authenticated or request.endpoint == 'auth.configurar_2fa' %}no-sidebar{% endif %}">
 
     <div id="pwa-update-bar">
         <p><i class="fas fa-sync-alt fa-spin me-2"></i> Nova versão disponível!</p>
@@ -260,6 +261,7 @@
             </div>
 
             <div class="top-navbar-right-items">
+                {% if request.endpoint != 'auth.configurar_2fa' %}
                 <div class="dropdown">
                     <a href="#" class="notification-bell" data-bs-toggle="dropdown" aria-expanded="false" title="Notificações">
                         🔔
@@ -302,8 +304,10 @@
                         {% endif %}
 
                         <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#changePasswordModal">Alterar Senha</a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('auth.configurar_2fa') }}"><i class="fas fa-shield-alt"></i> Configurar 2FA</a></li>
                     </ul>
                 </div>
+                {% endif %}
                 <a href="{{ url_for('auth.logout') }}" class="btn btn-outline-danger btn-sm" title="Sair do Sistema">Sair</a>
             </div>
         </div>
@@ -314,6 +318,7 @@
 
     <div class="page-container">
         {% if current_user.is_authenticated %}
+        {% if current_user.is_authenticated and request.endpoint != 'auth.configurar_2fa' %}
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <a href="{{ url_for('main.dashboard') }}" class="nav-brand">
@@ -699,11 +704,12 @@
                 });
             }
 
-            if ({{ current_user.is_authenticated | tojson }}) {
+            if ({{ current_user.is_authenticated | tojson }} && "{{ request.endpoint }}" !== "auth.configurar_2fa") {
                 fetchNotifications();
                 setInterval(fetchNotifications, 60000);
             }
-        });
+            });
     </script>
+{% endif %}
 </body>
 </html>

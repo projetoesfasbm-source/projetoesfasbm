@@ -83,6 +83,28 @@ class EmailService:
         return thr
 
     @staticmethod
+    def send_2fa_reset_email(user, token):
+        """Envia e-mail para redefinição do 2FA do usuário."""
+        if not user.email:
+            log.warning(f"Tentativa de envio de e-mail 2FA para usuário sem e-mail: {user.matricula}")
+            return None
+
+        log.info(f"Iniciando processo de envio de e-mail de RESET 2FA para: {user.email}")
+        app = current_app._get_current_object()
+
+        html_content = render_template(
+            'email/reset_2fa.html',
+            user=user,
+            token=token
+        )
+
+        subject = 'Recuperação de 2FA - SisGEn'
+
+        thr = Thread(target=send_async_email_brevo, args=[app, user.email, subject, html_content])
+        thr.start()
+        return thr
+
+    @staticmethod
     def send_justice_notification_email(user, processo, url):
         """Envia e-mail notificando o aluno da ABERTURA de um processo disciplinar."""
         if not user.email:

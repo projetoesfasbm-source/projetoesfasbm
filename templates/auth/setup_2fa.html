@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}Configurar 2FA - SisGEn{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8 col-md-10">
+            <div class="card">
+                <div class="card-header bg-warning text-dark">
+                    <h3 class="card-title mb-0"><i class="fas fa-shield-alt"></i> Ação Obrigatória: Configurar 2FA</h3>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning border-warning">
+                        <strong>Atenção!</strong> A partir de agora, o uso da Autenticação em Duas Etapas (2FA) é <strong>compulsório</strong>. 
+                        Você precisa concluir a configuração abaixo para liberar o seu acesso às funcionalidades do sistema.
+                    </div>
+
+                    <p>Para ativar a segurança, siga os passos abaixo:</p>
+
+                    <ol class="list-group list-group-numbered mb-4">
+                        <li class="list-group-item">
+                            <strong>Instale um aplicativo autenticador</strong> no seu celular, como o 
+                            <a href="https://play.google.com/store/apps/details?id=com.google.android.apps.authenticator2" target="_blank" rel="noopener">Google Authenticator</a>,
+                            <a href="https://authy.com/download/" target="_blank" rel="noopener">Authy</a> ou outro de sua preferência.
+                        </li>
+                        <li class="list-group-item">
+                            <strong>Escaneie o QR Code abaixo</strong> com o aplicativo. Ele irá adicionar a conta "ESFASBM" à sua lista.
+                        </li>
+                        <li class="list-group-item">
+                            <strong>Insira o código de 6 dígitos</strong> gerado pelo aplicativo no campo abaixo para confirmar e ativar a proteção.
+                        </li>
+                    </ol>
+
+                    <div class="text-center my-4">
+                        <div id="qrcode-container" class="d-inline-block p-3 bg-white border rounded">
+                            <div id="qrcode"></div>
+                        </div>
+                        <p class="mt-2">
+                            <small>Não consegue escanear? Insira a chave manualmente:</small><br>
+                            <code class="user-select-all bg-light p-1 rounded">{{ secret }}</code>
+                        </p>
+                    </div>
+
+                    <hr>
+
+                    <form method="POST" action="{{ url_for('auth.configurar_2fa') }}">
+                        {{ form.hidden_tag() }}
+                        <div class="row align-items-end">
+                            <div class="col-md-8">
+                                <div class="form-group">
+                                    <label for="token" class="form-label"><strong>Passo 3:</strong> Confirme o código</label>
+                                    {{ form.token(class="form-control form-control-lg", placeholder="Digite o código de 6 dígitos", required=True, autocomplete="one-time-code", inputmode="numeric") }}
+                                    {% if form.token.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in form.token.errors %}{{ error }}{% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <button type="submit" class="btn btn-success w-100 btn-lg">Ativar 2FA</button>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block modals %}
+    {# Importa a biblioteca qrcode.js de um CDN confiável #}
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Pega a URI gerada pelo backend e renderiza o QR Code no div #qrcode
+            new QRCode(document.getElementById("qrcode"), "{{ uri }}");
+        });
+    </script>
+{% endblock %}

@@ -42,6 +42,10 @@ class User(UserMixin, db.Model):
     is_active: Mapped[bool] = mapped_column(default=False, nullable=False)
     must_change_password: Mapped[bool] = mapped_column(default=False, nullable=False)
 
+
+    totp_secret: Mapped[t.Optional[str]] = mapped_column(db.String(32), nullable=True)
+    is_totp_enabled: Mapped[bool] = mapped_column(db.Boolean, default=False, server_default='0', nullable=False)
+
     # --- RELACIONAMENTOS ---
     # useList=False garante que seja tratado como objeto único (1-to-1)
     aluno_profile: Mapped['Aluno'] = relationship('Aluno', back_populates='user', uselist=False, cascade="all, delete-orphan")
@@ -63,10 +67,6 @@ class User(UserMixin, db.Model):
         self.password_hash = generate_password_hash(password)
 
     def check_password(self, password: str) -> bool:
-        if not self.password_hash:
-            return False
-        return check_password_hash(self.password_hash, password)
-
         if not self.password_hash:
             return False
         return check_password_hash(self.password_hash, password)

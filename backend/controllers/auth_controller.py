@@ -1,15 +1,16 @@
 # backend/controllers/auth_controller.py
 
 from flask import (
-    Blueprint, render_template, request, redirect, url_for, flash, current_app, session
+    Blueprint, render_template, request, redirect, url_for, flash, current_app, session,
 )
 from flask_login import login_user, logout_user, login_required, current_user
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField, BooleanField
-from wtforms.validators import DataRequired, Email, EqualTo, Length
+from wtforms.validators import DataRequired, Email, EqualTo, Length, Regexp
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from sqlalchemy import select
 
+from ..services.totp_service import TotpService
 from ..models.database import db
 from ..models.user import User
 from ..models.user_school import UserSchool
@@ -40,10 +41,29 @@ class ResetPasswordForm(FlaskForm):
     password2 = PasswordField("Confirme a senha", validators=[DataRequired(), EqualTo("password")])
     submit = SubmitField("Redefinir senha")
 
+class Verify2FAForm(FlaskForm):
+    token = StringField("Código de 6 dígitos", validators=[DataRequired(), Length(min=6, max=6), Regexp(r'^\d{6}$', message="O código deve conter apenas 6 números.")])
+    submit = SubmitField("Verificar")
+
+class Setup2FAForm(FlaskForm):
+    token = StringField("Código do App (6 dígitos)", validators=[DataRequired(), Length(min=6, max=6), Regexp(r'^\d{6}$', message="O código deve conter apenas 6 números.")])
+    submit = SubmitField("Ativar 2FA")
+
 # --- Helpers ---
-def _get_serializer():
+def _get_serializer(salt: str = "reset-password"):
     secret = current_app.config.get("SECRET_KEY") or "CHANGEME"
-    return URLSafeTimedSerializer(secret_key=secret, salt="reset-password")
+    return URLSafeTimedSerializer(secret_key=secret, salt=salt)
+
+@auth_bp.before_app_request
+def enforce_2fa_setup():
+    """Força usuários logados que não têm 2FA a configurá-lo antes de acessar o sistema."""
+    if current_user.is_authenticated and not getattr(current_user, 'is_totp_enabled', False):
+        # Permite acesso apenas à página de configuração do 2FA, logout e arquivos estáticos (CSS/JS)
+        allowed_endpoints = ['auth.configurar_2fa', 'auth.logout', 'static']
+        
+        if request.endpoint and request.endpoint not in allowed_endpoints and not request.endpoint.startswith('static'):
+            flash("A Autenticação em Duas Etapas (2FA) é obrigatória. Configure para liberar seu acesso ao sistema.", "warning")
+            return redirect(url_for('auth.configurar_2fa'))
 
 def _find_user_for_login(identifier):
     ident = (identifier or "").strip()
@@ -77,6 +97,13 @@ def login():
             flash("Conta inativa.", "warning")
             return redirect(url_for("auth.register"))
 
+        # INTERCEPTAÇÃO PARA 2FA
+        if getattr(user, 'is_totp_enabled', False):
+            session['pending_2fa_user_id'] = user.id
+            session['pending_2fa_remember'] = remember
+            return redirect(url_for("auth.verificar_2fa"))
+
+        # Login normal (sem 2FA)
         login_user(user, remember=remember)
         
         # Limpa qualquer seleção anterior
@@ -88,6 +115,121 @@ def login():
         return redirect(url_for("main.selecionar_escola"))
 
     return render_template("login.html", form=form)
+
+@auth_bp.route("/verificar-2fa", methods=["GET", "POST"])
+def verificar_2fa():
+    user_id = session.get('pending_2fa_user_id')
+    if not user_id:
+        return redirect(url_for("auth.login"))
+        
+    user = db.session.get(User, user_id)
+    if not user:
+        session.pop('pending_2fa_user_id', None)
+        return redirect(url_for("auth.login"))
+        
+    form = Verify2FAForm()
+    reset_form = CSRFOnlyForm()
+    if form.validate_on_submit():
+        if TotpService.verify_token(user.totp_secret, form.token.data):
+            remember = session.get('pending_2fa_remember', False)
+            
+            # Limpa a sessão pendente ANTES de logar
+            session.pop('pending_2fa_user_id', None)
+            session.pop('pending_2fa_remember', None)
+            
+            login_user(user, remember=remember)
+            session.pop('active_school_id', None)
+            session.permanent = True
+            
+            flash("Autenticação realizada com sucesso.", "success")
+            return redirect(url_for("main.selecionar_escola"))
+        else:
+            flash("Código de autenticação inválido. Tente novamente.", "danger")
+            
+    return render_template("auth/verify_2fa.html", form=form, reset_form=reset_form)
+
+@auth_bp.route("/configurar-2fa", methods=["GET", "POST"])
+@login_required
+def configurar_2fa():
+    form = Setup2FAForm()
+    
+    if current_user.is_totp_enabled:
+        flash("A Autenticação em Duas Etapas já está ativada na sua conta.", "info")
+        return redirect(url_for("main.dashboard"))
+        
+    if 'setup_2fa_secret' not in session:
+        session['setup_2fa_secret'] = TotpService.generate_secret()
+        
+    secret = session['setup_2fa_secret']
+    identificador = current_user.email if current_user.email else current_user.matricula
+    uri = TotpService.get_provisioning_uri(secret, identificador, issuer_name="ESFASBM")
+    
+    if form.validate_on_submit():
+        if TotpService.verify_token(secret, form.token.data):
+            current_user.totp_secret = secret
+            current_user.is_totp_enabled = True
+            db.session.commit()
+            session.pop('setup_2fa_secret', None)
+            flash("Autenticação em Duas Etapas (2FA) ativada com sucesso! Faça login novamente para confirmar.", "success")
+            return redirect(url_for("auth.logout"))
+        else:
+            flash("Código inválido. Certifique-se de escanear o QR Code corretamente e tente de novo.", "danger")
+            
+    return render_template("auth/setup_2fa.html", form=form, secret=secret, uri=uri)
+
+@auth_bp.route("/solicitar-reset-2fa", methods=["POST"])
+def solicitar_reset_2fa():
+    user_id = session.get('pending_2fa_user_id')
+    if not user_id:
+        flash("Sessão expirada. Faça login novamente.", "warning")
+        return redirect(url_for("auth.login"))
+
+    user = db.session.get(User, user_id)
+    if not user:
+        return redirect(url_for("auth.login"))
+
+    if not user.email:
+        flash("Sua conta não possui e-mail cadastrado. Procure a secretaria para recuperar seu acesso.", "danger")
+        return redirect(url_for("auth.verificar_2fa"))
+
+    s = _get_serializer("reset-2fa")
+    token = s.dumps({"user_id": user.id, "action": "reset_2fa"})
+    
+    try:
+        if hasattr(EmailService, 'send_2fa_reset_email'):
+            EmailService.send_2fa_reset_email(user, token)
+            flash(f"Instruções de recuperação enviadas para o e-mail ({user.email[:3]}***).", "success")
+        else:
+            # Fallback provisório para evitar quebra caso o método de email não exista ainda
+            reset_url = url_for('auth.resetar_2fa_token', token=token, _external=True)
+            current_app.logger.warning(f"Link de Recuperação 2FA gerado: {reset_url}")
+            flash("Link de recuperação gerado no console do servidor (EmailService não configurado para 2FA).", "info")
+    except Exception as e:
+        current_app.logger.error(f"Erro ao enviar email de reset 2FA: {e}")
+        flash("Erro ao tentar enviar o e-mail de recuperação.", "danger")
+        
+    return redirect(url_for("auth.login"))
+
+@auth_bp.route("/resetar-2fa/<token>")
+def resetar_2fa_token(token):
+    s = _get_serializer("reset-2fa")
+    try:
+        data = s.loads(token, max_age=3600)
+        if data.get("action") != "reset_2fa":
+            raise BadSignature()
+        user_id = data.get("user_id")
+    except (SignatureExpired, BadSignature):
+        flash("O link de recuperação é inválido ou expirou.", "danger")
+        return redirect(url_for("auth.login"))
+
+    user = db.session.get(User, user_id)
+    if user:
+        user.totp_secret = None
+        user.is_totp_enabled = False
+        db.session.commit()
+        flash("Sua Autenticação em Duas Etapas foi desativada. Faça login e configure um novo aparelho.", "success")
+    
+    return redirect(url_for("auth.login"))
 
 @auth_bp.route("/logout")
 @login_required
@@ -204,8 +346,11 @@ def redefinir_senha(token):
         try:
             user.set_password(form.password.data)
             user.must_change_password = False
+            user.totp_secret = None
+            user.is_totp_enabled = False
             db.session.commit()
             flash("Senha redefinida.", "success")
+            flash("Senha redefinida e segurança (2FA) resetada com sucesso.", "success")
             return redirect(url_for("auth.login"))
         except Exception:
             db.session.rollback()

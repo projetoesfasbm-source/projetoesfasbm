@@ -49,3 +49,23 @@ class Config:
                 "No SECRET_KEY set for Flask application. "
                 "Set the SECRET_KEY environment variable."
             )
+
+        # --- CONFIGURAÇÃO DE LOGGING ---
+        import logging
+        from logging import StreamHandler
+
+        # Configurar logging para mostrar erros no console/terminal
+        if not app.logger.handlers:
+            handler = StreamHandler()
+            handler.setLevel(logging.INFO)
+            formatter = logging.Formatter(
+                '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+            )
+            handler.setFormatter(formatter)
+            app.logger.addHandler(handler)
+            app.logger.setLevel(logging.INFO)
+
+        # Mostrar também erros de SQLAlchemy no console se estiver em desenvolvimento
+        if app.debug:
+            logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
+            logging.getLogger('sqlalchemy.pool').setLevel(logging.INFO)

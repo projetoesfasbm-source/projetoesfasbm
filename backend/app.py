@@ -4,6 +4,9 @@ import os
 import sys
 from unittest.mock import MagicMock
 
+# Adicionar o diretório raiz ao path para imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 # --- HACK PARA RODAR LOCAL NO WINDOWS SEM O WEASYPRINT ---
 if os.environ.get('FLASK_ENV') == 'development' or os.name == 'nt':
     sys.modules['weasyprint'] = MagicMock()
