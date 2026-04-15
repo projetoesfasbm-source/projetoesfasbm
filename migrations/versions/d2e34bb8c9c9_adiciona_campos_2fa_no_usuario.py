@@ -17,8 +17,14 @@ depends_on = None
 
 
 def upgrade():
-    pass
+    # Adiciona coluna totp_secret na tabela users
+    op.add_column('users', sa.Column('totp_secret', sa.String(32), nullable=True))
+    
+    # Adiciona coluna is_totp_enabled na tabela users
+    op.add_column('users', sa.Column('is_totp_enabled', sa.Boolean(), nullable=False, server_default='0'))
 
 
 def downgrade():
-    pass
+    # Remove as colunas em caso de rollback
+    op.drop_column('users', 'is_totp_enabled')
+    op.drop_column('users', 'totp_secret')
