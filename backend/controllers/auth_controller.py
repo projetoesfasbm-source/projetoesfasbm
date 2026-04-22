@@ -1,14 +1,16 @@
 # backend/controllers/auth_controller.py
 
 from flask import (
-    Blueprint, render_template, request, redirect, url_for, flash, current_app, session,
+    Blueprint, render_template, request, redirect, url_for, flash, current_app, session, make_response
 )
 from flask_login import login_user, logout_user, login_required, current_user
 from flask_wtf import FlaskForm
+from flask_wtf.csrf import CSRFError
 from wtforms import StringField, PasswordField, SubmitField, BooleanField
 from wtforms.validators import DataRequired, Email, EqualTo, Length, Regexp
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from sqlalchemy import select
+from datetime import datetime, timedelta
 
 from ..services.totp_service import TotpService
 from ..models.database import db
@@ -22,6 +24,13 @@ from ..services.email_service import EmailService
 from utils.normalizer import normalize_matricula, normalize_name
 
 auth_bp = Blueprint("auth", __name__, url_prefix="")
+
+@auth_bp.app_errorhandler(CSRFError)
+def handle_csrf_error(e):
+    """Captura erros de token CSRF expirado ou ausente para evitar tela em branco."""
+    current_app.logger.warning(f"Falha de CSRF detectada: {e.description}")
+    flash("Sua sessão expirou por inatividade. Por favor, tente novamente.", "warning")
+    return redirect(request.referrer or url_for('auth.login'))
 
 # --- Forms (Mantidos) ---
 class CSRFOnlyForm(FlaskForm): pass
@@ -58,7 +67,6 @@ def _get_serializer(salt: str = "reset-password"):
 def enforce_2fa_setup():
     """Força usuários logados que não têm 2FA a configurá-lo antes de acessar o sistema."""
     if current_user.is_authenticated and not getattr(current_user, 'is_totp_enabled', False):
-        # Permite acesso apenas à página de configuração do 2FA, logout e arquivos estáticos (CSS/JS)
         allowed_endpoints = ['auth.configurar_2fa', 'auth.logout', 'static']
         
         if request.endpoint and request.endpoint not in allowed_endpoints and not request.endpoint.startswith('static'):
@@ -99,18 +107,21 @@ def login():
 
         # INTERCEPTAÇÃO PARA 2FA
         if getattr(user, 'is_totp_enabled', False):
+            # VERIFICAÇÃO DE DISPOSITIVO CONFIÁVEL (30 DIAS)
+            trust_token = request.cookies.get(f'trust_device_{user.id}')
+            if trust_token and trust_token == user.totp_secret:
+                login_user(user, remember=remember)
+                session.pop('active_school_id', None)
+                session.permanent = True
+                return redirect(url_for("main.selecionar_escola"))
+
             session['pending_2fa_user_id'] = user.id
             session['pending_2fa_remember'] = remember
             return redirect(url_for("auth.verificar_2fa"))
 
         # Login normal (sem 2FA)
         login_user(user, remember=remember)
-        
-        # Limpa qualquer seleção anterior
         session.pop('active_school_id', None)
-        
-        # A inteligência de varrer as turmas, instrutores e admins 
-        # está centralizada no main.selecionar_escola. Joga pra lá!
         session.permanent = True
         return redirect(url_for("main.selecionar_escola"))
 
@@ -129,10 +140,12 @@ def verificar_2fa():
         
     form = Verify2FAForm()
     reset_form = CSRFOnlyForm()
+    
     if form.validate_on_submit():
         if TotpService.verify_token(user.totp_secret, form.token.data):
             remember = session.get('pending_2fa_remember', False)
-            
+            trust_device = request.form.get('trust_device') # Captura o checkbox do HTML
+
             # Limpa a sessão pendente ANTES de logar
             session.pop('pending_2fa_user_id', None)
             session.pop('pending_2fa_remember', None)
@@ -142,7 +155,23 @@ def verificar_2fa():
             session.permanent = True
             
             flash("Autenticação realizada com sucesso.", "success")
-            return redirect(url_for("main.selecionar_escola"))
+            
+            response = make_response(redirect(url_for("main.selecionar_escola")))
+            
+            # IMPLEMENTAÇÃO DO BOTÃO DE RECONHECER DISPOSITIVO (30 DIAS)
+            if trust_device:
+                expires = datetime.now() + timedelta(days=30)
+                # O cookie armazena o totp_secret (ou um hash dele) para validar este navegador específico
+                response.set_cookie(
+                    f'trust_device_{user.id}', 
+                    user.totp_secret, 
+                    expires=expires, 
+                    httponly=True, 
+                    secure=True, 
+                    samesite='Lax'
+                )
+            
+            return response
         else:
             flash("Código de autenticação inválido. Tente novamente.", "danger")
             
@@ -200,7 +229,6 @@ def solicitar_reset_2fa():
             EmailService.send_2fa_reset_email(user, token)
             flash(f"Instruções de recuperação enviadas para o e-mail ({user.email[:3]}***).", "success")
         else:
-            # Fallback provisório para evitar quebra caso o método de email não exista ainda
             reset_url = url_for('auth.resetar_2fa_token', token=token, _external=True)
             current_app.logger.warning(f"Link de Recuperação 2FA gerado: {reset_url}")
             flash("Link de recuperação gerado no console do servidor (EmailService não configurado para 2FA).", "info")
@@ -227,14 +255,19 @@ def resetar_2fa_token(token):
         user.totp_secret = None
         user.is_totp_enabled = False
         db.session.commit()
+        
+        # Opcional: Limpar cookies de confiança ao resetar 2FA
+        response = make_response(redirect(url_for("auth.login")))
+        response.delete_cookie(f'trust_device_{user.id}')
+        
         flash("Sua Autenticação em Duas Etapas foi desativada. Faça login e configure um novo aparelho.", "success")
+        return response
     
     return redirect(url_for("auth.login"))
 
 @auth_bp.route("/logout")
 @login_required
 def logout():
-    # LIMPEZA PROFUNDA: Limpa TUDO para não vazar lixo de um usuário para o outro
     session.clear() 
     logout_user()
     flash("Você saiu do sistema.", "info")
@@ -349,7 +382,6 @@ def redefinir_senha(token):
             user.totp_secret = None
             user.is_totp_enabled = False
             db.session.commit()
-            flash("Senha redefinida.", "success")
             flash("Senha redefinida e segurança (2FA) resetada com sucesso.", "success")
             return redirect(url_for("auth.login"))
         except Exception:
@@ -358,29 +390,20 @@ def redefinir_senha(token):
 
     return render_template("redefinir_senha.html", form=form, token=token)
 
-# --- ROTAS DO SUDO MODE (SELETOR DE CHAPÉU) ---
-
 @auth_bp.route("/ativar-modo-dec", methods=["GET", "POST"])
 @login_required
 def ativar_modo_dec():
-    # Segurança 1: Só quem tem o crachá VIP no banco pode acessar essa tela
     if current_user.role != 'super_admin':
         flash("Acesso negado. Você não possui privilégios de gestão DEC.", "danger")
         return redirect(url_for("main.dashboard"))
 
     if request.method == "POST":
         password = request.form.get("password")
-        
-        # Segurança 2: Confirma se a senha digitada está correta
         if current_user.check_password(password):
-            # Ativa o chapéu do DEC na sessão
             session['is_dec_mode'] = True
-            
-            # Limpa qualquer escola de instrutor que estivesse selecionada
             session.pop('active_school_id', None)
             session.pop('view_as_school_id', None)
             session.pop('view_as_school_name', None)
-            
             flash("Modo de Gestão DEC ativado com segurança.", "success")
             return redirect(url_for("super_admin.dashboard"))
         else:
@@ -388,14 +411,11 @@ def ativar_modo_dec():
 
     return render_template("ativar_dec.html")
 
-
 @auth_bp.route("/desativar-modo-dec")
 @login_required
 def desativar_modo_dec():
-    # Remove o chapéu do DEC da sessão
     session.pop('is_dec_mode', None)
     session.pop('view_as_school_id', None)
     session.pop('view_as_school_name', None)
-    
     flash("Modo DEC desativado. Você retornou à visão padrão.", "info")
     return redirect(url_for("main.dashboard"))

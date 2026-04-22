@@ -12,7 +12,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # Pasta onde os zips serão salvos
 BACKUP_DIR = os.path.join(BASE_DIR, "backups_sistema_full")
 # Arquivo de senhas
-ENV_FILE = os.path.join(BASE_DIR, ".env")
+ENV_FILE = os.path.join(BASE_DIR, ".env.local")
 
 # Pastas para ignorar
 PASTAS_IGNORAR = {
@@ -22,7 +22,7 @@ PASTAS_IGNORAR = {
 def extrair_credenciais_url():
     """Lê credenciais do .env"""
     if not os.path.exists(ENV_FILE):
-        print(f"❌ Erro: .env não encontrado em {ENV_FILE}")
+        print(f"❌ Erro: .env .local não encontrado em {ENV_FILE}")
         return None
     load_dotenv(ENV_FILE)
     database_url = os.getenv('DATABASE_URL')

@@ -79,9 +79,7 @@ class RelatorioService:
         Instrutor2 = aliased(Instrutor)
         User2 = aliased(User)
 
-        # DIAGNÓSTICO E CORREÇÃO:
-        # Puxamos os horários e, por LEFT OUTER JOIN, puxamos os diários assinados
-        # correspondentes àquele mesmo período/disciplina. Isso nos permite ver quem ASSINOU de fato.
+        # Busca base de horários confirmados
         query = (
             select(
                 Horario,
@@ -131,7 +129,8 @@ class RelatorioService:
                 
                 if data_aula_ant < data_limite:
                     duracao_ant = h_ant.duracao or 1
-                    chave = (data_aula_ant, h_ant.periodo, getattr(h_ant, 'pelotao', 'PADRAO'))
+                    # Chave única baseada no ID do horário para evitar duplicidade no histórico
+                    chave = (data_aula_ant, h_ant.periodo, h_ant.id)
                     
                     if chave not in slots_ant:
                         slots_ant.add(chave)
@@ -146,7 +145,6 @@ class RelatorioService:
             if mode_rr == 'exclude_rr' and instrutor_obj.is_rr: return 
             if instrutor_ids_filter and instrutor_obj.id not in instrutor_ids_filter: return
 
-            # Evita duplicidade de pagamento para o mesmo instrutor no mesmo slot
             chave_slot = (instrutor_obj.id, data_aula, periodo_aula)
             if chave_slot in slots_pagos: return
             slots_pagos.add(chave_slot)
@@ -197,22 +195,18 @@ class RelatorioService:
             offset_dias = RelatorioService._get_dia_offset(horario.dia_semana)
             data_aula = semana.data_inicio + timedelta(days=offset_dias)
 
-            # BUSCA O ASSINANTE REAL:
-            # Verifica se há um diário validado para esta aula. Se houver, pagamos quem assinou.
-            # Se não houver, fallback para os instrutores agendados (inst1/inst2).
+            # CORREÇÃO: Busca o diário assinado para pagar o instrutor real.
+            # Removido DiarioClasse.turma_id == horario.turma_id pois causava AttributeError
             diario_validado = db.session.scalar(
                 select(DiarioClasse).where(
                     DiarioClasse.data_aula == data_aula,
                     DiarioClasse.periodo == periodo,
-                    DiarioClasse.turma_id == horario.turma_id,
                     DiarioClasse.disciplina_id == disciplina.id,
                     DiarioClasse.status == 'assinado'
-                )
+                ).limit(1)
             )
 
             if diario_validado and diario_validado.instrutor_assinante:
-                # O instrutor_assinante é um objeto da tabela User.
-                # Precisamos encontrar o perfil de Instrutor correspondente na escola atual.
                 user_assinante = diario_validado.instrutor_assinante
                 instrutor_perfil = db.session.scalar(
                     select(Instrutor).where(
@@ -223,15 +217,11 @@ class RelatorioService:
                 
                 if instrutor_perfil:
                     processar_instrutor(user_assinante, instrutor_perfil, disciplina, data_aula, periodo, duracao, pelotao)
-                else:
-                    # Se, por anomalia, o assinante não tiver perfil de instrutor, ignoramos a contagem para evitar erros
-                    pass
             else:
-                # Fallback: Aula agendada mas ainda não assinada no diário (usa planejamento original)
+                # Fallback: Se não houver diário assinado, usa o planejamento original
                 if inst1 and usr1:
                     processar_instrutor(usr1, inst1, disciplina, data_aula, periodo, duracao, pelotao)
                 if inst2 and usr2:
-                    # Só processa inst2 se for diferente de inst1
                     if not (inst1 and inst1.id == inst2.id):
                         processar_instrutor(usr2, inst2, disciplina, data_aula, periodo, duracao, pelotao)
 
@@ -245,7 +235,6 @@ class RelatorioService:
                 if "_pelotoes_contabilizados" in d:
                     del d["_pelotoes_contabilizados"]
 
-            # Proteção extra contra dados nulos
             lista_final.append({
                 "instrutor_id": item["info"]["instrutor_id"],
                 "nome": item["info"]["user"]["nome_completo"] or "SEM NOME",
