@@ -247,9 +247,7 @@ def painel():
                     key = f"{disc_id}_{p}"
                     legacy_key = f"{disc_id}_legacy"
                     
-                    # === CORREÇÃO DA TRAVA FANTASMA AQUI ===
-                    # Antes o código dizia: "or h.status == 'concluido'"
-                    # Agora ele confia única e exclusivamente na existência física do diário no banco.
+                    # === CORREÇÃO DA TRAVA FANTASMA ===
                     if key in aulas_concluidas_keys or legacy_key in aulas_concluidas_keys:
                         grupos_dict[disc_id]['tempos_concluidos'] += 1
 
@@ -308,10 +306,17 @@ def registrar_aula(primeiro_horario_id):
             ).order_by(Horario.periodo).all()
 
         horarios_expandidos = []
+        periodos_processados = set() # TRAVA CONTRA HORÁRIOS DUPLICADOS NA ORIGEM
+
         for h in horarios_db:
             duracao = h.duracao if h.duracao and h.duracao > 0 else 1
             for i in range(duracao):
                 p = h.periodo + i
+                
+                # Se o período já foi processado neste bloco, ignora para não gerar duplicidade na tela
+                if p in periodos_processados:
+                    continue
+                    
                 existe = db.session.query(DiarioClasse).filter_by(
                     data_aula=data_aula,
                     turma_id=aluno_chefe.turma_id,
@@ -322,6 +327,7 @@ def registrar_aula(primeiro_horario_id):
                 
                 if not existe:
                     horarios_expandidos.append({'periodo': p, 'horario_pai_id': h.id, 'obj': h})
+                    periodos_processados.add(p) # Marca o período como já adicionado
         
         horarios_expandidos.sort(key=lambda x: x['periodo'])
         
@@ -357,6 +363,23 @@ def registrar_aula(primeiro_horario_id):
                 for h_virt in horarios_expandidos:
                     periodo_atual = h_virt['periodo']
                     horario_pai = h_virt['obj']
+
+                    # ========================================================
+                    # TRAVA ANTI-DUPLICAÇÃO (CONDIÇÃO DE CORRIDA / CLICK DUPLO)
+                    # Verifica no exato milissegundo antes de gravar se outra 
+                    # requisição não acabou de gravar esta mesma aula.
+                    # ========================================================
+                    ja_salvo_agora = db.session.query(DiarioClasse).filter_by(
+                        data_aula=data_aula,
+                        turma_id=aluno_chefe.turma_id,
+                        disciplina_id=horario_pai.disciplina_id,
+                        periodo=periodo_atual,
+                        is_deleted=False
+                    ).first()
+
+                    if ja_salvo_agora:
+                        continue # Ignora e não grava, pois já acabou de ser salvo
+                    # ========================================================
 
                     novo_diario = DiarioClasse(
                         data_aula=data_aula,

@@ -68,7 +68,7 @@ def enforce_2fa_setup():
     """Força usuários logados que não têm 2FA a configurá-lo antes de acessar o sistema."""
     if current_user.is_authenticated and not getattr(current_user, 'is_totp_enabled', False):
         allowed_endpoints = ['auth.configurar_2fa', 'auth.logout', 'static']
-        
+
         if request.endpoint and request.endpoint not in allowed_endpoints and not request.endpoint.startswith('static'):
             flash("A Autenticação em Duas Etapas (2FA) é obrigatória. Configure para liberar seu acesso ao sistema.", "warning")
             return redirect(url_for('auth.configurar_2fa'))
@@ -132,15 +132,15 @@ def verificar_2fa():
     user_id = session.get('pending_2fa_user_id')
     if not user_id:
         return redirect(url_for("auth.login"))
-        
+
     user = db.session.get(User, user_id)
     if not user:
         session.pop('pending_2fa_user_id', None)
         return redirect(url_for("auth.login"))
-        
+
     form = Verify2FAForm()
     reset_form = CSRFOnlyForm()
-    
+
     if form.validate_on_submit():
         if TotpService.verify_token(user.totp_secret, form.token.data):
             remember = session.get('pending_2fa_remember', False)
@@ -149,50 +149,50 @@ def verificar_2fa():
             # Limpa a sessão pendente ANTES de logar
             session.pop('pending_2fa_user_id', None)
             session.pop('pending_2fa_remember', None)
-            
+
             login_user(user, remember=remember)
             session.pop('active_school_id', None)
             session.permanent = True
-            
+
             flash("Autenticação realizada com sucesso.", "success")
-            
+
             response = make_response(redirect(url_for("main.selecionar_escola")))
-            
+
             # IMPLEMENTAÇÃO DO BOTÃO DE RECONHECER DISPOSITIVO (30 DIAS)
             if trust_device:
                 expires = datetime.now() + timedelta(days=30)
                 # O cookie armazena o totp_secret (ou um hash dele) para validar este navegador específico
                 response.set_cookie(
-                    f'trust_device_{user.id}', 
-                    user.totp_secret, 
-                    expires=expires, 
-                    httponly=True, 
-                    secure=True, 
+                    f'trust_device_{user.id}',
+                    user.totp_secret,
+                    expires=expires,
+                    httponly=True,
+                    secure=True,
                     samesite='Lax'
                 )
-            
+
             return response
         else:
             flash("Código de autenticação inválido. Tente novamente.", "danger")
-            
+
     return render_template("auth/verify_2fa.html", form=form, reset_form=reset_form)
 
 @auth_bp.route("/configurar-2fa", methods=["GET", "POST"])
 @login_required
 def configurar_2fa():
     form = Setup2FAForm()
-    
+
     if current_user.is_totp_enabled:
         flash("A Autenticação em Duas Etapas já está ativada na sua conta.", "info")
         return redirect(url_for("main.dashboard"))
-        
+
     if 'setup_2fa_secret' not in session:
         session['setup_2fa_secret'] = TotpService.generate_secret()
-        
+
     secret = session['setup_2fa_secret']
     identificador = current_user.email if current_user.email else current_user.matricula
     uri = TotpService.get_provisioning_uri(secret, identificador, issuer_name="ESFASBM")
-    
+
     if form.validate_on_submit():
         if TotpService.verify_token(secret, form.token.data):
             current_user.totp_secret = secret
@@ -203,7 +203,7 @@ def configurar_2fa():
             return redirect(url_for("auth.logout"))
         else:
             flash("Código inválido. Certifique-se de escanear o QR Code corretamente e tente de novo.", "danger")
-            
+
     return render_template("auth/setup_2fa.html", form=form, secret=secret, uri=uri)
 
 @auth_bp.route("/solicitar-reset-2fa", methods=["POST"])
@@ -223,7 +223,7 @@ def solicitar_reset_2fa():
 
     s = _get_serializer("reset-2fa")
     token = s.dumps({"user_id": user.id, "action": "reset_2fa"})
-    
+
     try:
         if hasattr(EmailService, 'send_2fa_reset_email'):
             EmailService.send_2fa_reset_email(user, token)
@@ -235,7 +235,7 @@ def solicitar_reset_2fa():
     except Exception as e:
         current_app.logger.error(f"Erro ao enviar email de reset 2FA: {e}")
         flash("Erro ao tentar enviar o e-mail de recuperação.", "danger")
-        
+
     return redirect(url_for("auth.login"))
 
 @auth_bp.route("/resetar-2fa/<token>")
@@ -255,20 +255,20 @@ def resetar_2fa_token(token):
         user.totp_secret = None
         user.is_totp_enabled = False
         db.session.commit()
-        
+
         # Opcional: Limpar cookies de confiança ao resetar 2FA
         response = make_response(redirect(url_for("auth.login")))
         response.delete_cookie(f'trust_device_{user.id}')
-        
+
         flash("Sua Autenticação em Duas Etapas foi desativada. Faça login e configure um novo aparelho.", "success")
         return response
-    
+
     return redirect(url_for("auth.login"))
 
 @auth_bp.route("/logout")
 @login_required
 def logout():
-    session.clear() 
+    session.clear()
     logout_user()
     flash("Você saiu do sistema.", "info")
     return redirect(url_for("auth.login"))
@@ -301,7 +301,7 @@ def register():
         if not vinculos:
             flash("Sem vínculo escolar.", "danger")
             return render_template("register.html", form_data=form_data, turmas=turmas)
-        
+
         primeira_escola_id = vinculos[0].school_id
 
         user.role = role
@@ -317,7 +317,7 @@ def register():
             opm_value = form_data.get("opm", "Não informado")
             turma_id_value = form_data.get('turma_id')
             turma_id = int(turma_id_value) if turma_id_value else None
-            
+
             if not user.aluno_profile:
                 perfil = Aluno(user_id=user.id, opm=opm_value, turma_id=turma_id)
                 db.session.add(perfil)

@@ -22,6 +22,7 @@ from ..services.user_service import UserService
 from ..services.turma_service import TurmaService
 from ..services.email_service import EmailService
 from ..services.notification_service import NotificationService
+from ..services.log_service import LogService
 
 from utils.decorators import admin_or_programmer_required, can_manage_justice_required
 
@@ -109,7 +110,6 @@ def index():
             ProcessoDisciplina.status != StatusProcesso.ARQUIVADO.value
         ).order_by(ProcessoDisciplina.data_ocorrencia.desc())
 
-        # CORREÇÃO CRUCIAL AQUI: Adicionado o `.join(User)` para a pesquisa funcionar em todo o banco!
         # CORREÇÃO CRUCIAL AQUI: Ordem exata das tabelas para o banco não se perder
         stmt_finalizados = select(ProcessoDisciplina).join(Aluno, ProcessoDisciplina.aluno_id == Aluno.id).join(User, Aluno.user_id == User.id).join(Turma, Aluno.turma_id == Turma.id).options(
             joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.user),
@@ -383,7 +383,7 @@ def enviar_recurso(pid):
     processo.status = StatusProcesso.EM_RECURSO.value
 
     db.session.commit()
-    flash("Recurso enviado ao Comandante.", "success")
+    flash("Recurso enviando ao Comandante.", "success")
     return redirect(url_for('justica.index'))
 
 @justica_bp.route('/finalizar-processo/<int:pid>', methods=['POST'])
@@ -402,13 +402,18 @@ def finalizar_processo(pid):
     fundamentacao_texto = request.form.get('observacao_decisao')
     turnos_sustacao = request.form.get('turnos_sustacao')
 
-    try:
-        pontos_finais = float(request.form.get('pontos_finais', 0.0))
-    except ValueError:
-        pontos_finais = 0.0
-
     if not decisao:
         flash("Selecione uma decisão válida.", "warning"); return redirect(url_for('justica.index'))
+
+    # BLOQUEIO DE PONTUAÇÃO: Busca o valor exato da tabela de regras (DisciplineRule)
+    pontos_finais = 0.0
+    if processo.regra_id:
+        regra = db.session.get(DisciplineRule, processo.regra_id)
+        if regra:
+            pontos_finais = regra.pontos
+    elif processo.pontos:
+        # Fallback caso seja uma infração registrada manualmente sem regra vinculada
+        pontos_finais = processo.pontos
 
     processo.decisao_final = decisao
     processo.data_decisao = datetime.now().astimezone()
@@ -438,15 +443,13 @@ def finalizar_processo(pid):
         processo.tipo_sancao = decisao
         processo.dias_sancao = 0
         processo.detalhes_sancao = None
-        if pontos_finais > 0:
-             processo.pontos = pontos_finais
+        processo.pontos = pontos_finais if pontos_finais > 0 else 0.0
 
     elif decisao == 'Sustação da Dispensa':
         processo.tipo_sancao = "Sustação da Dispensa"
         processo.detalhes_sancao = turnos_sustacao if turnos_sustacao else "Quantidade não informada"
         processo.dias_sancao = 0
-        if pontos_finais > 0:
-            processo.pontos = pontos_finais
+        processo.pontos = pontos_finais if pontos_finais > 0 else 0.0
 
     elif decisao == 'Justificado':
         processo.tipo_sancao = None
@@ -457,6 +460,14 @@ def finalizar_processo(pid):
     try:
         db.session.commit()
         aluno = db.session.get(Aluno, processo.aluno_id)
+        
+        # LOG DE AUDITORIA
+        LogService.log_action(
+            user_id=current_user.id,
+            action="FINALIZAR_PROCESSO_DISCIPLINA",
+            details=f"Julgou o PD {processo.id} do aluno {aluno.user.nome_completo if aluno and aluno.user else 'Desconhecido'}. Veredito: {decisao}. Pontos aplicados: {processo.pontos}"
+        )
+
         if aluno and aluno.user:
             link = url_for('justica.index', _external=True)
             msg_notificacao = f"Decisão emitida no processo {processo.id}. O prazo para recurso está correndo."
@@ -592,11 +603,14 @@ def imprimir_lote():
         if proc:
             if num_boletim:
                 msg_pub = f" | Publicado em Boletim Nº {num_boletim} em {datetime.now().strftime('%d/%m/%Y')}."
-                if not proc.observacao_decisao or f"Boletim Nº {num_boletim}" not in proc.observacao_decisao:
-                    if proc.observacao_decisao:
-                        proc.observacao_decisao += msg_pub
-                    else:
-                        proc.observacao_decisao = msg_pub
+            else:
+                msg_pub = f" | Impresso em {datetime.now().strftime('%d/%m/%Y')}."
+                
+            if not proc.observacao_decisao or msg_pub.strip() not in proc.observacao_decisao:
+                if proc.observacao_decisao:
+                    proc.observacao_decisao += msg_pub
+                else:
+                    proc.observacao_decisao = msg_pub
             processos_para_imprimir.append(proc)
 
     db.session.commit()
@@ -799,12 +813,12 @@ def anular_processo(pid):
 
     motivo = request.form.get('motivo_anulacao')
     if not motivo or len(motivo.strip()) < 10:
-        flash("A motivação da exclusão deve ter no mínimo 10 caracteres.", "warning")
+        flash("A motivação da anulação deve ter no mínimo 10 caracteres.", "warning")
         return redirect(url_for('justica.index'))
 
     # Cria o carimbo de auditoria
     data_atual = datetime.now().strftime('%d/%m/%Y %H:%M')
-    nota_anulacao = f"\n\n[PROCESSO EXCLUÍDO/ANULADO NO SISTEMA]\nData: {data_atual}\nResponsável: {current_user.nome_completo}\nMotivo da Exclusão: {motivo.strip()}"
+    nota_anulacao = f"\n\n[PROCESSO EXCLUÍDO/ANULADO NO SISTEMA]\nData: {data_atual}\nResponsável: {current_user.nome_completo}\nMotivo da Anulação: {motivo.strip()}"
 
     if processo.observacao_decisao and processo.observacao_decisao != 'None':
         processo.observacao_decisao += nota_anulacao
@@ -819,5 +833,13 @@ def anular_processo(pid):
     processo.pontos = 0.0
 
     db.session.commit()
-    flash(f"Processo Nº {processo.id} excluído com sucesso. O registro da anulação foi salvo no histórico.", "success")
+    
+    # LOG DE AUDITORIA DE ANULAÇÃO
+    LogService.log_action(
+        user_id=current_user.id,
+        action="ANULAR_PROCESSO_DISCIPLINA",
+        details=f"Anulou o PD {processo.id}. Motivo: {motivo.strip()}"
+    )
+
+    flash(f"Processo Nº {processo.id} anulado com sucesso. O registro foi salvo no histórico.", "success")
     return redirect(url_for('justica.index'))
