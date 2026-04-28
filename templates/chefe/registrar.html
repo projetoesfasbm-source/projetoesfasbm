@@ -185,5 +185,25 @@
             m.dispatchEvent(new Event('change'));
         });
     }
+
+    // ====================================================================
+    // TRAVA DE SEGURANÇA: PREVINE DUPLO CLIQUE (DOUBLE SUBMIT)
+    // ====================================================================
+    document.addEventListener('DOMContentLoaded', function() {
+        const formRegistrar = document.querySelector('form');
+        const btnSalvar = document.querySelector('button[type="submit"]');
+
+        if (formRegistrar && btnSalvar) {
+            formRegistrar.addEventListener('submit', function(e) {
+                // Apenas bloqueia se os campos obrigatórios (como Conteúdo) estiverem preenchidos
+                if (formRegistrar.checkValidity()) {
+                    btnSalvar.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Salvando aguarde...';
+                    btnSalvar.classList.add('disabled');
+                    btnSalvar.setAttribute('disabled', 'disabled');
+                    btnSalvar.style.pointerEvents = 'none';
+                }
+            });
+        }
+    });
 </script>
 {% endblock %}

@@ -1,3 +1,5 @@
+# backend/models/banco_questoes.py
+
 from .database import db
 from datetime import datetime
 
@@ -18,10 +20,10 @@ class QuestaoBanco(db.Model):
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
     ativo = db.Column(db.Boolean, default=True)
 
-    # Relacionamentos
-    disciplina = db.relationship('Disciplina', backref='questoes_banco')
-    escola = db.relationship('School', backref='questoes_banco')
-    instrutor = db.relationship('Instrutor', backref='questoes_enviadas')
+    # Relacionamentos com Cascade para garantir que se a disciplina/escola/instrutor sumir, as questões somem
+    disciplina = db.relationship('Disciplina', backref=db.backref('questoes_banco', cascade='all, delete-orphan'))
+    escola = db.relationship('School', backref=db.backref('questoes_banco', cascade='all, delete-orphan'))
+    instrutor = db.relationship('Instrutor', backref=db.backref('questoes_enviadas', cascade='all, delete-orphan'))
 
 class ConfiguracaoEnvio(db.Model):
     """Tabela que salva se o envio está aberto ou fechado"""
@@ -47,10 +49,10 @@ class DelegacaoProva(db.Model):
     escolas_fontes = db.Column(db.JSON, nullable=False)
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
 
-    # Relacionamentos
-    instrutor = db.relationship('Instrutor', backref='delegacoes_recebidas')
-    escola_gestora = db.relationship('School', backref='provas_geridas')
-    disciplina = db.relationship('Disciplina', backref='delegacoes_prova')
+    # Relacionamentos com Cascade
+    instrutor = db.relationship('Instrutor', backref=db.backref('delegacoes_recebidas', cascade='all, delete-orphan'))
+    escola_gestora = db.relationship('School', backref=db.backref('provas_geridas', cascade='all, delete-orphan'))
+    disciplina = db.relationship('Disciplina', backref=db.backref('delegacoes_prova', cascade='all, delete-orphan'))
 
 class RascunhoProva(db.Model):
     __tablename__ = 'rascunhos_prova'
@@ -60,5 +62,5 @@ class RascunhoProva(db.Model):
     questoes_selecionadas = db.Column(db.JSON, nullable=False)
     atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # Relacionamentos
-    delegacao = db.relationship('DelegacaoProva', backref=db.backref('rascunho', uselist=False))
+    # Relacionamentos com Cascade (se a delegacao sumir, o rascunho some)
+    delegacao = db.relationship('DelegacaoProva', backref=db.backref('rascunho', uselist=False, cascade='all, delete-orphan'))

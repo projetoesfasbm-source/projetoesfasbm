@@ -100,6 +100,10 @@
             <p class="text-muted mb-0">Auditoria, Edição, Devolução e Impressão.</p>
         </div>
         <div class="d-flex align-items-center gap-2 bg-white p-2 rounded shadow-sm border">
+            <a href="{{ url_for('diario.listar_lixeira') }}" class="btn btn-outline-danger btn-sm fw-bold">
+                <i class="fas fa-trash-restore me-1"></i> Lixeira
+            </a>
+            <div class="vr mx-1"></div>
             <label class="mb-0 small text-muted fw-bold ms-2">Consulta de Faltas:</label>
             <input type="date" id="dataFaltasDiarias" class="form-control form-control-sm" style="width: auto;">
             <button class="btn btn-danger btn-sm fw-bold" onclick="consultarFaltasDia()">

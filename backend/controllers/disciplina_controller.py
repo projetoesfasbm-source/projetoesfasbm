@@ -40,89 +40,6 @@ class DisciplinaForm(FlaskForm):
 class DeleteForm(FlaskForm):
     pass
 
-# --- FUNÇÃO AUXILIAR PARA GARANTIR CONTAGEM IDÊNTICA À AUDITORIA ---
-def _calcular_progresso_real(disciplina):
-    """
-    Calcula o progresso somando diretamente os horários agendados,
-    separando as aulas passadas (Ministradas) das futuras (Agendadas)
-    através do cálculo da data real de cada bloco.
-    """
-    hoje = datetime.now().date()
-    
-    # Query idêntica à rota 'detalhes_disciplina'
-    agendamentos = db.session.scalars(
-        select(Horario)
-        .join(Semana, Horario.semana_id == Semana.id)
-        .where(Horario.disciplina_id == disciplina.id)
-    ).all()
-
-    mapa_dias = {
-        'segunda': 0, 'segunda-feira': 0, 'terça': 1, 'terca': 1, 'terça-feira': 1,
-        'quarta': 2, 'quarta-feira': 2, 'quinta': 3, 'quinta-feira': 3,
-        'sexta': 4, 'sexta-feira': 4, 'sábado': 5, 'sabado': 5, 'domingo': 6
-    }
-
-    ministradas = 0
-    agendadas = 0
-
-    for agendamento in agendamentos:
-        qtd = agendamento.duracao if agendamento.duracao else 1
-        
-        # Calcula a data real da aula
-        data_real = agendamento.semana.data_inicio
-        dia_text = agendamento.dia_semana.lower().strip() if agendamento.dia_semana else ""
-        offset = mapa_dias.get(dia_text)
-        
-        if offset is not None:
-             data_real = agendamento.semana.data_inicio + timedelta(days=offset)
-        
-        # Normaliza para objeto tipo Date
-        if isinstance(data_real, datetime):
-            data_comparacao = data_real.date()
-        else:
-            data_comparacao = data_real
-
-        # Classificação: Passado/Hoje -> Ministradas | Futuro -> Agendadas
-        if data_comparacao <= hoje:
-            ministradas += qtd
-        else:
-            agendadas += qtd
-
-    previsto = disciplina.carga_horaria_prevista or 0
-    
-    # Proteção: Evita que a soma do banco ultrapasse a meta visualmente
-    if ministradas > previsto and previsto > 0:
-        ministradas = previsto
-        agendadas = 0
-    elif (ministradas + agendadas) > previsto and previsto > 0:
-        agendadas = previsto - ministradas
-
-    restante = max(0, previsto - (ministradas + agendadas))
-
-    pct_ministrada = round((ministradas / previsto * 100), 1) if previsto > 0 else 0
-    pct_agendada = round((agendadas / previsto * 100), 1) if previsto > 0 else 0
-    pct_restante = round((restante / previsto * 100), 1) if previsto > 0 else 0
-
-    # Define cor da barra
-    percentual_planejado = pct_ministrada + pct_agendada
-    cor = 'success'
-    if percentual_planejado < 50:
-        cor = 'danger'
-    elif percentual_planejado < 80:
-        cor = 'warning'
-
-    # Retorna o dicionário completo para preencher o novo HTML
-    return {
-        'realizado': ministradas,
-        'agendado': agendadas,
-        'restante_para_planejar': restante,
-        'previsto': previsto,
-        'pct_realizado': pct_ministrada,
-        'pct_agendado': pct_agendada,
-        'pct_restante': pct_restante,
-        'cor': cor
-    }
-
 @disciplina_bp.route('/')
 @login_required
 @can_view_management_pages_required
@@ -140,21 +57,27 @@ def listar_disciplinas():
     disciplinas_filtradas = []
     if turma_selecionada_id:
         disciplinas_filtradas = [d for d in todas_disciplinas if d.turma_id == turma_selecionada_id]
-    else:
-        disciplinas_filtradas = [] 
-
-    # Ordenação por nome
+    
+    # Ordenação alfabética
     disciplinas_filtradas.sort(key=lambda d: d.materia)
 
-    # Preparar dados de progresso USANDO A NOVA FUNÇÃO INTERNA CORRIGIDA
+    # Agora usamos exclusivamente o DisciplinaService para garantir que a lista 
+    # e o Dashboard falem a mesma língua (Auditoria Real)
     disciplinas_com_progresso = []
     for d in disciplinas_filtradas:
-        progresso = _calcular_progresso_real(d)
+        progresso = DisciplinaService.get_dados_progresso(d)
+        
+        # Define a cor da barra dinamicamente para a lista
+        percentual_planejado = progresso['pct_realizado'] + progresso['pct_agendado']
+        progresso['cor'] = 'success'
+        if percentual_planejado < 50:
+            progresso['cor'] = 'danger'
+        elif percentual_planejado < 80:
+            progresso['cor'] = 'warning'
+            
         disciplinas_com_progresso.append({'disciplina': d, 'progresso': progresso})
 
     delete_form = DeleteForm()
-    
-    # Busca Ciclos ordenados por nome para evitar erros
     ciclos = db.session.scalars(select(Ciclo).where(Ciclo.school_id == school_id).order_by(Ciclo.nome)).all()
     
     return render_template('listar_disciplinas.html', 
@@ -168,7 +91,7 @@ def listar_disciplinas():
 @login_required
 @can_view_management_pages_required
 def dashboard_disciplinas():
-    """Rota exclusiva para o novo Dashboard"""
+    """Rota do Dashboard de Alertas (Painel de Inteligência)"""
     school_id = UserService.get_current_school_id()
     if not school_id:
         return redirect(url_for('disciplina.listar_disciplinas'))
@@ -176,7 +99,13 @@ def dashboard_disciplinas():
     ciclo_id_arg = request.args.get('ciclo_id')
     
     ciclos = db.session.scalars(select(Ciclo).where(Ciclo.school_id == school_id).order_by(Ciclo.nome)).all()
-    ciclo_selecionado_id = int(ciclo_id_arg) if ciclo_id_arg else (ciclos[-1].id if ciclos else None)
+    
+    # Seleciona o ciclo: Prioridade para o argumento da URL, senão o último ciclo cadastrado
+    ciclo_selecionado_id = None
+    if ciclo_id_arg:
+        ciclo_selecionado_id = int(ciclo_id_arg)
+    elif ciclos:
+        ciclo_selecionado_id = ciclos[-1].id
 
     dashboard_data = DisciplinaService.get_dashboard_data(school_id, ciclo_selecionado_id)
 
@@ -195,7 +124,6 @@ def adicionar_disciplina():
         return redirect(url_for('disciplina.listar_disciplinas'))
         
     form = DisciplinaForm()
-    
     ciclos = db.session.scalars(select(Ciclo).where(Ciclo.school_id == school_id).order_by(Ciclo.nome)).all()
     form.ciclo_id.choices = [(c.id, c.nome) for c in ciclos]
     
@@ -247,7 +175,6 @@ def editar_disciplina(disciplina_id):
         submit = SubmitField('Salvar')
 
     form = EditDisciplinaForm(obj=disciplina)
-    
     ciclos = db.session.scalars(select(Ciclo).where(Ciclo.school_id == school_id).order_by(Ciclo.nome)).all()
     form.ciclo_id.choices = [(c.id, c.nome) for c in ciclos]
     form.turma_id.choices = [(disciplina.turma.id, disciplina.turma.nome)]
@@ -269,7 +196,6 @@ def editar_disciplina(disciplina_id):
 @login_required
 @school_admin_or_programmer_required
 def excluir_disciplina(disciplina_id):
-    form = DeleteForm()
     disciplina = db.session.get(Disciplina, disciplina_id)
     school_id = UserService.get_current_school_id()
     
@@ -294,10 +220,10 @@ def api_disciplinas_por_turma(turma_id):
     disciplinas = sorted(turma.disciplinas, key=lambda d: d.materia)
     return jsonify([{'id': d.id, 'materia': d.materia} for d in disciplinas])
 
-# --- ROTA DE AUDITORIA E DETALHES ---
 @disciplina_bp.route('/detalhes/<int:disciplina_id>')
 @login_required
 def detalhes_disciplina(disciplina_id):
+    """Rota de Auditoria Detalhada de Agendamentos"""
     disciplina = db.session.get(Disciplina, disciplina_id)
     if not disciplina:
         flash('Disciplina não encontrada.', 'danger')
@@ -346,8 +272,10 @@ def detalhes_disciplina(disciplina_id):
             'instrutor_nome': instrutor_nome
         })
 
+    # Ordenação decrescente por data para a auditoria
     processed_items.sort(key=lambda x: (x['data_real'], -x['periodo_inicio']), reverse=True)
 
+    # Agrupamento de blocos de aulas contíguas para melhor leitura
     grouped_list = []
     if processed_items:
         current_block = processed_items[0]
@@ -374,7 +302,7 @@ def detalhes_disciplina(disciplina_id):
             'periodos': p_str, 'qtd': item['qtd'], 'instrutor': item['instrutor_nome']
         })
     
-    horas_restantes = disciplina.carga_horaria_prevista - total_tempos_agendados
+    horas_restantes = (disciplina.carga_horaria_prevista or 0) - total_tempos_agendados
     
     return render_template('detalhes_disciplina.html', disciplina=disciplina, agendamentos=final_output,
                            total_auditado=total_tempos_agendados, horas_restantes=horas_restantes)

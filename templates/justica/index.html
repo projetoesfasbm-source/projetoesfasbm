@@ -336,13 +336,7 @@
                                                             </select>
                                                         </div>
 
-                                                        {% if school_type != 'ctsp' %}
-                                                        <div class="mb-2" id="divPontosRecurso{{ p.id }}" style="display:none;">
-                                                            <label class="form-label small">Nova Pontuação (Atenuada)</label>
-                                                            <input type="number" step="0.01" name="pontos_finais_recurso" class="form-control" value="{{ p.pontos }}">
                                                         </div>
-                                                        {% endif %}
-                                                    </div>
 
                                                     <div class="mb-3">
                                                         <label class="form-label small fw-bold">Fundamentação (Parecer do Comandante)</label>
@@ -414,13 +408,6 @@
                                                         </select>
                                                     </div>
 
-                                                    {% if school_type != 'ctsp' %}
-                                                    <div class="mb-3" id="divPontos{{ p.id }}" style="display:none;">
-                                                        <label class="form-label small">Pontos Perdidos (Automático)</label>
-                                                        <input type="number" step="0.01" name="pontos_finais" class="form-control" value="{{ p.pontos }}" placeholder="0.0">
-                                                    </div>
-                                                    {% endif %}
-
                                                     <div class="mb-3">
                                                         <label class="form-label small">Fundamentação / Observação</label>
                                                         <textarea name="observacao_decisao" class="form-control" rows="4" placeholder="Justifique a decisão..." required></textarea>
@@ -444,7 +431,7 @@
                 </div>
 
                 <div class="justice-content {% if active_tab == 'finalizados' %}active{% endif %}" id="finalizadosContent">
-
+                    
                     <div class="card mb-3 shadow-sm border-primary">
                         <div class="card-body p-2">
                             <form action="{{ url_for('justica.index') }}" method="GET" class="d-flex align-items-center">
@@ -496,6 +483,14 @@
 
                                         <div class="col-md-6 col-sm-9">
                                             <strong>{{ p.aluno.user.nome_completo }}</strong> <span class="text-muted small ms-1">(PD Nº {{ p.id }}/{{ ano_proc }})</span>
+                                            
+                                            {% if p.observacao_decisao and 'Publicado em Boletim Nº ' in p.observacao_decisao %}
+                                                {% set bol_extraido = p.observacao_decisao.split('Publicado em Boletim Nº ')[1].split(' em ')[0] %}
+                                                <span class="badge bg-primary ms-2" title="Documento vinculado ao boletim."><i class="fas fa-bullhorn"></i> Bol Nº {{ bol_extraido }}</span>
+                                            {% elif p.observacao_decisao and 'Impresso em ' in p.observacao_decisao %}
+                                                <span class="badge bg-secondary ms-2" title="Documento apenas impresso."><i class="fas fa-print"></i> Impresso</span>
+                                            {% endif %}
+
                                             <br>
                                             <span class="badge bg-dark mt-1">{{ p.decisao_final or 'Finalizado' }}</span>
                                             {% if p.tipo_sancao == 'Sustação da Dispensa' %}
@@ -503,11 +498,6 @@
                                             {% endif %}
                                             {% if p.decisao_recurso %}
                                                 <span class="badge bg-info text-dark mt-1 ms-1">Recurso: {{ p.decisao_recurso }}</span>
-                                            {% endif %}
-
-                                            {% if p.observacao_decisao and 'Publicado em Boletim Nº ' in p.observacao_decisao %}
-                                                {% set bol_extraido = p.observacao_decisao.split('Publicado em Boletim Nº ')[1].split(' em ')[0] %}
-                                                <span class="badge bg-secondary mt-1 ms-1" title="Documento já gerado e vinculado ao boletim."><i class="fas fa-bullhorn"></i> Pub Bol Nº {{ bol_extraido }}</span>
                                             {% endif %}
 
                                             <br><small class="text-muted d-block mt-1 text-truncate" title="{{ p.fato_constatado }}">{{ p.fato_constatado }}</small>
@@ -611,7 +601,7 @@
                             <li class="page-item {% if not finalizados.has_prev %}disabled{% endif %}">
                                 <a class="page-link" href="{{ url_for('justica.index', page=finalizados.prev_num, tab='finalizados', q=request.args.get('q', '')) }}" tabindex="-1">Anterior</a>
                             </li>
-
+                            
                             {% for page_num in finalizados.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
                                 {% if page_num %}
                                     <li class="page-item {% if page_num == finalizados.page %}active{% endif %}">
@@ -627,11 +617,6 @@
                             </li>
                         </ul>
                     </nav>
-                    {% endif %}
-                </div>
-
-                    {% if current_user.role != 'aluno' %}
-                    </form>
                     {% endif %}
                 </div>
 
@@ -818,7 +803,7 @@ function validarImpressaoLote() {
         alert('Por favor, selecione pelo menos um processo para imprimir.');
         return false;
     }
-    setTimeout(() => { window.location.reload(); }, 1500);
+    setTimeout(() => { window.location.reload(); }, 2500);
     return true;
 }
 

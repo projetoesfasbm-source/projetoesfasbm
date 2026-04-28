@@ -281,7 +281,7 @@
                             {# VERIFICAÇÃO INTELIGENTE DO AVATAR #}
                             {% set tem_perfil_aluno = current_user.aluno_profile is defined and current_user.aluno_profile %}
                             {% set tem_perfil_instrutor = current_user.instrutor_profile is defined and current_user.instrutor_profile %}
-                            
+
                             {% if tem_perfil_aluno and current_user.aluno_profile.foto_perfil and current_user.aluno_profile.foto_perfil != 'default.png' %}
                                 <img src="{{ url_for('static', filename='uploads/profile_pics/' + current_user.aluno_profile.foto_perfil) }}" alt="Foto de Perfil" onerror="this.src=''; this.parentElement.innerHTML='<span>{{ (current_user.nome_de_guerra or current_user.username)[0] }}</span>';">
                             {% elif tem_perfil_instrutor and current_user.instrutor_profile.foto_perfil and current_user.instrutor_profile.foto_perfil != 'default.png' %}

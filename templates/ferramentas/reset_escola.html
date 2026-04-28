@@ -1,82 +1,133 @@
 {% extends "base.html" %}
 
-{% block title %}Reset de Escola{% endblock %}
+{% block title %}Reset da Escola e Novo Ciclo{% endblock %}
 
 {% block content %}
 <div class="content-header">
-    <h1>Reset de Escola</h1>
-    <p>Ferramentas para limpeza de dados em massa para o início de um novo curso.</p>
+    <h1><i class="fas fa-trash-alt text-danger me-2"></i> Reset do Banco da Escola</h1>
+    <p>Painel de limpeza e preparação para a próxima edição de curso.</p>
 </div>
 
-<div class="alert alert-danger" role="alert">
-    <h4 class="alert-heading">⚠️ ATENÇÃO! AÇÕES IRREVERSÍVEIS!</h4>
-    <p>As ações nesta página apagam permanentemente os registros do banco de dados. Use com extrema cautela, idealmente apenas ao final de um ciclo de curso para preparar o sistema para o próximo.</p>
-    <hr>
-    <p class="mb-0">É obrigatório confirmar sua senha para executar qualquer uma destas operações.</p>
+<div class="alert alert-danger shadow-sm border-0 border-start border-danger border-4" role="alert">
+    <h5 class="alert-heading fw-bold"><i class="fas fa-exclamation-triangle"></i> Atenção: Ação Irreversível</h5>
+    <p class="mb-1">Este formulário apaga registros permanentemente. Marque as opções que deseja descartar da edição atual. <strong>Por padrão, todas as opções estão marcadas, gerando um "Reset Total" da Escola.</strong></p>
+    <p class="mb-0 small"><strong>Dica:</strong> Se você excluir Turmas, o sistema será forçado a apagar as Disciplinas e Diários vinculados a elas para manter a estabilidade do banco.</p>
 </div>
 
-<div class="tools-grid">
-    <div class="card border-danger">
-        <div class="card-header bg-danger text-white">
-            Excluir TODOS os Alunos
-        </div>
-        <div class="card-body">
-            <p class="card-text">Esta ação removerá permanentemente todos os usuários com o perfil "aluno" e seus dados associados (notas, históricos, etc.) da sua escola.</p>
-            <form method="POST" action="{{ url_for('tools.clear_data') }}" onsubmit="return confirm('CONFIRMAÇÃO FINAL:\n\nTem certeza ABSOLUTA de que deseja excluir TODOS os alunos? Esta ação não pode ser desfeita.');">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="action" value="clear_students">
-                <div class="form-group mb-3">
-                    <label for="password_students">Confirme sua senha:</label>
-                    <input type="password" name="password" id="password_students" class="form-control" required autocomplete="current-password">
-                </div>
-                <button type="submit" class="btn btn-danger w-100">Excluir Todos os Alunos</button>
-            </form>
-        </div>
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-dark text-white fw-bold">
+        <i class="fas fa-list-check me-1"></i> Confirmação de Exclusão de Dados
     </div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('tools.clear_data') }}" id="resetForm" onsubmit="return confirm('ALERTA FINAL:\n\nVocê revisou os itens que serão apagados?\nUma vez confirmado, todos os dados selecionados não poderão ser recuperados.\n\nDeseja continuar?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-    <div class="card border-danger">
-        <div class="card-header bg-danger text-white">
-            Excluir TODOS os Instrutores
-        </div>
-        <div class="card-body">
-            <p class="card-text">Esta ação removerá permanentemente todos os usuários com o perfil "instrutor" e seus dados associados (vínculos, aulas, etc.) da sua escola.</p>
-            <form method="POST" action="{{ url_for('tools.clear_data') }}" onsubmit="return confirm('CONFIRMAÇÃO FINAL:\n\nTem certeza ABSOLUTA de que deseja excluir TODOS os instrutores? Esta ação não pode ser desfeita.');">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="action" value="clear_instructors">
-                <div class="form-group mb-3">
-                    <label for="password_instructors">Confirme sua senha:</label>
-                    <input type="password" name="password" id="password_instructors" class="form-control" required autocomplete="current-password">
-                </div>
-                <button type="submit" class="btn btn-danger w-100">Excluir Todos os Instrutores</button>
-            </form>
-        </div>
-    </div>
+            <div class="list-group mb-4">
+                
+                <label class="list-group-item list-group-item-action d-flex align-items-start list-group-item-danger">
+                    <input class="form-check-input flex-shrink-0 mt-1 me-3 fs-5" type="checkbox" name="opcoes" value="alunos" checked>
+                    <div>
+                        <div class="fw-bold">1. Alunos e Seus Registros</div>
+                        <span class="small text-muted">Exclui todos os perfis com função de aluno, incluindo seus históricos de disciplina, notas, médias e respostas do sistema.</span>
+                    </div>
+                </label>
 
-    <div class="card border-danger">
-        <div class="card-header bg-danger text-white">
-            Excluir TODAS as Disciplinas
-        </div>
-        <div class="card-body">
-            <p class="card-text">Esta ação removerá permanentemente todas as disciplinas da sua escola, incluindo vínculos com turmas, aulas agendadas e notas de alunos.</p>
-            <form method="POST" action="{{ url_for('tools.clear_data') }}" onsubmit="return confirm('CONFIRMAÇÃO FINAL:\n\nTem certeza ABSOLUTA de que deseja excluir TODAS as disciplinas? Esta ação não pode ser desfeita.');">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="action" value="clear_disciplines">
+                <label class="list-group-item list-group-item-action d-flex align-items-start list-group-item-danger">
+                    <input class="form-check-input flex-shrink-0 mt-1 me-3 fs-5" type="checkbox" name="opcoes" value="instrutores" checked>
+                    <div>
+                        <div class="fw-bold">2. Instrutores</div>
+                        <span class="small text-muted">Exclui os perfis dos professores, seu banco de questões pessoalizado e autorizações/delegações de provas.</span>
+                    </div>
+                </label>
+
+                <label class="list-group-item list-group-item-action d-flex align-items-start list-group-item-danger">
+                    <input class="form-check-input flex-shrink-0 mt-1 me-3 fs-5" type="checkbox" name="opcoes" value="disciplinas" checked>
+                    <div>
+                        <div class="fw-bold">3. Disciplinas (Matérias)</div>
+                        <span class="small text-muted">Exclui as disciplinas cadastradas no curso e removerá em cascata os blocos de horário delas.</span>
+                    </div>
+                </label>
+
+                <label class="list-group-item list-group-item-action d-flex align-items-start list-group-item-danger">
+                    <input class="form-check-input flex-shrink-0 mt-1 me-3 fs-5" type="checkbox" name="opcoes" value="turmas" checked>
+                    <div>
+                        <div class="fw-bold">4. Turmas (Sindicatos/Pelotões)</div>
+                        <span class="small text-muted">Exclui as turmas e todos os cargos (como Chefe de Turma). <em>*Força a exclusão das disciplinas da turma.</em></span>
+                    </div>
+                </label>
+
+                <label class="list-group-item list-group-item-action d-flex align-items-start list-group-item-danger">
+                    <input class="form-check-input flex-shrink-0 mt-1 me-3 fs-5" type="checkbox" name="opcoes" value="vinculos" checked>
+                    <div>
+                        <div class="fw-bold">5. Vínculos de Docência</div>
+                        <span class="small text-muted">Apaga as correlações que definem qual instrutor ministra qual disciplina em qual turma.</span>
+                    </div>
+                </label>
+
+                <label class="list-group-item list-group-item-action d-flex align-items-start list-group-item-danger">
+                    <input class="form-check-input flex-shrink-0 mt-1 me-3 fs-5" type="checkbox" name="opcoes" value="ciclos" checked>
+                    <div>
+                        <div class="fw-bold">6. Ciclos e Calendário</div>
+                        <span class="small text-muted">Exclui as Divisões de Ciclos letivos. Remove em cascata TODAS as Semanas e todo o Quadro de Horário mapeado.</span>
+                    </div>
+                </label>
+
+                <label class="list-group-item list-group-item-action d-flex align-items-start list-group-item-danger">
+                    <input class="form-check-input flex-shrink-0 mt-1 me-3 fs-5" type="checkbox" name="opcoes" value="diarios" checked>
+                    <div>
+                        <div class="fw-bold">7. Diários de Classe</div>
+                        <span class="small text-muted">Exclui todos os registros diários salvos pelos instrutores, bem como o mapeamento e contagem de faltas gerados neles.</span>
+                    </div>
+                </label>
+
+                <label class="list-group-item list-group-item-action d-flex align-items-start list-group-item-danger">
+                    <input class="form-check-input flex-shrink-0 mt-1 me-3 fs-5" type="checkbox" name="opcoes" value="justica" checked>
+                    <div>
+                        <div class="fw-bold">8. Justiça, Disciplina e Atitudinal</div>
+                        <span class="small text-muted">Limpa totalmente o painel de Justiça: Processos Disciplinares (FATD/PD), Elogios, FADAs e Fichas de Avaliação Atitudinal.</span>
+                    </div>
+                </label>
+
+                <label class="list-group-item list-group-item-action d-flex align-items-start list-group-item-danger">
+                    <input class="form-check-input flex-shrink-0 mt-1 me-3 fs-5" type="checkbox" name="opcoes" value="questionarios" checked>
+                    <div>
+                        <div class="fw-bold">9. Questionários (Sociométrico)</div>
+                        <span class="small text-muted">Exclui as avaliações globais cadastradas no formato de questionário e esvazia suas respostas.</span>
+                    </div>
+                </label>
+
+            </div>
+
+            <hr class="my-4">
+
+            <div class="bg-light p-4 rounded border">
+                <h6 class="fw-bold text-dark mb-3"><i class="fas fa-lock text-muted"></i> Assinatura Digital de Exclusão</h6>
                 <div class="form-group mb-3">
-                    <label for="password_disciplines">Confirme sua senha:</label>
-                    <input type="password" name="password" id="password_disciplines" class="form-control" required autocomplete="current-password">
+                    <label for="password_confirm">Confirme sua senha de Admin para autorizar o procedimento:</label>
+                    <input type="password" name="password" id="password_confirm" class="form-control form-control-lg border-dark" required autocomplete="current-password" placeholder="Digite sua senha...">
                 </div>
-                <button type="submit" class="btn btn-danger w-100">Excluir Todas as Disciplinas</button>
-            </form>
-        </div>
+                <button type="submit" class="btn btn-danger btn-lg w-100 fw-bold shadow">
+                    <i class="fas fa-radiation-alt me-1"></i> Confirmar Exclusão Selecionada
+                </button>
+            </div>
+        </form>
     </div>
 </div>
 
 <style>
-    .tools-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-        gap: 1.5rem;
-        margin-top: 2rem;
+    /* Estética para dar um foco de perigo caso marcado, e ficar cinza quando desmarcado */
+    .list-group-item input[type="checkbox"]:checked ~ div {
+        opacity: 1;
+    }
+    .list-group-item input[type="checkbox"]:not(:checked) ~ div {
+        opacity: 0.5;
+        text-decoration: line-through;
+    }
+    .list-group-item input[type="checkbox"]:not(:checked) {
+        filter: grayscale(1);
+    }
+    .list-group-item-danger {
+        transition: all 0.3s ease;
     }
 </style>
 {% endblock %}

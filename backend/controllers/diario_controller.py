@@ -49,27 +49,25 @@ def assinar(diario_id):
     from ..models.aluno import Aluno
     from ..models.user import User
 
-    # DIAGNÓSTICO: Monitoramento de carga no POST
     if request.method == 'POST':
         content_length = request.content_length
         print(f"DEBUG SISGEN: Recebendo POST para Diário {diario_id}. Tamanho total: {content_length} bytes", file=sys.stderr)
         
-        # Se for maior que 2MB, avisamos no log para conferência
         if content_length and content_length > 2 * 1024 * 1024:
             print(f"ALERTA SISGEN: Requisição muito grande detectada: {content_length / 1024 / 1024:.2f} MB", file=sys.stderr)
 
     diario, instrutor = DiarioService.get_diario_para_assinatura(diario_id, current_user.id)
     
     if not diario:
-        flash("Diário não encontrado ou você não tem permissão para assiná-lo.", "danger")
+        flash("Diário não encontrado, já assinado ou você não tem permissão para acessá-lo.", "danger")
         return redirect(url_for('diario.listar_pendentes'))
 
-    # Busca todas as aulas do mesmo bloco (mesma data, turma e disciplina) que ainda estão pendentes
     diarios_bloco = db.session.scalars(
         db.select(DiarioClasse).where(
             DiarioClasse.data_aula == diario.data_aula,
             DiarioClasse.turma_id == diario.turma_id,
             DiarioClasse.disciplina_id == diario.disciplina_id,
+            DiarioClasse.is_deleted == False,
             DiarioClasse.status == 'pendente'
         ).order_by(DiarioClasse.periodo, DiarioClasse.id)
     ).all()
@@ -85,12 +83,11 @@ def assinar(diario_id):
         .order_by(Aluno.num_aluno, User.nome_de_guerra)
     ).all()
 
-    # Mapeamento de frequências para o template
     freq_map = {}
     for a in alunos_query:
         freq_map[a.id] = {}
         for d in diarios_bloco:
-            freq_map[a.id][d.id] = True # Default presente
+            freq_map[a.id][d.id] = True
             
     for d in diarios_bloco:
         for f in d.frequencias:
@@ -106,8 +103,6 @@ def assinar(diario_id):
         dados = None
         if tipo == 'canvas': 
             dados = request.form.get('assinatura_base64')
-            if dados:
-                print(f"DEBUG SISGEN: Tamanho da string de assinatura (Base64): {len(dados)} caracteres", file=sys.stderr)
         elif tipo == 'upload': 
             arquivo = request.files.get('assinatura_upload')
             if arquivo and allowed_file(arquivo.filename, arquivo.stream, ['png', 'jpg', 'jpeg']):
@@ -118,16 +113,13 @@ def assinar(diario_id):
         elif tipo == 'padrao': 
             dados = True
 
-        # Processar presenças do formulário
         frequencias_atualizadas = {}
         for d in diarios_bloco:
             frequencias_atualizadas[d.id] = {}
             for a in alunos_query:
                 campo_name = f"presenca_{a.id}_{d.id}"
-                # No HTML, checkbox marcado envia '1'
                 frequencias_atualizadas[d.id][a.id] = (request.form.get(campo_name) == '1')
 
-        # Chamada ao serviço para persistência
         ok, msg = DiarioService.assinar_diario(
             diario_id=diario.id, 
             user_id=current_user.id, 
@@ -177,7 +169,6 @@ def faltas_por_dia():
         return jsonify({"success": False, "message": "Formato de data inválido."}), 400
 
     try:
-        # Query otimizada para buscar alunos ausentes na data selecionada
         faltas_query = db.session.query(
             FrequenciaAluno.id,
             User.nome_completo,
@@ -200,6 +191,7 @@ def faltas_por_dia():
         ).filter(
             Turma.school_id == school_id,
             DiarioClasse.data_aula == data_busca,
+            DiarioClasse.is_deleted == False,
             FrequenciaAluno.presente == False
         ).order_by(
             Turma.nome,
@@ -229,3 +221,81 @@ def faltas_por_dia():
         })
     except Exception as e:
         return jsonify({"success": False, "message": f"Falha ao consultar banco de dados: {str(e)}"}), 500
+
+# ===============================
+# ROTAS DA LIXEIRA (ADMIN)
+# ===============================
+@diario_bp.route('/admin/lixeira', methods=['GET'])
+@login_required
+def listar_lixeira():
+    if not (current_user.is_sens or current_user.is_admin_escola or current_user.is_programador):
+        flash("Acesso negado.", "danger")
+        return redirect(url_for('main.dashboard'))
+        
+    from ..models.database import db
+    from ..models.diario_classe import DiarioClasse
+    from ..models.turma import Turma
+    
+    school_id = UserService.get_current_school_id()
+    if not school_id:
+        flash("Escola não selecionada.", "warning")
+        return redirect(url_for('main.dashboard'))
+
+    # Busca todos apagados
+    diarios_apagados = db.session.scalars(
+        db.select(DiarioClasse)
+        .join(Turma, DiarioClasse.turma_id == Turma.id)
+        .where(
+            Turma.school_id == school_id,
+            DiarioClasse.is_deleted == True
+        ).order_by(DiarioClasse.data_aula.desc(), DiarioClasse.periodo)
+    ).all()
+    
+    # Agrupa por bloco para exibir na view
+    grouped = []
+    if diarios_apagados:
+        curr_group = [diarios_apagados[0]]
+        for i in range(1, len(diarios_apagados)):
+            curr = diarios_apagados[i]
+            prev = curr_group[-1]
+            if (curr.data_aula == prev.data_aula and 
+                curr.turma_id == prev.turma_id and 
+                curr.disciplina_id == prev.disciplina_id):
+                curr_group.append(curr)
+            else:
+                grouped.append(curr_group)
+                curr_group = [curr]
+        if curr_group:
+            grouped.append(curr_group)
+            
+    lista_view = []
+    for g in grouped:
+        rep = g[0]
+        first_p = g[0].periodo
+        last_p = g[-1].periodo
+        per_str = f"{first_p}º" if first_p == last_p else f"{first_p}º a {last_p}º"
+        lista_view.append({
+            'id': rep.id,
+            'data_aula': rep.data_aula,
+            'turma_nome': rep.turma.nome if rep.turma else 'N/D',
+            'disciplina_nome': rep.disciplina.materia if rep.disciplina else 'N/D',
+            'periodos': per_str,
+            'qtd_aulas': len(g)
+        })
+
+    # Renderiza na tela (Ajuste o HTML conforme seu painel de admin, 
+    # basta varrer a variavel lixeira e usar um formulário POST chamando /admin/restaurar/<id>)
+    return render_template('diario/admin_lixeira.html', lixeira=lista_view)
+
+@diario_bp.route('/admin/restaurar/<int:diario_id>', methods=['POST'])
+@login_required
+def restaurar(diario_id):
+    if not (current_user.is_sens or current_user.is_admin_escola or current_user.is_programador):
+        return jsonify({"success": False, "message": "Acesso negado"}), 403
+        
+    ok, msg = DiarioService.restaurar_diario_admin(diario_id, current_user)
+    if ok:
+        flash(msg, "success")
+    else:
+        flash(msg, "danger")
+    return redirect(url_for('diario.listar_lixeira'))

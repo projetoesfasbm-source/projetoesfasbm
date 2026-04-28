@@ -1,7 +1,8 @@
 # backend/services/disciplina_service.py
 
 from flask import current_app
-from sqlalchemy import select, func, distinct, case, or_
+from sqlalchemy import select, func, distinct, case, or_, and_
+from datetime import datetime, timedelta
 from ..models.database import db
 from ..models.disciplina import Disciplina
 from ..models.disciplina_turma import DisciplinaTurma
@@ -15,44 +16,72 @@ class DisciplinaService:
     @staticmethod
     def get_dados_progresso(disciplina):
         """
-        Calcula o progresso de uma disciplina específica.
-        Usado pela lista principal (Visualização Legada/Detalhada).
+        Calcula o progresso real e agendado de uma disciplina cruzando dados do Quadro de Horário.
         """
         try:
-            previsto = disciplina.carga_horaria_prevista
-            realizado = disciplina.carga_horaria_cumprida
-            pct_realizado = int((realizado / previsto * 100)) if previsto > 0 else 0
+            previsto = disciplina.carga_horaria_prevista or 0
+            hoje = datetime.now().date()
             
-            # Cálculo simples para visualização rápida
-            # Se precisar de "agendado futuro" preciso, seria necessário query pesada no Horario
-            # Por enquanto, mantemos 0 ou lógica simplificada para não travar a lista
-            agendado = 0 
-            pct_agendado = 0
-            restante = previsto - realizado
+            agendamentos = db.session.scalars(
+                select(Horario)
+                .join(Semana, Horario.semana_id == Semana.id)
+                .where(Horario.disciplina_id == disciplina.id)
+            ).all()
+
+            mapa_dias = {
+                'segunda': 0, 'segunda-feira': 0, 'terça': 1, 'terca': 1, 'terça-feira': 1,
+                'quarta': 2, 'quarta-feira': 2, 'quinta': 3, 'quinta-feira': 3,
+                'sexta': 4, 'sexta-feira': 4, 'sábado': 5, 'sabado': 5, 'domingo': 6
+            }
+
+            ministradas = 0
+            agendadas_futuro = 0
+
+            for ag in agendamentos:
+                qtd = ag.duracao if ag.duracao else 1
+                data_real = ag.semana.data_inicio
+                dia_text = ag.dia_semana.lower().strip() if ag.dia_semana else ""
+                offset = mapa_dias.get(dia_text)
+                
+                if offset is not None:
+                    data_real = ag.semana.data_inicio + timedelta(days=offset)
+                
+                data_comp = data_real.date() if isinstance(data_real, datetime) else data_real
+
+                if data_comp <= hoje:
+                    ministradas += qtd
+                else:
+                    agendadas_futuro += qtd
+
+            realizado_total = max(ministradas, disciplina.carga_horaria_cumprida or 0)
+            if realizado_total > previsto and previsto > 0:
+                realizado_total = previsto
+            
+            restante = max(0, previsto - realizado_total - agendadas_futuro)
             
             return {
                 'previsto': previsto,
-                'realizado': realizado,
-                'pct_realizado': pct_realizado,
-                'agendado': agendado,
-                'pct_agendado': pct_agendado,
+                'realizado': realizado_total,
+                'pct_realizado': round((realizado_total / previsto * 100), 1) if previsto > 0 else 0,
+                'agendado': agendadas_futuro,
+                'pct_agendado': round((agendadas_futuro / previsto * 100), 1) if previsto > 0 else 0,
                 'restante_para_planejar': restante
             }
-        except Exception:
-            return {
-                'previsto': 0, 'realizado': 0, 'pct_realizado': 0,
-                'agendado': 0, 'pct_agendado': 0, 'restante_para_planejar': 0
-            }
+        except Exception as e:
+            current_app.logger.error(f"Erro no cálculo de progresso: {e}")
+            return {'previsto': 0, 'realizado': 0, 'pct_realizado': 0, 'agendado': 0, 'pct_agendado': 0, 'restante_para_planejar': 0}
 
     @staticmethod
     def get_dashboard_data(school_id, ciclo_id=None):
         """
-        Gera dados APENAS de anomalias e alertas para o Dashboard Inteligente.
+        Gera o Painel de Alertas detectando assincronia entre turmas da mesma escola.
         """
         try:
+            # Busca turmas APENAS da escola atual
             query_turmas = select(Turma).where(Turma.school_id == school_id)
             turmas = db.session.scalars(query_turmas).all()
             turma_ids = [t.id for t in turmas]
+            total_turmas = len(turma_ids) # CONTAGEM REAL DE TURMAS (Ex: 10 em Montenegro)
             
             if not turma_ids: return None
 
@@ -63,62 +92,64 @@ class DisciplinaService:
             disciplinas = db.session.scalars(query_base).all()
             if not disciplinas: return None
 
-            total_horas_previstas = sum(d.carga_horaria_prevista for d in disciplinas)
-            total_horas_cumpridas = sum(d.carga_horaria_cumprida for d in disciplinas)
-            progresso_global = (total_horas_cumpridas / total_horas_previstas * 100) if total_horas_previstas > 0 else 0
-
             materias_analysis = {}
+            total_previsto_global = 0
+            total_realizado_global = 0
+
             for d in disciplinas:
+                prog = DisciplinaService.get_dados_progresso(d)
+                
                 if d.materia not in materias_analysis:
                     materias_analysis[d.materia] = {'disciplinas': []}
                 
-                pct = (d.carga_horaria_cumprida / d.carga_horaria_prevista * 100) if d.carga_horaria_prevista > 0 else 0
-                
+                total_previsto_global += prog['previsto']
+                total_realizado_global += prog['realizado']
+
                 materias_analysis[d.materia]['disciplinas'].append({
                     'turma': d.turma.nome if d.turma else 'N/D',
-                    'pct': pct,
-                    'cumprida': d.carga_horaria_cumprida
+                    'pct': prog['pct_realizado'],
+                    'cumprida': prog['realizado'],
+                    'id': d.id
                 })
 
+            progresso_global = (total_realizado_global / total_previsto_global * 100) if total_previsto_global > 0 else 0
+
             materias_risco = []
-            
-            if progresso_global < 30: tolerance = 25.0
-            elif progresso_global < 70: tolerance = 15.0
-            else: tolerance = 10.0
+            if progresso_global < 30: tolerance = 20.0
+            elif progresso_global < 70: tolerance = 12.0
+            else: tolerance = 8.0
 
             for materia, data in materias_analysis.items():
                 lista_pcts = [item['pct'] for item in data['disciplinas']]
-                if not lista_pcts: continue
+                if not lista_pcts or len(lista_pcts) < 2: continue
                 
                 max_pct = max(lista_pcts)
                 min_pct = min(lista_pcts)
                 amplitude = max_pct - min_pct
                 
-                if amplitude <= tolerance: continue
+                if amplitude > tolerance:
+                    status = 'critical' if amplitude >= (tolerance * 1.8) else 'warning'
+                    t_min = next(item for item in data['disciplinas'] if item['pct'] == min_pct)
+                    t_max = next(item for item in data['disciplinas'] if item['pct'] == max_pct)
 
-                horas_diff = max([i['cumprida'] for i in data['disciplinas']]) - min([i['cumprida'] for i in data['disciplinas']])
-                if horas_diff <= 4: continue
-
-                status = 'critical' if amplitude >= (tolerance * 1.5) else 'warning'
-                turma_adiantada = next((item['turma'] for item in data['disciplinas'] if item['pct'] == max_pct), '?')
-                turma_atrasada = next((item['turma'] for item in data['disciplinas'] if item['pct'] == min_pct), '?')
-
-                materias_risco.append({
-                    'materia': materia,
-                    'status': status,
-                    'amplitude': amplitude,
-                    'min_pct': min_pct,
-                    'max_pct': max_pct,
-                    'turma_min': turma_atrasada,
-                    'turma_max': turma_adiantada
-                })
+                    materias_risco.append({
+                        'materia': materia,
+                        'status': status,
+                        'amplitude': amplitude,
+                        'min_pct': min_pct,
+                        'max_pct': max_pct,
+                        'turma_min': t_min['turma'],
+                        'turma_max': t_max['turma'],
+                        'disciplina_id_min': t_min['id']
+                    })
 
             materias_risco.sort(key=lambda x: (0 if x['status'] == 'critical' else 1, -x['amplitude']))
 
             return {
                 'progresso_global': progresso_global,
                 'materias_risco': materias_risco,
-                'total_analisado': len(materias_analysis)
+                'total_analisado': len(materias_analysis), # Matérias únicas (Ex: 29)
+                'total_turmas': total_turmas # Turmas da escola (Ex: 10)
             }
 
         except Exception as e:

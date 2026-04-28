@@ -11,6 +11,24 @@ from ..models.disciplina import Disciplina
 from ..models.disciplina_turma import DisciplinaTurma
 from ..models.turma import Turma
 from ..models.ciclo import Ciclo
+from ..models.semana import Semana
+from ..models.horario import Horario
+from ..models.diario_classe import DiarioClasse
+from ..models.frequencia import FrequenciaAluno
+from ..models.turma_cargo import TurmaCargo
+from ..models.questionario import Questionario
+from ..models.pergunta import Pergunta  # ADICIONADO AQUI
+from ..models.resposta import Resposta
+from ..models.banco_questoes import QuestaoBanco, RascunhoProva, DelegacaoProva
+from ..models.elogio import Elogio
+from ..models.fada_avaliacao import FadaAvaliacao
+from ..models.processo_disciplina import ProcessoDisciplina
+from ..models.avaliacao import AvaliacaoAtitudinal
+from ..models.historico import HistoricoAluno
+from ..models.historico_disciplina import HistoricoDisciplina
+from ..models.notification import Notification
+from ..models.password_reset_token import PasswordResetToken
+from ..models.push_subscription import PushSubscription
 
 class AdminToolsService:
     
@@ -222,93 +240,134 @@ class AdminToolsService:
             raise e
 
     @staticmethod
-    def clear_students(school_id: int):
+    def custom_clear_school_data(school_id: int, options: list):
         """
-        Exclui permanentemente todos os usuários com a função 'aluno'
-        associados a uma escola específica.
-        Usa o ORM para garantir que a cascata (exclusão de perfil, notas, histórico) funcione.
-        """
-        try:
-            # Busca os objetos User completos
-            students = db.session.scalars(
-                select(User)
-                .join(UserSchool)
-                .where(
-                    User.role == 'aluno',
-                    UserSchool.school_id == school_id
-                )
-            ).all()
-
-            if not students:
-                return True, "Nenhum aluno encontrado para excluir."
-
-            count = len(students)
-            # Deleta um por um para ativar o 'cascade="all, delete-orphan"' do modelo SQLAlchemy
-            for student in students:
-                db.session.delete(student)
-            
-            db.session.commit()
-            return True, f"{count} aluno(s) foram excluídos com sucesso."
-        except Exception as e:
-            db.session.rollback()
-            current_app.logger.error(f"Erro ao limpar alunos: {e}")
-            return False, f"Ocorreu um erro ao tentar excluir os alunos: {str(e)}"
-
-    @staticmethod
-    def clear_instructors(school_id: int):
-        """
-        Exclui permanentemente todos os usuários com a função 'instrutor'
-        associados a uma escola específica.
+        Processa as opções selecionadas via checkbox e as limpa em lote, lidando 
+        com as dependências do banco ativamente para evitar erros de Integridade Referencial.
         """
         try:
-            instructors = db.session.scalars(
-                select(User)
-                .join(UserSchool)
-                .where(
-                    User.role == 'instrutor',
-                    UserSchool.school_id == school_id
-                )
-            ).all()
+            # Garante que as dependências obrigatórias sejam tratadas se uma tabela "Pai" for excluída
+            if 'turmas' in options:
+                options.extend(['disciplinas', 'diarios', 'questionarios', 'vinculos'])
+            if 'disciplinas' in options:
+                options.extend(['diarios', 'vinculos'])
+            if 'ciclos' in options:
+                options.extend(['semanas', 'horarios'])
 
-            if not instructors:
-                return True, "Nenhum instrutor encontrado para excluir."
+            options = list(set(options)) # Remove duplicatas
 
-            count = len(instructors)
-            for instructor in instructors:
-                db.session.delete(instructor)
+            # 1. Coletar IDs para filtro rápido e seguro nas deleções em lote
+            all_users = db.session.scalars(select(User).join(UserSchool).where(UserSchool.school_id == school_id)).all()
+            user_ids = [u.id for u in all_users] if all_users else []
+            student_ids = [u.id for u in all_users if u.role == 'aluno']
+            instructor_ids = [u.id for u in all_users if u.role == 'instrutor']
+
+            turmas = db.session.scalars(select(Turma).where(Turma.school_id == school_id)).all()
+            turma_ids = [t.id for t in turmas] if turmas else []
+
+            ciclos = db.session.scalars(select(Ciclo).where(Ciclo.school_id == school_id)).all()
+            ciclo_ids = [c.id for c in ciclos] if ciclos else []
+
+            # LIMPEZA DAS DEPENDÊNCIAS MENORES (Cascata Forçada) ==================
+
+            # Justiça
+            if 'justica' in options and user_ids:
+                db.session.query(ProcessoDisciplina).filter(ProcessoDisciplina.aluno_id.in_(user_ids)).delete(synchronize_session=False)
+                db.session.query(Elogio).filter(Elogio.aluno_id.in_(user_ids)).delete(synchronize_session=False)
+                db.session.query(FadaAvaliacao).filter(FadaAvaliacao.aluno_id.in_(user_ids)).delete(synchronize_session=False)
+                db.session.query(AvaliacaoAtitudinal).filter(AvaliacaoAtitudinal.aluno_id.in_(user_ids)).delete(synchronize_session=False)
+
+            # Questionários (e respostas)
+            if 'questionarios' in options and turma_ids:
+                questoes = db.session.scalars(select(Questionario).where(Questionario.turma_id.in_(turma_ids))).all()
+                for q in questoes:
+                    db.session.query(Resposta).filter(Resposta.pergunta_id.in_(
+                        select(Pergunta.id).where(Pergunta.questionario_id == q.id)
+                    )).delete(synchronize_session=False)
+                    db.session.delete(q)
+
+            # Diários de Classe (e frequências)
+            if 'diarios' in options and turma_ids:
+                diarios = db.session.scalars(select(DiarioClasse).where(DiarioClasse.turma_id.in_(turma_ids))).all()
+                diario_ids = [d.id for d in diarios] if diarios else []
+                if diario_ids:
+                    db.session.query(FrequenciaAluno).filter(FrequenciaAluno.diario_id.in_(diario_ids)).delete(synchronize_session=False)
+                    db.session.query(DiarioClasse).filter(DiarioClasse.id.in_(diario_ids)).delete(synchronize_session=False)
+
+            # Vínculos Disciplina-Instrutor
+            if 'vinculos' in options and turma_ids:
+                disciplinas = db.session.scalars(select(Disciplina).where(Disciplina.turma_id.in_(turma_ids))).all()
+                disc_ids = [d.id for d in disciplinas] if disciplinas else []
+                if disc_ids:
+                    db.session.query(DisciplinaTurma).filter(DisciplinaTurma.disciplina_id.in_(disc_ids)).delete(synchronize_session=False)
+
+            # Disciplinas (e horários, históricos)
+            if 'disciplinas' in options and turma_ids:
+                disciplinas = db.session.scalars(select(Disciplina).where(Disciplina.turma_id.in_(turma_ids))).all()
+                disc_ids = [d.id for d in disciplinas] if disciplinas else []
+                if disc_ids:
+                    db.session.query(HistoricoDisciplina).filter(HistoricoDisciplina.disciplina_id.in_(disc_ids)).delete(synchronize_session=False)
+                    db.session.query(Horario).filter(Horario.disciplina_id.in_(disc_ids)).delete(synchronize_session=False)
+                    db.session.query(Disciplina).filter(Disciplina.id.in_(disc_ids)).delete(synchronize_session=False)
+
+            # Ciclos (e semanas, horários)
+            if 'ciclos' in options and ciclo_ids:
+                semanas = db.session.scalars(select(Semana).where(Semana.ciclo_id.in_(ciclo_ids))).all()
+                semana_ids = [s.id for s in semanas] if semanas else []
+                if semana_ids:
+                    db.session.query(Horario).filter(Horario.semana_id.in_(semana_ids)).delete(synchronize_session=False)
+                    db.session.query(Semana).filter(Semana.id.in_(semana_ids)).delete(synchronize_session=False)
+                db.session.query(Ciclo).filter(Ciclo.id.in_(ciclo_ids)).delete(synchronize_session=False)
+
+            # Turmas
+            if 'turmas' in options and turma_ids:
+                db.session.query(TurmaCargo).filter(TurmaCargo.turma_id.in_(turma_ids)).delete(synchronize_session=False)
+                db.session.query(Turma).filter(Turma.id.in_(turma_ids)).delete(synchronize_session=False)
+
+            # LIMPEZA DE USUÁRIOS ==================================================
             
+            # Alunos
+            if 'alunos' in options and student_ids:
+                db.session.query(FrequenciaAluno).filter(FrequenciaAluno.aluno_id.in_(student_ids)).delete(synchronize_session=False)
+                db.session.query(HistoricoDisciplina).filter(HistoricoDisciplina.aluno_id.in_(student_ids)).delete(synchronize_session=False)
+                db.session.query(HistoricoAluno).filter(HistoricoAluno.aluno_id.in_(student_ids)).delete(synchronize_session=False)
+                db.session.query(ProcessoDisciplina).filter(ProcessoDisciplina.aluno_id.in_(student_ids)).delete(synchronize_session=False)
+                db.session.query(Elogio).filter(Elogio.aluno_id.in_(student_ids)).delete(synchronize_session=False)
+                db.session.query(FadaAvaliacao).filter(FadaAvaliacao.aluno_id.in_(student_ids)).delete(synchronize_session=False)
+                db.session.query(AvaliacaoAtitudinal).filter(AvaliacaoAtitudinal.aluno_id.in_(student_ids)).delete(synchronize_session=False)
+                db.session.query(Resposta).filter(Resposta.aluno_id.in_(student_ids)).delete(synchronize_session=False)
+                
+                # Configurações de sistema dos alunos
+                db.session.query(Notification).filter(Notification.user_id.in_(student_ids)).delete(synchronize_session=False)
+                db.session.query(PasswordResetToken).filter(PasswordResetToken.user_id.in_(student_ids)).delete(synchronize_session=False)
+                db.session.query(PushSubscription).filter(PushSubscription.user_id.in_(student_ids)).delete(synchronize_session=False)
+                db.session.query(UserSchool).filter(UserSchool.user_id.in_(student_ids), UserSchool.school_id == school_id).delete(synchronize_session=False)
+                
+                db.session.query(User).filter(User.id.in_(student_ids)).delete(synchronize_session=False)
+
+            # Instrutores
+            if 'instrutores' in options and instructor_ids:
+                # Modulo Banco de Questoes e Delegações
+                delegacoes = db.session.scalars(select(DelegacaoProva).where(DelegacaoProva.instrutor_id.in_(instructor_ids))).all()
+                delegacao_ids = [d.id for d in delegacoes] if delegacoes else []
+                if delegacao_ids:
+                    db.session.query(RascunhoProva).filter(RascunhoProva.delegacao_id.in_(delegacao_ids)).delete(synchronize_session=False)
+                    
+                db.session.query(DelegacaoProva).filter(DelegacaoProva.instrutor_id.in_(instructor_ids)).delete(synchronize_session=False)
+                db.session.query(QuestaoBanco).filter(QuestaoBanco.instrutor_id.in_(instructor_ids)).delete(synchronize_session=False)
+
+                # Configurações de sistema dos instrutores
+                db.session.query(Notification).filter(Notification.user_id.in_(instructor_ids)).delete(synchronize_session=False)
+                db.session.query(PasswordResetToken).filter(PasswordResetToken.user_id.in_(instructor_ids)).delete(synchronize_session=False)
+                db.session.query(PushSubscription).filter(PushSubscription.user_id.in_(instructor_ids)).delete(synchronize_session=False)
+                db.session.query(UserSchool).filter(UserSchool.user_id.in_(instructor_ids), UserSchool.school_id == school_id).delete(synchronize_session=False)
+                
+                db.session.query(User).filter(User.id.in_(instructor_ids)).delete(synchronize_session=False)
+
             db.session.commit()
-            return True, f"{count} instrutor(es) foram excluídos com sucesso."
+            return True, "Os registros selecionados foram analisados e excluídos com sucesso do banco de dados."
+
         except Exception as e:
             db.session.rollback()
-            current_app.logger.error(f"Erro ao limpar instrutores: {e}")
-            return False, f"Ocorreu um erro ao tentar excluir os instrutores: {str(e)}"
-
-    @staticmethod
-    def clear_disciplines(school_id: int):
-        """
-        Exclui permanentemente todas as disciplinas de uma escola,
-        navegando através das turmas.
-        """
-        try:
-            # Busca disciplinas através das turmas da escola
-            # Também usamos o ORM aqui para garantir que Horários e Históricos sejam limpos
-            disciplines = db.session.scalars(
-                select(Disciplina)
-                .join(Turma)
-                .where(Turma.school_id == school_id)
-            ).all()
-
-            if not disciplines:
-                return True, "Nenhuma disciplina encontrada para excluir."
-
-            count = len(disciplines)
-            for discipline in disciplines:
-                db.session.delete(discipline)
-            
-            db.session.commit()
-            return True, f"{count} disciplina(s) foram excluídas com sucesso."
-        except Exception as e:
-            db.session.rollback()
-            current_app.logger.error(f"Erro ao limpar disciplinas: {e}")
-            return False, f"Ocorreu um erro ao tentar excluir as disciplinas: {str(e)}"
+            current_app.logger.error(f"Erro crítico no reset customizado da escola: {e}")
+            return False, f"Ocorreu um erro ao processar a limpeza: {str(e)}"

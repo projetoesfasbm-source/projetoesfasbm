@@ -16,6 +16,7 @@ from backend.models.semana import Semana
 from backend.models.disciplina import Disciplina
 from backend.models.turma import Turma
 from backend.models.ciclo import Ciclo
+from backend.services.diario_service import DiarioService
 
 chefe_bp = Blueprint('chefe', __name__, url_prefix='/chefe')
 
@@ -79,7 +80,6 @@ def debug_screen():
         output.append(f"<li><strong>Data Base:</strong> {data_hoje} ({dia_str})</li>")
         output.append(f"</ul>")
         
-        # BUSCA CORRIGIDA: Filtra semanas SOMENTE da escola atual através do Ciclo
         semanas = db.session.query(Semana).join(Ciclo).filter(
             Ciclo.school_id == escola_id,
             Semana.data_inicio <= data_hoje, 
@@ -95,7 +95,6 @@ def debug_screen():
         nomes_semanas = ", ".join([f"{s.nome} (ID {s.id})" for s in semanas])
         output.append(f"<p><strong>Semanas Ativas Detectadas (Escola {escola_id}):</strong> {nomes_semanas}</p>")
 
-        # Query de Teste PERMISSIVA usando IN para semana_id
         horarios_raw = db.session.query(Horario)\
             .outerjoin(Horario.disciplina)\
             .outerjoin(Disciplina.turma)\
@@ -112,7 +111,6 @@ def debug_screen():
              output.append(f"<tr><td colspan='7'>Nenhum horário encontrado para esta escola nas semanas IDs: {semana_ids}.</td></tr>")
 
         for h in horarios_raw:
-            # Proteção caso disciplina seja None devido ao outerjoin
             disc_turma_id = h.disciplina.turma_id if h.disciplina else None
             materia_nome = h.disciplina.materia if h.disciplina else "N/A"
 
@@ -157,12 +155,10 @@ def painel():
             flash("Acesso restrito ou aluno sem turma.", "danger")
             return redirect(url_for('main.index'))
 
-        # Data e Semana
         data_str = request.args.get('data')
         data_hoje = get_data_hoje_brasil()
         data_selecionada = datetime.strptime(data_str, '%Y-%m-%d').date() if data_str else data_hoje
         
-        # CORREÇÃO: Busca TODAS as semanas ativas APENAS DA ESCOLA DO ALUNO
         semanas_ativas = db.session.query(Semana).join(Ciclo).filter(
             Ciclo.school_id == aluno.turma.school_id,
             Semana.data_inicio <= data_selecionada,
@@ -177,7 +173,6 @@ def painel():
         
         variacoes_nome = get_variacoes_nome_turma(aluno.turma.nome)
         
-        # Query principal usando outerjoin e filtro de escola/semana correto
         query = db.session.query(Horario)\
             .outerjoin(Horario.disciplina)\
             .outerjoin(Disciplina.turma)\
@@ -190,7 +185,6 @@ def painel():
                 Horario.dia_semana.ilike(f"{dia_str}%")
             )
 
-        # Filtro abrangente: ID ou Nome
         query = query.filter(
             or_(
                 Disciplina.turma_id == aluno.turma_id,
@@ -201,10 +195,10 @@ def painel():
 
         horarios = query.order_by(Horario.periodo).all()
 
-        # Busca diários já lançados
         diarios_hoje = db.session.query(DiarioClasse).filter_by(
             data_aula=data_selecionada, 
-            turma_id=aluno.turma_id
+            turma_id=aluno.turma_id,
+            is_deleted=False # IGNORA LIXEIRA AQUI PARA NÃO BLOQUEAR RECRIAR
         ).all()
         
         aulas_concluidas_keys = set()
@@ -218,7 +212,6 @@ def painel():
         
         if horarios:
             for h in horarios:
-                # Proteção para disciplina nula no caso de outerjoin
                 if not h.disciplina:
                     continue
 
@@ -254,7 +247,8 @@ def painel():
                     key = f"{disc_id}_{p}"
                     legacy_key = f"{disc_id}_legacy"
                     
-                    if key in aulas_concluidas_keys or legacy_key in aulas_concluidas_keys or h.status == 'concluido':
+                    # === CORREÇÃO DA TRAVA FANTASMA ===
+                    if key in aulas_concluidas_keys or legacy_key in aulas_concluidas_keys:
                         grupos_dict[disc_id]['tempos_concluidos'] += 1
 
             for g in sorted(grupos_dict.values(), key=lambda x: min(x['periodos_expandidos'])):
@@ -278,7 +272,6 @@ def registrar_aula(primeiro_horario_id):
         aluno_chefe = verify_chefe_permission()
         if not aluno_chefe: return redirect(url_for('main.index'))
 
-        # Carrega o horário base com outerjoin
         horario_base = db.session.query(Horario)\
             .outerjoin(Horario.disciplina)\
             .outerjoin(Disciplina.turma)\
@@ -297,7 +290,6 @@ def registrar_aula(primeiro_horario_id):
 
         variacoes_nome = get_variacoes_nome_turma(aluno_chefe.turma.nome)
         
-        # Recupera os horários irmãos com outerjoin
         horarios_db = db.session.query(Horario)\
             .outerjoin(Horario.disciplina)\
             .outerjoin(Disciplina.turma)\
@@ -314,19 +306,28 @@ def registrar_aula(primeiro_horario_id):
             ).order_by(Horario.periodo).all()
 
         horarios_expandidos = []
+        periodos_processados = set() # TRAVA CONTRA HORÁRIOS DUPLICADOS NA ORIGEM
+
         for h in horarios_db:
             duracao = h.duracao if h.duracao and h.duracao > 0 else 1
             for i in range(duracao):
                 p = h.periodo + i
+                
+                # Se o período já foi processado neste bloco, ignora para não gerar duplicidade na tela
+                if p in periodos_processados:
+                    continue
+                    
                 existe = db.session.query(DiarioClasse).filter_by(
                     data_aula=data_aula,
                     turma_id=aluno_chefe.turma_id,
                     disciplina_id=h.disciplina_id,
-                    periodo=p
+                    periodo=p,
+                    is_deleted=False # DEIXA REGISTRAR SE ESTIVER NA LIXEIRA
                 ).first()
                 
                 if not existe:
                     horarios_expandidos.append({'periodo': p, 'horario_pai_id': h.id, 'obj': h})
+                    periodos_processados.add(p) # Marca o período como já adicionado
         
         horarios_expandidos.sort(key=lambda x: x['periodo'])
         
@@ -337,6 +338,25 @@ def registrar_aula(primeiro_horario_id):
         alunos_turma = db.session.query(Aluno).filter_by(turma_id=aluno_chefe.turma_id).order_by(Aluno.num_aluno).all()
 
         if request.method == 'POST':
+            # --- NOVAS TRAVAS DE SEGURANÇA E REGRA DE NEGÓCIO ---
+            conteudo_informado = request.form.get('conteudo')
+            
+            # 1. Validação de Conteúdo (Garante que preencheu qualquer coisa)
+            ok_cont, msg_cont = DiarioService.validar_conteudo_obrigatorio(conteudo_informado)
+            if not ok_cont:
+                flash(msg_cont, "danger")
+                return redirect(request.url)
+
+            # 2. Validação de Horário (Garante que a aula acabou em Brasília)
+            periodos_para_registrar = [h['periodo'] for h in horarios_expandidos]
+            if periodos_para_registrar:
+                ultimo_periodo_do_bloco = max(periodos_para_registrar)
+                ok_hora, msg_hora = DiarioService.validar_criacao_diario_aluno(data_aula, ultimo_periodo_do_bloco)
+                if not ok_hora:
+                    flash(msg_hora, "danger")
+                    return redirect(request.url)
+            # -----------------------------------------------------
+
             try:
                 ids_horarios_pais_atualizados = set()
                 count_regs = 0
@@ -344,13 +364,30 @@ def registrar_aula(primeiro_horario_id):
                     periodo_atual = h_virt['periodo']
                     horario_pai = h_virt['obj']
 
+                    # ========================================================
+                    # TRAVA ANTI-DUPLICAÇÃO (CONDIÇÃO DE CORRIDA / CLICK DUPLO)
+                    # Verifica no exato milissegundo antes de gravar se outra 
+                    # requisição não acabou de gravar esta mesma aula.
+                    # ========================================================
+                    ja_salvo_agora = db.session.query(DiarioClasse).filter_by(
+                        data_aula=data_aula,
+                        turma_id=aluno_chefe.turma_id,
+                        disciplina_id=horario_pai.disciplina_id,
+                        periodo=periodo_atual,
+                        is_deleted=False
+                    ).first()
+
+                    if ja_salvo_agora:
+                        continue # Ignora e não grava, pois já acabou de ser salvo
+                    # ========================================================
+
                     novo_diario = DiarioClasse(
                         data_aula=data_aula,
                         turma_id=aluno_chefe.turma_id,
                         disciplina_id=horario_pai.disciplina_id,
                         responsavel_id=current_user.id,
                         observacoes=request.form.get('observacoes'),
-                        conteudo_ministrado=request.form.get('conteudo'),
+                        conteudo_ministrado=conteudo_informado, # Usa a variável já capturada e validada
                         periodo=periodo_atual
                     )
                     db.session.add(novo_diario)

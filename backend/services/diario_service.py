@@ -1,8 +1,10 @@
+# backend/services/diario_service.py
 import os
 import base64
 import uuid
 import shutil
-from datetime import datetime
+from datetime import datetime, time
+from zoneinfo import ZoneInfo
 from flask import current_app, session
 from ..models.database import db
 from ..models.diario_classe import DiarioClasse
@@ -16,6 +18,48 @@ from sqlalchemy import select, and_, or_, distinct
 
 class DiarioService:
     
+    @staticmethod
+    def validar_criacao_diario_aluno(data_aula_str, periodo_final):
+        """ Validação rigorosa: O aluno SÓ PODE criar o diário DEPOIS que a aula acabar (Hora de Brasília) """
+        try:
+            fuso_sp = ZoneInfo('America/Sao_Paulo')
+            agora = datetime.now(fuso_sp)
+            
+            if isinstance(data_aula_str, str):
+                data_aula = datetime.strptime(data_aula_str, '%Y-%m-%d').date()
+            else:
+                data_aula = data_aula_str
+                
+            if data_aula > agora.date():
+                return False, "⚠️ Bloqueado: Não é possível criar diários para datas futuras."
+                
+            if data_aula < agora.date():
+                return True, "" # Aulas de dias anteriores estão liberadas
+                
+            # Horários de FIM de cada período (ajuste se necessário)
+            horarios_fim = {
+                1: time(8, 35), 2: time(9, 25), 3: time(10, 30), 4: time(11, 20),
+                5: time(14, 20), 6: time(15, 10), 7: time(16, 15), 8: time(17, 5),
+                9: time(19, 0), 10: time(19, 50), 11: time(20, 50), 12: time(21, 40)
+            }
+            
+            hora_fim = horarios_fim.get(int(periodo_final))
+            if not hora_fim:
+                return True, "" # Fallback de segurança se o período for desconhecido
+                
+            if agora.time() < hora_fim:
+                return False, f"⚠️ O diário só será liberado após o término desta aula ({hora_fim.strftime('%H:%M')} no horário de Brasília)."
+                
+            return True, ""
+        except Exception as e:
+            return False, f"Erro interno de validação de horário: {str(e)}"
+
+    @staticmethod
+    def validar_conteudo_obrigatorio(conteudo):
+        if not conteudo or str(conteudo).strip() == "":
+            return False, "⚠️ O campo 'Conteúdo Ministrado' é obrigatório. Preencha o resumo da aula."
+        return True, ""
+
     @staticmethod
     def get_current_instrutor(user_id):
         school_id = session.get('active_school_id')
@@ -34,8 +78,9 @@ class DiarioService:
             .join(Turma, DiarioClasse.turma_id == Turma.id)
             .where(
                 Turma.school_id == school_id,
-                DiarioClasse.conteudo_ministrado != None,
-                DiarioClasse.conteudo_ministrado != ''
+                DiarioClasse.is_deleted == False
+                # BUGFIX: Removido o filtro de conteudo_ministrado != None.
+                # Agora o diário é forçado a aparecer para o instrutor mesmo que o aluno tenha deixado em branco.
             )
         )
 
@@ -89,12 +134,6 @@ class DiarioService:
 
     @staticmethod
     def _criar_representante_grupo(group_items):
-        """
-        Organiza os dados do bloco de aulas e identifica o instrutor correto.
-        Lógica extraída dos modelos: 
-        DiarioClasse.instrutor_assinante -> User
-        DisciplinaTurma.instrutor_1 -> Instrutor -> User
-        """
         rep = group_items[0] 
         first_p = group_items[0].periodo
         last_p = group_items[-1].periodo
@@ -105,19 +144,15 @@ class DiarioService:
             
         rep.total_aulas_bloco = len(group_items)
 
-        # IDENTIFICAÇÃO DO INSTRUTOR PARA O ADM (Correção Definitiva)
-        # 1. Se assinado, o instrutor_assinante é um objeto User direto (como definido no modelo DiarioClasse)
         if rep.status == 'assinado' and getattr(rep, 'instrutor_assinante', None):
             u = rep.instrutor_assinante
             posto = u.posto_graduacao or ""
             guerra = u.nome_de_guerra or u.nome_completo or ""
             rep.instrutor_nome_exibicao = f"{posto} {guerra}".strip()
         else:
-            # 2. Se não assinado, busca quem é o instrutor vinculado no planejamento
             vinculo = db.session.scalar(
                 select(DisciplinaTurma).where(DisciplinaTurma.disciplina_id == rep.disciplina_id)
             )
-            # No modelo DisciplinaTurma, o atributo é 'instrutor_1' e no Instrutor a relação é 'user'
             if vinculo and getattr(vinculo, 'instrutor_1', None) and getattr(vinculo.instrutor_1, 'user', None):
                 u = vinculo.instrutor_1.user
                 posto = u.posto_graduacao or ""
@@ -157,7 +192,7 @@ class DiarioService:
         if not instrutor: return None, None
         
         diario = db.session.get(DiarioClasse, diario_id)
-        if not diario: return None, None
+        if not diario or diario.is_deleted: return None, None
 
         vinculo = db.session.scalars(
             select(DisciplinaTurma).where(
@@ -215,7 +250,8 @@ class DiarioService:
                 select(DiarioClasse).where(
                     DiarioClasse.data_aula == diario_pai.data_aula,
                     DiarioClasse.turma_id == diario_pai.turma_id,
-                    DiarioClasse.disciplina_id == diario_pai.disciplina_id
+                    DiarioClasse.disciplina_id == diario_pai.disciplina_id,
+                    DiarioClasse.is_deleted == False
                 )
             ).all()
 
@@ -241,7 +277,6 @@ class DiarioService:
                     d.assinatura_path = db_path
                     d.status = 'assinado'
                     d.data_assinatura = timestamp
-                    # O assinante gravado é o user_id, conforme modelo DiarioClasse
                     d.instrutor_assinante_id = user_id
                     if conteudo_atualizado: d.conteudo_ministrado = conteudo_atualizado
                     if observacoes_atualizadas is not None: d.observacoes = observacoes_atualizadas
@@ -260,7 +295,8 @@ class DiarioService:
             siblings = db.session.scalars(select(DiarioClasse).where(
                 DiarioClasse.data_aula == diario.data_aula,
                 DiarioClasse.turma_id == diario.turma_id,
-                DiarioClasse.disciplina_id == diario.disciplina_id
+                DiarioClasse.disciplina_id == diario.disciplina_id,
+                DiarioClasse.is_deleted == False
             )).all()
             for d in siblings:
                 d.status = 'pendente'
@@ -282,7 +318,8 @@ class DiarioService:
             siblings = db.session.scalars(select(DiarioClasse).where(
                 DiarioClasse.data_aula == diario.data_aula,
                 DiarioClasse.turma_id == diario.turma_id,
-                DiarioClasse.disciplina_id == diario.disciplina_id
+                DiarioClasse.disciplina_id == diario.disciplina_id,
+                DiarioClasse.is_deleted == False
             )).all()
             for d in siblings:
                 d.conteudo_ministrado = novo_conteudo
@@ -302,13 +339,37 @@ class DiarioService:
             siblings = db.session.scalars(select(DiarioClasse).where(
                 DiarioClasse.data_aula == diario.data_aula,
                 DiarioClasse.turma_id == diario.turma_id,
-                DiarioClasse.disciplina_id == diario.disciplina_id
+                DiarioClasse.disciplina_id == diario.disciplina_id,
+                DiarioClasse.is_deleted == False
             )).all()
-            total_apagados = len(siblings)
+            total_apagados = 0
             for d in siblings:
-                db.session.delete(d)
+                d.is_deleted = True # Soft Delete
+                total_apagados += 1
             db.session.commit()
-            return True, f"Sucesso: {total_apagados} aula(s) excluídas."
+            return True, f"Sucesso: {total_apagados} aula(s) foram movidas para a Lixeira do Admin."
         except Exception as e:
             db.session.rollback()
-            return False, f"Erro ao excluir diário: {str(e)}"
+            return False, f"Erro ao enviar para a lixeira: {str(e)}"
+
+    @staticmethod
+    def restaurar_diario_admin(diario_id, admin_user):
+        diario = db.session.get(DiarioClasse, diario_id)
+        if not diario: 
+            return False, "Diário não encontrado na lixeira."
+        try:
+            siblings = db.session.scalars(select(DiarioClasse).where(
+                DiarioClasse.data_aula == diario.data_aula,
+                DiarioClasse.turma_id == diario.turma_id,
+                DiarioClasse.disciplina_id == diario.disciplina_id,
+                DiarioClasse.is_deleted == True
+            )).all()
+            total_restaurados = 0
+            for d in siblings:
+                d.is_deleted = False 
+                total_restaurados += 1
+            db.session.commit()
+            return True, f"Sucesso: {total_restaurados} aula(s) foram restauradas."
+        except Exception as e:
+            db.session.rollback()
+            return False, f"Erro ao restaurar: {str(e)}"

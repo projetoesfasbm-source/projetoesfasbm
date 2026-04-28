@@ -97,9 +97,8 @@ def reset_escola():
 @login_required
 @admin_or_programmer_required
 def clear_data():
-    """Processa as solicitações de limpeza de dados."""
+    """Processa as solicitações de limpeza de dados em massa baseadas nas seleções."""
     password = request.form.get('password')
-    action = request.form.get('action')
     
     if not password or not current_user.check_password(password):
         flash('Senha incorreta. Nenhuma ação foi executada.', 'danger')
@@ -110,13 +109,15 @@ def clear_data():
         flash('Não foi possível identificar a sua escola. Ação cancelada.', 'danger')
         return redirect(url_for('tools.reset_escola'))
 
-    success, message = False, "Ação desconhecida."
-    if action == 'clear_students':
-        success, message = AdminToolsService.clear_students(school_id)
-    elif action == 'clear_instructors':
-        success, message = AdminToolsService.clear_instructors(school_id)
-    elif action == 'clear_disciplines':
-        success, message = AdminToolsService.clear_disciplines(school_id)
+    # Pega todos os values enviados com o name='opcoes'
+    opcoes_selecionadas = request.form.getlist('opcoes')
+    
+    if not opcoes_selecionadas:
+        flash('Nenhuma categoria de dados foi selecionada para exclusão.', 'warning')
+        return redirect(url_for('tools.reset_escola'))
+
+    # Chama o método inteligente que lida com as escolhas em lote no Service
+    success, message = AdminToolsService.custom_clear_school_data(school_id, opcoes_selecionadas)
 
     flash(message, 'success' if success else 'danger')
     return redirect(url_for('tools.reset_escola'))
