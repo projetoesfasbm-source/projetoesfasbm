@@ -177,15 +177,16 @@
         }
     </style>
 </head>
-<body class="{% if not current_user.is_authenticated %}no-sidebar{% endif %}">
-<body class="{% if not current_user.is_authenticated or request.endpoint == 'auth.configurar_2fa' %}no-sidebar{% endif %}">
+
+{# CORREÇÃO: Removida a tag body duplicada e adicionada verificação robusta para telas de auth #}
+<body class="{% if not current_user.is_authenticated or request.endpoint in ['auth.configurar_2fa', 'auth.recuperar_senha', 'auth.redefinir_senha', 'auth.login', 'auth.register', 'auth.verificar_2fa'] %}no-sidebar{% endif %}">
 
     <div id="pwa-update-bar">
         <p><i class="fas fa-sync-alt fa-spin me-2"></i> Nova versão disponível!</p>
         <button id="btn-refresh-pwa">Atualizar</button>
     </div>
 
-    {% if current_user.is_authenticated %}
+    {% if current_user.is_authenticated and request.endpoint not in ['auth.configurar_2fa', 'auth.verificar_2fa'] %}
 
     {# Variável de Controle Global #}
     {% set dec_mode_active = session.get('is_dec_mode') %}
@@ -261,7 +262,6 @@
             </div>
 
             <div class="top-navbar-right-items">
-                {% if request.endpoint != 'auth.configurar_2fa' %}
                 <div class="dropdown">
                     <a href="#" class="notification-bell" data-bs-toggle="dropdown" aria-expanded="false" title="Notificações">
                         🔔
@@ -307,7 +307,6 @@
                         <li><a class="dropdown-item" href="{{ url_for('auth.configurar_2fa') }}"><i class="fas fa-shield-alt"></i> Configurar 2FA</a></li>
                     </ul>
                 </div>
-                {% endif %}
                 <a href="{{ url_for('auth.logout') }}" class="btn btn-outline-danger btn-sm" title="Sair do Sistema">Sair</a>
             </div>
         </div>
@@ -317,8 +316,7 @@
     <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
     <div class="page-container">
-        {% if current_user.is_authenticated %}
-        {% if current_user.is_authenticated and request.endpoint != 'auth.configurar_2fa' %}
+        {% if current_user.is_authenticated and request.endpoint not in ['auth.configurar_2fa', 'auth.verificar_2fa'] %}
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <a href="{{ url_for('main.dashboard') }}" class="nav-brand">
@@ -704,12 +702,12 @@
                 });
             }
 
-            if ({{ current_user.is_authenticated | tojson }} && "{{ request.endpoint }}" !== "auth.configurar_2fa") {
+            // CORREÇÃO: Evita que o fetch rode caso o usuário não esteja logado
+            if ({{ current_user.is_authenticated | tojson }} && "{{ request.endpoint }}" !== "auth.configurar_2fa" && "{{ request.endpoint }}" !== "auth.recuperar_senha") {
                 fetchNotifications();
                 setInterval(fetchNotifications, 60000);
             }
-            });
+        });
     </script>
-{% endif %}
 </body>
 </html>

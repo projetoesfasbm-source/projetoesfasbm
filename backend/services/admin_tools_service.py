@@ -17,7 +17,7 @@ from ..models.diario_classe import DiarioClasse
 from ..models.frequencia import FrequenciaAluno
 from ..models.turma_cargo import TurmaCargo
 from ..models.questionario import Questionario
-from ..models.pergunta import Pergunta  # ADICIONADO AQUI
+from ..models.pergunta import Pergunta
 from ..models.resposta import Resposta
 from ..models.banco_questoes import QuestaoBanco, RascunhoProva, DelegacaoProva
 from ..models.elogio import Elogio
@@ -29,6 +29,8 @@ from ..models.historico_disciplina import HistoricoDisciplina
 from ..models.notification import Notification
 from ..models.password_reset_token import PasswordResetToken
 from ..models.push_subscription import PushSubscription
+from ..models.aluno import Aluno
+from ..models.instrutor import Instrutor
 
 class AdminToolsService:
     
@@ -127,7 +129,6 @@ class AdminToolsService:
 
             # 4. Disciplinas Globais e Vínculos
             if turma_ids:
-                # CORREÇÃO: Disciplina se liga à Turma diretamente. DisciplinaTurma liga Disciplina ao Instrutor.
                 disciplinas_db = db.session.scalars(
                     select(Disciplina).where(Disciplina.turma_id.in_(turma_ids))
                 ).all()
@@ -201,7 +202,6 @@ class AdminToolsService:
                 ).all()
                 backup["historicos"] = [serialize_model(h) for h in historicos_db]
 
-                # Processos Disciplinares com todos os detalhes de texto
                 processos_db = db.session.scalars(
                     select(ProcessoDisciplina).where(ProcessoDisciplina.aluno_id.in_(user_ids))
                 ).all()
@@ -211,13 +211,11 @@ class AdminToolsService:
                     p_data["injected_aluno_nome"] = user_info.get("nome", "Desconhecido")
                     p_data["injected_aluno_matricula"] = user_info.get("matricula", "N/A")
                     
-                    # Relator
                     relator_info = users_cache.get(p.relator_id, {})
                     p_data["injected_relator_nome"] = relator_info.get("nome", "N/A")
                     
                     backup["justica"]["processos"].append(p_data)
 
-                # Elogios
                 elogios_db = db.session.scalars(
                     select(Elogio).where(Elogio.aluno_id.in_(user_ids))
                 ).all()
@@ -240,13 +238,13 @@ class AdminToolsService:
             raise e
 
     @staticmethod
-    def custom_clear_school_data(school_id: int, options: list):
+    def custom_clear_school_data(school_id: int, options: list, instructors_to_delete_ids: list = None):
         """
         Processa as opções selecionadas via checkbox e as limpa em lote, lidando 
         com as dependências do banco ativamente para evitar erros de Integridade Referencial.
+        Recebe opcionalmente uma lista refinada de instrutores para desvincular da escola atual.
         """
         try:
-            # Garante que as dependências obrigatórias sejam tratadas se uma tabela "Pai" for excluída
             if 'turmas' in options:
                 options.extend(['disciplinas', 'diarios', 'questionarios', 'vinculos'])
             if 'disciplinas' in options:
@@ -256,11 +254,18 @@ class AdminToolsService:
 
             options = list(set(options)) # Remove duplicatas
 
-            # 1. Coletar IDs para filtro rápido e seguro nas deleções em lote
+            # 1. Coletar IDs Básicos de Usuário
             all_users = db.session.scalars(select(User).join(UserSchool).where(UserSchool.school_id == school_id)).all()
-            user_ids = [u.id for u in all_users] if all_users else []
             student_ids = [u.id for u in all_users if u.role == 'aluno']
-            instructor_ids = [u.id for u in all_users if u.role == 'instrutor']
+            
+            # Se a lista de instrutores foi enviada pela tela de confirmação, usamos ela.
+            if instructors_to_delete_ids is not None:
+                instructor_ids = [u.id for u in all_users if u.role == 'instrutor' and u.id in instructors_to_delete_ids]
+            else:
+                instructor_ids = []
+
+            alunos_db = db.session.scalars(select(Aluno).where(Aluno.user_id.in_(student_ids))).all() if student_ids else []
+            aluno_ids = [a.id for a in alunos_db] if alunos_db else []
 
             turmas = db.session.scalars(select(Turma).where(Turma.school_id == school_id)).all()
             turma_ids = [t.id for t in turmas] if turmas else []
@@ -271,11 +276,11 @@ class AdminToolsService:
             # LIMPEZA DAS DEPENDÊNCIAS MENORES (Cascata Forçada) ==================
 
             # Justiça
-            if 'justica' in options and user_ids:
-                db.session.query(ProcessoDisciplina).filter(ProcessoDisciplina.aluno_id.in_(user_ids)).delete(synchronize_session=False)
-                db.session.query(Elogio).filter(Elogio.aluno_id.in_(user_ids)).delete(synchronize_session=False)
-                db.session.query(FadaAvaliacao).filter(FadaAvaliacao.aluno_id.in_(user_ids)).delete(synchronize_session=False)
-                db.session.query(AvaliacaoAtitudinal).filter(AvaliacaoAtitudinal.aluno_id.in_(user_ids)).delete(synchronize_session=False)
+            if 'justica' in options and aluno_ids:
+                db.session.query(ProcessoDisciplina).filter(ProcessoDisciplina.aluno_id.in_(aluno_ids)).delete(synchronize_session=False)
+                db.session.query(Elogio).filter(Elogio.aluno_id.in_(aluno_ids)).delete(synchronize_session=False)
+                db.session.query(FadaAvaliacao).filter(FadaAvaliacao.aluno_id.in_(aluno_ids)).delete(synchronize_session=False)
+                db.session.query(AvaliacaoAtitudinal).filter(AvaliacaoAtitudinal.aluno_id.in_(aluno_ids)).delete(synchronize_session=False)
 
             # Questionários (e respostas)
             if 'questionarios' in options and turma_ids:
@@ -328,41 +333,81 @@ class AdminToolsService:
             
             # Alunos
             if 'alunos' in options and student_ids:
-                db.session.query(FrequenciaAluno).filter(FrequenciaAluno.aluno_id.in_(student_ids)).delete(synchronize_session=False)
-                db.session.query(HistoricoDisciplina).filter(HistoricoDisciplina.aluno_id.in_(student_ids)).delete(synchronize_session=False)
-                db.session.query(HistoricoAluno).filter(HistoricoAluno.aluno_id.in_(student_ids)).delete(synchronize_session=False)
-                db.session.query(ProcessoDisciplina).filter(ProcessoDisciplina.aluno_id.in_(student_ids)).delete(synchronize_session=False)
-                db.session.query(Elogio).filter(Elogio.aluno_id.in_(student_ids)).delete(synchronize_session=False)
-                db.session.query(FadaAvaliacao).filter(FadaAvaliacao.aluno_id.in_(student_ids)).delete(synchronize_session=False)
-                db.session.query(AvaliacaoAtitudinal).filter(AvaliacaoAtitudinal.aluno_id.in_(student_ids)).delete(synchronize_session=False)
-                db.session.query(Resposta).filter(Resposta.aluno_id.in_(student_ids)).delete(synchronize_session=False)
+                if aluno_ids:
+                    db.session.query(FrequenciaAluno).filter(FrequenciaAluno.aluno_id.in_(aluno_ids)).delete(synchronize_session=False)
+                    db.session.query(HistoricoDisciplina).filter(HistoricoDisciplina.aluno_id.in_(aluno_ids)).delete(synchronize_session=False)
+                    db.session.query(HistoricoAluno).filter(HistoricoAluno.aluno_id.in_(aluno_ids)).delete(synchronize_session=False)
+                    db.session.query(ProcessoDisciplina).filter(ProcessoDisciplina.aluno_id.in_(aluno_ids)).delete(synchronize_session=False)
+                    db.session.query(Elogio).filter(Elogio.aluno_id.in_(aluno_ids)).delete(synchronize_session=False)
+                    db.session.query(FadaAvaliacao).filter(FadaAvaliacao.aluno_id.in_(aluno_ids)).delete(synchronize_session=False)
+                    db.session.query(AvaliacaoAtitudinal).filter(AvaliacaoAtitudinal.aluno_id.in_(aluno_ids)).delete(synchronize_session=False)
+
+                # --- LIMPEZA DE CARGOS E VÍNCULOS PERDIDOS DOS ALUNOS ---
+                # Como o aluno pode ser Chefe de Turma, limpamos o TurmaCargo com segurança dinâmica
+                if hasattr(TurmaCargo, 'aluno_id') and aluno_ids:
+                    db.session.query(TurmaCargo).filter(TurmaCargo.aluno_id.in_(aluno_ids)).delete(synchronize_session=False)
+                elif hasattr(TurmaCargo, 'user_id'):
+                    db.session.query(TurmaCargo).filter(TurmaCargo.user_id.in_(student_ids)).delete(synchronize_session=False)
+
+                if hasattr(DisciplinaTurma, 'aluno_id') and aluno_ids:
+                    db.session.query(DisciplinaTurma).filter(DisciplinaTurma.aluno_id.in_(aluno_ids)).delete(synchronize_session=False)
+                elif hasattr(DisciplinaTurma, 'user_id'):
+                    db.session.query(DisciplinaTurma).filter(DisciplinaTurma.user_id.in_(student_ids)).delete(synchronize_session=False)
+                # --------------------------------------------------------
+
+                db.session.query(Resposta).filter(Resposta.user_id.in_(student_ids)).delete(synchronize_session=False)
                 
-                # Configurações de sistema dos alunos
+                # --- CAÇA-FANTASMAS DE INSTRUTORES RESIDUAIS ---
+                # Verifica se há perfis na tabela 'instrutores' ligados a estes alunos (perfis fantasmas)
+                instrutores_fantasma = db.session.scalars(select(Instrutor).where(Instrutor.user_id.in_(student_ids))).all()
+                if instrutores_fantasma:
+                    inst_ids = [i.id for i in instrutores_fantasma]
+                    # Limpar as dependências desse instrutor fantasma usando hasattr para evitar AttributeError
+                    delegacoes_fantasma = db.session.scalars(select(DelegacaoProva).where(DelegacaoProva.instrutor_id.in_(inst_ids))).all()
+                    if delegacoes_fantasma:
+                        del_ids = [d.id for d in delegacoes_fantasma]
+                        db.session.query(RascunhoProva).filter(RascunhoProva.delegacao_id.in_(del_ids)).delete(synchronize_session=False)
+                        db.session.query(DelegacaoProva).filter(DelegacaoProva.instrutor_id.in_(inst_ids)).delete(synchronize_session=False)
+                    
+                    if hasattr(QuestaoBanco, 'instrutor_id'):
+                        db.session.query(QuestaoBanco).filter(QuestaoBanco.instrutor_id.in_(inst_ids)).delete(synchronize_session=False)
+                        
+                    if hasattr(DisciplinaTurma, 'instrutor_id'):
+                        db.session.query(DisciplinaTurma).filter(DisciplinaTurma.instrutor_id.in_(inst_ids)).delete(synchronize_session=False)
+                        
+                    # Deleta o perfil instrutor fantasma
+                    db.session.query(Instrutor).filter(Instrutor.user_id.in_(student_ids)).delete(synchronize_session=False)
+                # ------------------------------------------------
+                
+                # Exclusão total e definitiva das configurações do aluno (referenciam User.id)
                 db.session.query(Notification).filter(Notification.user_id.in_(student_ids)).delete(synchronize_session=False)
                 db.session.query(PasswordResetToken).filter(PasswordResetToken.user_id.in_(student_ids)).delete(synchronize_session=False)
                 db.session.query(PushSubscription).filter(PushSubscription.user_id.in_(student_ids)).delete(synchronize_session=False)
-                db.session.query(UserSchool).filter(UserSchool.user_id.in_(student_ids), UserSchool.school_id == school_id).delete(synchronize_session=False)
+                db.session.query(UserSchool).filter(UserSchool.user_id.in_(student_ids)).delete(synchronize_session=False)
                 
+                # Deleta a tabela filha `alunos` antes da tabela pai `users`
+                db.session.query(Aluno).filter(Aluno.user_id.in_(student_ids)).delete(synchronize_session=False)
                 db.session.query(User).filter(User.id.in_(student_ids)).delete(synchronize_session=False)
 
-            # Instrutores
+            # Instrutores (COMPORTAMENTO SEGURO APLICADO E INTERATIVO)
             if 'instrutores' in options and instructor_ids:
-                # Modulo Banco de Questoes e Delegações
-                delegacoes = db.session.scalars(select(DelegacaoProva).where(DelegacaoProva.instrutor_id.in_(instructor_ids))).all()
-                delegacao_ids = [d.id for d in delegacoes] if delegacoes else []
-                if delegacao_ids:
-                    db.session.query(RascunhoProva).filter(RascunhoProva.delegacao_id.in_(delegacao_ids)).delete(synchronize_session=False)
-                    
-                db.session.query(DelegacaoProva).filter(DelegacaoProva.instrutor_id.in_(instructor_ids)).delete(synchronize_session=False)
-                db.session.query(QuestaoBanco).filter(QuestaoBanco.instrutor_id.in_(instructor_ids)).delete(synchronize_session=False)
+                # 1. Obter IDs da tabela instrutores reais
+                instrutores_db = db.session.scalars(select(Instrutor).where(Instrutor.user_id.in_(instructor_ids))).all()
+                inst_ids_reais = [i.id for i in instrutores_db] if instrutores_db else []
 
-                # Configurações de sistema dos instrutores
-                db.session.query(Notification).filter(Notification.user_id.in_(instructor_ids)).delete(synchronize_session=False)
-                db.session.query(PasswordResetToken).filter(PasswordResetToken.user_id.in_(instructor_ids)).delete(synchronize_session=False)
-                db.session.query(PushSubscription).filter(PushSubscription.user_id.in_(instructor_ids)).delete(synchronize_session=False)
+                # 2. Deleta as associações que esse instrutor tem com a Escola atual (Rascunhos antigos, Delegações...)
+                if inst_ids_reais:
+                    delegacoes = db.session.scalars(select(DelegacaoProva).where(DelegacaoProva.instrutor_id.in_(inst_ids_reais))).all()
+                    delegacao_ids = [d.id for d in delegacoes] if delegacoes else []
+                    if delegacao_ids:
+                        db.session.query(RascunhoProva).filter(RascunhoProva.delegacao_id.in_(delegacao_ids)).delete(synchronize_session=False)
+                        
+                    db.session.query(DelegacaoProva).filter(DelegacaoProva.instrutor_id.in_(inst_ids_reais)).delete(synchronize_session=False)
+
+                # 3. REGRA DE OURO PARA PROTEGER MÚLTIPLAS ESCOLAS:
+                # O instrutor NUNCA é apagado da tabela `users` nem perde suas configurações globais (Banco de Questões).
+                # Apenas removemos o vínculo dele com a SUA ESCOLA.
                 db.session.query(UserSchool).filter(UserSchool.user_id.in_(instructor_ids), UserSchool.school_id == school_id).delete(synchronize_session=False)
-                
-                db.session.query(User).filter(User.id.in_(instructor_ids)).delete(synchronize_session=False)
 
             db.session.commit()
             return True, "Os registros selecionados foram analisados e excluídos com sucesso do banco de dados."

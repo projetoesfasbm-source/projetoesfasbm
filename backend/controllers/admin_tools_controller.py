@@ -34,7 +34,6 @@ def mail_merge():
             flash('Ambos os arquivos (template e dados) são obrigatórios.', 'danger')
             return redirect(url_for('tools.mail_merge'))
 
-        # A função agora retorna um buffer de arquivo ZIP
         zip_buffer, error = MailMergeService.generate_documents(template_file, data_file, output_format)
 
         if error:
@@ -43,7 +42,6 @@ def mail_merge():
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
-        # Ajusta o send_file para enviar um arquivo .zip
         return send_file(
             zip_buffer,
             as_attachment=True,
@@ -64,15 +62,9 @@ def backup_escola():
         return redirect(url_for('tools.index'))
 
     try:
-        # Chama a função pesada que buscará todos os dados do banco
         backup_data = AdminToolsService.generate_school_backup(school_id)
-        
-        # Converte o dicionário Python para uma string JSON formatada e com caracteres acentuados preservados
         json_str = json.dumps(backup_data, ensure_ascii=False, indent=4)
-        
-        # Cria um buffer em memória para enviar como arquivo
         buffer = io.BytesIO(json_str.encode('utf-8'))
-        
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"backup_escola_{school_id}_edicao_{timestamp}.json"
         
@@ -97,7 +89,7 @@ def reset_escola():
 @login_required
 @admin_or_programmer_required
 def clear_data():
-    """Processa as solicitações de limpeza de dados em massa baseadas nas seleções."""
+    """Processa as solicitações de limpeza e intercepta se 'instrutores' for marcado."""
     password = request.form.get('password')
     
     if not password or not current_user.check_password(password):
@@ -109,56 +101,83 @@ def clear_data():
         flash('Não foi possível identificar a sua escola. Ação cancelada.', 'danger')
         return redirect(url_for('tools.reset_escola'))
 
-    # Pega todos os values enviados com o name='opcoes'
     opcoes_selecionadas = request.form.getlist('opcoes')
     
     if not opcoes_selecionadas:
         flash('Nenhuma categoria de dados foi selecionada para exclusão.', 'warning')
         return redirect(url_for('tools.reset_escola'))
 
-    # Chama o método inteligente que lida com as escolhas em lote no Service
+    # INTERCEPTAÇÃO: Se escolheu 'instrutores', pausa e manda pra tela de triagem
+    if 'instrutores' in opcoes_selecionadas:
+        users_escola = UserService.get_users_by_school(school_id)
+        instrutores = [u for u in users_escola if u.role == 'instrutor']
+        
+        if instrutores:
+            return render_template('ferramentas/selecionar_instrutores_reset.html',
+                                   opcoes=opcoes_selecionadas,
+                                   instrutores=instrutores,
+                                   password=password) # Passando a senha silenciosamente para o próximo form
+
+    # Se não selecionou instrutores, executa a limpeza direto
     success, message = AdminToolsService.custom_clear_school_data(school_id, opcoes_selecionadas)
+    flash(message, 'success' if success else 'danger')
+    return redirect(url_for('tools.reset_escola'))
+
+# --- NOVA ROTA PARA PROCESSAR A TELA INTERMEDIÁRIA ---
+@tools_bp.route('/limpar_confirmado', methods=['POST'])
+@login_required
+@admin_or_programmer_required
+def clear_data_confirmado():
+    """Executa a limpeza final usando a lista filtrada de instrutores."""
+    password = request.form.get('password')
+    if not password or not current_user.check_password(password):
+        flash('Sessão expirada ou senha inválida.', 'danger')
+        return redirect(url_for('tools.reset_escola'))
+
+    school_id = UserService.get_current_school_id()
+    opcoes_selecionadas = request.form.getlist('opcoes')
+    
+    # Pega apenas os IDs dos instrutores que PERMANECERAM marcados na tela intermediária
+    instrutores_marcados = request.form.getlist('instrutores_to_delete')
+    instrutores_to_delete_ids = [int(i) for i in instrutores_marcados]
+
+    # Chama o service passando a lista exata de quem deve sair
+    success, message = AdminToolsService.custom_clear_school_data(school_id, opcoes_selecionadas, instructors_to_delete_ids=instrutores_to_delete_ids)
 
     flash(message, 'success' if success else 'danger')
     return redirect(url_for('tools.reset_escola'))
 
-# --- NOVA FUNCIONALIDADE: LOGS DE AUDITORIA ---
 @tools_bp.route('/logs')
 @login_required
-@admin_or_programmer_required # Permite que Admin Escola e Programador vejam os logs
+@admin_or_programmer_required
 def logs_admin():
     school_id = UserService.get_current_school_id()
     if not school_id:
         flash("Nenhuma escola selecionada.", "warning")
         return redirect(url_for('main.dashboard'))
 
-    # Filtros da URL
     data_inicio_str = request.args.get('data_inicio')
     data_fim_str = request.args.get('data_fim')
     filtro_user_id = request.args.get('user_id', type=int)
 
-    # Converter datas
     if data_inicio_str:
         data_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d')
     else:
         data_inicio = datetime.now() - timedelta(days=7)
     
     if data_fim_str:
-        # Ajuste para pegar o final do dia na data fim
         data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').replace(hour=23, minute=59, second=59)
     else:
         data_fim = datetime.now()
 
-    # Buscar Logs
     logs = LogService.get_logs(
         school_id=school_id, 
         date_start=data_inicio, 
         date_end=data_fim, 
         user_id=filtro_user_id,
-        limit=200 # Limite de segurança para performance
+        limit=200
     )
 
-    # Buscar lista de usuários da escola para o filtro (Admins e Instrutores)
     users_escola = UserService.get_users_by_school(school_id)
 
     return render_template(
@@ -187,13 +206,9 @@ def preview_backup():
             
         if file and file.filename.endswith('.json'):
             try:
-                # Lê o conteúdo do arquivo JSON na memória
                 file_content = file.read().decode('utf-8')
                 backup_data = json.loads(file_content)
-                
-                # Renderiza a página passando os dados lidos do JSON para o dashboard
                 return render_template('ferramentas/preview_backup.html', data=backup_data, file_name=file.filename)
-                
             except json.JSONDecodeError:
                 flash('O arquivo enviado não é um JSON válido ou está corrompido.', 'error')
             except Exception as e:
@@ -203,5 +218,4 @@ def preview_backup():
             
         return redirect(request.url)
         
-    # Se for requisição GET, renderiza apenas a tela limpa para upload
     return render_template('ferramentas/preview_backup.html', data=None)

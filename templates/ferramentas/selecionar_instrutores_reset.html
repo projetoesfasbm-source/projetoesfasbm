@@ -1,0 +1,74 @@
+<!-- templates/ferramentas/selecionar_instrutores_reset.html -->
+{% extends 'base.html' %}
+
+{% block title %}Confirmação de Instrutores - Reset{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="card border-danger mb-4">
+        <div class="card-header bg-danger text-white">
+            <h4 class="mb-0"><i class="fas fa-exclamation-triangle"></i> Atenção: Passo Intermediário do Reset</h4>
+        </div>
+        <div class="card-body">
+            <p>Você selecionou a opção de remover <strong>Instrutores</strong> da escola. Como muitos instrutores continuarão ministrando aulas na próxima edição, listamos todos os perfis ativos abaixo.</p>
+            <p class="text-danger"><strong>Todos estão marcados para sair por padrão. DESMARQUE os instrutores que devem PERMANECER na escola.</strong></p>
+            <p><small><em>Nota: "Apagar" um instrutor neste painel não exclui seu cadastro do banco central (para proteger acesso a outras escolas), apenas remove seu vínculo com esta escola.</em></small></p>
+        </div>
+    </div>
+
+    <form action="{{ url_for('tools.clear_data_confirmado') }}" method="POST">
+        <!-- BLOQUEIO DE SEGURANÇA: TOKEN CSRF -->
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <!-- Reenvia silenciosamente as opções anteriores e a senha para o controlador final -->
+        <input type="hidden" name="password" value="{{ password }}">
+        {% for opcao in opcoes %}
+            <input type="hidden" name="opcoes" value="{{ opcao }}">
+        {% endfor %}
+
+        <div class="card shadow-sm">
+            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Lista de Instrutores Vinculados</h5>
+                <button type="button" class="btn btn-sm btn-outline-light" id="btn-toggle-all">Desmarcar Todos</button>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% for instrutor in instrutores %}
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="form-check custom-control custom-checkbox p-3 border rounded bg-light">
+                            <input type="checkbox" class="form-check-input instrutor-checkbox" name="instrutores_to_delete" value="{{ instrutor.id }}" id="inst_{{ instrutor.id }}" checked>
+                            <label class="form-check-label ms-2" for="inst_{{ instrutor.id }}">
+                                <strong>{{ instrutor.nome_de_guerra or instrutor.nome_completo }}</strong><br>
+                                <small class="text-muted">Mat: {{ instrutor.matricula }}</small>
+                            </label>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="col-12">
+                        <p class="text-muted">Nenhum instrutor encontrado para esta escola.</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="card-footer text-end">
+                <a href="{{ url_for('tools.reset_escola') }}" class="btn btn-secondary me-2">Cancelar e Voltar</a>
+                <button type="submit" class="btn btn-danger"><i class="fas fa-trash-alt"></i> Confirmar e Executar Limpeza</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const toggleBtn = document.getElementById('btn-toggle-all');
+        const checkboxes = document.querySelectorAll('.instrutor-checkbox');
+        let allChecked = true;
+
+        toggleBtn.addEventListener('click', function() {
+            allChecked = !allChecked;
+            checkboxes.forEach(cb => cb.checked = allChecked);
+            toggleBtn.textContent = allChecked ? 'Desmarcar Todos' : 'Marcar Todos';
+        });
+    });
+</script>
+{% endblock %}
