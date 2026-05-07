@@ -389,10 +389,14 @@
                     {% if current_user.is_staff_in_school(active_sid) or current_user.is_instrutor_in_school(active_sid) or current_user.role in ['super_admin', 'aluno'] %}
                         <div class="nav-separator">ACADÊMICO</div>
                         <a href="{{ url_for('horario.index') }}" class="nav-link {% if request.endpoint and ('horario.' in request.endpoint or 'semana.' in request.endpoint) and request.endpoint != 'horario.proximas_aulas_admin' %}active{% endif %}"><div class="nav-icon">📅</div> Quadro Horário</a>
+                        
                         {% if current_user.is_instrutor_in_school(active_sid) %}
                             <a href="{{ url_for('questoes.tela_envio') }}" class="nav-link {% if request.endpoint == 'questoes.tela_envio' %}active{% endif %}"><div class="nav-icon">📤</div> Enviar Questões</a>
                             <a href="{{ url_for('questoes.minhas_provas') }}" class="nav-link {% if request.endpoint == 'questoes.minhas_provas' %}active{% endif %}"><div class="nav-icon">📝</div> Montar Provas</a>
                         {% endif %}
+
+                        {# INSERÇÃO DA NOVA ABA DE RECURSOS - VISÍVEL PARA ADMINS, INSTRUTORES E ALUNOS #}
+                        <a href="{{ url_for('recursos.index') }}" class="nav-link {% if request.endpoint and 'recursos.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📑</div> Recursos</a>
 
                         {% if current_user.is_instrutor_in_school(active_sid) or current_user.is_sens_in_school(active_sid) or current_user.is_cal_in_school(active_sid) or current_user.role == 'super_admin' %}
                             <a href="{{ url_for('diario.listar_pendentes') }}" class="nav-link {% if request.endpoint and 'diario.' in request.endpoint %}active{% endif %}"><div class="nav-icon">✍️</div> Validar Diários</a>

@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+
+{% block title %}Enviar Novo Recurso{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4 pb-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-0 fw-bold" style="color: var(--secondary-color);">
+                <i class="fas fa-paper-plane text-primary me-2"></i> Solicitar Recurso
+            </h2>
+            <p class="text-muted mb-0 mt-1">Preencha os dados abaixo para contestar questões de prova.</p>
+        </div>
+        <a href="{{ url_for('recursos.index') }}" class="btn btn-outline-secondary btn-sm rounded-pill px-3 fw-bold">
+            <i class="fas fa-times me-1"></i> Cancelar
+        </a>
+    </div>
+
+    <form action="{{ url_for('recursos.novo_recurso') }}" method="POST" enctype="multipart/form-data" id="formRecurso">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="card shadow-sm border-0 mb-4" style="border-radius: 12px; border-top: 4px solid var(--primary-color);">
+            <div class="card-body p-4">
+                <h5 class="card-title fw-bold text-primary mb-4">
+                    <i class="fas fa-list-check me-2"></i> 1. Identificação da Avaliação
+                </h5>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">MATÉRIA</label>
+                        <select class="form-select select2" name="disciplina_id" id="disciplina_id" required>
+                            <option value="">Selecione a Matéria...</option>
+                            {% for d in disciplinas %}
+                                <option value="{{ d.id }}">{{ d.materia }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">PROVA</label>
+                        <select class="form-select" name="prova_id" id="prova_id" disabled required>
+                            <option value="">Selecione a matéria primeiro...</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="container-questoes">
+            <div class="questao-item card shadow-sm border-0 mb-3" style="border-radius: 12px; border-left: 5px solid var(--primary-color) !important;">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="fw-bold mb-0">Questão #1</h5>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">TEXTO DA QUESTÃO (COLE AQUI A QUESTÃO INTEIRA)</label>
+                        <textarea class="form-control" name="questao_texto[]" rows="3" placeholder="Ex: Qual é o sistema que permite ao gestor público..." required></textarea>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-8">
+                            <label class="form-label small fw-bold">ARGUMENTAÇÃO</label>
+                            <textarea class="form-control" name="argumentacao_texto[]" rows="4" placeholder="Descreva aqui os motivos da sua contestação..." required></textarea>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">ANEXAR FUNDAMENTAÇÃO (PDF/WORD)</label>
+                            <input type="file" class="form-control" name="arquivo_anexo[]" accept=".pdf,.doc,.docx">
+                            <div class="form-text small">Opcional. Máximo 5MB.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="text-center mb-5 mt-4">
+            <button type="button" class="btn btn-outline-primary fw-bold rounded-pill px-4 shadow-sm" id="btn-add-questao">
+                <i class="fas fa-plus-circle me-2"></i> Adicionar Mais uma Questão (Mesma Prova)
+            </button>
+        </div>
+
+        <div class="card shadow border-0 bg-primary text-white" style="border-radius: 12px;">
+            <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-center p-4">
+                <div class="mb-3 mb-md-0">
+                    <h5 class="fw-bold mb-1"><i class="fas fa-check-circle me-2 text-warning"></i> Finalizar Envio?</h5>
+                    <p class="mb-0 opacity-75">Confira se todas as questões e anexos estão corretos antes de protocolar.</p>
+                </div>
+                <button type="submit" class="btn btn-light btn-lg fw-bold px-5 text-primary rounded-pill shadow">
+                    <i class="fas fa-paper-plane me-2"></i> Protocolar Recurso
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let questaoCount = 1;
+    const disciplinaSelect = document.getElementById('disciplina_id');
+    const provaSelect = document.getElementById('prova_id');
+    const btnAdd = document.getElementById('btn-add-questao');
+    const container = document.getElementById('container-questoes');
+
+    // 1. Lógica de Carregamento Dinâmico de Provas (AJAX)
+    disciplinaSelect.addEventListener('change', function() {
+        const discId = this.value;
+        provaSelect.innerHTML = '<option value="">Carregando...</option>';
+        provaSelect.disabled = true;
+
+        if (discId) {
+            fetch(`/recursos/api/get_provas/${discId}`)
+                .then(response => response.json())
+                .then(data => {
+                    provaSelect.innerHTML = '<option value="">Selecione a Prova...</option>';
+                    if (data.length > 0) {
+                        data.forEach(p => {
+                            const option = document.createElement('option');
+                            option.value = p.id;
+                            option.textContent = p.nome;
+                            provaSelect.appendChild(option);
+                        });
+                        provaSelect.disabled = false;
+                    } else {
+                        provaSelect.innerHTML = '<option value="">Nenhuma prova ativa encontrada para esta matéria</option>';
+                    }
+                })
+                .catch(err => {
+                    provaSelect.innerHTML = '<option value="">Erro ao carregar</option>';
+                });
+        } else {
+            provaSelect.innerHTML = '<option value="">Selecione a matéria primeiro...</option>';
+            provaSelect.disabled = true;
+        }
+    });
+
+    // 2. Lógica do Botão (+) para adicionar mais campos
+    btnAdd.addEventListener('click', function() {
+        questaoCount++;
+        const newQuestao = document.createElement('div');
+        newQuestao.className = 'questao-item card shadow-sm border-0 mb-3 animate__animated animate__fadeInUp';
+        newQuestao.style.borderRadius = '12px';
+        newQuestao.style.borderLeft = '5px solid var(--primary-color)';
+        
+        newQuestao.innerHTML = `
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="fw-bold mb-0">Questão #${questaoCount}</h5>
+                    <button type="button" class="btn btn-sm btn-outline-danger btn-remove-questao rounded-pill px-3">
+                        <i class="fas fa-trash me-1"></i> Remover
+                    </button>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">TEXTO DA QUESTÃO (COLE AQUI A QUESTÃO INTEIRA)</label>
+                    <textarea class="form-control" name="questao_texto[]" rows="3" required></textarea>
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-md-8">
+                        <label class="form-label small fw-bold">ARGUMENTAÇÃO</label>
+                        <textarea class="form-control" name="argumentacao_texto[]" rows="4" required></textarea>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">ANEXAR FUNDAMENTAÇÃO (PDF/WORD)</label>
+                        <input type="file" class="form-control" name="arquivo_anexo[]" accept=".pdf,.doc,.docx">
+                    </div>
+                </div>
+            </div>
+        `;
+        container.appendChild(newQuestao);
+
+        newQuestao.querySelector('.btn-remove-questao').addEventListener('click', function() {
+            newQuestao.remove();
+        });
+    });
+});
+</script>
+{% endblock %}

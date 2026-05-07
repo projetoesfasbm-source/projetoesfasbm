@@ -59,6 +59,8 @@ from backend.models.frequencia import FrequenciaAluno
 from backend.models.elogio import Elogio
 # --- NOVO MÓDULO: BANCO DE QUESTÕES E PROVAS ---
 from backend.models.banco_questoes import QuestaoBanco, DelegacaoProva, RascunhoProva, ConfiguracaoEnvio
+# --- NOVO MÓDULO: RECURSOS ---
+from backend.models.recurso import ProvaRecurso, Recurso, DisciplinaHabilitada
 # ------------------------------------------------------------
 from datetime import datetime, timezone, timedelta
 try:
@@ -196,6 +198,7 @@ def register_blueprints(app):
     from backend.controllers.regras_controller import regras_bp
     from backend.controllers.diario_controller import diario_bp
     from backend.controllers.questoes_controller import questoes_bp
+    from backend.controllers.recursos_controller import recursos_bp
 
     app.register_blueprint(admin_escola_bp)
     app.register_blueprint(tools_bp)
@@ -226,6 +229,7 @@ def register_blueprints(app):
     app.register_blueprint(regras_bp)
     app.register_blueprint(diario_bp)
     app.register_blueprint(questoes_bp)
+    app.register_blueprint(recursos_bp)
 
 def register_handlers_and_processors(app):
 

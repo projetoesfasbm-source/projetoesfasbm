@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}Gerir Provas - {{ disciplina.materia }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4 pb-5">
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('recursos.index') }}">Recursos</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ disciplina.materia }}</li>
+        </ol>
+    </nav>
+
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
+        <div>
+            <h2 class="mb-0 fw-bold" style="color: var(--secondary-color);">
+                <i class="fas fa-edit text-primary me-2"></i> Configurar Provas
+            </h2>
+            <p class="text-muted mb-0 mt-1">Disciplina: <strong>{{ disciplina.materia }}</strong></p>
+        </div>
+        <a href="{{ url_for('recursos.index') }}" class="btn btn-outline-secondary btn-sm rounded-pill fw-bold px-3">
+            <i class="fas fa-arrow-left me-1"></i> Voltar
+        </a>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-4">
+            <div class="card shadow-sm border-0" style="border-radius: 12px;">
+                <div class="card-body p-4">
+                    <h5 class="card-title fw-bold mb-3">Nova Prova</h5>
+                    <form action="{{ url_for('recursos.gerenciar_provas', disciplina_id=disciplina.id) }}" method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        
+                        <div class="mb-4">
+                            <label for="nome_prova" class="form-label small fw-bold text-muted">NOME DA PROVA (LIVRE)</label>
+                            <input type="text" class="form-control" id="nome_prova" name="nome_prova" 
+                                   placeholder="Ex: Prova Objetiva 01" required>
+                            <div class="form-text">Este nome aparecerá para o aluno no momento do recurso.</div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100 fw-bold rounded-pill">
+                            <i class="fas fa-plus-circle me-2"></i> Adicionar Prova
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-8">
+            <div class="card shadow-sm border-0" style="border-radius: 12px;">
+                <div class="card-body p-4">
+                    <h5 class="card-title fw-bold mb-4">Provas Registradas</h5>
+                    
+                    {% if provas %}
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="border-0">Nome da Prova</th>
+                                    <th class="border-0 text-center">Criada em</th>
+                                    <th class="border-0 text-center">Estado</th>
+                                    <th class="border-0 text-end">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for prova in provas %}
+                                <tr>
+                                    <td class="fw-bold text-dark">{{ prova.nome }}</td>
+                                    <td class="text-center small">{{ prova.created_at|br_time('%d/%m/%Y') }}</td>
+                                    <td class="text-center">
+                                        {% if prova.is_active %}
+                                        <span class="badge bg-success-subtle text-success px-3 rounded-pill">Ativa</span>
+                                        {% else %}
+                                        <span class="badge bg-danger-subtle text-danger px-3 rounded-pill">Inativa</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end">
+                                        <a href="#" class="btn btn-light btn-sm text-primary rounded-circle" title="Ver recursos desta prova">
+                                            <i class="fas fa-list-ul"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-clipboard-list fa-3x text-light mb-3"></i>
+                        <p class="text-muted">Nenhuma prova criada para esta disciplina ainda.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

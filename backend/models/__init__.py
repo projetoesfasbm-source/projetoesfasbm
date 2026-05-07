@@ -34,6 +34,9 @@ from .elogio import Elogio
 # CORREÇÃO AQUI: Adicionado ConfiguracaoEnvio
 from .banco_questoes import QuestaoBanco, DelegacaoProva, RascunhoProva, ConfiguracaoEnvio
 
+# --- NOVO MÓDULO: RECURSOS ---
+from .recurso import ProvaRecurso, Recurso, DisciplinaHabilitada
+
 __all__ = [
     "db", "User", "School", "UserSchool", "Turma", "Aluno", "Disciplina",
     "HistoricoAluno", "HistoricoDisciplina", "TurmaCargo", "Semana", "Horario",
@@ -43,5 +46,7 @@ __all__ = [
     "FadaAvaliacao", "Ciclo", "Questionario", "Pergunta", "OpcaoResposta",
     "Resposta", "Elogio", 
     # CORREÇÃO AQUI: Adicionado ConfiguracaoEnvio
-    "QuestaoBanco", "DelegacaoProva", "RascunhoProva", "ConfiguracaoEnvio" 
+    "QuestaoBanco", "DelegacaoProva", "RascunhoProva", "ConfiguracaoEnvio",
+    # MÓDULO DE RECURSOS
+    "ProvaRecurso", "Recurso", "DisciplinaHabilitada"
 ]

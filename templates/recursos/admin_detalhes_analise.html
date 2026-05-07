@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+
+{% block title %}Análise Técnica de Recurso{% endblock %}
+
+{% block content %}
+<div class="container mt-4 pb-5">
+    <div class="d-flex justify-content-between align-items-center mb-4 no-print">
+        <div>
+            <h2 class="fw-bold mb-0" style="color: var(--secondary-color);">
+                <i class="fas fa-file-signature text-primary me-2"></i> Processar Recurso #{{ r.id }}
+            </h2>
+            <p class="text-muted">Trâmite Atual: <span class="badge bg-info text-dark shadow-sm">{{ r.status }}</span></p>
+        </div>
+        <a href="{{ url_for('recursos.listar_recursos_pendentes') }}" class="btn btn-outline-secondary rounded-pill fw-bold">
+            <i class="fas fa-arrow-left me-1"></i> Voltar à Lista
+        </a>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-4 no-print">
+            <div class="card shadow-sm border-0 mb-3" style="border-radius: 12px;">
+                <div class="card-body">
+                    <h6 class="fw-bold text-muted small mb-3 border-bottom pb-2">DADOS DO REQUERENTE</h6>
+                    <p class="mb-1"><strong>Nome:</strong> {{ r.aluno.nome_completo }}</p>
+                    <p class="mb-1"><strong>Matrícula:</strong> {{ r.aluno.matricula }}</p>
+                    <p class="mb-1"><strong>Matéria:</strong> {{ r.prova.disciplina.materia }}</p>
+                    <p class="mb-0"><strong>Prova:</strong> {{ r.prova.nome }}</p>
+                </div>
+            </div>
+
+            {% if r.parecer_instrutor %}
+            <div class="card shadow-sm border-0 mb-3" style="border-radius: 12px; border-left: 5px solid #28a745;">
+                <div class="card-body">
+                    <h6 class="fw-bold text-success small mb-2 uppercase">PARECER DO INSTRUTOR</h6>
+                    <div class="p-2 small bg-light rounded" style="white-space: pre-wrap;">{{ r.parecer_instrutor }}</div>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="card shadow-sm border-0" style="border-radius: 12px; background-color: #fffbe6;">
+                <div class="card-body">
+                    <h6 class="fw-bold text-warning small mb-2 border-bottom border-warning pb-2">ARGUMENTAÇÃO DO ALUNO</h6>
+                    <div class="p-2 border rounded bg-white small mb-3" style="white-space: pre-wrap; max-height: 150px; overflow-y: auto;"><strong>Questão:</strong> {{ r.questao_texto }}</div>
+                    <p class="small fst-italic mb-3">"{{ r.argumentacao_texto }}"</p>
+                    {% if r.arquivo_anexo %}
+                    <a href="{{ url_for('static', filename='uploads/recursos_anexos/' + r.arquivo_anexo) }}" target="_blank" class="btn btn-sm btn-dark w-100 rounded-pill shadow-sm">
+                        <i class="fas fa-paperclip me-1"></i> Ver Fundamentação Anexa
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-8">
+            <div class="card shadow border-0" style="border-radius: 15px;">
+                <div class="card-body p-4">
+                    <form action="{{ url_for('recursos.salvar_parecer', recurso_id=r.id) }}" method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        
+                        <div class="row g-3 mb-4 no-print">
+                            <div class="col-md-7">
+                                <label class="form-label fw-bold small">TIPO DE DOCUMENTO A GERAR</label>
+                                <select name="tipo_acao" class="form-select border-primary fw-bold" id="selectTipoDoc" required>
+                                    <option value="parecer_instrutor" {% if current_user.role == 'instrutor' or r.status == 'Com Instrutor' %}selected{% endif %}>PARECER DO INSTRUTOR (CONTEUDISTA)</option>
+                                    <option value="decisao_cmt" {% if r.status == 'Com Comandante' %}selected{% endif %}>DECISÃO DO COMANDANTE DA ESCOLA</option>
+                                </select>
+                            </div>
+                            <div class="col-md-5" id="colStatusFinal" style="{% if current_user.role == 'instrutor' or r.status == 'Com Instrutor' %}display: none;{% endif %}">
+                                <label class="form-label fw-bold small text-danger">ESTADO FINAL DO RECURSO</label>
+                                <select name="status_final" class="form-select border-danger fw-bold">
+                                    <option value="Deferido" {% if r.status == 'Deferido' %}selected{% endif %}>DEFERIDO (Aceito)</option>
+                                    <option value="Indeferido" {% if r.status == 'Indeferido' %}selected{% endif %}>INDEFERIDO (Recusado)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">TEXTO DO DOCUMENTO (EDITE ABAIXO)</label>
+                            <textarea name="conteudo_texto" id="editorBM" class="form-control" rows="18" style="font-family: 'Courier New', Courier, monospace; font-size: 0.9rem;">{% if r.decisao_comandante %}{{ r.decisao_comandante }}{% elif r.parecer_instrutor and r.status != 'Com Instrutor' %}{{ r.parecer_instrutor }}{% else %}ESTADO DO RIO GRANDE DO SUL
+SECRETARIA DA SEGURANÇA PÚBLICA
+BRIGADA MILITAR
+DEPARTAMENTO DE EDUCAÇÃO E CULTURA
+
+PARECER DO REQUERIMENTO PARA REVISÃO
+
+NOME DO REQUERENTE: {{ r.aluno.nome_completo }}
+MATÉRIA: {{ r.prova.disciplina.materia }}
+
+CONCLUSÃO:
+Trata-se de requerimento de revisão de questão objetiva referente à disciplina citada, na qual o recorrente questiona o gabarito.
+
+A análise deve se restringir, de forma objetiva, ao conteúdo constante no material didático oficialmente disponibilizado aos discentes.
+
+Diante do exposto, este instrutor julga pelo [DEFERIMENTO/INDEFERIMENTO] do recurso.
+
+É o parecer.{% endif %}</textarea>
+                        </div>
+
+                        <div class="mt-4 p-3 bg-light rounded border text-center border-2" style="border-style: dashed !important;">
+                            <small class="text-muted d-block mb-1"><i class="fas fa-certificate text-success"></i> Documento Assinado Digitalmente</small>
+                            <h5 class="mb-0 fw-bold text-dark uppercase">{{ current_user.rank }} {{ current_user.nome_completo }}</h5>
+                            <small class="text-muted">ID: {{ current_user.matricula }} - Verificado via Sistema</small>
+                        </div>
+
+                        <div class="mt-4 no-print text-end">
+                            <button type="submit" class="btn btn-success btn-lg px-5 fw-bold rounded-pill shadow">
+                                <i class="fas fa-check-double me-2"></i> FINALIZAR E ASSINAR DOCUMENTO
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const selectTipo = document.getElementById('selectTipoDoc');
+    const colStatus = document.getElementById('colStatusFinal');
+    const editor = document.getElementById('editorBM');
+
+    const modeloParecer = `ESTADO DO RIO GRANDE DO SUL
+SECRETARIA DA SEGURANÇA PÚBLICA
+BRIGADA MILITAR
+DEPARTAMENTO DE EDUCAÇÃO E CULTURA
+
+PARECER DO REQUERIMENTO PARA REVISÃO
+
+NOME DO REQUERENTE: {{ r.aluno.nome_completo }}
+MATÉRIA: {{ r.prova.disciplina.materia }}
+
+CONCLUSÃO:
+Trata-se de requerimento de revisão de questão objetiva referente à disciplina citada, na qual o recorrente questiona o gabarito.
+
+A análise deve se restringir, de forma objetiva, ao conteúdo constante no material didático oficialmente disponibilizado aos discentes.
+
+Diante do exposto, este instrutor julga pelo [DEFERIMENTO/INDEFERIMENTO] do recurso.
+
+É o parecer.`;
+
+    const modeloDecisao = `ESTADO DO RIO GRANDE DO SUL
+SECRETARIA DA SEGURANÇA PÚBLICA
+BRIGADA MILITAR
+DEPARTAMENTO DE EDUCAÇÃO E CULTURA
+
+DECISÃO DE RECURSO
+
+Cuida-se de recurso interposto contra questão aplicada na prova da disciplina {{ r.prova.disciplina.materia }}.
+
+Considerando o fundamento no princípio da vinculação ao conteúdo oficialmente disponibilizado aos alunos, DECIDO PELO [DEFERIMENTO/INDEFERIMENTO] DO RECURSO.
+
+Dê-se ciência ao interessado e realizem-se as retificações necessárias.`;
+
+    selectTipo.addEventListener('change', function() {
+        if (this.value === 'decisao_cmt') {
+            colStatus.style.display = 'block';
+            if(editor.value === modeloParecer) editor.value = modeloDecisao;
+        } else {
+            colStatus.style.display = 'none';
+            if(editor.value === modeloDecisao) editor.value = modeloParecer;
+        }
+    });
+});
+</script>
+
+<style>
+    .uppercase { text-transform: uppercase; }
+    @media print {
+        .no-print { display: none !important; }
+        .container { width: 100% !important; max-width: 100% !important; margin: 0 !important; padding: 0 !important; }
+        .card { border: none !important; box-shadow: none !important; }
+        textarea { border: none !important; resize: none !important; height: auto !important; overflow: hidden !important; }
+    }
+</style>
+{% endblock %}
