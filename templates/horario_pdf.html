@@ -25,6 +25,7 @@
         .disciplina-title { font-weight: bold; font-size: 1.1em; display: block; }
         .instrutor-name, .slot-observacao { font-size: 0.9em; color: #444; display: block; }
         .slot-observacao { font-style: italic; }
+        .intervalo-row td { background-color: #e0e0e0; font-weight: bold; text-transform: uppercase; font-size: 0.85em; letter-spacing: 1px; }
         .weekend-table { margin-top: 20px; }
     </style>
 </head>
@@ -46,13 +47,6 @@
             </tr>
         </thead>
         <tbody>
-            {% set tempos = [
-                ("1º", "07:30-08:15"), ("2º", "08:15-09:00"), ("3º", "09:00-09:45"),
-                ("4º", "10:00-10:45"), ("5º", "10:45-11:30"), ("6º", "11:30-12:15"),
-                ("7º", "13:45-14:30"), ("8º", "14:30-15:15"), ("9º", "15:15-16:00"),
-                ("10º", "16:15-17:00"), ("11º", "17:00-17:45"), ("12º", "17:45-18:30"),
-                ("13º", "18:30-19:15"), ("14º", "19:15-20:00"), ("15º", "20:00-20:45")
-            ] %}
             {% for row_idx in range(15) %}
                 {% set periodo_num = row_idx + 1 %}
                 {% if (periodo_num <= 12) or 
@@ -63,7 +57,9 @@
                     <td class="cell-tempo"><strong>{{ tempos[row_idx][0] }}</strong><span>{{ tempos[row_idx][1] }}</span></td>
                     {% for col_idx in range(5) %}
                         {% set aula = horario_matrix[row_idx][col_idx] %}
-                        {% if aula != 'SKIP' %}
+                        {% if aula == 'SKIP' %}
+                            {# Já coberto pelo rowspan de uma aula anterior #}
+                        {% elif aula %}
                             <td rowspan="{{ aula.duracao if not aula.is_disposicao else 1 }}">
                                 <div class="slot-content">
                                     <span class="disciplina-title">{{ aula.materia }}</span>
@@ -71,9 +67,27 @@
                                     {% if aula.observacao %}<span class="slot-observacao">{{ aula.observacao }}</span>{% endif %}
                                 </div>
                             </td>
+                        {% else %}
+                            <td></td>
                         {% endif %}
                     {% endfor %}
                 </tr>
+                
+                {# USO DO .get() PARA BLINDAR A GERAÇÃO DO PDF #}
+                {% set pos_int_1 = (intervalos.get('pos_int_1', 3)|int) - 1 %}
+                {% set pos_almoco = (intervalos.get('pos_almoco', 6)|int) - 1 %}
+                {% set pos_int_2 = (intervalos.get('pos_int_2', 9)|int) - 1 %}
+                
+                {% if row_idx == pos_int_1 and intervalos.get('intervalo_1') and intervalos.get('intervalo_1') not in ['N/D', '-', ''] %}
+                    <tr class="intervalo-row"><td colspan="6">INTERVALO MANHÃ: {{ intervalos.get('intervalo_1') }}</td></tr>
+                {% endif %}
+                {% if row_idx == pos_almoco and intervalos.get('almoco') and intervalos.get('almoco') not in ['N/D', '-', ''] %}
+                    <tr class="intervalo-row"><td colspan="6">ALMOÇO: {{ intervalos.get('almoco') }}</td></tr>
+                {% endif %}
+                {% if row_idx == pos_int_2 and intervalos.get('intervalo_2') and intervalos.get('intervalo_2') not in ['N/D', '-', ''] %}
+                    <tr class="intervalo-row"><td colspan="6">INTERVALO TARDE: {{ intervalos.get('intervalo_2') }}</td></tr>
+                {% endif %}
+
                 {% endif %}
             {% endfor %}
         </tbody>

@@ -175,10 +175,41 @@
             object-fit: cover;
             border-radius: 50%;
         }
+
+        /* --- ESTILOS PREMIUM DO BOTÃO INSTALAR PWA --- */
+        .btn-install-premium {
+            background: linear-gradient(135deg, #0d6efd 0%, #6610f2 100%);
+            color: #ffffff !important;
+            border: none;
+            border-radius: 50rem !important; /* Formato Pílula */
+            padding: 10px 16px;
+            font-weight: 700;
+            font-size: 0.95rem;
+            letter-spacing: 0.5px;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 15px rgba(13, 110, 253, 0.4);
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            text-decoration: none;
+            width: 100%;
+        }
+        
+        .btn-install-premium:hover, .btn-install-premium:active {
+            transform: translateY(-2px) scale(1.02);
+            box-shadow: 0 6px 20px rgba(102, 16, 242, 0.5);
+            color: #ffffff;
+            background: linear-gradient(135deg, #0b5ed7 0%, #520dc2 100%);
+        }
+
+        .btn-install-premium i {
+            font-size: 1.1rem;
+        }
     </style>
 </head>
 
-{# CORREÇÃO: Removida a tag body duplicada e adicionada verificação robusta para telas de auth #}
 <body class="{% if not current_user.is_authenticated or request.endpoint in ['auth.configurar_2fa', 'auth.recuperar_senha', 'auth.redefinir_senha', 'auth.login', 'auth.register', 'auth.verificar_2fa'] %}no-sidebar{% endif %}">
 
     <div id="pwa-update-bar">
@@ -294,7 +325,7 @@
                     <ul class="dropdown-menu dropdown-menu-end">
                         <li><a class="dropdown-item" href="{{ url_for('user.meu_perfil') }}">Meu Perfil</a></li>
 
-                        {# Botões administrativos no dropdown só aparecem se o MODO DEC estiver ligado #}
+                        {# Botões administrativos no dropdown só aparecem se o MODO DEC #}
                         {% if dec_mode_active %}
                             {% if session.get('view_as_school_id') %}
                                 <li><a class="dropdown-item text-danger fw-bold" href="{{ url_for('super_admin.clear_school_selection') }}"><i class="fas fa-sign-out-alt"></i> Sair da Escola (Ir p/ DEC)</a></li>
@@ -336,8 +367,6 @@
 
             <nav class="sidebar-nav">
                 {% set active_sid = session.get('active_school_id')|int if session.get('active_school_id') else None %}
-
-                {# Define se está no painel GLOBAL (Modo DEC ativado E sem escola selecionada) #}
                 {% set is_global_dec_view = (dec_mode_active and not session.get('view_as_school_id')) %}
 
                 <a href="{{ url_for('main.dashboard') }}" class="nav-link {% if request.endpoint == 'main.dashboard' %}active{% endif %}"><div class="nav-icon">🏠</div> Início</a>
@@ -354,7 +383,6 @@
                             <div class="nav-icon">🛡️</div> Ativar Modo DEC
                         </a>
                     {% else %}
-                        {# Se o DEC está ativo E ele está dentro de uma escola, mostra o botão de fuga limpo #}
                         {% if session.get('view_as_school_id') %}
                             <a href="{{ url_for('super_admin.clear_school_selection') }}" class="nav-link text-warning fw-bold" style="background-color: rgba(255, 193, 7, 0.1);">
                                 <div class="nav-icon">🔙</div> Sair da Escola (Ir p/ DEC)
@@ -373,7 +401,6 @@
 
                     <div class="nav-separator">GERAL</div>
                     <a href="{{ url_for('main.safebrowser') }}" class="nav-link {% if request.endpoint == 'main.safebrowser' %}active{% endif %}"><div class="nav-icon">🛡️</div> SafeBrowser</a>
-                    <a href="#" id="btnInstalar" class="nav-link text-primary fw-bold" style="display: none;" onclick="event.preventDefault();"><div class="nav-icon">📲</div> Instalar App</a>
 
                     {% if current_user.is_staff_in_school(active_sid) or current_user.is_instrutor_in_school(active_sid) or current_user.role in ['super_admin', 'aluno'] %}
                         <a href="{{ url_for('aluno.listar_alunos') }}" class="nav-link {% if request.endpoint and 'aluno.' in request.endpoint and 'historico' not in request.endpoint %}active{% endif %}"><div class="nav-icon">👥</div> Alunos</a>
@@ -395,7 +422,6 @@
                             <a href="{{ url_for('questoes.minhas_provas') }}" class="nav-link {% if request.endpoint == 'questoes.minhas_provas' %}active{% endif %}"><div class="nav-icon">📝</div> Montar Provas</a>
                         {% endif %}
 
-                        {# INSERÇÃO DA NOVA ABA DE RECURSOS - VISÍVEL PARA ADMINS, INSTRUTORES E ALUNOS #}
                         <a href="{{ url_for('recursos.index') }}" class="nav-link {% if request.endpoint and 'recursos.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📑</div> Recursos</a>
 
                         {% if current_user.is_instrutor_in_school(active_sid) or current_user.is_sens_in_school(active_sid) or current_user.is_cal_in_school(active_sid) or current_user.role == 'super_admin' %}
@@ -446,7 +472,14 @@
                     <a href="{{ url_for('questoes.painel_gestao') }}" class="nav-link {% if request.endpoint and 'questoes.' in request.endpoint %}active{% endif %}"><div class="nav-icon">🗂️</div> Banco de Questões</a>
                 {% endif %}
             </nav>
-            <div class="sidebar-footer"></div>
+            
+            {# --- BOTÃO APP COM DESIGN PREMIUM E DESTAQUE --- #}
+            <div class="sidebar-footer px-3 pb-3 pt-2">
+                <a href="#" id="btnInstalar" class="btn-install-premium" style="display: none;" onclick="event.preventDefault();">
+                    <i class="fas fa-cloud-download-alt me-2"></i> Baixar App SisGEn
+                </a>
+            </div>
+
         </aside>
         {% endif %}
 
@@ -475,7 +508,7 @@
         </main>
     </div>
 
-    {# MANTIDO: Modais de senha #}
+    {# Modais de senha #}
     {% if current_user.is_authenticated %}
     <div class="modal fade" id="changePasswordModal" tabindex="-1" aria-labelledby="changePasswordModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
@@ -522,7 +555,9 @@
         window.addEventListener('beforeinstallprompt', (e) => {
             e.preventDefault();
             deferredPrompt = e;
-            btnInstalar.style.display = 'flex';
+            if (btnInstalar) {
+                btnInstalar.style.display = 'flex'; 
+            }
         });
 
         if (btnInstalar) {
@@ -706,7 +741,6 @@
                 });
             }
 
-            // CORREÇÃO: Evita que o fetch rode caso o usuário não esteja logado
             if ({{ current_user.is_authenticated | tojson }} && "{{ request.endpoint }}" !== "auth.configurar_2fa" && "{{ request.endpoint }}" !== "auth.recuperar_senha") {
                 fetchNotifications();
                 setInterval(fetchNotifications, 60000);

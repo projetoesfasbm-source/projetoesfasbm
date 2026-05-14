@@ -1,6 +1,6 @@
 {
-    "name": "Sistema ESFAS",
-    "short_name": "ESFAS",
+    "name": "Sistema SisGEn",
+    "short_name": "SisGEn",
     "start_url": "/",
     "scope": "/",
     "display": "standalone",

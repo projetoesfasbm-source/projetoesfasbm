@@ -125,7 +125,7 @@
                         <select id="turma_id" name="turma_id" class="form-control">
                             <option value="">Não sei ainda / Definir depois</option>
                             {% for turma in turmas %}
-                                <option value="{{ turma.id }}">{{ turma.nome }}</option>
+                                <option value="{{ turma.id }}" {% if form_data.get('turma_id')|string == turma.id|string %}selected{% endif %}>{{ turma.nome }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -155,21 +155,52 @@
                     const alunoFields = document.getElementById('aluno-fields');
                     const opmInput = document.getElementById('opm');
                     const turmaSelect = document.getElementById('turma_id');
+                    const matriculaInput = document.getElementById('matricula');
 
+                    // Função para mostrar/esconder campos de aluno
                     function toggleAlunoFields() {
                         if (roleSelect.value === 'aluno') {
                             alunoFields.style.display = 'block';
                             opmInput.required = true;
-                            // turmaSelect.required = true; // REMOVIDO PARA SER OPCIONAL
                         } else {
                             alunoFields.style.display = 'none';
                             opmInput.required = false;
-                            // turmaSelect.required = false; // JÁ NÃO É REQUIRED
+                        }
+                    }
+
+                    // Função nova para buscar turmas na API baseada na matrícula
+                    function carregarTurmas() {
+                        const matricula = matriculaInput.value;
+                        if (matricula.length >= 6) {
+                            // O Flask vai descobrir a URL exata e o JS substitui a palavra 'PLACEHOLDER' pela matrícula digitada
+                            const urlExata = "{{ url_for('auth.api_turmas', matricula='PLACEHOLDER') }}".replace('PLACEHOLDER', matricula);
+                            fetch(urlExata)
+                                .then(response => response.json())
+                                .then(data => {
+                                    turmaSelect.innerHTML = '<option value="">Não sei ainda / Definir depois</option>';
+                                    data.forEach(turma => {
+                                        const option = document.createElement('option');
+                                        option.value = turma.id;
+                                        option.textContent = turma.nome;
+                                        turmaSelect.appendChild(option);
+                                    });
+                                })
+                                .catch(error => console.error('Erro ao buscar turmas:', error));
+                        } else {
+                            turmaSelect.innerHTML = '<option value="">Não sei ainda / Definir depois</option>';
                         }
                     }
 
                     toggleAlunoFields();
                     roleSelect.addEventListener('change', toggleAlunoFields);
+                    
+                    // Escuta quando o usuário digita ou sai do campo de matrícula
+                    matriculaInput.addEventListener('blur', carregarTurmas);
+                    matriculaInput.addEventListener('keyup', function() {
+                        if (this.value.length >= 6) {
+                            carregarTurmas();
+                        }
+                    });
                 });
             </script>
 
@@ -179,6 +210,6 @@
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmxc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
 </body>
 </html>

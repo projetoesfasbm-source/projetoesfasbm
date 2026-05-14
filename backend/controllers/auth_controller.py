@@ -1,7 +1,7 @@
 # backend/controllers/auth_controller.py
 
 from flask import (
-    Blueprint, render_template, request, redirect, url_for, flash, current_app, session, make_response
+    Blueprint, render_template, request, redirect, url_for, flash, current_app, session, make_response, jsonify
 )
 from flask_login import login_user, logout_user, login_required, current_user
 from flask_wtf import FlaskForm
@@ -273,21 +273,49 @@ def logout():
     flash("Você saiu do sistema.", "info")
     return redirect(url_for("auth.login"))
 
+# --- NOVA ROTA DE API PARA O JAVASCRIPT ---
+@auth_bp.route("/api/turmas/<matricula>")
+def api_turmas(matricula):
+    mat_norm = normalize_matricula(matricula)
+    if not mat_norm:
+        return jsonify([])
+
+    user = db.session.execute(select(User).where(User.matricula == mat_norm)).scalar_one_or_none()
+    if not user:
+        return jsonify([])
+
+    vinculo = db.session.execute(select(UserSchool).where(UserSchool.user_id == user.id)).scalars().first()
+    if not vinculo:
+        return jsonify([])
+
+    turmas = db.session.execute(select(Turma).where(Turma.school_id == vinculo.school_id).order_by(Turma.nome)).scalars().all()
+    return jsonify([{"id": t.id, "nome": t.nome} for t in turmas])
+# ------------------------------------------
+
 @auth_bp.route("/register", methods=["GET", "POST"])
 def register():
-    turmas = db.session.scalars(select(Turma).order_by(Turma.nome)).all()
+    # Inicialmente vazio para não carregar turmas de todas as escolas
+    turmas = []
     form_data = request.form.to_dict()
 
     if request.method == "POST":
         role = form_data.get("role", "aluno")
         pwd = form_data.get("password", "")
         pwd2 = form_data.get("password2", "")
+        matricula_norm = normalize_matricula(form_data.get("matricula"))
+
+        # Recupera as turmas da escola do usuário em caso de recarregamento da página (erros de validação)
+        if matricula_norm:
+            temp_user = db.session.execute(select(User).where(User.matricula == matricula_norm)).scalar_one_or_none()
+            if temp_user:
+                vinculo = db.session.execute(select(UserSchool).where(UserSchool.user_id == temp_user.id)).scalars().first()
+                if vinculo:
+                    turmas = db.session.scalars(select(Turma).where(Turma.school_id == vinculo.school_id).order_by(Turma.nome)).all()
 
         if not pwd or pwd != pwd2 or len(pwd) < 8:
             flash("Senha inválida.", "danger")
             return render_template("register.html", form_data=form_data, turmas=turmas)
 
-        matricula_norm = normalize_matricula(form_data.get("matricula"))
         if not matricula_norm:
             flash("Matrícula inválida.", "danger")
             return render_template("register.html", form_data=form_data, turmas=turmas)

@@ -3,7 +3,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, abort
 from flask_login import login_required, current_user
 from sqlalchemy import select, func, case, desc, and_
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, aliased  # <-- ADICIONADO ALIASED AQUI
 from collections import defaultdict
 from datetime import datetime
 from functools import wraps
@@ -18,7 +18,6 @@ from backend.models.frequencia import FrequenciaAluno
 from backend.models.user import User
 from backend.models.instrutor import Instrutor
 from backend.services.user_service import UserService
-# ADIÇÃO: Importação do Service para conectar com a validação do Instrutor
 from backend.services.diario_service import DiarioService
 
 admin_escola_bp = Blueprint('admin_escola', __name__, url_prefix='/admin-escola')
@@ -60,8 +59,10 @@ def espelho_diarios():
         return redirect(url_for('main.dashboard'))
 
     # =========================================================================
-    # PARTE 1: LÓGICA DO PAINEL DE RISCO (MANTIDA INTEGRALMENTE)
+    # PARTE 1: LÓGICA DO PAINEL DE RISCO (CORREÇÃO DE VAZAMENTO DE FALTAS APLICADA)
     # =========================================================================
+    TurmaDiario = aliased(Turma) # Criamos um "clone" virtual da tabela Turma
+    
     stats_query = db.session.execute(
         select(
             Aluno,
@@ -70,13 +71,15 @@ def espelho_diarios():
             Disciplina.carga_horaria_prevista,
             func.count(FrequenciaAluno.id).label('total_faltas_materia')
         )
-        .join(Turma, Aluno.turma_id == Turma.id)
+        .join(Turma, Aluno.turma_id == Turma.id) # Verifica a Turma ATUAL do aluno
         .join(FrequenciaAluno, Aluno.id == FrequenciaAluno.aluno_id)
         .join(DiarioClasse, FrequenciaAluno.diario_id == DiarioClasse.id)
+        .join(TurmaDiario, DiarioClasse.turma_id == TurmaDiario.id) # Verifica a Turma ONDE A FALTA OCORREU
         .join(Disciplina, DiarioClasse.disciplina_id == Disciplina.id)
         .options(joinedload(Aluno.user)) 
         .where(
-            Turma.school_id == school_id,
+            Turma.school_id == school_id,       # O Aluno pertence a esta escola
+            TurmaDiario.school_id == school_id, # A falta OBRIGATORIAMENTE tem que ter ocorrido nesta escola
             FrequenciaAluno.presente == False
         )
         .group_by(Aluno.id, Turma.nome, Disciplina.id)
@@ -159,16 +162,11 @@ def espelho_diarios():
     # =========================================================================
     # PARTE 2: LÓGICA DA LISTA DE DIÁRIOS (ALTERADA)
     # =========================================================================
-    # Alteração: Usar DiarioService para garantir que vemos o status da assinatura
-    
     page = request.args.get('page', 1, type=int)
     turma_id = request.args.get('turma_id', type=int)
     disciplina_id = request.args.get('disciplina_id', type=int)
     data_str = request.args.get('data')
 
-    # Busca a lista completa (ou filtrada) através do Service
-    # user_id=None -> Modo Admin (vê tudo)
-    # status=None -> Vê pendentes E assinados
     diarios_todos = DiarioService.get_diarios_pendentes(
         school_id=school_id,
         user_id=None, 
@@ -177,7 +175,6 @@ def espelho_diarios():
         status=None 
     )
 
-    # Filtragem manual de data
     if data_str:
         try:
             data_filtro = datetime.strptime(data_str, '%Y-%m-%d').date()
@@ -185,14 +182,12 @@ def espelho_diarios():
         except ValueError:
             pass
 
-    # Lógica de Paginação Manual (necessária pois DiarioService retorna lista, não Query)
     total_items = len(diarios_todos)
     per_page = 20
     start = (page - 1) * per_page
     end = start + per_page
     diarios_paginados = diarios_todos[start:end]
     
-    # Classe auxiliar para simular o objeto Pagination do SQLAlchemy no template
     class FakePagination:
         def __init__(self, items, page, per_page, total):
             self.items = items
@@ -207,10 +202,8 @@ def espelho_diarios():
 
     pagination = FakePagination(diarios_paginados, page, per_page, total_items)
     
-    # Filtros Inteligentes (Service)
     turmas, disciplinas = DiarioService.get_filtros_disponiveis(school_id, user_id=None, turma_selected_id=turma_id)
 
-    # Dados para a tabela de "Todos os Alunos" do modal/collapse
     todos_alunos_query = db.session.execute(
         select(Aluno, Turma.nome)
         .join(Turma)
@@ -261,12 +254,18 @@ def detalhe_faltas_aluno(aluno_id):
     if not aluno:
         return "Aluno não encontrado", 404
 
-    # Busca todas as faltas (ordenadas por disciplina e data)
+    school_id = UserService.get_current_school_id()
+
     faltas_query = db.session.scalars(
         select(FrequenciaAluno)
         .join(DiarioClasse)
+        .join(Turma, DiarioClasse.turma_id == Turma.id)
         .join(Disciplina)
-        .where(FrequenciaAluno.aluno_id == aluno_id, FrequenciaAluno.presente == False)
+        .where(
+            FrequenciaAluno.aluno_id == aluno_id, 
+            FrequenciaAluno.presente == False,
+            Turma.school_id == school_id # Impede que faltas de outras escolas apareçam no modal
+        )
         .order_by(Disciplina.materia, DiarioClasse.data_aula.desc())
     ).all()
     
@@ -319,7 +318,6 @@ def editar_diario_bloco(diario_id):
         flash('Diário não encontrado', 'danger')
         return redirect(url_for('admin_escola.espelho_diarios'))
 
-    # Busca todos os tempos da mesma aula no mesmo dia
     diarios_bloco = db.session.scalars(
         select(DiarioClasse)
         .where(
@@ -330,7 +328,6 @@ def editar_diario_bloco(diario_id):
         .order_by(DiarioClasse.periodo, DiarioClasse.id) 
     ).all()
 
-    # Busca alunos da turma ordenados
     alunos = db.session.scalars(
         select(Aluno)
         .join(User)
@@ -347,7 +344,6 @@ def editar_diario_bloco(diario_id):
                 diario.conteudo_ministrado = conteudo
                 diario.observacoes = observacoes
                 
-                # Atualiza Presenças
                 for aluno in alunos:
                     campo_name = f"presenca_{aluno.id}_{diario.id}"
                     esta_presente = (request.form.get(campo_name) == 'on')
@@ -397,7 +393,6 @@ def retornar_diario():
         flash("Dados inválidos para retorno.", "danger")
         return redirect(url_for('admin_escola.espelho_diarios'))
     
-    # Chama o serviço para remover assinatura e voltar para pendente
     sucesso, msg = DiarioService.retornar_diario_admin(diario_id, current_user, motivo)
     if sucesso:
         flash(msg, "success")
@@ -439,7 +434,6 @@ def imprimir_relatorio():
     turma = db.session.get(Turma, turma_id)
     disciplina = db.session.get(Disciplina, disciplina_id)
     
-    # Busca dados agrupados para a impressão
     diarios = DiarioService.get_diarios_agrupados(
         school_id=school_id,
         user_id=None, 

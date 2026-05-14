@@ -58,14 +58,28 @@ class HorarioService:
         if aula.instrutor_id_2:
             instrutor_val += f"-{aula.instrutor_id_2}"
 
+        # CORREÇÃO CRÍTICA: Se a aula faz parte de um bloco agrupado (ex: passou pelo intervalo),
+        # buscamos a duração e o período total do grupo inteiro para não perder horas na edição.
+        periodo_real = aula.periodo
+        duracao_real = aula.duracao
+        
+        if aula.group_id:
+            agregado = db.session.execute(
+                select(func.min(Horario.periodo), func.sum(Horario.duracao))
+                .where(Horario.group_id == aula.group_id)
+            ).first()
+            if agregado and agregado[0] is not None:
+                periodo_real = agregado[0]
+                duracao_real = agregado[1]
+
         return {
             'id': aula.id,
             'disciplina_id': aula.disciplina_id,
             'disciplina_nome': aula.disciplina.materia if aula.disciplina else "Desconhecida",
             'instrutor_id': instrutor_val,
             'observacao': aula.observacao,
-            'duracao': aula.duracao,
-            'periodo': aula.periodo,
+            'duracao': duracao_real,
+            'periodo': periodo_real,
             'dia': aula.dia_semana,
             'pelotao': aula.pelotao,
             'semana_id': aula.semana_id,
@@ -294,30 +308,31 @@ class HorarioService:
             if not semana:
                 return False, "Semana não encontrada.", 404
 
-            if not is_admin:
-                if dia == 'sabado' and not semana.mostrar_sabado:
-                    return False, "⚠️ AGENDAMENTO BLOQUEADO: O Sábado não está habilitado nesta semana.", 403
+            # CORREÇÃO CRÍTICA: Validações físicas do quadro passam a ser exigidas DE TODOS (Incluindo Administradores)
+            if dia == 'sabado' and not semana.mostrar_sabado:
+                return False, "⚠️ AGENDAMENTO BLOQUEADO: O Sábado não está habilitado nesta semana.", 403
 
-                if dia == 'domingo' and not semana.mostrar_domingo:
-                    return False, "⚠️ AGENDAMENTO BLOQUEADO: O Domingo não está habilitado nesta semana.", 403
+            if dia == 'domingo' and not semana.mostrar_domingo:
+                return False, "⚠️ AGENDAMENTO BLOQUEADO: O Domingo não está habilitado nesta semana.", 403
 
-                for p in range(periodo_inicio, periodo_fim + 1):
-                    if p == 13 and not semana.mostrar_periodo_13:
-                        return False, "⚠️ AGENDAMENTO BLOQUEADO: O 13º tempo não está habilitado.", 403
-                    if p == 14 and not semana.mostrar_periodo_14:
-                        return False, "⚠️ AGENDAMENTO BLOQUEADO: O 14º tempo não está habilitado.", 403
-                    if p == 15 and not semana.mostrar_periodo_15:
-                        return False, "⚠️ AGENDAMENTO BLOQUEADO: O 15º tempo não está habilitado.", 403
+            for p in range(periodo_inicio, periodo_fim + 1):
+                if p == 13 and not semana.mostrar_periodo_13:
+                    return False, "⚠️ AGENDAMENTO BLOQUEADO: O 13º tempo não está habilitado.", 403
+                if p == 14 and not semana.mostrar_periodo_14:
+                    return False, "⚠️ AGENDAMENTO BLOQUEADO: O 14º tempo não está habilitado.", 403
+                if p == 15 and not semana.mostrar_periodo_15:
+                    return False, "⚠️ AGENDAMENTO BLOQUEADO: O 15º tempo não está habilitado.", 403
 
-                    if dia == 'sabado' and semana.periodos_sabado > 0 and p > semana.periodos_sabado:
-                        return False, f"⚠️ AGENDAMENTO BLOQUEADO: Sábado vai apenas até o {semana.periodos_sabado}º tempo.", 403
+                if dia == 'sabado' and semana.periodos_sabado > 0 and p > semana.periodos_sabado:
+                    return False, f"⚠️ AGENDAMENTO BLOQUEADO: Sábado vai apenas até o {semana.periodos_sabado}º tempo.", 403
 
-                    if dia == 'domingo' and semana.periodos_domingo > 0 and p > semana.periodos_domingo:
-                        return False, f"⚠️ AGENDAMENTO BLOQUEADO: Domingo vai apenas até o {semana.periodos_domingo}º tempo.", 403
+                if dia == 'domingo' and semana.periodos_domingo > 0 and p > semana.periodos_domingo:
+                    return False, f"⚠️ AGENDAMENTO BLOQUEADO: Domingo vai apenas até o {semana.periodos_domingo}º tempo.", 403
 
             disciplina = db.session.get(Disciplina, disciplina_id)
 
-            if disciplina and not is_admin:
+            # CORREÇÃO CRÍTICA: Administradores não escapam mais da regra de limite de horas (removido 'and not is_admin')
+            if disciplina:
                 total_agendado = db.session.scalar(
                     select(func.sum(Horario.duracao))
                     .where(Horario.disciplina_id == disciplina_id, Horario.pelotao == pelotao)
@@ -344,6 +359,7 @@ class HorarioService:
                         f"Você tentou agendar {duracao}h."
                     ), 400
 
+            # Restrição de prioridade permanece sendo avaliada (exceto para Admin que as define)
             if semana and not is_admin:
                 if getattr(semana, 'priority_active', False):
                     raw_priority = getattr(semana, 'priority_disciplines', '[]') or '[]'
@@ -423,6 +439,7 @@ class HorarioService:
 
             instructors_to_check = [i for i in [instrutor_id_1, instrutor_id_2] if i is not None]
 
+            # VALIDAÇÃO 1: Double Booking (Conflito externo) - Impede instrutor em duas turmas diferentes
             if instructors_to_check:
                 conflict_query = select(Horario).where(
                     Horario.semana_id == semana_id,
@@ -449,6 +466,7 @@ class HorarioService:
             aula_original = db.session.get(Horario, horario_id) if horario_id else None
             group_id_original = aula_original.group_id if aula_original else None
 
+            # VALIDAÇÃO 2: Marcação Dupla Interna - Impede duas aulas no mesmo pelotão/horário
             conflito_query_interno = select(Horario).where(
                 Horario.pelotao == pelotao,
                 Horario.semana_id == semana_id,
@@ -698,9 +716,6 @@ class HorarioService:
         return False, "Funcionalidade não implementada neste contexto."
 
 
-    # =========================================================================
-    # CÉREBRO CORRIGIDO: EXTRAÇÃO DE FOTO BLINDADA E VARIAVEIS SINCRONIZADAS
-    # =========================================================================
     @staticmethod
     def get_aulas_painel_admin(school_id, ciclo_id, instrutor_id=None, turma_nome=None):
         hoje = date.today()
@@ -755,22 +770,18 @@ class HorarioService:
                 posto = u.posto_graduacao or ''
                 nome_guerra = u.nome_de_guerra or u.username or 'U'
                 
-                # EXTRAÇÃO BLINDADA DA FOTO
                 foto_final = 'default.png'
                 
-                # 1. Checa a foto do perfil específico vinculado à aula
                 foto_aula = getattr(aula.instrutor, 'foto_perfil', None)
                 if foto_aula and str(foto_aula).strip() not in ['', 'None', 'default.png']:
                     foto_final = str(foto_aula).strip()
                 else:
-                    # 2. Faz o fallback para o perfil principal (onde o upload ocorre no 'Meu Perfil')
                     primary_prof = getattr(u, 'instrutor_profile', None)
                     if primary_prof:
                         foto_primaria = getattr(primary_prof, 'foto_perfil', None)
                         if foto_primaria and str(foto_primaria).strip() not in ['', 'None', 'default.png']:
                             foto_final = str(foto_primaria).strip()
 
-                # 3. Varredura física: Se não existe na pasta, volta para o default para não gerar ERRO 404
                 if foto_final != 'default.png':
                     caminho_foto = os.path.join(current_app.static_folder, 'uploads', 'profile_pics', foto_final)
                     if not os.path.exists(caminho_foto):
@@ -788,7 +799,6 @@ class HorarioService:
                 posto2 = u2.posto_graduacao or ''
                 nome_guerra2 = u2.nome_de_guerra or u2.username or 'U'
                 
-                # EXTRAÇÃO BLINDADA DA FOTO
                 foto_final2 = 'default.png'
                 
                 foto_aula2 = getattr(aula.instrutor_2, 'foto_perfil', None)
@@ -832,7 +842,6 @@ class HorarioService:
                 'is_passada': data_aula < hoje 
             })
 
-        # Ordenar e Agrupar
         aulas_raw.sort(key=lambda x: (x['data_raw'], x['turma'], x['periodo_inicio']))
 
         grouped_aulas = []
@@ -865,7 +874,6 @@ class HorarioService:
             else:
                 grouped_aulas.append(aula)
 
-        # Formatação
         horarios_inicio = {
             1: "07:45", 2: "08:35", 3: "09:40", 4: "10:30",
             5: "13:30", 6: "14:20", 7: "15:25", 8: "16:15"

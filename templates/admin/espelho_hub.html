@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}Gestão Escolar - Diários{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
+        <div>
+            <h2 class="fw-bold mb-0 text-dark"><i class="fas fa-university text-primary me-2"></i> Gestão Escolar</h2>
+            <p class="text-muted mb-0 mt-1">Selecione o módulo que deseja acessar.</p>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-md-6 col-lg-4">
+            <a href="{{ url_for('admin_escola.gerenciar_diarios') }}" class="text-decoration-none">
+                <div class="card h-100 shadow-sm border-0 hover-lift">
+                    <div class="card-body text-center p-4">
+                        <div class="bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 70px; height: 70px;">
+                            <i class="fas fa-book-open fa-2x"></i>
+                        </div>
+                        <h4 class="fw-bold text-dark">Caderno de Chamada</h4>
+                        <p class="text-muted small">Gerencie as frequências e os conteúdos ministrados nos diários de classe.</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <div class="col-md-6 col-lg-4">
+            <a href="{{ url_for('admin_escola.painel_risco') }}" class="text-decoration-none">
+                <div class="card h-100 shadow-sm border-0 hover-lift">
+                    <div class="card-body text-center p-4">
+                        <div class="bg-danger text-white rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 70px; height: 70px;">
+                            <i class="fas fa-exclamation-triangle fa-2x"></i>
+                        </div>
+                        <h4 class="fw-bold text-dark">Painel de Risco</h4>
+                        <p class="text-muted small">Controle de faltas e alertas de alunos em risco de reprovação.</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <div class="col-md-6 col-lg-4">
+            <a href="{{ url_for('diario.listar_lixeira') }}" class="text-decoration-none">
+                <div class="card h-100 shadow-sm border-0 hover-lift">
+                    <div class="card-body text-center p-4">
+                        <div class="bg-secondary text-white rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 70px; height: 70px;">
+                            <i class="fas fa-trash-alt fa-2x"></i>
+                        </div>
+                        <h4 class="fw-bold text-dark">Lixeira</h4>
+                        <p class="text-muted small">Itens excluídos (Diários de Classe aguardando restauração ou remoção).</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <div class="col-md-6 col-lg-4">
+            <a href="#" class="text-decoration-none" data-bs-toggle="modal" data-bs-target="#modalRelatorio">
+                <div class="card h-100 shadow-sm border-0 hover-lift">
+                    <div class="card-body text-center p-4">
+                        <div class="bg-success text-white rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 70px; height: 70px;">
+                            <i class="fas fa-file-pdf fa-2x"></i>
+                        </div>
+                        <h4 class="fw-bold text-dark">Relatórios</h4>
+                        <p class="text-muted small">Baixe relatórios oficiais em PDF baseados nas turmas e disciplinas.</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalRelatorio" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form action="{{ url_for('admin_escola.imprimir_relatorio') }}" method="GET" target="_blank">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title fw-bold"><i class="fas fa-print"></i> Emitir Relatório Oficial</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Turma / Pelotão</label>
+                        <select name="turma_id" class="form-select" required>
+                            <option value="">-- Selecione a Turma --</option>
+                            {% for t in turmas %}
+                            <option value="{{ t.id }}">{{ t.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Disciplina</label>
+                        <select name="disciplina_id" class="form-select" required>
+                            <option value="">-- Selecione a Disciplina --</option>
+                            {% for d in disciplinas %}
+                            <option value="{{ d.id }}">{{ d.materia }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success fw-bold">Gerar Relatório (PDF)</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+    .hover-lift { transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out; }
+    .hover-lift:hover { transform: translateY(-5px); box-shadow: 0 .5rem 1rem rgba(0,0,0,.15)!important; }
+</style>
+{% endblock %}

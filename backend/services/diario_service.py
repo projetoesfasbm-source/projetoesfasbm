@@ -3,8 +3,9 @@ import os
 import base64
 import uuid
 import shutil
-from datetime import datetime, time
-from zoneinfo import ZoneInfo
+import re
+from datetime import datetime, time, timedelta
+import pytz
 from flask import current_app, session
 from ..models.database import db
 from ..models.diario_classe import DiarioClasse
@@ -16,14 +17,26 @@ from ..models.disciplina_turma import DisciplinaTurma
 from ..models.frequencia import FrequenciaAluno
 from sqlalchemy import select, and_, or_, distinct
 
+# IMPORTAÇÃO PARA LER OS HORÁRIOS DINÂMICOS DA ESCOLA
+from .site_config_service import SiteConfigService
+
 class DiarioService:
     
     @staticmethod
-    def validar_criacao_diario_aluno(data_aula_str, periodo_final):
-        """ Validação rigorosa: O aluno SÓ PODE criar o diário DEPOIS que a aula acabar (Hora de Brasília) """
+    def get_agora_brasilia():
+        """Garante que o horário retornado seja estritamente o de Brasília, ignorando o fuso do servidor."""
         try:
-            fuso_sp = ZoneInfo('America/Sao_Paulo')
-            agora = datetime.now(fuso_sp)
+            tz = pytz.timezone('America/Sao_Paulo')
+            return datetime.now(tz)
+        except Exception:
+            # Fallback de segurança infalível: Pega a hora universal exata e subtrai 3 horas
+            return datetime.utcnow() - timedelta(hours=3)
+
+    @staticmethod
+    def validar_criacao_diario_aluno(data_aula_str, periodo_final):
+        """ Validação rigorosa: O aluno SÓ PODE criar o diário DURANTE/APÓS o último período daquela disciplina """
+        try:
+            agora = DiarioService.get_agora_brasilia()
             
             if isinstance(data_aula_str, str):
                 data_aula = datetime.strptime(data_aula_str, '%Y-%m-%d').date()
@@ -34,21 +47,28 @@ class DiarioService:
                 return False, "⚠️ Bloqueado: Não é possível criar diários para datas futuras."
                 
             if data_aula < agora.date():
-                return True, "" # Aulas de dias anteriores estão liberadas
+                return True, "" # Aulas de dias anteriores estão sempre liberadas
                 
-            # Horários de FIM de cada período (ajuste se necessário)
-            horarios_fim = {
-                1: time(8, 35), 2: time(9, 25), 3: time(10, 30), 4: time(11, 20),
-                5: time(14, 20), 6: time(15, 10), 7: time(16, 15), 8: time(17, 5),
-                9: time(19, 0), 10: time(19, 50), 11: time(20, 50), 12: time(21, 40)
-            }
+            # BUSCA DINÂMICA: Lê a configuração real da escola para aquele período específico
+            school_id = session.get('active_school_id')
+            periodo_key = f"horario_periodo_{int(periodo_final):02d}"
+            time_str = SiteConfigService.get_config(periodo_key, 'N/D', school_id=school_id)
+
+            if not time_str or time_str in ['N/D', '-']:
+                return True, "" # Fallback de segurança: libera se não houver horário cadastrado na escola
+
+            # Extrai os horários cadastrados (Ex: de "09:00-09:45" extrai ["09:00", "09:45"])
+            times = re.findall(r'\d{2}:\d{2}', str(time_str))
+            if not times:
+                return True, ""
             
-            hora_fim = horarios_fim.get(int(periodo_final))
-            if not hora_fim:
-                return True, "" # Fallback de segurança se o período for desconhecido
-                
-            if agora.time() < hora_fim:
-                return False, f"⚠️ O diário só será liberado após o término desta aula ({hora_fim.strftime('%H:%M')} no horário de Brasília)."
+            # Pega o horário de INÍCIO do último período da disciplina para liberar o diário *durante* a aula
+            hora_inicio_str = times[0]
+            h, m = map(int, hora_inicio_str.split(':'))
+            hora_liberacao = time(h, m)
+            
+            if agora.time() < hora_liberacao:
+                return False, f"⚠️ O diário só será liberado durante o último período desta disciplina (a partir das {hora_inicio_str} no horário de Brasília)."
                 
             return True, ""
         except Exception as e:
@@ -79,8 +99,6 @@ class DiarioService:
             .where(
                 Turma.school_id == school_id,
                 DiarioClasse.is_deleted == False
-                # BUGFIX: Removido o filtro de conteudo_ministrado != None.
-                # Agora o diário é forçado a aparecer para o instrutor mesmo que o aluno tenha deixado em branco.
             )
         )
 
@@ -271,7 +289,8 @@ class DiarioService:
                             freq.presente = presente_bool
                             if freq.presente: freq.justificativa = None
 
-            timestamp = datetime.now()
+            # Usa o relógio exato de Brasília em vez do relógio em UTC do PythonAnywhere
+            timestamp = DiarioService.get_agora_brasilia()
             for d in bloco_completo:
                 if d.status == 'pendente':
                     d.assinatura_path = db_path

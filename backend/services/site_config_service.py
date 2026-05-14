@@ -56,8 +56,14 @@ class SiteConfigService:
 
         # Horários dos Períodos
         ('horario_intervalo_manha', '09:45-10:00', 'text', 'Intervalo Manhã', 'horarios'),
+        ('posicao_intervalo_manha', '3', 'text', 'Posição do Int. da Manhã (Após qual período?)', 'horarios'),
+        
         ('horario_intervalo_almoco', '12:15-13:45', 'text', 'Intervalo Almoço', 'horarios'),
+        ('posicao_intervalo_almoco', '6', 'text', 'Posição do Almoço (Após qual período?)', 'horarios'),
+        
         ('horario_intervalo_tarde', '16:00-16:15', 'text', 'Intervalo Tarde', 'horarios'),
+        ('posicao_intervalo_tarde', '9', 'text', 'Posição do Int. da Tarde (Após qual período?)', 'horarios'),
+        
         ('horario_periodo_01', '07:30-08:15', 'text', '1º Período', 'horarios'),
         ('horario_periodo_02', '08:15-09:00', 'text', '2º Período', 'horarios'),
         ('horario_periodo_03', '09:00-09:45', 'text', '3º Período', 'horarios'),
@@ -85,7 +91,6 @@ class SiteConfigService:
         Se school_id for fornecido, tenta buscar 'school_{id}_{key}'.
         Se não encontrar (ou não houver school_id), busca a 'key' global.
         """
-        # 1. Tenta buscar configuração específica da escola (Contexto)
         if school_id:
             school_key = f"school_{school_id}_{key}"
             config = db.session.execute(
@@ -95,7 +100,6 @@ class SiteConfigService:
             if config is not None:
                 return config.config_value
 
-        # 2. Fallback: Busca configuração global (Padrão)
         config = db.session.execute(
             select(SiteConfig).where(SiteConfig.config_key == key)
         ).scalar_one_or_none()
@@ -103,7 +107,6 @@ class SiteConfigService:
         if config is not None:
             return config.config_value
             
-        # 3. Fallback: Valor hardcoded no código ou default fornecido
         if key in SiteConfigService._DEFAULTS_MAP:
             return SiteConfigService._DEFAULTS_MAP[key]
             
@@ -166,11 +169,9 @@ class SiteConfigService:
         """
         target_key = key
         
-        # Se for contexto de escola, prefixa a chave
         if school_id:
             target_key = f"school_{school_id}_{key}"
         
-        # Validações por tipo continuam úteis
         if config_type == 'image':
             if value and not (value.startswith('/static/uploads/') or value.startswith('http://') or value.startswith('https://')): 
                 raise ValueError(f"Valor inválido para configuração de imagem: {value}.")
@@ -200,15 +201,11 @@ class SiteConfigService:
             )
             db.session.add(config)
         
-        db.session.commit() # Salva imediatamente
+        db.session.commit()
         return config
 
     @staticmethod
     def delete_config(key: str, school_id=None):
-        """
-        Remove uma configuração específica.
-        Se school_id for informado, remove a personalização da escola.
-        """
         target_key = key
         if school_id:
             target_key = f"school_{school_id}_{key}"

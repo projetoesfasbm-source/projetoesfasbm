@@ -44,10 +44,30 @@ def _get_horario_context_data():
         time_str = SiteConfigService.get_config(key, 'N/D', school_id=school_id)
         tempos.append((periodo_str, time_str))
 
+    # --- LÓGICA DIRETA: LER A POSIÇÃO CONFIGURADA PELO GESTOR NO CUSTOMIZER ---
+    try:
+        pos_int_1 = int(float(SiteConfigService.get_config('posicao_intervalo_manha', '3', school_id=school_id)))
+    except (ValueError, TypeError):
+        pos_int_1 = 3
+        
+    try:
+        pos_almoco = int(float(SiteConfigService.get_config('posicao_intervalo_almoco', '6', school_id=school_id)))
+    except (ValueError, TypeError):
+        pos_almoco = 6
+        
+    try:
+        pos_int_2 = int(float(SiteConfigService.get_config('posicao_intervalo_tarde', '9', school_id=school_id)))
+    except (ValueError, TypeError):
+        pos_int_2 = 9
+    # -------------------------------------------------------------------------
+
     intervalos = {
         'intervalo_1': SiteConfigService.get_config('horario_intervalo_manha', 'N/D', school_id=school_id),
+        'pos_int_1': pos_int_1,
         'almoco': SiteConfigService.get_config('horario_intervalo_almoco', 'N/D', school_id=school_id),
+        'pos_almoco': pos_almoco,
         'intervalo_2': SiteConfigService.get_config('horario_intervalo_tarde', 'N/D', school_id=school_id),
+        'pos_int_2': pos_int_2,
     }
     return tempos, intervalos
 
@@ -377,7 +397,15 @@ def exportar_pdf():
 
     horario_matrix = HorarioService.construir_matriz_horario(pelotao, semana_id, current_user)
     datas_semana = HorarioService.get_datas_da_semana(semana)
-    rendered_html = render_template('horario_pdf.html', pelotao_selecionado=pelotao, semana_selecionada=semana, horario_matrix=horario_matrix, datas_semana=datas_semana)
+    tempos, intervalos = _get_horario_context_data()
+    
+    rendered_html = render_template('horario_pdf.html', 
+                                    pelotao_selecionado=pelotao, 
+                                    semana_selecionada=semana, 
+                                    horario_matrix=horario_matrix, 
+                                    datas_semana=datas_semana,
+                                    tempos=tempos,
+                                    intervalos=intervalos)
     try:
         pdf_content = HTML(string=rendered_html, base_url=request.url_root).write_pdf()
         filename_utf8 = f'horario_{pelotao}_{semana.nome}.pdf'.replace(' ', '_')
@@ -387,7 +415,7 @@ def exportar_pdf():
         flash(f'Erro ao gerar PDF: {e}', 'danger')
         return redirect(url_for('horario.index', pelotao=pelotao, semana_id=semana_id))
 
-@horario_bp.route('/editar/<pelotao>/<int:semana_id>/<int:ciclo_id>')
+@horario_bp.route('/editar/<path:pelotao>/<int:semana_id>/<int:ciclo_id>')
 @login_required
 @can_schedule_classes_required
 def editar_horario_grid(pelotao, semana_id, ciclo_id):
@@ -414,7 +442,7 @@ def get_aula_details(horario_id):
         return jsonify({'success': False, 'message': 'Aula não encontrada.'}), 404
     return jsonify({'success': True, **aula_details})
 
-@horario_bp.route('/api/instrutores-vinculados/<pelotao>/<int:disciplina_id>')
+@horario_bp.route('/api/instrutores-vinculados/<path:pelotao>/<int:disciplina_id>')
 @login_required
 def get_instrutores_vinculados(pelotao, disciplina_id):
     vinculo = db.session.scalar(

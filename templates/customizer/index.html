@@ -31,11 +31,21 @@
                 {% for config in configs_by_category.get('horarios', []) %}
                 <div class="config-card">
                     <label class="config-label">{{ config.description or config.config_key }}</label>
-                    <input type="text" class="form-control text-input" 
-                           value="{{ config.config_value or '' }}"
-                           data-config-key="{{ config.config_key }}" 
-                           data-config-type="text"
-                           placeholder="HH:MM-HH:MM">
+                    
+                    {% if 'posicao' in config.config_key %}
+                        <input type="number" class="form-control text-input" 
+                               value="{{ config.config_value or '' }}"
+                               data-config-key="{{ config.config_key }}" 
+                               data-config-type="text"
+                               placeholder="Ex: 3" min="1" max="15" style="max-width: 150px;">
+                        <small style="color: #64748b; font-size: 0.8rem; margin-top: 5px; display: block;">Digite o NÚMERO do período. (Ex: 3 = aparecerá após o 3º período).</small>
+                    {% else %}
+                        <input type="text" class="form-control text-input" 
+                               value="{{ config.config_value or '' }}"
+                               data-config-key="{{ config.config_key }}" 
+                               data-config-type="text"
+                               placeholder="HH:MM-HH:MM">
+                    {% endif %}
                 </div>
                 {% endfor %}
             </div>

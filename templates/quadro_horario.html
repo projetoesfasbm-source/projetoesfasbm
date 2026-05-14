@@ -38,15 +38,12 @@
         
         <div class="controls-group d-flex gap-2 flex-wrap justify-content-end align-items-center">
             
-            {# --- NOVO BOTÃO: DASHBOARD DO INSTRUTOR (DESTAQUE MÁXIMO) --- #}
             {% if current_user.is_instrutor_in_school(session.get('active_school_id')|int) %}
             <button type="button" class="btn btn-warning btn-lg shadow fw-bold border border-dark text-dark" onclick="abrirDashboardInstrutor()">
                 <i class="fas fa-chart-pie me-2"></i> PAINEL DO INSTRUTOR
             </button>
             {% endif %}
-            {# ------------------------------------------------------------- #}
 
-            {# 1. BOTÃO DATA DE FORMATURA #}
             {% if turma_atual and current_user.is_sens %}
                 <button type="button" class="btn btn-info text-white shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#modalDataFormatura">
                     <i class="fas fa-graduation-cap me-1"></i> 
@@ -58,17 +55,14 @@
                 </button>
             {% endif %}
 
-            {# 2. BOTÃO DE GERENCIAR SEMANAS #}
             {% if current_user.is_sens %}
                 <a href="{{ url_for('semana.gerenciar_semanas') }}" class="btn btn-dark shadow-sm fw-bold">
                     <i class="fas fa-calendar-plus me-1"></i> Gerenciar Semanas / Ciclos
                 </a>
             {% endif %}
 
-            {# 3. BOTÕES QUE DEPENDEM DE UMA SEMANA JÁ EXISTIR #}
             {% if semana_selecionada %}
                 
-                {# BOTÕES ADMINISTRATIVOS #}
                 {% if current_user.is_sens %}
                     <button type="button" class="btn {% if priority_active %}btn-danger text-white{% else %}btn-warning{% endif %} fw-bold shadow-sm" 
                             data-bs-toggle="modal" data-bs-target="#priorityModal">
@@ -81,7 +75,6 @@
                     </a>
                 {% endif %}
                 
-                {# CORREÇÃO: Admin/Sens tem acesso total, Instrutor depende de permissão #}
                 {% if can_schedule_in_this_turma or current_user.is_sens %}
                     <button type="button" class="btn btn-primary" onclick="openConfirmationModal()">
                         Agendar/Desmarcar Aulas
@@ -188,9 +181,20 @@
                         {% endfor %}
                     </tr>
                     
-                    {% if row_idx == 2 %}<tr><td colspan="6" class="bg-secondary text-white py-1 text-center small fw-bold text-uppercase">{{ intervalos.intervalo_1 }}</td></tr>{% endif %}
-                    {% if row_idx == 5 %}<tr><td colspan="6" class="bg-secondary text-white py-1 text-center small fw-bold text-uppercase">{{ intervalos.almoco }}</td></tr>{% endif %}
-                    {% if row_idx == 8 %}<tr><td colspan="6" class="bg-secondary text-white py-1 text-center small fw-bold text-uppercase">{{ intervalos.intervalo_2 }}</td></tr>{% endif %}
+                    {# USO DO .get() PARA BLINDAR A TELA CONTRA FALHAS DO BACKEND (E -1 PARA AJUSTE DO ARRAY) #}
+                    {% set pos_int_1 = (intervalos.get('pos_int_1', 3)|int) - 1 %}
+                    {% set pos_almoco = (intervalos.get('pos_almoco', 6)|int) - 1 %}
+                    {% set pos_int_2 = (intervalos.get('pos_int_2', 9)|int) - 1 %}
+                    
+                    {% if row_idx == pos_int_1 and intervalos.get('intervalo_1') and intervalos.get('intervalo_1') not in ['N/D', '-', ''] %}
+                        <tr><td colspan="6" class="bg-secondary text-white py-1 text-center small fw-bold text-uppercase">INTERVALO MANHÃ: {{ intervalos.get('intervalo_1') }}</td></tr>
+                    {% endif %}
+                    {% if row_idx == pos_almoco and intervalos.get('almoco') and intervalos.get('almoco') not in ['N/D', '-', ''] %}
+                        <tr><td colspan="6" class="bg-secondary text-white py-1 text-center small fw-bold text-uppercase">ALMOÇO: {{ intervalos.get('almoco') }}</td></tr>
+                    {% endif %}
+                    {% if row_idx == pos_int_2 and intervalos.get('intervalo_2') and intervalos.get('intervalo_2') not in ['N/D', '-', ''] %}
+                        <tr><td colspan="6" class="bg-secondary text-white py-1 text-center small fw-bold text-uppercase">INTERVALO TARDE: {{ intervalos.get('intervalo_2') }}</td></tr>
+                    {% endif %}
                     
                     {% endif %}
                 {% endfor %}
@@ -250,7 +254,6 @@
 {% endblock %}
 
 {% block modals %}
-{# MODAL DATA FORMATURA (NOVO) #}
 {% if turma_atual %}
 <div class="modal fade" id="modalDataFormatura" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
@@ -405,7 +408,6 @@
 </div>
 {% endif %}
 
-{# --- NOVO MODAL: DASHBOARD INSTRUTOR --- #}
 <div class="modal fade" id="dashboardInstrutorModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-scrollable" style="max-width: 95vw; margin-left: auto; margin-right: auto;">
         <div class="modal-content">
@@ -427,7 +429,6 @@
         </div>
     </div>
 </div>
-{# -------------------------------------- #}
 
 <script>
     function abrirDashboardInstrutor() {
@@ -446,7 +447,6 @@
         fetch("{{ url_for('horario.dashboard_instrutor') }}")
             .then(async response => {
                 if (!response.ok) {
-                    // Pega o erro real do servidor para exibir
                     const text = await response.text();
                     throw new Error(`Erro ${response.status}: ${text.substring(0, 200)}...`); 
                 }
@@ -456,7 +456,6 @@
                 contentDiv.innerHTML = html;
             })
             .catch(err => {
-                // Exibe o erro de forma legível dentro do modal
                 contentDiv.innerHTML = `
                     <div class="alert alert-danger text-center">
                         <h4 class="alert-heading"><i class="fas fa-exclamation-triangle"></i> Ops! Algo deu errado.</h4>
@@ -582,7 +581,6 @@
     .turma-selection-buttons { display: flex; flex-wrap: wrap; gap: 1rem; justify-content: center; padding: 1rem 0; }
     .btn-turma { flex-grow: 1; padding: 1rem; font-size: 1.1rem; }
 
-    /* ESTILO DE DESTAQUE PARA AULA DO USUÁRIO */
     .aula-destaque-usuario {
         background-color: #d1fae5 !important;
         border: 4px solid #059669 !important;

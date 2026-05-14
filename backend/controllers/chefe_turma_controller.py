@@ -247,7 +247,6 @@ def painel():
                     key = f"{disc_id}_{p}"
                     legacy_key = f"{disc_id}_legacy"
                     
-                    # === CORREÇÃO DA TRAVA FANTASMA ===
                     if key in aulas_concluidas_keys or legacy_key in aulas_concluidas_keys:
                         grupos_dict[disc_id]['tempos_concluidos'] += 1
 
@@ -305,15 +304,21 @@ def registrar_aula(primeiro_horario_id):
                 )
             ).order_by(Horario.periodo).all()
 
+        ultimo_periodo_real_do_bloco = 1
+        for h in horarios_db:
+            dur_real = h.duracao if h.duracao and h.duracao > 0 else 1
+            final_h = h.periodo + dur_real - 1
+            if final_h > ultimo_periodo_real_do_bloco:
+                ultimo_periodo_real_do_bloco = final_h
+
         horarios_expandidos = []
-        periodos_processados = set() # TRAVA CONTRA HORÁRIOS DUPLICADOS NA ORIGEM
+        periodos_processados = set() 
 
         for h in horarios_db:
             duracao = h.duracao if h.duracao and h.duracao > 0 else 1
             for i in range(duracao):
                 p = h.periodo + i
                 
-                # Se o período já foi processado neste bloco, ignora para não gerar duplicidade na tela
                 if p in periodos_processados:
                     continue
                     
@@ -322,12 +327,12 @@ def registrar_aula(primeiro_horario_id):
                     turma_id=aluno_chefe.turma_id,
                     disciplina_id=h.disciplina_id,
                     periodo=p,
-                    is_deleted=False # DEIXA REGISTRAR SE ESTIVER NA LIXEIRA
+                    is_deleted=False 
                 ).first()
                 
                 if not existe:
                     horarios_expandidos.append({'periodo': p, 'horario_pai_id': h.id, 'obj': h})
-                    periodos_processados.add(p) # Marca o período como já adicionado
+                    periodos_processados.add(p) 
         
         horarios_expandidos.sort(key=lambda x: x['periodo'])
         
@@ -338,24 +343,20 @@ def registrar_aula(primeiro_horario_id):
         alunos_turma = db.session.query(Aluno).filter_by(turma_id=aluno_chefe.turma_id).order_by(Aluno.num_aluno).all()
 
         if request.method == 'POST':
-            # --- NOVAS TRAVAS DE SEGURANÇA E REGRA DE NEGÓCIO ---
             conteudo_informado = request.form.get('conteudo')
             
-            # 1. Validação de Conteúdo (Garante que preencheu qualquer coisa)
             ok_cont, msg_cont = DiarioService.validar_conteudo_obrigatorio(conteudo_informado)
             if not ok_cont:
                 flash(msg_cont, "danger")
                 return redirect(request.url)
 
-            # 2. Validação de Horário (Garante que a aula acabou em Brasília)
+            # Validação de Horário (Garante que a aula acabou em Brasília, usando o último período real)
             periodos_para_registrar = [h['periodo'] for h in horarios_expandidos]
             if periodos_para_registrar:
-                ultimo_periodo_do_bloco = max(periodos_para_registrar)
-                ok_hora, msg_hora = DiarioService.validar_criacao_diario_aluno(data_aula, ultimo_periodo_do_bloco)
+                ok_hora, msg_hora = DiarioService.validar_criacao_diario_aluno(data_aula, ultimo_periodo_real_do_bloco)
                 if not ok_hora:
                     flash(msg_hora, "danger")
                     return redirect(request.url)
-            # -----------------------------------------------------
 
             try:
                 ids_horarios_pais_atualizados = set()
@@ -364,11 +365,6 @@ def registrar_aula(primeiro_horario_id):
                     periodo_atual = h_virt['periodo']
                     horario_pai = h_virt['obj']
 
-                    # ========================================================
-                    # TRAVA ANTI-DUPLICAÇÃO (CONDIÇÃO DE CORRIDA / CLICK DUPLO)
-                    # Verifica no exato milissegundo antes de gravar se outra 
-                    # requisição não acabou de gravar esta mesma aula.
-                    # ========================================================
                     ja_salvo_agora = db.session.query(DiarioClasse).filter_by(
                         data_aula=data_aula,
                         turma_id=aluno_chefe.turma_id,
@@ -378,8 +374,7 @@ def registrar_aula(primeiro_horario_id):
                     ).first()
 
                     if ja_salvo_agora:
-                        continue # Ignora e não grava, pois já acabou de ser salvo
-                    # ========================================================
+                        continue 
 
                     novo_diario = DiarioClasse(
                         data_aula=data_aula,
@@ -387,7 +382,7 @@ def registrar_aula(primeiro_horario_id):
                         disciplina_id=horario_pai.disciplina_id,
                         responsavel_id=current_user.id,
                         observacoes=request.form.get('observacoes'),
-                        conteudo_ministrado=conteudo_informado, # Usa a variável já capturada e validada
+                        conteudo_ministrado=conteudo_informado, 
                         periodo=periodo_atual
                     )
                     db.session.add(novo_diario)
