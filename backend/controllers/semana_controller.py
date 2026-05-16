@@ -1,7 +1,8 @@
+# backend/controllers/semana_controller.py
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError # <--- Adicionado
+from sqlalchemy.exc import IntegrityError
 from datetime import datetime
 from flask_wtf import FlaskForm
 from wtforms import StringField, DateField, SubmitField, SelectField, BooleanField, IntegerField
@@ -57,14 +58,11 @@ def gerenciar_semanas(ciclo_id):
     
     form.ciclo_id.choices = [(c.id, c.nome) for c in ciclos]
 
-    # --- LÓGICA DE SELEÇÃO AUTOMÁTICA ---
-    # Se um ID foi passado, verifica se ele é válido para esta escola
+    # Lógica de seleção automática de ciclo
     if ciclo_id:
         if not any(c.id == ciclo_id for c in ciclos):
-            ciclo_id = None # Ciclo inválido ou de outra escola
+            ciclo_id = None 
 
-    # Se não temos um ciclo selecionado (ou era inválido), mas existem ciclos:
-    # Seleciona automaticamente o ÚLTIMO ciclo criado (maior ID)
     if not ciclo_id and ciclos:
         ultimo_ciclo = max(ciclos, key=lambda c: c.id)
         ciclo_id = ultimo_ciclo.id
@@ -72,12 +70,10 @@ def gerenciar_semanas(ciclo_id):
     # Query Base: Semanas
     query = select(Semana).join(Ciclo).where(Ciclo.school_id == school_id).order_by(Semana.data_inicio.desc())
     
-    # Aplica o filtro do ciclo selecionado
     if ciclo_id:
         query = query.where(Semana.ciclo_id == ciclo_id)
-        form.ciclo_id.data = ciclo_id # Preenche o form de adição com o ciclo atual
+        form.ciclo_id.data = ciclo_id 
     else:
-        # Se não houver ciclos na escola, garante que não traga semanas soltas (segurança)
         query = query.where(Semana.id == -1) 
     
     semanas = db.session.execute(query).scalars().all()
@@ -102,7 +98,6 @@ def adicionar_semana():
     form.ciclo_id.choices = [(c.id, c.nome) for c in ciclos]
 
     if form.validate_on_submit():
-        # Service valida se o ciclo pertence à escola
         success, message = SemanaService.add_semana(form.data)
         if success:
             flash(message, 'success')
@@ -121,10 +116,9 @@ def adicionar_semana():
 @login_required
 @school_admin_or_programmer_required
 def editar_semana(semana_id):
-    semana = db.session.get(Semana, semana_id)
+    semana = db.session.get(Semana, semantic_id)
     school_id = UserService.get_current_school_id()
     
-    # Validação de segurança via Ciclo
     if not semana or (school_id and semana.ciclo.school_id != school_id):
         flash("Semana não encontrada ou não pertence à sua escola.", "danger")
         return redirect(url_for('semana.gerenciar_semanas'))
@@ -179,18 +173,15 @@ def adicionar_ciclo():
     school_id = UserService.get_current_school_id()
     
     if nome_ciclo and school_id:
-        # Verifica se já existe ciclo com esse nome NA MESMA ESCOLA
         exists = db.session.scalar(
             select(Ciclo).where(Ciclo.nome == nome_ciclo, Ciclo.school_id == school_id)
         )
         if not exists:
-            # Tenta criar, tratando erro de integridade (duplicate entry)
             try:
                 novo_ciclo = Ciclo(nome=nome_ciclo, school_id=school_id)
                 db.session.add(novo_ciclo)
                 db.session.commit()
                 flash(f"Ciclo '{nome_ciclo}' criado com sucesso!", "success")
-                # Redireciona para o novo ciclo criado
                 return redirect(url_for('semana.gerenciar_semanas', ciclo_id=novo_ciclo.id))
             except IntegrityError:
                 db.session.rollback()
@@ -205,12 +196,9 @@ def adicionar_ciclo():
 @login_required
 @admin_or_programmer_required
 def deletar_ciclo(ciclo_id):
-    # CORREÇÃO: Chama o Service que faz a limpeza em cascata
     success, message = SemanaService.deletar_ciclo(ciclo_id)
-    
     category = 'success' if success else 'danger'
     flash(message, category)
-    
     return redirect(url_for('semana.gerenciar_semanas'))
 
 @semana_bp.route('/<int:semana_id>/salvar-prioridade', methods=['POST'])
@@ -225,13 +213,22 @@ def salvar_prioridade(semana_id):
             return jsonify({'success': False, 'message': 'Semana não encontrada'}), 404
 
         data = request.get_json()
+        
+        # Status do sistema prioritário
         semana.priority_active = data.get('status', False)
         
+        # Lista de disciplinas com prioridade geral
         disciplinas = data.get('disciplinas', [])
         semana.priority_disciplines = json.dumps(disciplinas)
 
-        # FORÇA A LIMPEZA DOS BLOQUEIOS DE PERÍODO (Funcionalidade Removida)
-        semana.priority_blocks = json.dumps({}) 
+        # BLOQUEIOS DE PRIORIDADE (Granular por Turma/Dia/Período)
+        priority_blocks = data.get('priority_blocks', {})
+        semana.priority_blocks = json.dumps(priority_blocks)
+
+        # BLOQUEIOS TOTAIS (Administrador tranca o período para todos)
+        # Recebe a estrutura JSON do frontend e salva no novo campo do Model
+        blocked_blocks = data.get('blocked_blocks', {})
+        semana.blocked_blocks = json.dumps(blocked_blocks)
 
         db.session.commit()
         return jsonify({'success': True})

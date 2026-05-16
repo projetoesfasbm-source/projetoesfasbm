@@ -8,45 +8,65 @@
         {% endif %}
     {% endif %}
 
-    <td class="schedule-slot" rowspan="{{ aula.duracao if not aula.is_disposicao else 1 }}" style="vertical-align: middle; position: relative;">
+    <td class="schedule-slot {% if aula.blocked %}blocked-slot{% endif %}" rowspan="{{ aula.duracao if not aula.is_disposicao else 1 }}" style="vertical-align: middle; position: relative;">
         <div class="slot-content 
-                    {% if aula.is_disposicao %}disposicao{% endif %} 
+                    {% if aula.is_disposicao and not aula.blocked %}disposicao{% endif %} 
                     {% if aula.status == 'pendente' %}pendente{% endif %}
                     {# APLICA DESTAQUE SE: For minha aula E NÃO for pendente (ou seja, Agendada e Autorizada) #}
                     {% if is_my_class and aula.status != 'pendente' %}aula-destaque-usuario{% endif %}" 
-             style="height: 100%; min-height: 80px; display: flex; flex-direction: column; justify-content: center; padding: 4px;">
+             style="height: 100%; min-height: 80px; display: flex; flex-direction: column; justify-content: center; padding: 4px; {% if aula.blocked and not aula.id %}align-items: center;{% endif %}">
             
-            <div style="font-size: 0.75em; opacity: 0.8;">{{ aula.data_exibicao }}</div>
-
-            <div class="disciplina-title" style="font-weight: bold; line-height: 1.2; margin-bottom: 2px;">
-                {{ aula.materia }}
-                {% if is_my_class and aula.status != 'pendente' %}
-                    <i class="fas fa-check-circle text-success ms-1" title="Sua aula confirmada"></i>
+            {# ======================================================== #}
+            {# SE O PERÍODO ESTÁ BLOQUEADO E NÃO TEM AULA MARCADA (VAZIO) #}
+            {# ======================================================== #}
+            {% if aula.blocked and not aula.id %}
+                <i class="fas fa-lock text-danger mb-1 fs-5"></i>
+                <div class="text-danger fw-bold small text-center" style="line-height: 1.1;">Período<br>Bloqueado</div>
+            
+            {# ======================================================== #}
+            {# RENDERIZAÇÃO NORMAL (COM AULA OU À DISPOSIÇÃO LIVRE)       #}
+            {# ======================================================== #}
+            {% else %}
+                
+                {# Se tem aula marcada, mas o admin bloqueou o período depois, mostra o cadeado no canto #}
+                {% if aula.blocked %}
+                    <i class="fas fa-lock position-absolute top-0 end-0 m-1 text-danger" title="Período Bloqueado pelo Administrador" style="opacity: 0.8; font-size: 0.85rem;"></i>
                 {% endif %}
-            </div>
 
-            {% if aula.instrutor %}
-            <div class="instrutor-name" style="font-size: 0.85em; color: #555;">
-                {{ aula.instrutor }}
-            </div>
-            {% endif %}
+                {% if aula.data_exibicao %}
+                    <div style="font-size: 0.75em; opacity: 0.8;">{{ aula.data_exibicao }}</div>
+                {% endif %}
 
-            {% if aula.observacao %}
-            <div class="slot-observacao" 
-                 style="margin-top: 4px; 
-                        padding-top: 4px; 
-                        border-top: 1px dotted #ccc; 
-                        font-size: 0.8em; 
-                        color: #dc3545; 
-                        white-space: normal !important; 
-                        word-wrap: break-word !important; 
-                        overflow-wrap: anywhere !important; 
-                        word-break: break-word; 
-                        line-height: 1.1; 
-                        display: block; 
-                        max-width: 100%;">
-                <i class="fas fa-info-circle"></i> {{ aula.observacao }}
-            </div>
+                <div class="disciplina-title" style="font-weight: bold; line-height: 1.2; margin-bottom: 2px;">
+                    {{ aula.materia }}
+                    {% if is_my_class and aula.status != 'pendente' %}
+                        <i class="fas fa-check-circle text-success ms-1" title="Sua aula confirmada"></i>
+                    {% endif %}
+                </div>
+
+                {% if aula.instrutor %}
+                <div class="instrutor-name" style="font-size: 0.85em; color: #555;">
+                    {{ aula.instrutor }}
+                </div>
+                {% endif %}
+
+                {% if aula.observacao %}
+                <div class="slot-observacao" 
+                     style="margin-top: 4px; 
+                            padding-top: 4px; 
+                            border-top: 1px dotted #ccc; 
+                            font-size: 0.8em; 
+                            color: #dc3545; 
+                            white-space: normal !important; 
+                            word-wrap: break-word !important; 
+                            overflow-wrap: anywhere !important; 
+                            word-break: break-word; 
+                            line-height: 1.1; 
+                            display: block; 
+                            max-width: 100%;">
+                    <i class="fas fa-info-circle"></i> {{ aula.observacao }}
+                </div>
+                {% endif %}
             {% endif %}
         </div>
     </td>

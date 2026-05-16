@@ -33,7 +33,7 @@ from utils.decorators import super_admin_required, admin_required
 user_bp = Blueprint("user", __name__, url_prefix="/user")
 
 posto_graduacao_structured = {
-    'Praças': ['Soldado PM', '2º Sargento PM', '1º Sargento PM', 'Aluno Oficial'],
+    'Praças': ['Soldado PM', '3º Sargento PM EXT', '2º Sargento PM', '1º Sargento PM', 'Aluno Oficial'],
     'Oficiais': ['1º Tenente PM', 'Capitão PM', 'Major PM', 'Tenente-Coronel PM', 'Coronel PM'],
     'Saúde - Enfermagem': ['Ten Enf', 'Cap Enf', 'Maj Enf', 'Ten Cel Enf', 'Cel Enf'],
     'Saúde - Médicos': ['Ten Med', 'Cap Med', 'Maj Med', 'Ten Cel Med', 'Cel Med'],
@@ -113,7 +113,7 @@ def meu_perfil():
             form.turma_id.choices = [(t.id, t.nome) for t in turmas]
             if request.method == 'GET':
                  form.turma_id.data = current_user.aluno_profile.turma_id
-                 
+
     elif hasattr(current_user, 'instrutor_profile') and current_user.instrutor_profile:
         if request.method == 'GET':
             form.is_rr.data = current_user.instrutor_profile.is_rr

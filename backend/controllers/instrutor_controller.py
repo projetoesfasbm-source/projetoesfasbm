@@ -20,7 +20,7 @@ from utils.decorators import (
 instrutor_bp = Blueprint("instrutor", __name__, url_prefix="/instrutor")
 
 posto_graduacao_structured = {
-    'Praças': ['Soldado PM', '2º Sargento PM', '1º Sargento PM', 'Aluno Oficial'],
+    'Praças': ['Soldado PM', '3º Sargento PM EXT', '2º Sargento PM', '1º Sargento PM', 'Aluno Oficial'],
     'Oficiais': ['1º Tenente PM', 'Capitão PM', 'Major PM', 'Tenente-Coronel PM', 'Coronel PM'],
     'Saúde - Enfermagem': ['Ten Enf', 'Cap Enf', 'Maj Enf', 'Ten Cel Enf', 'Cel Enf'],
     'Saúde - Médicos': ['Ten Med', 'Cap Med', 'Maj Med', 'Ten Cel Med', 'Cel Med'],

@@ -245,13 +245,13 @@ def excluir_aluno(aluno_id):
             if aluno:
                 # Armazena o ID do usuário antes de remover o perfil do aluno
                 current_user_id = aluno.user_id
-                
+
                 # Remove Aluno Profile
                 db.session.delete(aluno)
-                
+
                 # Remove Vínculo UserSchool usando o ID armazenado
                 db.session.query(UserSchool).filter_by(user_id=current_user_id, school_id=school_id).delete()
-                
+
                 db.session.commit()
                 flash('Aluno removido da escola.', 'success')
             else:

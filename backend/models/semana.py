@@ -38,11 +38,16 @@ class Semana(db.Model):
     priority_active: Mapped[bool] = mapped_column(default=False, server_default='0')
     priority_disciplines: Mapped[str | None] = mapped_column(db.Text, nullable=True)
 
-    # >>> NOVO CAMPO PARA BLOQUEIO GRANULAR <<<
-    # Armazena JSON com bloqueios por:
+    # Armazena JSON com bloqueios de prioridade por:
     # { "T1": { "segunda": ["P1","P2"], "quarta": ["P3"] }, ... }
     priority_blocks: Mapped[str | None] = mapped_column(db.Text, nullable=True)
-    # <<< FIM DO NOVO CAMPO >>>
+
+    # =========================
+    # Configurações de Bloqueio (NOVO)
+    # =========================
+    # Armazena JSON com bloqueios totais (ninguém pode marcar) por:
+    # { "T1": { "segunda": ["P1","P2"], "quarta": ["P3"] }, ... }
+    blocked_blocks: Mapped[str | None] = mapped_column(db.Text, nullable=True)
 
     def __init__(
         self,

@@ -82,6 +82,7 @@
                         <option value="" disabled selected>-- Selecione --</option>
                         <optgroup label="Praças">
                             <option value="Soldado PM">Soldado PM</option>
+                            <option value="3º Sargento PM EXT">3º Sargento PM EXT</option>
                             <option value="2º Sargento PM">2º Sargento PM</option>
                             <option value="1º Sargento PM">1º Sargento PM</option>
                             <option value="Aluno Oficial">Aluno Oficial</option>
@@ -193,7 +194,7 @@
 
                     toggleAlunoFields();
                     roleSelect.addEventListener('change', toggleAlunoFields);
-                    
+
                     // Escuta quando o usuário digita ou sai do campo de matrícula
                     matriculaInput.addEventListener('blur', carregarTurmas);
                     matriculaInput.addEventListener('keyup', function() {

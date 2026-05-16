@@ -34,7 +34,7 @@
                 <span class="badge bg-white text-dark border border-dark"><strong style="font-size: 1.2em; vertical-align: middle;">+</strong> Disponível</span>
                 <span class="badge bg-success border border-dark">Confirmado (Seu/Admin)</span>
                 <span class="badge bg-warning text-dark border border-dark">Pendente (Aguardando)</span>
-                <span class="badge bg-danger border border-dark">Bloqueado (Outro Instrutor)</span>
+                <span class="badge bg-danger border border-dark">Bloqueado (Outro Instrutor / Admin)</span>
             </div>
         </div>
     </div>
@@ -115,7 +115,16 @@
                             {% set dia_chave = chaves_dias[col_idx] %}
                             {% set data_formatada = datas_semana[dia_chave] %}
                             
-                            {% if aula.is_disposicao %}
+                            {# LÓGICA DE DEFINIÇÃO DE ESTADO DA CÉLULA (INCLUINDO BLOQUEIO ADMIN) #}
+                            {% if aula.blocked and not aula.id %}
+                                {% if is_admin %}
+                                    {% set cell_class = 'cell-bloqueada-admin-forcar' %}
+                                    {% set cell_type = 'add' %}
+                                {% else %}
+                                    {% set cell_class = 'cell-bloqueada-admin' %}
+                                    {% set cell_type = 'locked-admin' %}
+                                {% endif %}
+                            {% elif aula.is_disposicao %}
                                 {% set cell_class = 'cell-disponivel' %}
                                 {% set cell_type = 'add' %}
                             {% else %}
@@ -134,7 +143,7 @@
 
                             <td rowspan="{{ rowspan_val }}" 
                                 class="{{ cell_class }} slot-interativo" 
-                                style="cursor: pointer; height: 50px; border: 1px solid #000 !important;"
+                                style="cursor: pointer; height: 50px; border: 1px solid #000 !important; position: relative;"
                                 data-type="{{ cell_type }}"
                                 data-dia-nome="{{ dia_chave }}"
                                 data-data-formatada="{{ data_formatada }}"
@@ -142,7 +151,20 @@
                                 data-aula-id="{{ aula.id or '' }}"
                                 >
                                 <div class="cell-content">
-                                    {% if cell_type == 'add' %}
+                                    {% if aula.blocked %}
+                                        <i class="fas fa-lock position-absolute top-0 end-0 m-1 text-danger" title="Bloqueado pelo Administrador" style="opacity: 0.8; font-size: 0.85rem; z-index: 10;"></i>
+                                    {% endif %}
+
+                                    {% if cell_type == 'locked-admin' %}
+                                        <div class="text-danger fw-bold small text-center" style="line-height: 1.1;">
+                                            <i class="fas fa-lock fs-6 mb-1"></i><br>Bloqueado
+                                        </div>
+                                    {% elif cell_class == 'cell-bloqueada-admin-forcar' %}
+                                        <div class="text-danger fw-bold small text-center" style="line-height: 1.1;">
+                                            <i class="fas fa-lock fs-6 mb-1"></i><br>Bloqueado
+                                        </div>
+                                        <button type="button" class="btn btn-sm btn-outline-danger mt-1 py-0 px-2 fw-bold bg-white" style="font-size: 0.7rem; border-width: 2px; pointer-events: none;">+ Forçar</button>
+                                    {% elif cell_type == 'add' %}
                                         <span style="font-size: 28px; font-weight: 900; color: #000000; line-height: 1; display: block;">+</span>
                                     {% elif cell_type == 'edit' or cell_type == 'locked' %}
                                         <div style="font-weight: bold;">{{ aula.materia }}</div>
@@ -288,6 +310,12 @@
     .cell-confirmada { background-color: #d1e7dd !important; color: #0f5132 !important; }
     .cell-pendente { background-color: #fff3cd !important; color: #664d03 !important; }
     .cell-bloqueada { background-color: #f8d7da !important; color: #842029 !important; opacity: 0.9; cursor: not-allowed; }
+    
+    /* NOVO: Estilos para o Bloqueio Administrativo */
+    .cell-bloqueada-admin { background-color: #fee2e2 !important; cursor: not-allowed !important; opacity: 0.95; }
+    .cell-bloqueada-admin-forcar { background-color: #fee2e2 !important; transition: background-color 0.2s; }
+    .cell-bloqueada-admin-forcar:hover { background-color: #fca5a5 !important; }
+
     .cell-content { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100%; width: 100%; min-height: 40px; font-weight: 500; }
     .intervalo-row td { border-top: 2px solid #000 !important; border-bottom: 2px solid #000 !important; background-color: #6c757d !important; color: #fff !important; }
 </style>
@@ -307,7 +335,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const instrutorSelect = document.getElementById('instrutor_id');
     const disciplinaSelect = document.getElementById('disciplina_id');
     
-    // Lista de todas as checkboxes
     const allCheckboxes = document.querySelectorAll('.periodo-checkbox');
     
     const isAdmin = {{ 'true' if is_admin else 'false' }};
@@ -320,7 +347,6 @@ document.addEventListener('DOMContentLoaded', function() {
         return string.charAt(0).toUpperCase() + string.slice(1);
     }
 
-    // Marca as checkboxes (Limpa tudo antes)
     function setCheckboxes(periodoInicial, duracao) {
         allCheckboxes.forEach(cb => cb.checked = false);
         
@@ -334,7 +360,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Algoritmo para separar as checkboxes marcadas em BLOCOS CONTÍNUOS
     function getSelectedBlocks() {
         let selecionados = [];
         allCheckboxes.forEach(cb => {
@@ -353,16 +378,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
         for (let i = 1; i < selecionados.length; i++) {
             if (selecionados[i] === selecionados[i-1] + 1) {
-                // É contínuo (ex: 1 e 2)
                 currentLength++;
             } else {
-                // Buraco detectado (ex: 1 e 3) - Finaliza o bloco anterior
                 blocks.push({ periodo: currentStart, duracao: currentLength });
                 currentStart = selecionados[i];
                 currentLength = 1;
             }
         }
-        // Adiciona o último bloco
         blocks.push({ periodo: currentStart, duracao: currentLength });
         
         return blocks;
@@ -419,6 +441,12 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
+        // NOVO: Intercepta o clique se a célula foi trancada pelo administrador
+        if (type === 'locked-admin') {
+            alert('⚠️ Este período foi bloqueado pelo administrador da escola e não pode receber agendamentos.');
+            return;
+        }
+
         formAula.reset();
         
         document.getElementById('pelotao').value = pelotaoAtual;
@@ -432,7 +460,6 @@ document.addEventListener('DOMContentLoaded', function() {
             btnRemover.style.display = 'none';
             document.getElementById('horario_id').value = '';
             
-            // Marca APENAS o período clicado
             setCheckboxes(periodo, 1);
             
             if(isAdmin) instrutorSelect.innerHTML = '<option value="">Selecione a Disciplina primeiro...</option>';
@@ -448,12 +475,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
                         document.getElementById('horario_id').value = aulaId;
                         
-                        // --- CORREÇÃO: Marca apenas os períodos exatos retornados ---
-                        
-                        // 1. Limpa todas as checkboxes primeiro
                         allCheckboxes.forEach(cb => cb.checked = false);
 
-                        // 2. Se o backend mandou a lista exata (nova lógica)
                         if (data.periodos && Array.isArray(data.periodos)) {
                             data.periodos.forEach(p => {
                                 const cb = document.getElementById(`periodo_check_${p}`);
@@ -462,10 +485,8 @@ document.addEventListener('DOMContentLoaded', function() {
                                 }
                             });
                         } else {
-                            // Fallback para lógica antiga (caso o cache do navegador segure o JS velho)
                             setCheckboxes(data.periodo, data.duracao);
                         }
-                        // -----------------------------------------------------------
 
                         document.getElementById('disciplina_id').value = data.disciplina_id;
                         document.getElementById('observacao').value = data.observacao || '';
@@ -493,7 +514,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         const formData = new FormData(formAula);
-        // Cria um objeto base com os dados do formulário
         const baseData = Object.fromEntries(formData.entries());
         baseData.semana_id = parseInt(baseData.semana_id);
         
@@ -502,21 +522,14 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        // Prepara uma lista de promessas (requisições)
         const promises = blocks.map((block, index) => {
-            const data = { ...baseData }; // Copia os dados
+            const data = { ...baseData }; 
             data.periodo = block.periodo;
             data.duracao = block.duracao;
             
-            // Lógica IMPORTANTE para Edição:
-            // Se estamos editando (temos um ID original), o PRIMEIRO bloco usa esse ID para substituir a aula antiga.
-            // Os DEMAIS blocos (se o usuário dividiu a aula) são criados como novos (ID nulo).
-            // Se estamos criando do zero, todos os blocos têm ID nulo.
-            
             if (index > 0) {
-                data.horario_id = null; // Força criação de nova aula para os blocos extras
+                data.horario_id = null; 
             }
-            // (Para o index 0, ele mantém o horario_id que estava no form, seja ele preenchido ou vazio)
 
             return fetch('/horario/salvar-aula', {
                 method: 'POST',
@@ -525,13 +538,11 @@ document.addEventListener('DOMContentLoaded', function() {
             }).then(r => r.json());
         });
 
-        // Envia todas as requisições
         Promise.all(promises)
             .then(results => {
-                // Verifica se alguma falhou
                 const errors = results.filter(r => !r.success);
                 if (errors.length > 0) {
-                    alert('Alguns blocos não puderam ser salvos: ' + errors[0].message);
+                    alert('Erro ao salvar: ' + errors[0].message);
                 } else {
                     location.reload();
                 }

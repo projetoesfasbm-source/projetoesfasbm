@@ -67,7 +67,7 @@
                     <button type="button" class="btn {% if priority_active %}btn-danger text-white{% else %}btn-warning{% endif %} fw-bold shadow-sm" 
                             data-bs-toggle="modal" data-bs-target="#priorityModal">
                         <i class="fas fa-star me-1"></i> 
-                        {% if priority_active %}Prioridade ATIVA{% else %}Configurar Prioridade{% endif %}
+                        {% if priority_active %}Prioridade ATIVA{% else %}Configurar Restrições{% endif %}
                     </button>
 
                     <a href="{{ url_for('horario.exportar_pdf', pelotao=pelotao_selecionado, semana_id=semana_selecionada.id) }}" class="btn btn-danger" target="_blank">
@@ -147,6 +147,10 @@
         {% endif %}
     </div>
 {% else %}
+    {% set pos_int_1 = (intervalos.get('pos_int_1', 3)|int) - 1 %}
+    {% set pos_almoco = (intervalos.get('pos_almoco', 6)|int) - 1 %}
+    {% set pos_int_2 = (intervalos.get('pos_int_2', 9)|int) - 1 %}
+
     <div class="table-wrapper">
         <table class="horario-table-new">
             <thead>
@@ -172,7 +176,42 @@
                         {% for col_idx in range(5) %}
                             {% set aula = horario_matrix[row_idx][col_idx] %}
                             
-                            {% if aula %}
+                            {% if aula == 'SKIP' %}
+                                {% set last_row = row_idx - 1 %}
+                                {% set is_after_interval = (last_row == pos_int_1 or last_row == pos_almoco or last_row == pos_int_2) %}
+                                {% if is_after_interval %}
+                                    {% set ns = namespace(found=false) %}
+                                    {% for r in range(row_idx - 1, -1, -1) %}
+                                        {% if not ns.found and horario_matrix[r][col_idx] != 'SKIP' and horario_matrix[r][col_idx] %}
+                                            {% set parent_aula = horario_matrix[r][col_idx] %}
+                                            {% set p_dur = parent_aula.original_duracao|default(parent_aula.duracao) %}
+                                            {% if r + p_dur > row_idx %}
+                                                {% set remaining = r + p_dur - row_idx %}
+                                                {% set max_dur = remaining %}
+                                                {% if row_idx <= pos_almoco and row_idx + remaining - 1 > pos_almoco %}
+                                                    {% set max_dur = pos_almoco - row_idx + 1 %}
+                                                {% elif row_idx <= pos_int_2 and row_idx + remaining - 1 > pos_int_2 %}
+                                                    {% set max_dur = pos_int_2 - row_idx + 1 %}
+                                                {% endif %}
+                                                {% set _ = parent_aula.update({'duracao': max_dur, 'original_duracao': p_dur}) %}
+                                                {% set aula = parent_aula %}
+                                                {% include 'partials/_horario_slot_view.html' %}
+                                                {% set ns.found = true %}
+                                            {% endif %}
+                                        {% endif %}
+                                    {% endfor %}
+                                {% endif %}
+                            {% elif aula %}
+                                {% set p_dur = aula.original_duracao|default(aula.duracao) %}
+                                {% set max_dur = p_dur %}
+                                {% if row_idx <= pos_int_1 and row_idx + p_dur - 1 > pos_int_1 %}
+                                    {% set max_dur = pos_int_1 - row_idx + 1 %}
+                                {% elif row_idx <= pos_almoco and row_idx + p_dur - 1 > pos_almoco %}
+                                    {% set max_dur = pos_almoco - row_idx + 1 %}
+                                {% elif row_idx <= pos_int_2 and row_idx + p_dur - 1 > pos_int_2 %}
+                                    {% set max_dur = pos_int_2 - row_idx + 1 %}
+                                {% endif %}
+                                {% set _ = aula.update({'duracao': max_dur, 'original_duracao': p_dur}) %}
                                 {% include 'partials/_horario_slot_view.html' %}
                             {% else %}
                                 <td class="schedule-slot free {% if priority_active and not can_schedule_in_this_turma %}blocked-slot{% endif %}"></td>
@@ -180,11 +219,6 @@
                             
                         {% endfor %}
                     </tr>
-                    
-                    {# USO DO .get() PARA BLINDAR A TELA CONTRA FALHAS DO BACKEND (E -1 PARA AJUSTE DO ARRAY) #}
-                    {% set pos_int_1 = (intervalos.get('pos_int_1', 3)|int) - 1 %}
-                    {% set pos_almoco = (intervalos.get('pos_almoco', 6)|int) - 1 %}
-                    {% set pos_int_2 = (intervalos.get('pos_int_2', 9)|int) - 1 %}
                     
                     {% if row_idx == pos_int_1 and intervalos.get('intervalo_1') and intervalos.get('intervalo_1') not in ['N/D', '-', ''] %}
                         <tr><td colspan="6" class="bg-secondary text-white py-1 text-center small fw-bold text-uppercase">INTERVALO MANHÃ: {{ intervalos.get('intervalo_1') }}</td></tr>
@@ -225,8 +259,45 @@
                             <td class="cell-tempo"><strong>{{ tempos[row_idx][0] }}</strong><span>{{ tempos[row_idx][1] }}</span></td>
                             
                             {% if semana_selecionada.mostrar_sabado %}
-                                {% set aula = horario_matrix[row_idx][5] %}
-                                {% if aula %}
+                                {% set col_idx = 5 %}
+                                {% set aula = horario_matrix[row_idx][col_idx] %}
+                                
+                                {% if aula == 'SKIP' %}
+                                    {% set last_row = row_idx - 1 %}
+                                    {% set is_after_interval = (last_row == pos_int_1 or last_row == pos_almoco or last_row == pos_int_2) %}
+                                    {% if is_after_interval %}
+                                        {% set ns = namespace(found=false) %}
+                                        {% for r in range(row_idx - 1, -1, -1) %}
+                                            {% if not ns.found and horario_matrix[r][col_idx] != 'SKIP' and horario_matrix[r][col_idx] %}
+                                                {% set parent_aula = horario_matrix[r][col_idx] %}
+                                                {% set p_dur = parent_aula.original_duracao|default(parent_aula.duracao) %}
+                                                {% if r + p_dur > row_idx %}
+                                                    {% set remaining = r + p_dur - row_idx %}
+                                                    {% set max_dur = remaining %}
+                                                    {% if row_idx <= pos_almoco and row_idx + remaining - 1 > pos_almoco %}
+                                                        {% set max_dur = pos_almoco - row_idx + 1 %}
+                                                    {% elif row_idx <= pos_int_2 and row_idx + remaining - 1 > pos_int_2 %}
+                                                        {% set max_dur = pos_int_2 - row_idx + 1 %}
+                                                    {% endif %}
+                                                    {% set _ = parent_aula.update({'duracao': max_dur, 'original_duracao': p_dur}) %}
+                                                    {% set aula = parent_aula %}
+                                                    {% include 'partials/_horario_slot_view.html' %}
+                                                    {% set ns.found = true %}
+                                                {% endif %}
+                                            {% endif %}
+                                        {% endfor %}
+                                    {% endif %}
+                                {% elif aula %}
+                                    {% set p_dur = aula.original_duracao|default(aula.duracao) %}
+                                    {% set max_dur = p_dur %}
+                                    {% if row_idx <= pos_int_1 and row_idx + p_dur - 1 > pos_int_1 %}
+                                        {% set max_dur = pos_int_1 - row_idx + 1 %}
+                                    {% elif row_idx <= pos_almoco and row_idx + p_dur - 1 > pos_almoco %}
+                                        {% set max_dur = pos_almoco - row_idx + 1 %}
+                                    {% elif row_idx <= pos_int_2 and row_idx + p_dur - 1 > pos_int_2 %}
+                                        {% set max_dur = pos_int_2 - row_idx + 1 %}
+                                    {% endif %}
+                                    {% set _ = aula.update({'duracao': max_dur, 'original_duracao': p_dur}) %}
                                     {% include 'partials/_horario_slot_view.html' %}
                                 {% else %}
                                     <td class="schedule-slot free weekend-slot {% if priority_active and not can_schedule_in_this_turma %}blocked-slot{% endif %}"></td>
@@ -234,8 +305,45 @@
                             {% endif %}
                             
                             {% if semana_selecionada.mostrar_domingo %}
-                                {% set aula = horario_matrix[row_idx][6] %}
-                                {% if aula %}
+                                {% set col_idx = 6 %}
+                                {% set aula = horario_matrix[row_idx][col_idx] %}
+                                
+                                {% if aula == 'SKIP' %}
+                                    {% set last_row = row_idx - 1 %}
+                                    {% set is_after_interval = (last_row == pos_int_1 or last_row == pos_almoco or last_row == pos_int_2) %}
+                                    {% if is_after_interval %}
+                                        {% set ns = namespace(found=false) %}
+                                        {% for r in range(row_idx - 1, -1, -1) %}
+                                            {% if not ns.found and horario_matrix[r][col_idx] != 'SKIP' and horario_matrix[r][col_idx] %}
+                                                {% set parent_aula = horario_matrix[r][col_idx] %}
+                                                {% set p_dur = parent_aula.original_duracao|default(parent_aula.duracao) %}
+                                                {% if r + p_dur > row_idx %}
+                                                    {% set remaining = r + p_dur - row_idx %}
+                                                    {% set max_dur = remaining %}
+                                                    {% if row_idx <= pos_almoco and row_idx + remaining - 1 > pos_almoco %}
+                                                        {% set max_dur = pos_almoco - row_idx + 1 %}
+                                                    {% elif row_idx <= pos_int_2 and row_idx + remaining - 1 > pos_int_2 %}
+                                                        {% set max_dur = pos_int_2 - row_idx + 1 %}
+                                                    {% endif %}
+                                                    {% set _ = parent_aula.update({'duracao': max_dur, 'original_duracao': p_dur}) %}
+                                                    {% set aula = parent_aula %}
+                                                    {% include 'partials/_horario_slot_view.html' %}
+                                                    {% set ns.found = true %}
+                                                {% endif %}
+                                            {% endif %}
+                                        {% endfor %}
+                                    {% endif %}
+                                {% elif aula %}
+                                    {% set p_dur = aula.original_duracao|default(aula.duracao) %}
+                                    {% set max_dur = p_dur %}
+                                    {% if row_idx <= pos_int_1 and row_idx + p_dur - 1 > pos_int_1 %}
+                                        {% set max_dur = pos_int_1 - row_idx + 1 %}
+                                    {% elif row_idx <= pos_almoco and row_idx + p_dur - 1 > pos_almoco %}
+                                        {% set max_dur = pos_almoco - row_idx + 1 %}
+                                    {% elif row_idx <= pos_int_2 and row_idx + p_dur - 1 > pos_int_2 %}
+                                        {% set max_dur = pos_int_2 - row_idx + 1 %}
+                                    {% endif %}
+                                    {% set _ = aula.update({'duracao': max_dur, 'original_duracao': p_dur}) %}
                                     {% include 'partials/_horario_slot_view.html' %}
                                 {% else %}
                                     <td class="schedule-slot free weekend-slot {% if priority_active and not can_schedule_in_this_turma %}blocked-slot{% endif %}"></td>
@@ -344,15 +452,15 @@
 
 {% if semana_selecionada and current_user.is_sens %}
 <div class="modal fade" id="priorityModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header bg-light">
-                <h5 class="modal-title fw-bold"><i class="fas fa-star text-warning"></i> Configurar Prioridade</h5>
+                <h5 class="modal-title fw-bold"><i class="fas fa-sliders-h text-warning"></i> Configurar Restrições da Semana</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <div class="mb-4">
-                    <label class="form-label text-muted fw-bold small">CONFIGURAÇÃO PARA A SEMANA:</label>
+                    <label class="form-label text-muted fw-bold small">SEMANA SELECIONADA:</label>
                     <div class="input-group">
                         <span class="input-group-text bg-white"><i class="far fa-calendar-alt"></i></span>
                         <input type="text" class="form-control fw-bold bg-white text-dark" 
@@ -363,8 +471,8 @@
 
                 <div class="d-flex align-items-center justify-content-between p-3 bg-light border rounded mb-3">
                     <div>
-                        <label class="form-check-label fw-bold mb-0 text-dark" for="priorityActive">Ativar Modo Prioridade</label>
-                        <div class="small text-muted" style="font-size: 0.85rem;">Bloqueia agendamentos de não listados.</div>
+                        <label class="form-check-label fw-bold mb-0 text-dark" for="priorityActive"><i class="fas fa-star text-warning"></i> Ativar Modo Prioridade Geral</label>
+                        <div class="small text-muted" style="font-size: 0.85rem;">Trava o quadro inteiro e libera marcação apenas para disciplinas listadas abaixo.</div>
                     </div>
                     <div class="form-check form-switch m-0">
                         <input class="form-check-input scale-125" type="checkbox" id="priorityActive" 
@@ -373,9 +481,9 @@
                     </div>
                 </div>
 
-                <div id="priorityListContainer">
-                    <label class="form-label fw-bold mb-2">Disciplinas Permitidas (Nomes Únicos):</label>
-                    <div class="border rounded p-2 bg-white" style="max-height: 250px; overflow-y: auto;">
+                <div id="priorityListContainer" class="mb-4">
+                    <label class="form-label fw-bold mb-2">Disciplinas Permitidas (Se prioridade estiver ativa):</label>
+                    <div class="border rounded p-2 bg-white" style="max-height: 200px; overflow-y: auto;">
                         {% if all_materias_names %}
                             {% for materia_nome in all_materias_names %}
                             <div class="form-check border-bottom py-2 position-relative">
@@ -392,10 +500,46 @@
                         {% endif %}
                     </div>
                     <div class="d-flex justify-content-between mt-2 px-1">
-                        <small class="text-muted">Marque os nomes das disciplinas que terão permissão em TODAS as turmas.</small>
+                        <small class="text-muted">Marque as disciplinas que terão permissão em TODAS as turmas.</small>
                         <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none fw-bold" onclick="selectAllPriority(true)">Marcar Todas</button>
                     </div>
                 </div>
+
+                <div class="border-top pt-4">
+                    <h5 class="fw-bold text-danger mb-2"><i class="fas fa-ban"></i> Bloqueio de Períodos Específicos</h5>
+                    <p class="small text-muted mb-3">Marque os períodos onde <strong>nenhum instrutor</strong> poderá agendar aulas. Esta configuração se aplica apenas para a turma <strong class="text-dark">{{ pelotao_selecionado }}</strong>, a menos que você marque a opção abaixo para aplicar a todas as turmas da escola.</p>
+                    
+                    <div class="table-responsive bg-white border rounded">
+                        <table class="table table-sm table-bordered text-center table-hover mb-0" id="blockGridTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width: 70px;">Tempo</th>
+                                    <th>Seg</th><th>Ter</th><th>Qua</th><th>Qui</th><th>Sex</th><th>Sáb</th><th>Dom</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for p in range(1, 16) %}
+                                <tr>
+                                    <td class="fw-bold align-middle bg-light">{{ p }}º</td>
+                                    {% for d in ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'] %}
+                                    <td class="align-middle">
+                                        <input class="form-check-input block-checkbox scale-125 m-0" type="checkbox" data-dia="{{ d }}" data-periodo="{{ p }}">
+                                    </td>
+                                    {% endfor %}
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="form-check mt-3 bg-danger bg-opacity-10 p-3 rounded border border-danger">
+                        <input class="form-check-input ms-1 scale-125" type="checkbox" id="applyToAllPelotoes">
+                        <label class="form-check-label fw-bold text-danger ms-3" for="applyToAllPelotoes">
+                            Aplicar estes bloqueios de período a TODAS as turmas cadastradas na escola.
+                        </label>
+                    </div>
+                </div>
+
             </div>
             <div class="modal-footer bg-light">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -431,6 +575,16 @@
 </div>
 
 <script>
+    let blockedData = {};
+    {% if semana_selecionada and semana_selecionada.blocked_blocks %}
+        try {
+            blockedData = {{ semana_selecionada.blocked_blocks | safe }};
+        } catch(e) {
+            console.error("Erro ao fazer parse dos bloqueios de período", e);
+            blockedData = {};
+        }
+    {% endif %}
+
     function abrirDashboardInstrutor() {
         const modalEl = document.getElementById('dashboardInstrutorModal');
         const modal = new bootstrap.Modal(modalEl);
@@ -500,6 +654,26 @@
                 document.body.classList.toggle('weekend-panel-open');
             });
         }
+
+        const priorityModalEl = document.getElementById('priorityModal');
+        if (priorityModalEl) {
+            priorityModalEl.addEventListener('show.bs.modal', function () {
+                const currentPelotao = "{{ pelotao_selecionado }}";
+                const pelData = blockedData[currentPelotao] || {};
+                
+                document.querySelectorAll('.block-checkbox').forEach(chk => {
+                    let d = chk.getAttribute('data-dia');
+                    let p = chk.getAttribute('data-periodo');
+                    if (pelData[d] && pelData[d].includes(p)) {
+                        chk.checked = true;
+                    } else {
+                        chk.checked = false;
+                    }
+                });
+                
+                document.getElementById('applyToAllPelotoes').checked = false;
+            });
+        }
     });
 
     const confirmationModal = document.getElementById('confirmation-modal-overlay');
@@ -535,35 +709,40 @@
         const checks = document.querySelectorAll('.priority-disc-check:checked');
         const names = Array.from(checks).map(c => c.value);
 
+        let newPelData = {};
+        document.querySelectorAll('.block-checkbox:checked').forEach(chk => {
+            let d = chk.getAttribute('data-dia');
+            let p = chk.getAttribute('data-periodo');
+            if (!newPelData[d]) newPelData[d] = [];
+            newPelData[d].push(p);
+        });
+
+        const applyToAll = document.getElementById('applyToAllPelotoes').checked;
+        const currentPelotao = "{{ pelotao_selecionado }}";
+        
+        if (applyToAll) {
+            const todasTurmas = [{% for t in todas_as_turmas %}"{{ t.nome }}",{% endfor %}];
+            todasTurmas.forEach(turma => { blockedData[turma] = newPelData; });
+        } else {
+            blockedData[currentPelotao] = newPelData;
+        }
+
         const btn = document.querySelector('#priorityModal .btn-success');
         const originalText = btn.innerHTML;
-        btn.innerHTML = 'Salvando...';
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
         btn.disabled = true;
 
         fetch('/semana/{{ semana_selecionada.id }}/salvar-prioridade', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': '{{ csrf_token() }}'
-            },
-            body: JSON.stringify({ status: active, disciplinas: names })
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
+            body: JSON.stringify({ status: active, disciplinas: names, blocked_blocks: blockedData })
         })
         .then(res => res.json())
         .then(data => {
-            if(data.success) {
-                location.reload();
-            } else {
-                alert('Erro ao salvar: ' + (data.message || 'Erro desconhecido'));
-                btn.innerHTML = originalText;
-                btn.disabled = false;
-            }
+            if(data.success) { location.reload(); } 
+            else { alert('Erro ao salvar: ' + (data.message || 'Erro desconhecido')); btn.innerHTML = originalText; btn.disabled = false; }
         })
-        .catch(err => {
-            console.error(err);
-            alert('Erro de conexão.');
-            btn.innerHTML = originalText;
-            btn.disabled = false;
-        });
+        .catch(err => { console.error(err); alert('Erro de conexão.'); btn.innerHTML = originalText; btn.disabled = false; });
     }
 </script>
 <style>

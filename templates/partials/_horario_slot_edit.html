@@ -1,21 +1,49 @@
 {# templates/partials/_horario_slot_edit.html #}
 {% if aula != 'SKIP' %}
-    <td class="schedule-slot"
+    <td class="schedule-slot {% if aula.blocked %}blocked-slot{% endif %}"
         rowspan="{{ aula.duracao if not aula.is_disposicao else 1 }}"
         data-dia="{{ dia }}"
         data-periodo="{{ periodo }}"
         style="vertical-align: middle; position: relative; padding: 0; height: 1px; max-width: 100%;">
 
-        {% if aula.is_disposicao %}
+        {# ======================================================== #}
+        {# 1. SE O PERÍODO ESTÁ BLOQUEADO E VAZIO                   #}
+        {# ======================================================== #}
+        {% if aula.blocked and not aula.id %}
+            <div style="height: 100%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; background-color: #fee2e2; {% if not is_admin %}cursor: not-allowed;{% endif %}">
+                <i class="fas fa-lock text-danger mb-1 fs-5"></i>
+                <div class="text-danger fw-bold small text-center" style="line-height: 1.1;">Período<br>Bloqueado</div>
+                
+                {# Admin tem o superpoder de forçar o agendamento mesmo bloqueado #}
+                {% if is_admin %}
+                    <button type="button" class="btn btn-sm btn-outline-danger mt-1 py-0 px-2 fw-bold bg-white" data-action="add" style="font-size: 0.7rem; border-width: 2px;" title="Como Admin, você pode forçar o agendamento">
+                        + Forçar
+                    </button>
+                {% endif %}
+            </div>
+
+        {# ======================================================== #}
+        {# 2. SE ESTÁ VAZIO E LIBERADO PARA MARCAR                  #}
+        {# ======================================================== #}
+        {% elif aula.is_disposicao %}
             <button type="button" class="slot-button disponivel" data-action="add" style="width: 100%; height: 100%; border: none; background: transparent; cursor: pointer; color: #aaa;">
                 <div style="display: flex; align-items: center; justify-content: center; height: 100%;">
                     <span style="font-size: 1.5rem;">+</span>
                 </div>
             </button>
+            
+        {# ======================================================== #}
+        {# 3. SE JÁ EXISTE UMA AULA MARCADA NESTE ESPAÇO            #}
+        {# ======================================================== #}
         {% else %}
             <div class="slot-content {% if aula.status == 'pendente' %}pendente{% endif %}" 
-                 style="height: 100%; width: 100%; display: flex; flex-direction: column; justify-content: space-between; padding: 4px; box-sizing: border-box; overflow: hidden;">
+                 style="height: 100%; width: 100%; display: flex; flex-direction: column; justify-content: space-between; padding: 4px; box-sizing: border-box; overflow: hidden; position: relative;">
                 
+                {# Se a aula já está marcada, mas o admin bloqueou o período depois #}
+                {% if aula.blocked %}
+                    <i class="fas fa-lock position-absolute top-0 end-0 m-1 text-danger" title="Período Bloqueado pelo Administrador" style="opacity: 0.8; font-size: 0.85rem; z-index: 10;"></i>
+                {% endif %}
+
                 {# CONTEÚDO SUPERIOR (Disciplina, Instrutor, Obs) #}
                 <div class="slot-info" style="flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: flex-start; overflow: hidden;">
                     
@@ -62,10 +90,13 @@
                             <button class="btn-icon deny" data-action="deny_aula" data-id="{{ aula.id }}" title="Negar">×</button>
                         </div>
                     {% elif aula.can_edit and not aula.is_continuation %}
-                        <div class="slot-actions horizontal-actions">
-                            <button class="btn-icon edit" data-action="edit" data-id="{{ aula.id }}" title="Editar" style="background-color: #3b82f6;">✏️</button>
-                            <button class="btn-icon delete" data-action="delete" data-id="{{ aula.id }}" title="Excluir" style="background-color: #ef4444;">🗑️</button>
-                        </div>
+                        {# Se estiver bloqueado, esconde os botões de edição para o instrutor #}
+                        {% if not aula.blocked or is_admin %}
+                            <div class="slot-actions horizontal-actions">
+                                <button class="btn-icon edit" data-action="edit" data-id="{{ aula.id }}" title="Editar" style="background-color: #3b82f6;">✏️</button>
+                                <button class="btn-icon delete" data-action="delete" data-id="{{ aula.id }}" title="Excluir" style="background-color: #ef4444;">🗑️</button>
+                            </div>
+                        {% endif %}
                     {% endif %}
                 </div>
 
