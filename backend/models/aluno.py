@@ -38,7 +38,6 @@ class Aluno(db.Model):
     historico: Mapped[list["HistoricoAluno"]] = relationship(back_populates="aluno", cascade="all, delete-orphan")
     historico_disciplinas: Mapped[list["HistoricoDisciplina"]] = relationship(back_populates="aluno", cascade="all, delete-orphan")
     processos_disciplinares: Mapped[list["ProcessoDisciplina"]] = relationship(back_populates="aluno", cascade="all, delete-orphan")
-    avaliacoes: Mapped[list["AvaliacaoAtitudinal"]] = relationship(back_populates="aluno", cascade="all, delete-orphan")
     fada_avaliacoes: Mapped[list['FadaAvaliacao']] = relationship('FadaAvaliacao', back_populates='aluno', lazy='dynamic', cascade="all, delete-orphan")
     frequencias: Mapped[list["FrequenciaAluno"]] = relationship("FrequenciaAluno", back_populates="aluno", cascade="all, delete-orphan")
     
@@ -57,4 +56,5 @@ class Aluno(db.Model):
 
     def __repr__(self):
         matricula_repr = self.user.matricula if self.user else 'N/A'
+        return f"<Aluno id={self.id} matricula='{matricula_repr}'>"'N/A'
         return f"<Aluno id={self.id} matricula='{matricula_repr}'>"

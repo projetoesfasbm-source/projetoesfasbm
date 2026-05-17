@@ -23,7 +23,7 @@ from ..models.banco_questoes import QuestaoBanco, RascunhoProva, DelegacaoProva
 from ..models.elogio import Elogio
 from ..models.fada_avaliacao import FadaAvaliacao
 from ..models.processo_disciplina import ProcessoDisciplina
-from ..models.avaliacao import AvaliacaoAtitudinal
+#from ..models.avaliacao import AvaliacaoAtitudinal
 from ..models.historico import HistoricoAluno
 from ..models.historico_disciplina import HistoricoDisciplina
 from ..models.notification import Notification
@@ -280,7 +280,7 @@ class AdminToolsService:
                 db.session.query(ProcessoDisciplina).filter(ProcessoDisciplina.aluno_id.in_(aluno_ids)).delete(synchronize_session=False)
                 db.session.query(Elogio).filter(Elogio.aluno_id.in_(aluno_ids)).delete(synchronize_session=False)
                 db.session.query(FadaAvaliacao).filter(FadaAvaliacao.aluno_id.in_(aluno_ids)).delete(synchronize_session=False)
-                db.session.query(AvaliacaoAtitudinal).filter(AvaliacaoAtitudinal.aluno_id.in_(aluno_ids)).delete(synchronize_session=False)
+                #db.session.query(AvaliacaoAtitudinal).filter(AvaliacaoAtitudinal.aluno_id.in_(aluno_ids)).delete(synchronize_session=False)
 
             # Questionários (e respostas)
             if 'questionarios' in options and turma_ids:
@@ -340,7 +340,7 @@ class AdminToolsService:
                     db.session.query(ProcessoDisciplina).filter(ProcessoDisciplina.aluno_id.in_(aluno_ids)).delete(synchronize_session=False)
                     db.session.query(Elogio).filter(Elogio.aluno_id.in_(aluno_ids)).delete(synchronize_session=False)
                     db.session.query(FadaAvaliacao).filter(FadaAvaliacao.aluno_id.in_(aluno_ids)).delete(synchronize_session=False)
-                    db.session.query(AvaliacaoAtitudinal).filter(AvaliacaoAtitudinal.aluno_id.in_(aluno_ids)).delete(synchronize_session=False)
+                    #db.session.query(AvaliacaoAtitudinal).filter(AvaliacaoAtitudinal.aluno_id.in_(aluno_ids)).delete(synchronize_session=False)
 
                 # --- LIMPEZA DE CARGOS E VÍNCULOS PERDIDOS DOS ALUNOS ---
                 # Como o aluno pode ser Chefe de Turma, limpamos o TurmaCargo com segurança dinâmica

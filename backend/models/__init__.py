@@ -14,7 +14,6 @@ from .instrutor import Instrutor
 from .disciplina_turma import DisciplinaTurma
 from .processo_disciplina import ProcessoDisciplina
 from .discipline_rule import DisciplineRule
-from .avaliacao import AvaliacaoAtitudinal
 from .notification import Notification
 from .site_config import SiteConfig
 from .password_reset_token import PasswordResetToken

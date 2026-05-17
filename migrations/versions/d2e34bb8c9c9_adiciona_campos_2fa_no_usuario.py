@@ -17,11 +17,17 @@ depends_on = None
 
 
 def upgrade():
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    columns = [c['name'] for c in inspector.get_columns('users')]
+    
     # Adiciona coluna totp_secret na tabela users
-    op.add_column('users', sa.Column('totp_secret', sa.String(32), nullable=True))
+    if 'totp_secret' not in columns:
+        op.add_column('users', sa.Column('totp_secret', sa.String(32), nullable=True))
     
     # Adiciona coluna is_totp_enabled na tabela users
-    op.add_column('users', sa.Column('is_totp_enabled', sa.Boolean(), nullable=False, server_default='0'))
+    if 'is_totp_enabled' not in columns:
+        op.add_column('users', sa.Column('is_totp_enabled', sa.Boolean(), nullable=False, server_default='0'))
 
 
 def downgrade():

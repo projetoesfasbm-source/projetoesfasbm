@@ -29,7 +29,7 @@ from backend.services.asset_service import AssetService
 
 # --- Importações de TODOS os modelos para o Flask-Migrate ---
 from backend.models.aluno import Aluno
-from backend.models.avaliacao import AvaliacaoAtitudinal, AvaliacaoItem
+# from backend.models.avaliacao import AvaliacaoAtitudinal, AvaliacaoItem
 from backend.models.disciplina import Disciplina
 from backend.models.disciplina_turma import DisciplinaTurma
 from backend.models.discipline_rule import DisciplineRule
@@ -174,7 +174,7 @@ def register_blueprints(app):
     from backend.controllers.aluno_controller import aluno_bp
     from backend.controllers.assets_controller import assets_bp
     from backend.controllers.auth_controller import auth_bp
-    from backend.controllers.avaliacao_controller import avaliacao_bp
+    #from backend.controllers.avaliacao_controller import avaliacao_bp
     from backend.controllers.customizer_controller import customizer_bp
     from backend.controllers.disciplina_controller import disciplina_bp
     from backend.controllers.historico_controller import historico_bp
@@ -205,7 +205,6 @@ def register_blueprints(app):
     app.register_blueprint(aluno_bp)
     app.register_blueprint(assets_bp)
     app.register_blueprint(auth_bp)
-    app.register_blueprint(avaliacao_bp)
     app.register_blueprint(customizer_bp)
     app.register_blueprint(disciplina_bp)
     app.register_blueprint(historico_bp)

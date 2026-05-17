@@ -46,8 +46,6 @@ class FadaAvaliacao(db.Model):
 
     # --- FLUXO E AUDITORIA ---
     status: Mapped[str] = mapped_column(String(20), default='RASCUNHO') 
-    # Etapas: RASCUNHO -> COMISSAO -> ALUNO -> FINALIZADO
-    etapa_atual: Mapped[str] = mapped_column(String(50), default='RASCUNHO')
     
     # Snapshots para Integridade Jurídica (Congela nota no envio)
     ndisc_snapshot: Mapped[float] = mapped_column(Float, default=0.0)

@@ -178,9 +178,11 @@ class JusticaService:
             descontos_totais_pontos += val
 
         bonus_total = min(len(elogios), 2) * JusticaService.BONUS_ELOGIO
-        total_pontos = (18 * JusticaService.FADA_BASE) - descontos_totais_pontos + bonus_total
-        media = total_pontos / 18.0
-        return max(0.0, min(10.0, media))
+        
+        media_calculada = (18.0 * JusticaService.FADA_BASE - descontos_totais_pontos + bonus_total) / 18.0
+        media_final = max(0.0, min(10.0, media_calculada))
+        
+        return media_final
 
     @staticmethod
     def calcular_aat_final(aluno_id):

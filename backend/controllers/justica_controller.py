@@ -1,6 +1,8 @@
 # backend/controllers/justica_controller.py
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, g
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, g, Response
 from flask_login import login_required, current_user
+from urllib.parse import quote
+from weasyprint import HTML
 from sqlalchemy import select, or_
 from sqlalchemy.orm import joinedload
 from datetime import datetime, timedelta
@@ -734,44 +736,69 @@ def salvar_fada():
 @can_manage_justice_required
 def enviar_fada_comissao(fada_id):
     f = db.session.get(FadaAvaliacao, fada_id)
-    if f:
+    # UNIFICAÇÃO: Apenas FADAs em 'RASCUNHO' podem ser enviadas.
+    if f and f.status == 'RASCUNHO':
         aat, ndisc, _ = JusticaService.calcular_aat_final(f.aluno_id)
-        f.ndisc_snapshot = ndisc; f.aat_snapshot = aat; f.status = 'EM_ASSINATURA'; f.etapa_atual = 'COMISSAO'; f.data_envio = datetime.now().astimezone()
+        f.ndisc_snapshot = ndisc
+        f.aat_snapshot = aat
+        # UNIFICAÇÃO: A máquina de estados avança para 'COMISSAO'
+        f.status = 'COMISSAO'
+        f.data_envio = datetime.now().astimezone()
         db.session.commit()
         return jsonify({'success': True})
-    return jsonify({'error': 'Erro'}), 404
+    return jsonify({'error': 'Avaliação não encontrada ou não está em modo Rascunho.'}), 404
 
 @justica_bp.route('/fada/assinar-membro/<int:fada_id>', methods=['POST'])
 @login_required
 def assinar_fada_membro(fada_id):
-    f = db.session.get(FadaAvaliacao, fada_id)
-    if not f or f.etapa_atual != 'COMISSAO': return jsonify({'error': 'N/A'}), 400
+    fada = db.session.get(FadaAvaliacao, fada_id)
+    # UNIFICAÇÃO: A verificação agora é feita na coluna 'status'
+    if not fada or fada.status != 'COMISSAO':
+        return jsonify({'error': 'Avaliação não encontrada ou não está na etapa da comissão.'}), 404
 
     uid = current_user.id
-    h = hashlib.sha256(f"{uid}-{datetime.now()}-{uuid.uuid4()}".encode()).hexdigest()[:16].upper()
+    hash_assinatura = request.json.get('hash')
+    if not hash_assinatura:
+        return jsonify({'error': 'Hash de assinatura não fornecido.'}), 400
 
-    if f.presidente_id == uid: f.hash_pres = h; f.data_ass_pres = datetime.now().astimezone()
-    elif f.membro1_id == uid: f.hash_m1 = h; f.data_ass_m1 = datetime.now().astimezone()
-    elif f.membro2_id == uid: f.hash_m2 = h; f.data_ass_m2 = datetime.now().astimezone()
-    else: return jsonify({'error': 'Não autorizado'}), 403
+    agora = datetime.now().astimezone()
 
-    if f.hash_pres and f.hash_m1 and f.hash_m2: f.etapa_atual = 'ALUNO'
+    # Lógica de assinatura com trava anti-duplicidade
+    if fada.presidente_id == uid:
+        if fada.hash_pres: return jsonify({'error': 'Presidente já assinou.'}), 400
+        fada.hash_pres = hash_assinatura; fada.data_ass_pres = agora
+    elif fada.membro1_id == uid:
+        if fada.hash_m1: return jsonify({'error': 'Membro 1 já assinou.'}), 400
+        fada.hash_m1 = hash_assinatura; fada.data_ass_m1 = agora
+    elif fada.membro2_id == uid:
+        if fada.hash_m2: return jsonify({'error': 'Membro 2 já assinou.'}), 400
+        fada.hash_m2 = hash_assinatura; fada.data_ass_m2 = agora
+    else:
+        return jsonify({'error': 'Não autorizado. O usuário não faz parte da comissão.'}), 403
+
+    # UNIFICAÇÃO: Máquina de estados avança o 'status'
+    if fada.hash_pres and fada.hash_m1 and fada.hash_m2:
+        fada.status = 'ALUNO'
+
     db.session.commit()
-    return redirect(url_for('justica.fada_boletim'))
+    return jsonify({'success': True, 'message': 'Assinatura registrada.', 'status_atual': fada.status}), 200
 
 @justica_bp.route('/fada/assinar-aluno/<int:fada_id>', methods=['POST'])
 @login_required
 def assinar_fada_aluno(fada_id):
     f = db.session.get(FadaAvaliacao, fada_id)
-    if f.etapa_atual != 'ALUNO': return jsonify({'error': 'Aguarde'}), 400
+    # UNIFICAÇÃO: A verificação agora é feita na coluna 'status'
+    if f.status != 'ALUNO':
+        return jsonify({'error': 'Esta avaliação não está aguardando sua assinatura.'}), 400
 
     if request.form.get('acao') == 'assinar':
-        f.status = 'FINALIZADO'; f.etapa_atual = 'FINALIZADO'
+        f.status = 'FINALIZADO'
         f.data_assinatura = datetime.now().astimezone(); f.ip_assinatura = request.remote_addr
         f.hash_integridade = hashlib.sha256(f"FINAL-{f.id}-{uuid.uuid4()}".encode()).hexdigest()[:20].upper()
         flash("Assinado com sucesso.", "success")
     else:
-        f.status = 'RECURSO'; f.texto_recurso = request.form.get('motivo_recurso')
+        f.status = 'RECURSO'
+        f.texto_recurso = request.form.get('motivo_recurso')
         f.data_assinatura = datetime.now().astimezone()
         flash("Recurso enviado.", "warning")
 
