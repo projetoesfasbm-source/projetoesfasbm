@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Ficha de Avaliação de Desempenho do Aluno (FADA)</title>
+    <style>
+        @page {
+            size: A4 portrait;
+            margin: 2cm;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            color: #333;
+            line-height: 1.4;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #2c3e50;
+            padding-bottom: 10px;
+        }
+        .header h1 {
+            font-size: 18px;
+            margin: 5px 0;
+            color: #2c3e50;
+            text-transform: uppercase;
+        }
+        .header p {
+            margin: 2px 0;
+            font-size: 14px;
+        }
+        .info-box {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 20px;
+            background-color: #f9f9f9;
+        }
+        .info-row {
+            display: flex;
+            margin-bottom: 5px;
+        }
+        .info-row span {
+            font-weight: bold;
+            width: 150px;
+            display: inline-block;
+        }
+        table.tabela-notas {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        table.tabela-notas th, table.tabela-notas td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+        }
+        table.tabela-notas th {
+            background-color: #2c3e50;
+            color: white;
+            font-weight: bold;
+        }
+        table.tabela-notas td.attr-name {
+            text-align: left;
+            font-weight: bold;
+            width: 70%;
+        }
+        .resumo-box {
+            display: table;
+            width: 100%;
+            margin-bottom: 20px;
+            border: 2px solid #2c3e50;
+        }
+        .resumo-item {
+            display: table-cell;
+            text-align: center;
+            padding: 15px;
+            border-right: 1px solid #ccc;
+            width: 33.33%;
+        }
+        .resumo-item:last-child {
+            border-right: none;
+        }
+        .resumo-item .label {
+            display: block;
+            font-size: 11px;
+            color: #777;
+            text-transform: uppercase;
+        }
+        .resumo-item .valor {
+            display: block;
+            font-size: 24px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .assinaturas {
+            margin-top: 40px;
+        }
+        .assinatura-bloco {
+            border: 1px dashed #ccc;
+            padding: 15px;
+            margin-bottom: 10px;
+            page-break-inside: avoid;
+        }
+        .assinatura-bloco h3 {
+            margin-top: 0;
+            font-size: 14px;
+            color: #2c3e50;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 5px;
+        }
+        .hash {
+            font-family: "Courier New", Courier, monospace;
+            font-size: 11px;
+            color: #555;
+            background: #f0f0f0;
+            padding: 2px 5px;
+            border-radius: 3px;
+            word-break: break-all;
+        }
+        .footer {
+            margin-top: 30px;
+            text-align: center;
+            font-size: 10px;
+            color: #888;
+            border-top: 1px solid #ccc;
+            padding-top: 10px;
+        }
+        .badge-finalizado {
+            display: inline-block;
+            background-color: #27ae60;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            float: right;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>Ficha de Avaliação de Desempenho do Aluno (FADA)</h1>
+        <p>{{ escola.name if escola else 'Instituição de Ensino' }}</p>
+        <p>Documento Oficial Escolar</p>
+    </div>
+
+    <div class="info-box">
+        <span class="badge-finalizado">Status: FINALIZADO</span>
+        <div class="info-row"><span>Aluno:</span> {{ aluno.user.nome_completo if aluno.user else 'N/A' }}</div>
+        <div class="info-row"><span>Matrícula:</span> {{ aluno.user.matricula if aluno.user else 'N/A' }}</div>
+        <div class="info-row"><span>Turma:</span> {{ aluno.turma.nome if aluno.turma else 'N/A' }}</div>
+        <div class="info-row"><span>Data da Emissão:</span> {{ now.strftime('%d/%m/%Y às %H:%M') }}</div>
+        <div class="info-row"><span>Doc ID:</span> <span class="hash">{{ fada.hash_integridade }}</span></div>
+    </div>
+
+    <table class="tabela-notas">
+        <thead>
+            <tr>
+                <th class="attr-name">Atributo Avaliado</th>
+                <th>Nota Atribuída</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><td class="attr-name">1. Expressão Oral e Escrita</td><td>{{ "%.2f"|format(fada.expressao) }}</td></tr>
+            <tr><td class="attr-name">2. Planejamento e Organização</td><td>{{ "%.2f"|format(fada.planejamento) }}</td></tr>
+            <tr><td class="attr-name">3. Perseverança</td><td>{{ "%.2f"|format(fada.perseveranca) }}</td></tr>
+            <tr><td class="attr-name">4. Apresentação Pessoal</td><td>{{ "%.2f"|format(fada.apresentacao) }}</td></tr>
+            <tr><td class="attr-name">5. Lealdade</td><td>{{ "%.2f"|format(fada.lealdade) }}</td></tr>
+            <tr><td class="attr-name">6. Tato e Discrição</td><td>{{ "%.2f"|format(fada.tato) }}</td></tr>
+            <tr><td class="attr-name">7. Equilíbrio Emocional</td><td>{{ "%.2f"|format(fada.equilibrio) }}</td></tr>
+            <tr><td class="attr-name">8. Disciplina</td><td>{{ "%.2f"|format(fada.disciplina) }}</td></tr>
+            <tr><td class="attr-name">9. Responsabilidade</td><td>{{ "%.2f"|format(fada.responsabilidade) }}</td></tr>
+            <tr><td class="attr-name">10. Maturidade</td><td>{{ "%.2f"|format(fada.maturidade) }}</td></tr>
+            <tr><td class="attr-name">11. Assiduidade</td><td>{{ "%.2f"|format(fada.assiduidade) }}</td></tr>
+            <tr><td class="attr-name">12. Pontualidade</td><td>{{ "%.2f"|format(fada.pontualidade) }}</td></tr>
+            <tr><td class="attr-name">13. Dicção e Oratória</td><td>{{ "%.2f"|format(fada.diccao) }}</td></tr>
+            <tr><td class="attr-name">14. Liderança</td><td>{{ "%.2f"|format(fada.lideranca) }}</td></tr>
+            <tr><td class="attr-name">15. Relacionamento Interpessoal</td><td>{{ "%.2f"|format(fada.relacionamento) }}</td></tr>
+            <tr><td class="attr-name">16. Ética Profissional</td><td>{{ "%.2f"|format(fada.etica) }}</td></tr>
+            <tr><td class="attr-name">17. Produtividade</td><td>{{ "%.2f"|format(fada.produtividade) }}</td></tr>
+            <tr><td class="attr-name">18. Eficiência Operacional</td><td>{{ "%.2f"|format(fada.eficiencia) }}</td></tr>
+        </tbody>
+    </table>
+
+    <div class="resumo-box">
+        <div class="resumo-item">
+            <span class="label">Nota Disciplinar (NDisc)</span>
+            <span class="valor">{{ "%.4f"|format(fada.ndisc_snapshot) }}</span>
+        </div>
+        <div class="resumo-item">
+            <span class="label">Média dos Atributos</span>
+            <span class="valor">{{ "%.4f"|format(fada.media_final) }}</span>
+        </div>
+        <div class="resumo-item">
+            <span class="label">Nota Atitudinal (AAT)</span>
+            <span class="valor">{{ "%.4f"|format(fada.aat_snapshot) }}</span>
+        </div>
+    </div>
+
+    {% if fada.observacoes %}
+    <div class="info-box">
+        <strong>Observações da Comissão:</strong><br>
+        {{ fada.observacoes }}
+    </div>
+    {% endif %}
+
+    <div class="assinaturas">
+        <h3>Auditoria de Assinaturas Digitais</h3>
+        
+        <div class="assinatura-bloco">
+            <h3>Presidente da Comissão</h3>
+            <div><strong>Hash de Assinatura:</strong> <span class="hash">{{ fada.hash_pres }}</span></div>
+            <div><strong>Data:</strong> {{ fada.data_ass_pres.strftime('%d/%m/%Y %H:%M') if fada.data_ass_pres else 'N/A' }}</div>
+        </div>
+
+        <div class="assinatura-bloco">
+            <h3>Membro Avaliador 1</h3>
+            <div><strong>Hash de Assinatura:</strong> <span class="hash">{{ fada.hash_m1 }}</span></div>
+            <div><strong>Data:</strong> {{ fada.data_ass_m1.strftime('%d/%m/%Y %H:%M') if fada.data_ass_m1 else 'N/A' }}</div>
+        </div>
+
+        <div class="assinatura-bloco">
+            <h3>Membro Avaliador 2</h3>
+            <div><strong>Hash de Assinatura:</strong> <span class="hash">{{ fada.hash_m2 }}</span></div>
+            <div><strong>Data:</strong> {{ fada.data_ass_m2.strftime('%d/%m/%Y %H:%M') if fada.data_ass_m2 else 'N/A' }}</div>
+        </div>
+
+        <div class="assinatura-bloco" style="border-color: #27ae60; background-color: #f4fcf7;">
+            <h3>Ciente do Aluno</h3>
+            <div><strong>IP Registrado:</strong> {{ fada.ip_assinatura }}</div>
+            <div><strong>Data da Ciência:</strong> {{ fada.data_assinatura.strftime('%d/%m/%Y %H:%M') if fada.data_assinatura else 'N/A' }}</div>
+            <div><strong>Termo Aceito:</strong> Sim (Concordância e leitura confirmadas)</div>
+        </div>
+    </div>
+
+    <div class="footer">
+        Documento gerado automaticamente pelo Sistema Integrado. A validade das assinaturas pode ser verificada através dos Hashes Criptográficos.
+    </div>
+
+</body>
+</html>

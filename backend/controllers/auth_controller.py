@@ -66,6 +66,10 @@ def _get_serializer(salt: str = "reset-password"):
 @auth_bp.before_app_request
 def enforce_2fa_setup():
     """Força usuários logados que não têm 2FA a configurá-lo antes de acessar o sistema."""
+    # Ignora a obrigatoriedade de 2FA em ambiente de desenvolvimento local
+    if current_app.debug:
+        return
+        
     if current_user.is_authenticated and not getattr(current_user, 'is_totp_enabled', False):
         allowed_endpoints = ['auth.configurar_2fa', 'auth.logout', 'static']
 
@@ -106,7 +110,7 @@ def login():
             return redirect(url_for("auth.register"))
 
         # INTERCEPTAÇÃO PARA 2FA
-        if getattr(user, 'is_totp_enabled', False):
+        if getattr(user, 'is_totp_enabled', False) and not current_app.debug:
             # VERIFICAÇÃO DE DISPOSITIVO CONFIÁVEL (30 DIAS)
             trust_token = request.cookies.get(f'trust_device_{user.id}')
             if trust_token and trust_token == user.totp_secret:

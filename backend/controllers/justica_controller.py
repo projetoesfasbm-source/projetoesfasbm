@@ -795,7 +795,47 @@ def assinar_fada_aluno(fada_id):
         f.status = 'FINALIZADO'
         f.data_assinatura = datetime.now().astimezone(); f.ip_assinatura = request.remote_addr
         f.hash_integridade = hashlib.sha256(f"FINAL-{f.id}-{uuid.uuid4()}".encode()).hexdigest()[:20].upper()
-        flash("Assinado com sucesso.", "success")
+        
+        # --- INTEGRAÇÃO COM O BOLETIM ---
+        try:
+            # Importa os modelos necessários aqui para evitar import circular, se for o caso
+            from backend.models.disciplina import Disciplina
+            from backend.models.historico_disciplina import HistoricoDisciplina
+            from backend.models.aluno import Aluno
+            
+            aluno_obj = db.session.get(Aluno, f.aluno_id)
+            if aluno_obj:
+                # Procura a disciplina "Avaliação Atitudinal" vinculada à turma deste aluno
+                disciplina_aat = db.session.scalar(
+                    select(Disciplina).where(
+                        Disciplina.turma_id == aluno_obj.turma_id,
+                        Disciplina.materia == 'Avaliação Atitudinal'
+                    )
+                )
+                
+                if disciplina_aat:
+                    # Verifica se o aluno já tem um histórico para essa disciplina
+                    hist = db.session.scalar(
+                        select(HistoricoDisciplina).where(
+                            HistoricoDisciplina.aluno_id == aluno_obj.id,
+                            HistoricoDisciplina.disciplina_id == disciplina_aat.id
+                        )
+                    )
+                    
+                    if hist:
+                        hist.nota_final = f.aat_snapshot
+                    else:
+                        novo_hist = HistoricoDisciplina(
+                            aluno_id=aluno_obj.id,
+                            disciplina_id=disciplina_aat.id,
+                            nota_final=f.aat_snapshot
+                        )
+                        db.session.add(novo_hist)
+        except Exception as e:
+            logger.error(f"Erro ao injetar nota da FADA no boletim: {e}")
+        # --------------------------------
+        
+        flash("Assinado com sucesso. Nota lançada no boletim (se a disciplina estiver cadastrada).", "success")
     else:
         f.status = 'RECURSO'
         f.texto_recurso = request.form.get('motivo_recurso')
@@ -870,3 +910,36 @@ def anular_processo(pid):
 
     flash(f"Processo Nº {processo.id} anulado com sucesso. O registro foi salvo no histórico.", "success")
     return redirect(url_for('justica.index'))
+
+@justica_bp.route('/fada/exportar-pdf/<int:fada_id>')
+@login_required
+def exportar_fada_pdf(fada_id):
+    fada = db.session.get(FadaAvaliacao, fada_id)
+    if not fada:
+        flash("Avaliação não encontrada.", "danger")
+        return redirect(url_for('justica.fada_boletim'))
+        
+    if fada.status != 'FINALIZADO':
+        flash("O PDF só pode ser gerado após o documento ser FINALIZADO (Assinado por todos).", "warning")
+        return redirect(url_for('justica.fada_boletim'))
+        
+    aluno = db.session.get(Aluno, fada.aluno_id)
+    escola = aluno.turma.school if aluno.turma else None
+    
+    html = render_template(
+        'justica/fada_pdf.html',
+        fada=fada,
+        aluno=aluno,
+        escola=escola,
+        now=datetime.now().astimezone()
+    )
+    
+    pdf = HTML(string=html).write_pdf()
+    
+    nome_arquivo = f"FADA_{aluno.user.matricula if aluno.user else 'ALUNO'}.pdf"
+    
+    return Response(
+        pdf,
+        mimetype="application/pdf",
+        headers={"Content-disposition": f"attachment; filename={nome_arquivo}"}
+    )
