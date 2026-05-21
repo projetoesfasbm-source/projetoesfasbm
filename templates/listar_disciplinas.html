@@ -33,6 +33,16 @@
                 {% endfor %}
             </select>
         </div>
+        
+        <div class="filter-group flex-grow-1" style="max-width: 400px;">
+            <label for="ciclo_select" class="form-label"><strong>Filtrar por Ciclo (Opcional):</strong></label>
+            <select name="ciclo_id" id="ciclo_select" class="form-select shadow-sm" onchange="this.form.submit()">
+                <option value="">-- Todos os Ciclos --</option>
+                {% for c in ciclos %}
+                <option value="{{ c.id }}" {% if c.id == ciclo_selecionado_id %}selected{% endif %}>{{ c.nome }}</option>
+                {% endfor %}
+            </select>
+        </div>
     </form>
 </div>
 
@@ -139,7 +149,7 @@
                     <div class="text-center py-5">
                         <div class="text-muted mb-3" style="font-size: 3rem;"><i class="fas fa-folder-open"></i></div>
                         <h4>Nenhuma Disciplina Encontrada</h4>
-                        <p class="text-muted">Esta turma ainda não possui disciplinas cadastradas.</p>
+                        <p class="text-muted">Não há disciplinas para os filtros selecionados.</p>
                         {% if current_user.is_sens or current_user.role in ['programador', 'admin_escola'] %}
                         <a href="{{ url_for('disciplina.adicionar_disciplina') }}" class="btn btn-primary mt-2">Cadastrar Agora</a>
                         {% endif %}

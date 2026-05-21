@@ -1,3 +1,5 @@
+# backend/controllers/chefe_turma_controller.py
+
 from flask import Blueprint, render_template, request, flash, redirect, url_for, g
 from flask_login import login_required, current_user
 from datetime import date, datetime, timedelta
@@ -208,53 +210,96 @@ def painel():
             else:
                 aulas_concluidas_keys.add(f"{d.disciplina_id}_legacy")
 
-        grupos_dict = {}
-        
+        # REFACTORING: Agrupamento Inteligente por Blocos Consecutivos
+        flat_periods = []
         if horarios:
             for h in horarios:
                 if not h.disciplina:
                     continue
-
-                disc_id = h.disciplina_id
-                
-                if disc_id not in grupos_dict:
+                dur = h.duracao if h.duracao and h.duracao > 0 else 1
+                for i in range(dur):
+                    flat_periods.append({
+                        'periodo': h.periodo + i,
+                        'obj': h,
+                        'disc_id': h.disciplina_id,
+                        'instrutor': h.instrutor
+                    })
+                    
+        # Ordena todos os períodos do dia cronologicamente
+        flat_periods.sort(key=lambda x: x['periodo'])
+        
+        blocos = []
+        current_block = None
+        
+        for fp in flat_periods:
+            if not current_block:
+                # Inicializa o primeiro bloco
+                nome_instrutor = "N/A"
+                if fp['instrutor']:
+                    if hasattr(fp['instrutor'], 'user') and fp['instrutor'].user:
+                        nome_instrutor = fp['instrutor'].user.nome_de_guerra or fp['instrutor'].user.nome_completo
+                    elif hasattr(fp['instrutor'], 'nome_guerra'):
+                        nome_instrutor = fp['instrutor'].nome_guerra
+                        
+                current_block = {
+                    'disciplina': fp['obj'].disciplina,
+                    'disc_id': fp['disc_id'],
+                    'nome_instrutor': nome_instrutor,
+                    'horarios_reais': [fp['obj']],
+                    'periodos_expandidos': [fp['periodo']],
+                    'status': 'pendente',
+                    'primeiro_horario_id': fp['obj'].id,
+                    'total_tempos': 1,
+                    'last_p': fp['periodo']
+                }
+            else:
+                # Verifica se é a mesma disciplina E se é imediatamente consecutivo
+                if fp['disc_id'] == current_block['disc_id'] and fp['periodo'] == current_block['last_p'] + 1:
+                    current_block['periodos_expandidos'].append(fp['periodo'])
+                    current_block['last_p'] = fp['periodo']
+                    if fp['obj'] not in current_block['horarios_reais']:
+                        current_block['horarios_reais'].append(fp['obj'])
+                    current_block['total_tempos'] += 1
+                else:
+                    # Quebrou a sequência (outra disciplina ou intervalo de tempo), guarda o atual e cria um novo
+                    blocos.append(current_block)
+                    
                     nome_instrutor = "N/A"
-                    if h.instrutor:
-                        if hasattr(h.instrutor, 'user') and h.instrutor.user:
-                            nome_instrutor = h.instrutor.user.nome_de_guerra or h.instrutor.user.nome_completo
-                        elif hasattr(h.instrutor, 'nome_guerra'):
-                            nome_instrutor = h.instrutor.nome_guerra
-
-                    grupos_dict[disc_id] = {
-                        'disciplina': h.disciplina,
+                    if fp['instrutor']:
+                        if hasattr(fp['instrutor'], 'user') and fp['instrutor'].user:
+                            nome_instrutor = fp['instrutor'].user.nome_de_guerra or fp['instrutor'].user.nome_completo
+                        elif hasattr(fp['instrutor'], 'nome_guerra'):
+                            nome_instrutor = fp['instrutor'].nome_guerra
+                            
+                    current_block = {
+                        'disciplina': fp['obj'].disciplina,
+                        'disc_id': fp['disc_id'],
                         'nome_instrutor': nome_instrutor,
-                        'horarios_reais': [], 
-                        'periodos_expandidos': [], 
+                        'horarios_reais': [fp['obj']],
+                        'periodos_expandidos': [fp['periodo']],
                         'status': 'pendente',
-                        'primeiro_horario_id': h.id,
-                        'total_tempos': 0,
-                        'tempos_concluidos': 0
+                        'primeiro_horario_id': fp['obj'].id,
+                        'total_tempos': 1,
+                        'last_p': fp['periodo']
                     }
+
+        if current_block:
+            blocos.append(current_block)
+            
+        # Processa as contagens de conclusão para cada bloco
+        for b in blocos:
+            b['periodos'] = sorted(list(set(b['periodos_expandidos'])))
+            b['tempos_concluidos'] = 0
+            for p in b['periodos']:
+                key = f"{b['disc_id']}_{p}"
+                legacy_key = f"{b['disc_id']}_legacy"
+                if key in aulas_concluidas_keys or legacy_key in aulas_concluidas_keys:
+                    b['tempos_concluidos'] += 1
+                    
+            if b['tempos_concluidos'] >= b['total_tempos'] and b['total_tempos'] > 0:
+                b['status'] = 'concluido'
                 
-                duracao = h.duracao if h.duracao and h.duracao > 0 else 1
-                grupos_dict[disc_id]['horarios_reais'].append(h)
-                grupos_dict[disc_id]['total_tempos'] += duracao
-
-                for i in range(duracao):
-                    p = h.periodo + i
-                    grupos_dict[disc_id]['periodos_expandidos'].append(p)
-                    
-                    key = f"{disc_id}_{p}"
-                    legacy_key = f"{disc_id}_legacy"
-                    
-                    if key in aulas_concluidas_keys or legacy_key in aulas_concluidas_keys:
-                        grupos_dict[disc_id]['tempos_concluidos'] += 1
-
-            for g in sorted(grupos_dict.values(), key=lambda x: min(x['periodos_expandidos'])):
-                g['periodos'] = sorted(list(set(g['periodos_expandidos'])))
-                if g['tempos_concluidos'] >= g['total_tempos'] and g['total_tempos'] > 0:
-                    g['status'] = 'concluido'
-                aulas_agrupadas.append(g)
+            aulas_agrupadas.append(b)
 
         return render_template('chefe/painel.html', aluno=aluno, aulas_agrupadas=aulas_agrupadas, data_selecionada=data_selecionada, erro_semana=False)
 
@@ -289,6 +334,7 @@ def registrar_aula(primeiro_horario_id):
 
         variacoes_nome = get_variacoes_nome_turma(aluno_chefe.turma.nome)
         
+        # Busca apenas os horários DESTA disciplina neste dia para formar os blocos de validação
         horarios_db = db.session.query(Horario)\
             .outerjoin(Horario.disciplina)\
             .outerjoin(Disciplina.turma)\
@@ -304,34 +350,63 @@ def registrar_aula(primeiro_horario_id):
                 )
             ).order_by(Horario.periodo).all()
 
-        ultimo_periodo_real_do_bloco = 1
+        # Reconstrói os blocos consecutivos idênticos ao painel para encontrar onde a aula se encaixa
+        flat_periods = []
         for h in horarios_db:
-            dur_real = h.duracao if h.duracao and h.duracao > 0 else 1
-            final_h = h.periodo + dur_real - 1
-            if final_h > ultimo_periodo_real_do_bloco:
-                ultimo_periodo_real_do_bloco = final_h
-
+            dur = h.duracao if h.duracao and h.duracao > 0 else 1
+            for i in range(dur):
+                flat_periods.append({'periodo': h.periodo + i, 'obj': h})
+        
+        flat_periods.sort(key=lambda x: x['periodo'])
+        
+        blocos = []
+        current_block = None
+        for fp in flat_periods:
+            if not current_block:
+                current_block = {'horarios_reais': [fp['obj']], 'periodos_expandidos': [fp['periodo']], 'last_p': fp['periodo']}
+            else:
+                if fp['periodo'] == current_block['last_p'] + 1:
+                    current_block['periodos_expandidos'].append(fp['periodo'])
+                    current_block['last_p'] = fp['periodo']
+                    if fp['obj'] not in current_block['horarios_reais']:
+                        current_block['horarios_reais'].append(fp['obj'])
+                else:
+                    blocos.append(current_block)
+                    current_block = {'horarios_reais': [fp['obj']], 'periodos_expandidos': [fp['periodo']], 'last_p': fp['periodo']}
+        if current_block:
+            blocos.append(current_block)
+            
+        # Encontrar o bloco exato que contém o horário que o usuário clicou para assinar
+        target_block = None
+        for b in blocos:
+            if any(h.id == primeiro_horario_id for h in b['horarios_reais']):
+                target_block = b
+                break
+                
+        if not target_block:
+            flash("Horário não encontrado nos blocos do dia.", "danger")
+            return redirect(url_for('chefe.painel', data=data_aula))
+            
+        # Agora a trava respeita o FIM DESTE BLOCO e não o fim do dia!
+        ultimo_periodo_real_do_bloco = target_block['last_p']
+        
         horarios_expandidos = []
         periodos_processados = set() 
 
-        for h in horarios_db:
-            duracao = h.duracao if h.duracao and h.duracao > 0 else 1
-            for i in range(duracao):
-                p = h.periodo + i
-                
-                if p in periodos_processados:
-                    continue
-                    
-                existe = db.session.query(DiarioClasse).filter_by(
-                    data_aula=data_aula,
-                    turma_id=aluno_chefe.turma_id,
-                    disciplina_id=h.disciplina_id,
-                    periodo=p,
-                    is_deleted=False 
-                ).first()
-                
-                if not existe:
-                    horarios_expandidos.append({'periodo': p, 'horario_pai_id': h.id, 'obj': h})
+        for p in target_block['periodos_expandidos']:
+            horario_pai = next(h for h in target_block['horarios_reais'] if h.periodo <= p < h.periodo + (h.duracao or 1))
+            
+            existe = db.session.query(DiarioClasse).filter_by(
+                data_aula=data_aula,
+                turma_id=aluno_chefe.turma_id,
+                disciplina_id=horario_base.disciplina_id,
+                periodo=p,
+                is_deleted=False 
+            ).first()
+            
+            if not existe:
+                if p not in periodos_processados:
+                    horarios_expandidos.append({'periodo': p, 'horario_pai_id': horario_pai.id, 'obj': horario_pai})
                     periodos_processados.add(p) 
         
         horarios_expandidos.sort(key=lambda x: x['periodo'])
@@ -350,7 +425,7 @@ def registrar_aula(primeiro_horario_id):
                 flash(msg_cont, "danger")
                 return redirect(request.url)
 
-            # Validação de Horário (Garante que a aula acabou em Brasília, usando o último período real)
+            # Validação de Horário adaptada para verificar o fim EXATO daquele bloco isolado
             periodos_para_registrar = [h['periodo'] for h in horarios_expandidos]
             if periodos_para_registrar:
                 ok_hora, msg_hora = DiarioService.validar_criacao_diario_aluno(data_aula, ultimo_periodo_real_do_bloco)

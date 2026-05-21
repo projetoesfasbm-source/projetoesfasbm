@@ -50,13 +50,21 @@ def listar_disciplinas():
         return redirect(url_for('main.dashboard'))
         
     turma_selecionada_id = request.args.get('turma_id', type=int)
+    ciclo_selecionado_id = request.args.get('ciclo_id', type=int)
     
     turmas_disponiveis = TurmaService.get_turmas_by_school(school_id)
     todas_disciplinas = DisciplinaService.get_disciplinas_by_school(school_id)
 
     disciplinas_filtradas = []
-    if turma_selecionada_id:
-        disciplinas_filtradas = [d for d in todas_disciplinas if d.turma_id == turma_selecionada_id]
+    for d in todas_disciplinas:
+        # Filtro de turma
+        if turma_selecionada_id and d.turma_id != turma_selecionada_id:
+            continue
+        # Filtro de ciclo
+        if ciclo_selecionado_id and d.ciclo_id != ciclo_selecionado_id:
+            continue
+            
+        disciplinas_filtradas.append(d)
     
     # Ordenação alfabética
     disciplinas_filtradas.sort(key=lambda d: d.materia)
@@ -85,7 +93,8 @@ def listar_disciplinas():
                            delete_form=delete_form,
                            turmas=turmas_disponiveis,
                            turma_selecionada_id=turma_selecionada_id,
-                           ciclos=ciclos)
+                           ciclos=ciclos,
+                           ciclo_selecionado_id=ciclo_selecionado_id)
 
 @disciplina_bp.route('/dashboard-intelligence')
 @login_required
@@ -217,8 +226,19 @@ def excluir_disciplina(disciplina_id):
 def api_disciplinas_por_turma(turma_id):
     turma = db.session.get(Turma, turma_id)
     if not turma: return jsonify({'error': 'Turma não encontrada'}), 404
-    disciplinas = sorted(turma.disciplinas, key=lambda d: d.materia)
-    return jsonify([{'id': d.id, 'materia': d.materia} for d in disciplinas])
+    
+    # REMOVIDA A LIMITAÇÃO DO CICLO: Consulta direta para trazer TODAS as disciplinas da turma
+    disciplinas = db.session.scalars(
+        select(Disciplina).where(Disciplina.turma_id == turma_id).order_by(Disciplina.materia)
+    ).all()
+    
+    # Melhoria: Adiciona o nome do ciclo para facilitar a identificação no formulário
+    resultado = []
+    for d in disciplinas:
+        nome_ciclo = d.ciclo.nome if d.ciclo else "Sem Ciclo"
+        resultado.append({'id': d.id, 'materia': f"{d.materia} ({nome_ciclo})"})
+        
+    return jsonify(resultado)
 
 @disciplina_bp.route('/detalhes/<int:disciplina_id>')
 @login_required

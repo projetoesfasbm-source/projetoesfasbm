@@ -15,7 +15,7 @@ class VinculoService:
     @staticmethod
     def get_all_vinculos(turma_filtrada_id: int = None, school_id: int = None):
         """
-        Busca vínculos. 
+        Busca vínculos.
         - Se turma_filtrada_id for fornecido, filtra por ela.
         - Se school_id for fornecido, garante que só traga vínculos dessa escola (segurança/filtro geral).
         """
@@ -30,7 +30,7 @@ class VinculoService:
 
         if turma_filtrada_id:
             query = query.where(Turma.id == turma_filtrada_id)
-        
+
         if school_id:
             query = query.where(Turma.school_id == school_id)
 
@@ -45,7 +45,7 @@ class VinculoService:
 
         if not disciplina_id:
             return False, 'A disciplina é obrigatória.'
-        
+
         if not instrutor_id_1 and not instrutor_id_2:
             return False, 'Pelo menos um instrutor deve ser selecionado.'
 
@@ -58,7 +58,7 @@ class VinculoService:
         disciplina = db.session.get(Disciplina, disciplina_id)
         if not disciplina or not disciplina.turma:
             return False, 'Disciplina ou turma associada não encontrada.'
-        
+
         pelotao_nome = disciplina.turma.nome
 
         vinculo_existente = db.session.scalars(select(DisciplinaTurma).filter_by(
@@ -78,7 +78,7 @@ class VinculoService:
                 )
                 db.session.add(novo_vinculo)
                 message = 'Vínculo criado com sucesso!'
-            
+
             db.session.commit()
             return True, message
         except Exception as e:
@@ -102,10 +102,10 @@ class VinculoService:
 
         if not disciplina_id:
             return False, 'A disciplina é obrigatória.'
-            
+
         if not instrutor_id_1 and not instrutor_id_2:
             return False, 'Pelo menos um instrutor deve ser selecionado.'
-        
+
         instrutor_1 = int(instrutor_id_1) if instrutor_id_1 else 0
         instrutor_2 = int(instrutor_id_2) if instrutor_id_2 else 0
 
@@ -115,7 +115,7 @@ class VinculoService:
         disciplina = db.session.get(Disciplina, disciplina_id)
         if not disciplina or not disciplina.turma:
             return False, 'Disciplina ou turma associada não encontrada.'
-        
+
         pelotao_nome = disciplina.turma.nome
 
         try:
@@ -124,7 +124,7 @@ class VinculoService:
             vinculo.disciplina_id = disciplina_id
             vinculo.instrutor_id_1 = instrutor_1 if instrutor_1 > 0 else None
             vinculo.instrutor_id_2 = instrutor_2 if instrutor_2 > 0 else None
-            
+
             # 2. NOVA REGRA: Altera apenas os horários pendentes para entrarem pro novo instrutor
             horarios_pendentes = db.session.scalars(
                 select(Horario).filter_by(
@@ -138,13 +138,13 @@ class VinculoService:
                 # Mantém a disciplina igual, a não ser que tenha sido corrigida no formulário
                 horario.disciplina_id = disciplina_id
                 horario.pelotao = pelotao_nome
-                
+
                 # Atualiza os instrutores no horário futuro
                 if instrutor_1 > 0:
                     horario.instrutor_id = instrutor_1
                 elif instrutor_2 > 0:
                     horario.instrutor_id = instrutor_2
-                
+
                 horario.instrutor_id_2 = instrutor_2 if instrutor_2 > 0 else None
 
             db.session.commit()
