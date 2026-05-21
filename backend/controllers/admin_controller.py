@@ -59,37 +59,30 @@ def espelho_diarios():
         return redirect(url_for('main.dashboard'))
 
     # =========================================================================
-    # PARTE 1: LÓGICA DO PAINEL DE RISCO (CORREÇÃO DA MULTIPLICAÇÃO DE FALTAS)
+    # CORREÇÃO: Subquery isolada para contar faltas REAIS (evita duplicação)
     # =========================================================================
     
-    # Busca todos os alunos da escola
-    alunos_escola = db.session.scalars(
-        select(Aluno)
-        .join(Turma)
-        .options(joinedload(Aluno.user), joinedload(Aluno.turma))
-        .where(Turma.school_id == school_id)
-    ).unique().all()
+    # Esta subquery consolida as faltas por aluno e disciplina ANTES de cruzar com as outras tabelas
+    subquery_faltas = db.session.query(
+        FrequenciaAluno.aluno_id,
+        DiarioClasse.disciplina_id,
+        func.count(FrequenciaAluno.id).label('contagem')
+    ).join(DiarioClasse, FrequenciaAluno.diario_id == DiarioClasse.id)\
+     .filter(FrequenciaAluno.presente == False)\
+     .group_by(FrequenciaAluno.aluno_id, DiarioClasse.disciplina_id).subquery()
 
-    # CORREÇÃO: Utilizando distinct para garantir que cada registro de falta seja contado apenas uma vez
-    stats_query = db.session.execute(
-        select(
-            Aluno,
-            Turma.nome.label('turma_nome'),
-            Disciplina.materia,
-            Disciplina.carga_horaria_prevista,
-            func.count(distinct(FrequenciaAluno.id)).label('total_faltas_materia') 
-        )
-        .join(Turma, Aluno.turma_id == Turma.id) 
-        .join(FrequenciaAluno, Aluno.id == FrequenciaAluno.aluno_id)
-        .join(DiarioClasse, FrequenciaAluno.diario_id == DiarioClasse.id)
-        .join(Disciplina, DiarioClasse.disciplina_id == Disciplina.id)
-        .options(joinedload(Aluno.user)) 
-        .where(
-            Turma.school_id == school_id,        
-            FrequenciaAluno.presente == False
-        )
-        .group_by(Aluno.id, Turma.nome, Disciplina.id)
-    ).all()
+    # Query principal unindo Alunos com a contagem exata da subquery
+    stats_query = db.session.query(
+        Aluno,
+        Turma.nome.label('turma_nome'),
+        Disciplina.materia,
+        Disciplina.carga_horaria_prevista,
+        subquery_faltas.c.contagem
+    ).join(Turma, Aluno.turma_id == Turma.id)\
+     .join(subquery_faltas, Aluno.id == subquery_faltas.c.aluno_id)\
+     .join(Disciplina, subquery_faltas.c.disciplina_id == Disciplina.id)\
+     .options(joinedload(Aluno.user))\
+     .filter(Turma.school_id == school_id).all()
 
     alunos_map = defaultdict(lambda: {
         'obj': None, 
@@ -99,13 +92,8 @@ def espelho_diarios():
         'max_gravidade': 0
     })
 
-    for row in stats_query:
-        aluno = row[0]
-        turma_nome = row[1]
-        materia = row[2]
-        carga_total = row[3] or 1 
-        faltas = row[4]
-
+    for aluno, turma_nome, materia, carga_total, faltas in stats_query:
+        carga_total = carga_total or 1
         porcentagem = (faltas / carga_total) * 100
         
         status_materia = 'normal'
@@ -143,27 +131,20 @@ def espelho_diarios():
             elif data['max_gravidade'] == 1: gravidade_str = 'atencao'
             
             aluno_obj = data['obj']
-            nome_display = "Sem Nome"
-            matricula_display = "N/D"
-            if aluno_obj.user:
-                nome_display = aluno_obj.user.nome_completo or aluno_obj.user.nome_de_guerra or "Sem Nome"
-                matricula_display = aluno_obj.user.matricula or "N/D"
+            nome_display = aluno_obj.user.nome_completo if aluno_obj.user else "Sem Nome"
+            matricula_display = aluno_obj.user.matricula if aluno_obj.user else "N/D"
 
             alunos_alertas.append({
                 'id': aluno_obj.id,
                 'nome': nome_display,
                 'matricula': matricula_display,
                 'turma': data['turma'],
-                'foto': aluno_obj.foto_perfil,
                 'total_faltas': data['total_global_faltas'],
                 'riscos': data['disciplinas_risco'], 
                 'gravidade': gravidade_str
             })
 
-    alunos_alertas.sort(key=lambda x: (
-        {'critico': 0, 'atencao': 1, 'moderado': 2}[x['gravidade']], 
-        -x['total_faltas']
-    ))
+    alunos_alertas.sort(key=lambda x: ({'critico': 0, 'atencao': 1, 'moderado': 2}[x['gravidade']], -x['total_faltas']))
 
     # =========================================================================
     # PARTE 2: LÓGICA DA LISTA DE DIÁRIOS
@@ -316,9 +297,6 @@ def detalhe_faltas_aluno(aluno_id):
 @login_required
 @sens_permission_required
 def editar_diario_bloco(diario_id):
-    """
-    Permite editar um bloco de aulas (mesma turma, data e disciplina).
-    """
     ref_diario = db.session.get(DiarioClasse, diario_id)
     if not ref_diario:
         flash('Diário não encontrado', 'danger')
