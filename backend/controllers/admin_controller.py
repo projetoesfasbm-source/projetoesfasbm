@@ -2,8 +2,8 @@
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, abort
 from flask_login import login_required, current_user
-from sqlalchemy import select, func, case, desc, and_
-from sqlalchemy.orm import joinedload, aliased  # <-- ADICIONADO ALIASED AQUI
+from sqlalchemy import select, func, case, desc, and_, distinct
+from sqlalchemy.orm import joinedload, aliased  
 from collections import defaultdict
 from datetime import datetime
 from functools import wraps
@@ -59,27 +59,33 @@ def espelho_diarios():
         return redirect(url_for('main.dashboard'))
 
     # =========================================================================
-    # PARTE 1: LÓGICA DO PAINEL DE RISCO (CORREÇÃO DE VAZAMENTO DE FALTAS APLICADA)
+    # PARTE 1: LÓGICA DO PAINEL DE RISCO (CORREÇÃO DA MULTIPLICAÇÃO DE FALTAS)
     # =========================================================================
-    TurmaDiario = aliased(Turma) # Criamos um "clone" virtual da tabela Turma
     
+    # Busca todos os alunos da escola
+    alunos_escola = db.session.scalars(
+        select(Aluno)
+        .join(Turma)
+        .options(joinedload(Aluno.user), joinedload(Aluno.turma))
+        .where(Turma.school_id == school_id)
+    ).unique().all()
+
+    # CORREÇÃO: Utilizando distinct para garantir que cada registro de falta seja contado apenas uma vez
     stats_query = db.session.execute(
         select(
             Aluno,
             Turma.nome.label('turma_nome'),
             Disciplina.materia,
             Disciplina.carga_horaria_prevista,
-            func.count(FrequenciaAluno.id).label('total_faltas_materia')
+            func.count(distinct(FrequenciaAluno.id)).label('total_faltas_materia') 
         )
-        .join(Turma, Aluno.turma_id == Turma.id) # Verifica a Turma ATUAL do aluno
+        .join(Turma, Aluno.turma_id == Turma.id) 
         .join(FrequenciaAluno, Aluno.id == FrequenciaAluno.aluno_id)
         .join(DiarioClasse, FrequenciaAluno.diario_id == DiarioClasse.id)
-        .join(TurmaDiario, DiarioClasse.turma_id == TurmaDiario.id) # Verifica a Turma ONDE A FALTA OCORREU
         .join(Disciplina, DiarioClasse.disciplina_id == Disciplina.id)
         .options(joinedload(Aluno.user)) 
         .where(
-            Turma.school_id == school_id,       # O Aluno pertence a esta escola
-            TurmaDiario.school_id == school_id, # A falta OBRIGATORIAMENTE tem que ter ocorrido nesta escola
+            Turma.school_id == school_id,        
             FrequenciaAluno.presente == False
         )
         .group_by(Aluno.id, Turma.nome, Disciplina.id)
@@ -160,7 +166,7 @@ def espelho_diarios():
     ))
 
     # =========================================================================
-    # PARTE 2: LÓGICA DA LISTA DE DIÁRIOS (ALTERADA)
+    # PARTE 2: LÓGICA DA LISTA DE DIÁRIOS
     # =========================================================================
     page = request.args.get('page', 1, type=int)
     turma_id = request.args.get('turma_id', type=int)
@@ -264,7 +270,7 @@ def detalhe_faltas_aluno(aluno_id):
         .where(
             FrequenciaAluno.aluno_id == aluno_id, 
             FrequenciaAluno.presente == False,
-            Turma.school_id == school_id # Impede que faltas de outras escolas apareçam no modal
+            Turma.school_id == school_id 
         )
         .order_by(Disciplina.materia, DiarioClasse.data_aula.desc())
     ).all()
@@ -377,10 +383,6 @@ def editar_diario_bloco(diario_id):
         diarios=diarios_bloco,
         alunos=alunos
     )
-
-# ==============================================================================
-# NOVAS ROTAS ADICIONADAS (NECESSÁRIAS PARA O SISTEMA DE DEVOLUÇÃO E IMPRESSÃO E EXCLUSÃO)
-# ==============================================================================
 
 @admin_escola_bp.route('/retornar-diario', methods=['POST'])
 @login_required
