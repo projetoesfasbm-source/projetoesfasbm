@@ -245,16 +245,16 @@ def detalhe_faltas_aluno(aluno_id):
 
     faltas_query = db.session.scalars(
         select(FrequenciaAluno)
-        .join(DiarioClasse)
+        .join(DiarioClasse, FrequenciaAluno.diario_id == DiarioClasse.id)
         .join(Turma, DiarioClasse.turma_id == Turma.id)
-        .join(Disciplina)
+        .join(Disciplina, DiarioClasse.disciplina_id == Disciplina.id)
         .where(
             FrequenciaAluno.aluno_id == aluno_id, 
             FrequenciaAluno.presente == False,
             Turma.school_id == school_id 
         )
         .order_by(Disciplina.materia, DiarioClasse.data_aula.desc())
-    ).all()
+    ).unique().all()
     
     disciplinas_map = {}
     for f in faltas_query:

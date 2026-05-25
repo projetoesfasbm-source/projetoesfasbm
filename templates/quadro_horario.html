@@ -151,6 +151,19 @@
     {% set pos_almoco = (intervalos.get('pos_almoco', 6)|int) - 1 %}
     {% set pos_int_2 = (intervalos.get('pos_int_2', 9)|int) - 1 %}
 
+    {% set table_cols = 6 %}
+    {% if semana_selecionada.mostrar_sabado %}{% set table_cols = table_cols + 1 %}{% endif %}
+    {% if semana_selecionada.mostrar_domingo %}{% set table_cols = table_cols + 1 %}{% endif %}
+
+    {% set dias_loop = [0, 1, 2, 3, 4] %}
+    {% if semana_selecionada.mostrar_sabado and semana_selecionada.mostrar_domingo %}
+        {% set dias_loop = [0, 1, 2, 3, 4, 5, 6] %}
+    {% elif semana_selecionada.mostrar_sabado %}
+        {% set dias_loop = [0, 1, 2, 3, 4, 5] %}
+    {% elif semana_selecionada.mostrar_domingo %}
+        {% set dias_loop = [0, 1, 2, 3, 4, 6] %}
+    {% endif %}
+
     <div class="table-wrapper">
         <table class="horario-table-new">
             <thead>
@@ -161,6 +174,12 @@
                     <th class="header-dia">Quarta-feira <br><small>({{ datas_semana.quarta }})</small></th>
                     <th class="header-dia">Quinta-feira <br><small>({{ datas_semana.quinta }})</small></th>
                     <th class="header-dia">Sexta-feira <br><small>({{ datas_semana.sexta }})</small></th>
+                    {% if semana_selecionada.mostrar_sabado %}
+                    <th class="header-dia weekend">Sábado <br><small>({{ datas_semana.sabado }})</small></th>
+                    {% endif %}
+                    {% if semana_selecionada.mostrar_domingo %}
+                    <th class="header-dia weekend">Domingo <br><small>({{ datas_semana.domingo }})</small></th>
+                    {% endif %}
                 </tr>
             </thead>
             <tbody>
@@ -173,61 +192,73 @@
                     
                     <tr class="periodo-row">
                         <td class="cell-tempo"><strong>{{ tempos[row_idx][0] }}</strong><span>{{ tempos[row_idx][1] }}</span></td>
-                        {% for col_idx in range(5) %}
-                            {% set aula = horario_matrix[row_idx][col_idx] %}
-                            
-                            {% if aula == 'SKIP' %}
-                                {% set last_row = row_idx - 1 %}
-                                {% set is_after_interval = (last_row == pos_int_1 or last_row == pos_almoco or last_row == pos_int_2) %}
-                                {% if is_after_interval %}
-                                    {% set ns = namespace(found=false) %}
-                                    {% for r in range(row_idx - 1, -1, -1) %}
-                                        {% if not ns.found and horario_matrix[r][col_idx] != 'SKIP' and horario_matrix[r][col_idx] %}
-                                            {% set parent_aula = horario_matrix[r][col_idx] %}
-                                            {% set p_dur = parent_aula.original_duracao|default(parent_aula.duracao) %}
-                                            {% if r + p_dur > row_idx %}
-                                                {% set remaining = r + p_dur - row_idx %}
-                                                {% set max_dur = remaining %}
-                                                {% if row_idx <= pos_almoco and row_idx + remaining - 1 > pos_almoco %}
-                                                    {% set max_dur = pos_almoco - row_idx + 1 %}
-                                                {% elif row_idx <= pos_int_2 and row_idx + remaining - 1 > pos_int_2 %}
-                                                    {% set max_dur = pos_int_2 - row_idx + 1 %}
+                        {% for col_idx in dias_loop %}
+                            {% set mostrar_celula = true %}
+                            {% if col_idx == 5 and periodo_num > semana_selecionada.periodos_sabado %}
+                                {% set mostrar_celula = false %}
+                            {% endif %}
+                            {% if col_idx == 6 and periodo_num > semana_selecionada.periodos_domingo %}
+                                {% set mostrar_celula = false %}
+                            {% endif %}
+
+                            {% if mostrar_celula %}
+                                {% set aula = horario_matrix[row_idx][col_idx] %}
+                                
+                                {% if aula == 'SKIP' %}
+                                    {% set last_row = row_idx - 1 %}
+                                    {% set is_after_interval = (last_row == pos_int_1 or last_row == pos_almoco or last_row == pos_int_2) %}
+                                    {% if is_after_interval %}
+                                        {% set ns = namespace(found=false) %}
+                                        {% for r in range(row_idx - 1, -1, -1) %}
+                                            {% if not ns.found and horario_matrix[r][col_idx] != 'SKIP' and horario_matrix[r][col_idx] %}
+                                                {% set parent_aula = horario_matrix[r][col_idx] %}
+                                                {% set p_dur = parent_aula.original_duracao|default(parent_aula.duracao) %}
+                                                {% if r + p_dur > row_idx %}
+                                                    {% set remaining = r + p_dur - row_idx %}
+                                                    {% set max_dur = remaining %}
+                                                    {% if row_idx <= pos_almoco and row_idx + remaining - 1 > pos_almoco %}
+                                                        {% set max_dur = pos_almoco - row_idx + 1 %}
+                                                    {% elif row_idx <= pos_int_2 and row_idx + remaining - 1 > pos_int_2 %}
+                                                        {% set max_dur = pos_int_2 - row_idx + 1 %}
+                                                    {% endif %}
+                                                    {% set _ = parent_aula.update({'duracao': max_dur, 'original_duracao': p_dur}) %}
+                                                    {% set aula = parent_aula %}
+                                                    {% include 'partials/_horario_slot_view.html' %}
+                                                    {% set ns.found = true %}
                                                 {% endif %}
-                                                {% set _ = parent_aula.update({'duracao': max_dur, 'original_duracao': p_dur}) %}
-                                                {% set aula = parent_aula %}
-                                                {% include 'partials/_horario_slot_view.html' %}
-                                                {% set ns.found = true %}
                                             {% endif %}
-                                        {% endif %}
-                                    {% endfor %}
+                                        {% endfor %}
+                                    {% endif %}
+                                {% elif aula %}
+                                    {% set p_dur = aula.original_duracao|default(aula.duracao) %}
+                                    {% set max_dur = p_dur %}
+                                    {% if row_idx <= pos_int_1 and row_idx + p_dur - 1 > pos_int_1 %}
+                                        {% set max_dur = pos_int_1 - row_idx + 1 %}
+                                    {% elif row_idx <= pos_almoco and row_idx + p_dur - 1 > pos_almoco %}
+                                        {% set max_dur = pos_almoco - row_idx + 1 %}
+                                    {% elif row_idx <= pos_int_2 and row_idx + p_dur - 1 > pos_int_2 %}
+                                        {% set max_dur = pos_int_2 - row_idx + 1 %}
+                                    {% endif %}
+                                    {% set _ = aula.update({'duracao': max_dur, 'original_duracao': p_dur}) %}
+                                    {% include 'partials/_horario_slot_view.html' %}
+                                {% else %}
+                                    <td class="schedule-slot free {% if col_idx >= 5 %}weekend-slot{% endif %} {% if priority_active and not can_schedule_in_this_turma %}blocked-slot{% endif %}"></td>
                                 {% endif %}
-                            {% elif aula %}
-                                {% set p_dur = aula.original_duracao|default(aula.duracao) %}
-                                {% set max_dur = p_dur %}
-                                {% if row_idx <= pos_int_1 and row_idx + p_dur - 1 > pos_int_1 %}
-                                    {% set max_dur = pos_int_1 - row_idx + 1 %}
-                                {% elif row_idx <= pos_almoco and row_idx + p_dur - 1 > pos_almoco %}
-                                    {% set max_dur = pos_almoco - row_idx + 1 %}
-                                {% elif row_idx <= pos_int_2 and row_idx + p_dur - 1 > pos_int_2 %}
-                                    {% set max_dur = pos_int_2 - row_idx + 1 %}
-                                {% endif %}
-                                {% set _ = aula.update({'duracao': max_dur, 'original_duracao': p_dur}) %}
-                                {% include 'partials/_horario_slot_view.html' %}
                             {% else %}
-                                <td class="schedule-slot free {% if priority_active and not can_schedule_in_this_turma %}blocked-slot{% endif %}"></td>
+                                <td class="schedule-slot free blocked-slot" style="background-color: #f8f9fa;"></td>
                             {% endif %}
                             
                         {% endfor %}
                     </tr>
                     
                     {% if row_idx == pos_int_1 and intervalos.get('intervalo_1') and intervalos.get('intervalo_1') not in ['N/D', '-', ''] %}
-                        <tr><td colspan="6" class="bg-secondary text-white py-1 text-center small fw-bold text-uppercase">INTERVALO MANHÃ: {{ intervalos.get('intervalo_1') }}</td></tr>
+                        <tr><td colspan="{{ table_cols }}" class="bg-secondary text-white py-1 text-center small fw-bold text-uppercase">INTERVALO MANHÃ: {{ intervalos.get('intervalo_1') }}</td></tr>
                     {% endif %}
                     {% if row_idx == pos_almoco and intervalos.get('almoco') and intervalos.get('almoco') not in ['N/D', '-', ''] %}
-                        <tr><td colspan="6" class="bg-secondary text-white py-1 text-center small fw-bold text-uppercase">ALMOÇO: {{ intervalos.get('almoco') }}</td></tr>
+                        <tr><td colspan="{{ table_cols }}" class="bg-secondary text-white py-1 text-center small fw-bold text-uppercase">ALMOÇO: {{ intervalos.get('almoco') }}</td></tr>
                     {% endif %}
                     {% if row_idx == pos_int_2 and intervalos.get('intervalo_2') and intervalos.get('intervalo_2') not in ['N/D', '-', ''] %}
-                        <tr><td colspan="6" class="bg-secondary text-white py-1 text-center small fw-bold text-uppercase">INTERVALO TARDE: {{ intervalos.get('intervalo_2') }}</td></tr>
+                        <tr><td colspan="{{ table_cols }}" class="bg-secondary text-white py-1 text-center small fw-bold text-uppercase">INTERVALO TARDE: {{ intervalos.get('intervalo_2') }}</td></tr>
                     {% endif %}
                     
                     {% endif %}
@@ -235,128 +266,6 @@
             </tbody>
         </table>
     </div>
-
-    {% if semana_selecionada.mostrar_sabado or semana_selecionada.mostrar_domingo %}
-    <button class="weekend-toggle-btn" id="weekend-toggle">
-        <span>Fim de Semana</span>
-    </button>
-    
-    <div class="weekend-panel" id="weekend-panel">
-        <div class="table-wrapper">
-            <table class="horario-table-new weekend-table">
-                <thead>
-                    <tr>
-                        <th class="header-tempo">Horário</th>
-                        {% if semana_selecionada.mostrar_sabado %}<th class="header-dia weekend">Sábado <br><small>({{ datas_semana.sabado }})</small></th>{% endif %}
-                        {% if semana_selecionada.mostrar_domingo %}<th class="header-dia weekend">Domingo <br><small>({{ datas_semana.domingo }})</small></th>{% endif %}
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for row_idx in range(15) %}
-                        {% if (semana_selecionada.mostrar_sabado and loop.index <= semana_selecionada.periodos_sabado) or
-                              (semana_selecionada.mostrar_domingo and loop.index <= semana_selecionada.periodos_domingo) %}
-                        <tr class="periodo-row">
-                            <td class="cell-tempo"><strong>{{ tempos[row_idx][0] }}</strong><span>{{ tempos[row_idx][1] }}</span></td>
-                            
-                            {% if semana_selecionada.mostrar_sabado %}
-                                {% set col_idx = 5 %}
-                                {% set aula = horario_matrix[row_idx][col_idx] %}
-                                
-                                {% if aula == 'SKIP' %}
-                                    {% set last_row = row_idx - 1 %}
-                                    {% set is_after_interval = (last_row == pos_int_1 or last_row == pos_almoco or last_row == pos_int_2) %}
-                                    {% if is_after_interval %}
-                                        {% set ns = namespace(found=false) %}
-                                        {% for r in range(row_idx - 1, -1, -1) %}
-                                            {% if not ns.found and horario_matrix[r][col_idx] != 'SKIP' and horario_matrix[r][col_idx] %}
-                                                {% set parent_aula = horario_matrix[r][col_idx] %}
-                                                {% set p_dur = parent_aula.original_duracao|default(parent_aula.duracao) %}
-                                                {% if r + p_dur > row_idx %}
-                                                    {% set remaining = r + p_dur - row_idx %}
-                                                    {% set max_dur = remaining %}
-                                                    {% if row_idx <= pos_almoco and row_idx + remaining - 1 > pos_almoco %}
-                                                        {% set max_dur = pos_almoco - row_idx + 1 %}
-                                                    {% elif row_idx <= pos_int_2 and row_idx + remaining - 1 > pos_int_2 %}
-                                                        {% set max_dur = pos_int_2 - row_idx + 1 %}
-                                                    {% endif %}
-                                                    {% set _ = parent_aula.update({'duracao': max_dur, 'original_duracao': p_dur}) %}
-                                                    {% set aula = parent_aula %}
-                                                    {% include 'partials/_horario_slot_view.html' %}
-                                                    {% set ns.found = true %}
-                                                {% endif %}
-                                            {% endif %}
-                                        {% endfor %}
-                                    {% endif %}
-                                {% elif aula %}
-                                    {% set p_dur = aula.original_duracao|default(aula.duracao) %}
-                                    {% set max_dur = p_dur %}
-                                    {% if row_idx <= pos_int_1 and row_idx + p_dur - 1 > pos_int_1 %}
-                                        {% set max_dur = pos_int_1 - row_idx + 1 %}
-                                    {% elif row_idx <= pos_almoco and row_idx + p_dur - 1 > pos_almoco %}
-                                        {% set max_dur = pos_almoco - row_idx + 1 %}
-                                    {% elif row_idx <= pos_int_2 and row_idx + p_dur - 1 > pos_int_2 %}
-                                        {% set max_dur = pos_int_2 - row_idx + 1 %}
-                                    {% endif %}
-                                    {% set _ = aula.update({'duracao': max_dur, 'original_duracao': p_dur}) %}
-                                    {% include 'partials/_horario_slot_view.html' %}
-                                {% else %}
-                                    <td class="schedule-slot free weekend-slot {% if priority_active and not can_schedule_in_this_turma %}blocked-slot{% endif %}"></td>
-                                {% endif %}
-                            {% endif %}
-                            
-                            {% if semana_selecionada.mostrar_domingo %}
-                                {% set col_idx = 6 %}
-                                {% set aula = horario_matrix[row_idx][col_idx] %}
-                                
-                                {% if aula == 'SKIP' %}
-                                    {% set last_row = row_idx - 1 %}
-                                    {% set is_after_interval = (last_row == pos_int_1 or last_row == pos_almoco or last_row == pos_int_2) %}
-                                    {% if is_after_interval %}
-                                        {% set ns = namespace(found=false) %}
-                                        {% for r in range(row_idx - 1, -1, -1) %}
-                                            {% if not ns.found and horario_matrix[r][col_idx] != 'SKIP' and horario_matrix[r][col_idx] %}
-                                                {% set parent_aula = horario_matrix[r][col_idx] %}
-                                                {% set p_dur = parent_aula.original_duracao|default(parent_aula.duracao) %}
-                                                {% if r + p_dur > row_idx %}
-                                                    {% set remaining = r + p_dur - row_idx %}
-                                                    {% set max_dur = remaining %}
-                                                    {% if row_idx <= pos_almoco and row_idx + remaining - 1 > pos_almoco %}
-                                                        {% set max_dur = pos_almoco - row_idx + 1 %}
-                                                    {% elif row_idx <= pos_int_2 and row_idx + remaining - 1 > pos_int_2 %}
-                                                        {% set max_dur = pos_int_2 - row_idx + 1 %}
-                                                    {% endif %}
-                                                    {% set _ = parent_aula.update({'duracao': max_dur, 'original_duracao': p_dur}) %}
-                                                    {% set aula = parent_aula %}
-                                                    {% include 'partials/_horario_slot_view.html' %}
-                                                    {% set ns.found = true %}
-                                                {% endif %}
-                                            {% endif %}
-                                        {% endfor %}
-                                    {% endif %}
-                                {% elif aula %}
-                                    {% set p_dur = aula.original_duracao|default(aula.duracao) %}
-                                    {% set max_dur = p_dur %}
-                                    {% if row_idx <= pos_int_1 and row_idx + p_dur - 1 > pos_int_1 %}
-                                        {% set max_dur = pos_int_1 - row_idx + 1 %}
-                                    {% elif row_idx <= pos_almoco and row_idx + p_dur - 1 > pos_almoco %}
-                                        {% set max_dur = pos_almoco - row_idx + 1 %}
-                                    {% elif row_idx <= pos_int_2 and row_idx + p_dur - 1 > pos_int_2 %}
-                                        {% set max_dur = pos_int_2 - row_idx + 1 %}
-                                    {% endif %}
-                                    {% set _ = aula.update({'duracao': max_dur, 'original_duracao': p_dur}) %}
-                                    {% include 'partials/_horario_slot_view.html' %}
-                                {% else %}
-                                    <td class="schedule-slot free weekend-slot {% if priority_active and not can_schedule_in_this_turma %}blocked-slot{% endif %}"></td>
-                                {% endif %}
-                            {% endif %}
-                        </tr>
-                        {% endif %}
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-    {% endif %}
 {% endif %}
 </div>
 {% endblock %}

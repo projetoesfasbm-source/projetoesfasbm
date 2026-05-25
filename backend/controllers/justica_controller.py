@@ -1,4 +1,3 @@
-# backend/controllers/justica_controller.py
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, g
 from flask_login import login_required, current_user
 from sqlalchemy import select, or_
@@ -401,20 +400,37 @@ def finalizar_processo(pid):
     decisao = request.form.get('decisao')
     fundamentacao_texto = request.form.get('observacao_decisao')
     turnos_sustacao = request.form.get('turnos_sustacao')
+    novo_enquadramento_id = request.form.get('novo_enquadramento_id')
 
     if not decisao:
         flash("Selecione uma decisão válida.", "warning"); return redirect(url_for('justica.index'))
 
-    # BLOQUEIO DE PONTUAÇÃO: Busca o valor exato da tabela de regras (DisciplineRule)
     pontos_finais = 0.0
-    if processo.regra_id:
-        regra = db.session.get(DisciplineRule, processo.regra_id)
-        if regra:
-            pontos_finais = regra.pontos
-    elif processo.pontos:
-        # Fallback caso seja uma infração registrada manualmente sem regra vinculada
-        pontos_finais = processo.pontos
 
+    # Lógica para Mudar o Enquadramento Dinâmico sem interromper o fluxo
+    if novo_enquadramento_id:
+        nova_regra = db.session.get(DisciplineRule, int(novo_enquadramento_id))
+        if nova_regra:
+            enquadramento_antigo = processo.codigo_infracao or 'N/A'
+            
+            # Atualiza a regra no banco de dados para a nova escolhida
+            processo.regra_id = nova_regra.id
+            processo.codigo_infracao = nova_regra.codigo
+            pontos_finais = nova_regra.pontos
+            
+            # Registra a alteração na fundamentação para auditoria
+            fundamentacao_texto = f"[ENQUADRAMENTO ALTERADO]: O chefe reclassificou a infração de '{enquadramento_antigo}' para '{nova_regra.codigo} - {nova_regra.descricao}'.\n\n{fundamentacao_texto}"
+    else:
+        # Se não houve alteração no enquadramento, busca a pontuação da regra atual
+        if processo.regra_id:
+            regra = db.session.get(DisciplineRule, processo.regra_id)
+            if regra:
+                pontos_finais = regra.pontos
+        elif processo.pontos:
+            # Fallback caso seja uma infração registrada manualmente
+            pontos_finais = processo.pontos
+
+    # Prossegue com o fluxo normal da decisão e finalização
     processo.decisao_final = decisao
     processo.data_decisao = datetime.now().astimezone()
     processo.relator_id = current_user.id
@@ -461,12 +477,16 @@ def finalizar_processo(pid):
         db.session.commit()
         aluno = db.session.get(Aluno, processo.aluno_id)
         
-        # LOG DE AUDITORIA
-        LogService.log_action(
-            user_id=current_user.id,
-            action="FINALIZAR_PROCESSO_DISCIPLINA",
-            details=f"Julgou o PD {processo.id} do aluno {aluno.user.nome_completo if aluno and aluno.user else 'Desconhecido'}. Veredito: {decisao}. Pontos aplicados: {processo.pontos}"
-        )
+        # Tenta salvar no log, ignorando se o método não existir
+        try:
+            if hasattr(LogService, 'log_action'):
+                LogService.log_action(
+                    user_id=current_user.id,
+                    action="FINALIZAR_PROCESSO_DISCIPLINA",
+                    details=f"Julgou o PD {processo.id} do aluno {aluno.user.nome_completo if aluno and aluno.user else 'Desconhecido'}. Veredito: {decisao}. Pontos aplicados: {processo.pontos}"
+                )
+        except Exception as log_e:
+            logger.warning(f"Não foi possível salvar log de auditoria: {log_e}")
 
         if aluno and aluno.user:
             link = url_for('justica.index', _external=True)
@@ -834,12 +854,16 @@ def anular_processo(pid):
 
     db.session.commit()
     
-    # LOG DE AUDITORIA DE ANULAÇÃO
-    LogService.log_action(
-        user_id=current_user.id,
-        action="ANULAR_PROCESSO_DISCIPLINA",
-        details=f"Anulou o PD {processo.id}. Motivo: {motivo.strip()}"
-    )
+    # Tenta salvar no log, ignorando se falhar
+    try:
+        if hasattr(LogService, 'log_action'):
+            LogService.log_action(
+                user_id=current_user.id,
+                action="ANULAR_PROCESSO_DISCIPLINA",
+                details=f"Anulou o PD {processo.id}. Motivo: {motivo.strip()}"
+            )
+    except Exception as log_e:
+        logger.warning(f"Não foi possível salvar log de auditoria: {log_e}")
 
     flash(f"Processo Nº {processo.id} anulado com sucesso. O registro foi salvo no histórico.", "success")
     return redirect(url_for('justica.index'))

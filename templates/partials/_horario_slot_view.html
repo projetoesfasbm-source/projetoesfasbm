@@ -1,10 +1,20 @@
 {% if aula != 'SKIP' %}
-    {# Lógica de Destaque #}
+    {# Lógica de Destaque Corrigida #}
     {% set is_my_class = false %}
-    {% if current_user.is_authenticated and current_user.role == 'instrutor' and current_user.instrutor_profile %}
-        {# Agora usamos os campos 'raw' que foram adicionados no Service #}
-        {% if aula.raw_instrutor_id == current_user.instrutor_profile.id or (aula.raw_instrutor_id_2 and aula.raw_instrutor_id_2 == current_user.instrutor_profile.id) %}
-             {% set is_my_class = true %}
+    
+    {% if current_user.is_authenticated and current_user.role == 'instrutor' %}
+        
+        {# Verificação 1: Pelo ID numérico exato enviado pelo backend (À prova de falhas) #}
+        {% if instrutor_logado_id and (aula.raw_instrutor_id == instrutor_logado_id or aula.raw_instrutor_id_2 == instrutor_logado_id) %}
+            {% set is_my_class = true %}
+            
+        {# Verificação 2: Pela string de Posto + Nome de Guerra #}
+        {% elif aula.instrutor %}
+            {% set meu_nome_completo = ((current_user.posto_graduacao or '') ~ ' ' ~ (current_user.nome_de_guerra or current_user.username)) | trim %}
+            {% if meu_nome_completo in aula.instrutor %}
+                {% set is_my_class = true %}
+            {% endif %}
+            
         {% endif %}
     {% endif %}
 
