@@ -1,4 +1,3 @@
-# backend/controllers/diario_controller.py
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, jsonify
 from flask_login import login_required, current_user
 from datetime import datetime
@@ -144,6 +143,26 @@ def assinar(diario_id):
                            alunos_list=alunos_query, 
                            freq_map=freq_map)
 
+@diario_bp.route('/instrutor/devolver/<int:diario_id>', methods=['POST'])
+@login_required
+def devolver_aluno(diario_id):
+    # Verifica se o usuário atual é realmente um instrutor do sistema
+    instrutor = DiarioService.get_current_instrutor(current_user.id)
+    if not instrutor:
+        flash("Acesso negado. Apenas instrutores podem devolver diários.", "danger")
+        return redirect(url_for('diario.listar_pendentes'))
+
+    motivo = request.form.get('motivo_devolucao', 'Correção de períodos necessária.')
+    
+    ok, msg = DiarioService.devolver_diario_aluno(diario_id, current_user, motivo)
+    
+    if ok:
+        flash(msg, "success")
+    else:
+        flash(msg, "danger")
+        
+    return redirect(url_for('diario.listar_pendentes'))
+
 @diario_bp.route('/faltas-por-dia', methods=['GET'])
 @login_required
 def faltas_por_dia():
@@ -222,9 +241,6 @@ def faltas_por_dia():
     except Exception as e:
         return jsonify({"success": False, "message": f"Falha ao consultar banco de dados: {str(e)}"}), 500
 
-# ===============================
-# ROTAS DA LIXEIRA (ADMIN)
-# ===============================
 @diario_bp.route('/admin/lixeira', methods=['GET'])
 @login_required
 def listar_lixeira():
@@ -241,30 +257,40 @@ def listar_lixeira():
         flash("Escola não selecionada.", "warning")
         return redirect(url_for('main.dashboard'))
 
-    # Busca todos apagados
     diarios_apagados = db.session.scalars(
         db.select(DiarioClasse)
         .join(Turma, DiarioClasse.turma_id == Turma.id)
         .where(
             Turma.school_id == school_id,
             DiarioClasse.is_deleted == True
-        ).order_by(DiarioClasse.data_aula.desc(), DiarioClasse.periodo)
+        ).order_by(DiarioClasse.data_aula.desc(), DiarioClasse.turma_id, DiarioClasse.disciplina_id, DiarioClasse.periodo.asc())
     ).all()
     
-    # Agrupa por bloco para exibir na view
     grouped = []
     if diarios_apagados:
         curr_group = [diarios_apagados[0]]
         for i in range(1, len(diarios_apagados)):
             curr = diarios_apagados[i]
             prev = curr_group[-1]
-            if (curr.data_aula == prev.data_aula and 
+            
+            is_same_context = (
+                curr.data_aula == prev.data_aula and 
                 curr.turma_id == prev.turma_id and 
-                curr.disciplina_id == prev.disciplina_id):
+                curr.disciplina_id == prev.disciplina_id
+            )
+            
+            is_consecutive = False
+            if curr.periodo is not None and prev.periodo is not None:
+                is_consecutive = (curr.periodo == prev.periodo + 1) or (curr.periodo == prev.periodo)
+            elif curr.periodo is None and prev.periodo is None:
+                is_consecutive = True
+
+            if is_same_context and is_consecutive:
                 curr_group.append(curr)
             else:
                 grouped.append(curr_group)
                 curr_group = [curr]
+                
         if curr_group:
             grouped.append(curr_group)
             
@@ -273,7 +299,14 @@ def listar_lixeira():
         rep = g[0]
         first_p = g[0].periodo
         last_p = g[-1].periodo
-        per_str = f"{first_p}º" if first_p == last_p else f"{first_p}º a {last_p}º"
+        
+        if first_p is None:
+            per_str = "N/D"
+        elif first_p == last_p:
+            per_str = f"{first_p}º"
+        else:
+            per_str = f"{first_p}º a {last_p}º"
+            
         lista_view.append({
             'id': rep.id,
             'data_aula': rep.data_aula,
@@ -283,8 +316,6 @@ def listar_lixeira():
             'qtd_aulas': len(g)
         })
 
-    # Renderiza na tela (Ajuste o HTML conforme seu painel de admin, 
-    # basta varrer a variavel lixeira e usar um formulário POST chamando /admin/restaurar/<id>)
     return render_template('diario/admin_lixeira.html', lixeira=lista_view)
 
 @diario_bp.route('/admin/restaurar/<int:diario_id>', methods=['POST'])

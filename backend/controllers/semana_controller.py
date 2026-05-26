@@ -48,20 +48,20 @@ def index():
 def gerenciar_semanas(ciclo_id):
     form = AddSemanaForm()
     delete_form = DeleteForm()
-    
+
     school_id = UserService.get_current_school_id()
-    
+
     # Busca apenas Ciclos da escola atual
     ciclos = db.session.execute(
         select(Ciclo).where(Ciclo.school_id == school_id).order_by(Ciclo.nome)
     ).scalars().all()
-    
+
     form.ciclo_id.choices = [(c.id, c.nome) for c in ciclos]
 
     # Lógica de seleção automática de ciclo
     if ciclo_id:
         if not any(c.id == ciclo_id for c in ciclos):
-            ciclo_id = None 
+            ciclo_id = None
 
     if not ciclo_id and ciclos:
         ultimo_ciclo = max(ciclos, key=lambda c: c.id)
@@ -69,20 +69,20 @@ def gerenciar_semanas(ciclo_id):
 
     # Query Base: Semanas
     query = select(Semana).join(Ciclo).where(Ciclo.school_id == school_id).order_by(Semana.data_inicio.desc())
-    
+
     if ciclo_id:
         query = query.where(Semana.ciclo_id == ciclo_id)
-        form.ciclo_id.data = ciclo_id 
+        form.ciclo_id.data = ciclo_id
     else:
-        query = query.where(Semana.id == -1) 
-    
+        query = query.where(Semana.id == -1)
+
     semanas = db.session.execute(query).scalars().all()
 
-    return render_template('gerenciar_semanas.html', 
-                           semanas=semanas, 
-                           add_form=form, 
+    return render_template('gerenciar_semanas.html',
+                           semanas=semanas,
+                           add_form=form,
                            delete_form=delete_form,
-                           todos_os_ciclos=ciclos, 
+                           todos_os_ciclos=ciclos,
                            ciclo_selecionado_id=ciclo_id)
 
 @semana_bp.route('/adicionar', methods=['POST'])
@@ -91,7 +91,7 @@ def gerenciar_semanas(ciclo_id):
 def adicionar_semana():
     form = AddSemanaForm()
     school_id = UserService.get_current_school_id()
-    
+
     ciclos = db.session.execute(
         select(Ciclo).where(Ciclo.school_id == school_id).order_by(Ciclo.nome)
     ).scalars().all()
@@ -104,11 +104,11 @@ def adicionar_semana():
         else:
             flash(message, 'danger')
         return redirect(url_for('semana.gerenciar_semanas', ciclo_id=form.ciclo_id.data))
-    
+
     for field, errors in form.errors.items():
         for error in errors:
             flash(f"Erro em {getattr(form, field).label.text}: {error}", 'danger')
-            
+
     ciclo_id = request.form.get('ciclo_id')
     return redirect(url_for('semana.gerenciar_semanas', ciclo_id=ciclo_id))
 
@@ -116,9 +116,9 @@ def adicionar_semana():
 @login_required
 @school_admin_or_programmer_required
 def editar_semana(semana_id):
-    semana = db.session.get(Semana, semantic_id)
+    semana = db.session.get(Semana, semana_id)
     school_id = UserService.get_current_school_id()
-    
+
     if not semana or (school_id and semana.ciclo.school_id != school_id):
         flash("Semana não encontrada ou não pertence à sua escola.", "danger")
         return redirect(url_for('semana.gerenciar_semanas'))
@@ -139,7 +139,7 @@ def editar_semana(semana_id):
              'mostrar_sabado': 'mostrar_sabado' in request.form,
              'mostrar_domingo': 'mostrar_domingo' in request.form
         })
-        
+
         success, msg = SemanaService.update_semana(semana_id, data)
         if success:
             flash('Semana atualizada com sucesso!', 'success')
@@ -171,7 +171,7 @@ def deletar_semana(semana_id):
 def adicionar_ciclo():
     nome_ciclo = request.form.get('nome_ciclo')
     school_id = UserService.get_current_school_id()
-    
+
     if nome_ciclo and school_id:
         exists = db.session.scalar(
             select(Ciclo).where(Ciclo.nome == nome_ciclo, Ciclo.school_id == school_id)
@@ -208,15 +208,15 @@ def salvar_prioridade(semana_id):
     try:
         semana = db.session.get(Semana, semana_id)
         school_id = UserService.get_current_school_id()
-        
+
         if not semana or (school_id and semana.ciclo.school_id != school_id):
             return jsonify({'success': False, 'message': 'Semana não encontrada'}), 404
 
         data = request.get_json()
-        
+
         # Status do sistema prioritário
         semana.priority_active = data.get('status', False)
-        
+
         # Lista de disciplinas com prioridade geral
         disciplinas = data.get('disciplinas', [])
         semana.priority_disciplines = json.dumps(disciplinas)
