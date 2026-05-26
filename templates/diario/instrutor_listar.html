@@ -8,12 +8,12 @@
 
     <div class="mb-4">
         <a href="{{ url_for('diario.listar_pendentes', status='pendente') }}"
-           class="btn {% if sel_status == 'pendente' %}btn-primary{% else %}btn-outline-primary bg-white{% endif %} btn-lg me-2 shadow-sm fw-bold">
+            class="btn {% if sel_status == 'pendente' %}btn-primary{% else %}btn-outline-primary bg-white{% endif %} btn-lg me-2 shadow-sm fw-bold">
             <i class="fas fa-clock me-2"></i> Pendentes de Assinatura
         </a>
 
         <a href="{{ url_for('diario.listar_pendentes', status='assinado') }}"
-           class="btn {% if sel_status == 'assinado' %}btn-success{% else %}btn-outline-success bg-white{% endif %} btn-lg shadow-sm fw-bold">
+            class="btn {% if sel_status == 'assinado' %}btn-success{% else %}btn-outline-success bg-white{% endif %} btn-lg shadow-sm fw-bold">
             <i class="fas fa-check-double me-2"></i> Histórico (Já Validados)
         </a>
     </div>
@@ -49,7 +49,7 @@
             </form>
         </div>
     </div>
-
+    
     {% if diarios %}
     <div class="card shadow-sm">
         <div class="table-responsive">
@@ -85,9 +85,14 @@
                         </td>
                         <td class="text-end pe-4">
                             {% if diario.status == 'pendente' %}
-                                <a href="{{ url_for('diario.assinar', diario_id=diario.id) }}" class="btn btn-primary btn-sm shadow-sm">
-                                    <i class="fas fa-pen-nib"></i> Validar Bloco
-                                </a>
+                                <div class="btn-group" role="group">
+                                    <a href="{{ url_for('diario.assinar', diario_id=diario.id) }}" class="btn btn-primary btn-sm shadow-sm">
+                                        <i class="fas fa-pen-nib"></i> Validar
+                                    </a>
+                                    <button type="button" class="btn btn-danger btn-sm shadow-sm" data-bs-toggle="modal" data-bs-target="#modalDevolver-{{ diario.id }}">
+                                        <i class="fas fa-undo"></i>
+                                    </button>
+                                </div>
                             {% else %}
                                 <button class="btn btn-secondary btn-sm disabled" disabled>
                                     <i class="fas fa-check"></i> Feito
@@ -111,4 +116,31 @@
     </div>
     {% endif %}
 </div>
+
+{% for diario in diarios %}
+{% if diario.status == 'pendente' %}
+<div class="modal fade" id="modalDevolver-{{ diario.id }}" tabindex="-1" aria-hidden="true" style="z-index: 1060 !important;" data-bs-backdrop="false">
+  <div class="modal-dialog">
+    <div class="modal-content shadow-lg">
+      <form method="POST" action="{{ url_for('diario.devolver_aluno', diario_id=diario.id) }}">
+          {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+          <div class="modal-header bg-danger text-white">
+            <h5 class="modal-title">Devolver ao Aluno</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <p>Isto enviará o diário para a lixeira, liberando o horário para o Chefe de Turma corrigir.</p>
+            <textarea class="form-control" name="motivo_devolucao" rows="3" required placeholder="Motivo da devolução..."></textarea>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-danger">Confirmar Devolução</button>
+          </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endfor %}
+
 {% endblock %}

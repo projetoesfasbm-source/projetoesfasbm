@@ -9,7 +9,7 @@
 </div>
 
 {# VERIFICAÇÃO DE PERMISSÃO: Adicionado 'admin_sens' #}
-{% if current_user.role in ['programador', 'admin_escola', 'super_admin', 'sens', 'admin_sens'] %}
+{% if current_user.is_programador or current_user.is_admin_escola or current_user.is_sens %}
 
     <div class="table-container" style="max-width: 700px; margin: 0 auto;">
         <form method="POST" action="{{ url_for('vinculo.editar_vinculo', vinculo_id=vinculo.id) }}">

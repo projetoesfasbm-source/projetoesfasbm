@@ -121,7 +121,13 @@ class DiarioService:
         if turma_id: stmt = stmt.where(DiarioClasse.turma_id == turma_id)
         if disciplina_id: stmt = stmt.where(DiarioClasse.disciplina_id == disciplina_id)
 
-        stmt = stmt.order_by(DiarioClasse.data_aula.desc(), DiarioClasse.periodo)
+        # ORDENAÇÃO RIGOROSA PARA AGRUPAMENTO
+        stmt = stmt.order_by(
+            DiarioClasse.data_aula.desc(), 
+            DiarioClasse.turma_id, 
+            DiarioClasse.disciplina_id, 
+            DiarioClasse.periodo.asc()
+        )
         return db.session.scalars(stmt.distinct()).all()
 
     @staticmethod
@@ -137,9 +143,19 @@ class DiarioService:
             curr = raw_diarios[i]
             prev = current_group[-1]
 
-            if (curr.data_aula == prev.data_aula and 
+            is_same_context = (
+                curr.data_aula == prev.data_aula and 
                 curr.turma_id == prev.turma_id and 
-                curr.disciplina_id == prev.disciplina_id):
+                curr.disciplina_id == prev.disciplina_id
+            )
+
+            is_consecutive = False
+            if curr.periodo is not None and prev.periodo is not None:
+                is_consecutive = (curr.periodo == prev.periodo + 1) or (curr.periodo == prev.periodo)
+            elif curr.periodo is None and prev.periodo is None:
+                is_consecutive = True
+            
+            if is_same_context and is_consecutive:
                 current_group.append(curr)
             else:
                 grouped_diarios.append(DiarioService._criar_representante_grupo(current_group))
@@ -289,7 +305,6 @@ class DiarioService:
                             freq.presente = presente_bool
                             if freq.presente: freq.justificativa = None
 
-            # Usa o relógio exato de Brasília em vez do relógio em UTC do PythonAnywhere
             timestamp = DiarioService.get_agora_brasilia()
             for d in bloco_completo:
                 if d.status == 'pendente':
@@ -363,7 +378,7 @@ class DiarioService:
             )).all()
             total_apagados = 0
             for d in siblings:
-                d.is_deleted = True # Soft Delete
+                d.is_deleted = True 
                 total_apagados += 1
             db.session.commit()
             return True, f"Sucesso: {total_apagados} aula(s) foram movidas para a Lixeira do Admin."
@@ -392,3 +407,33 @@ class DiarioService:
         except Exception as e:
             db.session.rollback()
             return False, f"Erro ao restaurar: {str(e)}"
+
+    @staticmethod
+    def devolver_diario_aluno(diario_id, instrutor_user, motivo_devolucao):
+        """
+        Função para o Instrutor REJEITAR/DEVOLVER o diário ao aluno.
+        """
+        diario = db.session.get(DiarioClasse, diario_id)
+        if not diario: 
+            return False, "Diário não encontrado."
+        
+        try:
+            # Pega todos os diários daquele mesmo bloco quebrado
+            siblings = db.session.scalars(select(DiarioClasse).where(
+                DiarioClasse.data_aula == diario.data_aula,
+                DiarioClasse.turma_id == diario.turma_id,
+                DiarioClasse.disciplina_id == diario.disciplina_id,
+                DiarioClasse.is_deleted == False
+            )).all()
+            
+            total_apagados = 0
+            for d in siblings:
+                d.is_deleted = True # Remove da visão ativa (Soft Delete)
+                d.observacoes = (d.observacoes or "") + f"\n[DEVOLVIDO AO ALUNO PELO INSTRUTOR]: {motivo_devolucao}"
+                total_apagados += 1
+                
+            db.session.commit()
+            return True, f"Diário devolvido/rejeitado com sucesso! O período foi liberado para o aluno refazer."
+        except Exception as e:
+            db.session.rollback()
+            return False, f"Erro ao devolver diário: {str(e)}"
