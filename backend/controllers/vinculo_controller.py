@@ -43,8 +43,8 @@ def gerenciar_vinculos():
             flash("Turma selecionada inválida ou de outra escola.", "warning")
             turma_filtrada_id = None 
 
-    vinculos = VinculoService.get_all_vinculos(turma_filtrada_id, school_id)
     active_edicao = session.get('active_edicao_id')
+    vinculos = VinculoService.get_all_vinculos(turma_filtrada_id, school_id, active_edicao)
     turmas = TurmaService.get_turmas_by_school(school_id, active_edicao)
     delete_form = DeleteForm()
     

@@ -13,11 +13,12 @@ from ..models.horario import Horario
 
 class VinculoService:
     @staticmethod
-    def get_all_vinculos(turma_filtrada_id: int = None, school_id: int = None):
+    def get_all_vinculos(turma_filtrada_id: int = None, school_id: int = None, edicao_id: int = None):
         """
         Busca vínculos.
         - Se turma_filtrada_id for fornecido, filtra por ela.
         - Se school_id for fornecido, garante que só traga vínculos dessa escola (segurança/filtro geral).
+        - Se edicao_id for fornecido, filtra turmas pertencentes a essa edição.
         """
         query = db.select(DisciplinaTurma).options(
             joinedload(DisciplinaTurma.instrutor_1).joinedload(Instrutor.user),
@@ -33,6 +34,9 @@ class VinculoService:
 
         if school_id:
             query = query.where(Turma.school_id == school_id)
+
+        if edicao_id:
+            query = query.where(Turma.edicao_id == edicao_id)
 
         query = query.order_by(DisciplinaTurma.id.desc())
         return db.session.scalars(query).all()
