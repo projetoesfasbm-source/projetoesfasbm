@@ -116,6 +116,7 @@ def login():
             if trust_token and trust_token == user.totp_secret:
                 login_user(user, remember=remember)
                 session.pop('active_school_id', None)
+                session.pop('is_dec_mode', None)
                 session.permanent = True
                 return redirect(url_for("main.selecionar_escola"))
 
@@ -126,6 +127,7 @@ def login():
         # Login normal (sem 2FA)
         login_user(user, remember=remember)
         session.pop('active_school_id', None)
+        session.pop('is_dec_mode', None)
         session.permanent = True
         return redirect(url_for("main.selecionar_escola"))
 
@@ -156,6 +158,7 @@ def verificar_2fa():
 
             login_user(user, remember=remember)
             session.pop('active_school_id', None)
+            session.pop('is_dec_mode', None)
             session.permanent = True
 
             flash("Autenticação realizada com sucesso.", "success")

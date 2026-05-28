@@ -14,7 +14,7 @@ from ..models.processo_disciplina import ProcessoDisciplina
 
 class DashboardService:
     @staticmethod
-    def get_dashboard_data(school_id=None):
+    def get_dashboard_data(school_id=None, edicao_id=None):
 
         # --- Contagens Básicas ---
         # CORREÇÃO: Filtra explicitamente pelo role 'aluno' na tabela UserSchool para não contar admins
@@ -24,6 +24,8 @@ class DashboardService:
                 UserSchool.school_id == school_id,
                 UserSchool.role == 'aluno'  # <--- Filtro Adicionado
             )
+        if edicao_id:
+            alunos_query = alunos_query.where(Aluno.edicao_id == edicao_id)
         total_alunos = db.session.scalar(alunos_query) or 0
 
         # CORREÇÃO: Mesma lógica para instrutores, garantindo que só conta quem tem role 'instrutor'
@@ -33,6 +35,9 @@ class DashboardService:
                 UserSchool.school_id == school_id,
                 UserSchool.role == 'instrutor' # <--- Filtro Adicionado
             )
+        if edicao_id:
+            from ..models.edicao import Edicao
+            instrutores_query = instrutores_query.where(Instrutor.edicoes.any(Edicao.id == edicao_id))
         total_instrutores = db.session.scalar(instrutores_query) or 0
 
         disciplinas_query = select(func.count(func.distinct(Disciplina.materia)))

@@ -13,7 +13,7 @@ from ..models.horario import Horario
 class TurmaService:
 
     @staticmethod
-    def create_turma(data, school_id):
+    def create_turma(data, school_id, edicao_id=None):
         nome_turma = data.get('nome')
         ano = data.get('ano')
         status = data.get('status')
@@ -27,7 +27,7 @@ class TurmaService:
             return False, f'Uma turma com o nome "{nome_turma}" já existe nesta escola.'
 
         try:
-            nova_turma = Turma(nome=nome_turma, ano=ano, school_id=school_id)
+            nova_turma = Turma(nome=nome_turma, ano=ano, school_id=school_id, edicao_id=edicao_id)
             if status: nova_turma.status = status
             
             db.session.add(nova_turma)
@@ -132,9 +132,12 @@ class TurmaService:
             return False, str(e)
 
     @staticmethod
-    def get_turmas_by_school(school_id):
+    def get_turmas_by_school(school_id, edicao_id=None):
         if not school_id: return []
-        return db.session.scalars(select(Turma).where(Turma.school_id == school_id).order_by(Turma.nome)).all()
+        query = select(Turma).where(Turma.school_id == school_id)
+        if edicao_id:
+            query = query.where(Turma.edicao_id == edicao_id)
+        return db.session.scalars(query.order_by(Turma.nome)).all()
 
     @staticmethod
     def get_cargos_da_turma(turma_id, cargos_lista):

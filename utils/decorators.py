@@ -62,11 +62,10 @@ def can_schedule_classes_required(f):
         is_instrutor = current_user.is_instrutor_in_school(school_id)
         is_sens = current_user.is_sens_in_school(school_id)
         is_admin = current_user.is_admin_escola_in_school(school_id)
-        is_prog = current_user.is_programador
         
         has_instrutor_profile = getattr(current_user, 'instrutor_profile', None) is not None
 
-        if (is_instrutor or is_sens or is_admin or is_prog or has_instrutor_profile):
+        if (is_instrutor or is_sens or is_admin or has_instrutor_profile):
             return f(*args, **kwargs)
             
         return redirect(url_for('main.dashboard'))
@@ -75,7 +74,7 @@ def can_schedule_classes_required(f):
 def admin_or_programmer_required(f):
     """
     Usado em admin_tools e áreas genéricas.
-    Permite acesso se for Admin da Escola, Staff (SENS/CAL) ou Programador.
+    Permite acesso se for Admin da Escola ou Staff (SENS/CAL).
     """
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -92,7 +91,7 @@ def admin_or_programmer_required(f):
 
 def school_admin_or_programmer_required(f):
     """
-    Permite acesso ao SENS, Admin da Escola (Comandante) ou Programador.
+    Permite acesso ao SENS ou Admin da Escola (Comandante).
     """
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -101,8 +100,7 @@ def school_admin_or_programmer_required(f):
             
         school_id = UserService.get_current_school_id()
         
-        if (current_user.is_programador or 
-            current_user.is_admin_escola_in_school(school_id) or 
+        if (current_user.is_admin_escola_in_school(school_id) or 
             current_user.is_sens_in_school(school_id)):
             return f(*args, **kwargs)
 
@@ -114,7 +112,6 @@ def sens_or_admin_or_programmer_required(f):
     """
     NOVO DECORATOR (CORREÇÃO VÍNCULOS):
     Permite acesso SOMENTE para:
-    - Programador
     - Admin da Escola (Comandante)
     - Chefe da SENS
     
@@ -129,7 +126,6 @@ def sens_or_admin_or_programmer_required(f):
 
         # Verifica permissões específicas para Vínculos (SENS ou Admin)
         if (
-            current_user.is_programador or
             current_user.is_admin_escola_in_school(school_id) or
             current_user.is_sens_in_school(school_id)
         ):
@@ -148,13 +144,7 @@ def super_admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-def programador_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if not current_user.is_authenticated or not current_user.is_programador:
-            abort(403)
-        return f(*args, **kwargs)
-    return decorated_function
+
 
 def can_view_management_pages_required(f):
     @wraps(f)
@@ -178,7 +168,6 @@ def can_manage_justice_required(f):
     """
     Permite acesso aos gestores de justiça:
     - Admin da Escola
-    - Programador
     - SENS (Chefia de Ensino)
     - CAL (Corpo de Alunos)
     """
@@ -189,8 +178,8 @@ def can_manage_justice_required(f):
             
         school_id = UserService.get_current_school_id()
         
-        # Admin Global e Programador
-        if current_user.is_programador or (getattr(current_user, 'role', '') == 'super_admin'):
+        # Admin Global
+        if getattr(current_user, 'role', '') == 'super_admin':
             return f(*args, **kwargs)
             
         # Admin da Escola, SENS ou CAL

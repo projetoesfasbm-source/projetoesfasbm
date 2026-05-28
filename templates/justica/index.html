@@ -29,8 +29,8 @@
                         </button>
 
                         {% set school_type = 'ctsp' %}
-                        {% if g.active_school and g.active_school.npccal_type %}
-                            {% set school_type = g.active_school.npccal_type|lower %}
+                        {% if g.active_edicao and g.active_edicao.npccal_type %}
+                            {% set school_type = g.active_edicao.npccal_type|lower %}
                         {% endif %}
                         {% if school_type in ['cbfpm', 'cspm'] %}
                         <a href="{{ url_for('justica.fada_boletim') }}" class="btn btn-info text-white justice-option-btn">
@@ -703,7 +703,7 @@
                                             </div>
                                             <div class="col-md-5">
                                                 <label class="small">Hora</label>
-                                                <input type="time" name="hora_fato" class="form-control" value="{{ agora_hora or '12:00' }}">
+                                                <input type="time" name="hora_fato" id="horaFatoInput" class="form-control" value="{{ agora_hora or '12:00' }}" onchange="atualizarTextoInteligente()">
                                             </div>
                                         </div>
                                         <div class="mb-2">
@@ -1075,6 +1075,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         const dataExtenso = getDataPorExtenso(document.getElementById('dataFatoInput').value);
+        const horaFato = document.getElementById('horaFatoInput').value || '12:00';
         const anoAtual = new Date().getFullYear();
 
         if(checks.length === 1) {
@@ -1083,10 +1084,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 .then(r => r.json())
                 .then(d => {
                     const nomeCompleto = `${d.posto_graduacao} ${d.nome_completo}, Id Func. ${d.matricula}`;
-                    box.value = `Termo de Justificação:\n\nTendo em vista as informações constantes na Parte Nº ___/${anoAtual}, evidenciando a existência, em tese, de infração das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação:\n\n1. Justificante: ${nomeCompleto}.\n\n2. Descrição da conduta infracional: O ${nomeCompleto}, no dia ${dataExtenso}, ${descFato}. Com isso, incorreu ${regraDesc}.\n\n3. Cientifico-lhe que a contar do recebimento da presente, abre-se o prazo de 24 horas, para que, querendo, apresente resposta escrita com as provas que entender cabíveis. Fica advertido o acusado que a não entrega da justificação dentro do prazo estipulado, implicará em reconhecimento como verdadeiros os fatos imputados.\n\n[NOME, POSTO/GRADUAÇÃO E FUNÇÃO DO RESPONSÁVEL]`;
+                    box.value = `Termo de Justificação:\n\nTendo em vista as informações constantes na Parte Nº ___/${anoAtual}, evidenciando a existência, em tese, de infração das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação:\n\n1. Justificante: ${nomeCompleto}.\n\n2. Descrição da conduta infracional: O ${nomeCompleto}, no dia ${dataExtenso} às ${horaFato}, ${descFato}. Com isso, incorreu ${regraDesc}.\n\n3. Cientifico-lhe que a contar do recebimento da presente, abre-se o prazo de 24 horas, para que, querendo, apresente resposta escrita com as provas que entender cabíveis. Fica advertido o acusado que a não entrega da justificação dentro do prazo estipulado, implicará em reconhecimento como verdadeiros os fatos imputados.\n\n[NOME, POSTO/GRADUAÇÃO E FUNÇÃO DO RESPONSÁVEL]`;
                 });
         } else if(checks.length > 1) {
-            box.value = `Termo Coletivo para ${checks.length} alunos.\nFato: ${descFato}\nEnquadramento: ${regraDesc}`;
+            box.value = `Termo Coletivo para ${checks.length} alunos.\nFato ocorrido no dia ${dataExtenso} às ${horaFato}:\n${descFato}\nEnquadramento: ${regraDesc}`;
         }
     };
 });

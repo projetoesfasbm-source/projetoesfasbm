@@ -84,9 +84,9 @@
                                     <span class="badge bg-warning text-dark" title="Aguardando Aluno"><i class="fas fa-user-edit"></i></span>
                                 {% elif status == 'FINALIZADO' %}
                                     <span class="badge bg-success" title="Concluído"><i class="fas fa-check-double"></i></span>
-                                    <a href="{{ url_for('justica.exportar_fada_pdf', fada_id=fada_id) }}" class="btn btn-sm btn-danger" title="Imprimir PDF">
+                                    <button type="button" class="btn btn-sm btn-danger btn-fada-pdf" data-url="{{ url_for('justica.exportar_fada_pdf', fada_id=fada_id) }}" title="Imprimir PDF">
                                         <i class="fas fa-file-pdf"></i>
-                                    </a>
+                                    </button>
                                 {% endif %}
                             </div>
                         </td>
@@ -151,6 +151,69 @@ function abrirFadaModal(alunoId, nomeAluno, fadaId, status, fadaData) {
 function fecharFadaModal() {
     document.getElementById('overlayFada').style.display = 'none';
     document.body.style.overflow = '';
+}
+
+// Lógica de Polling do PDF
+document.querySelectorAll('.btn-fada-pdf').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const originalIcon = this.innerHTML;
+        this.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        this.disabled = true;
+        
+        fetch(this.dataset.url)
+            .then(res => res.json())
+            .then(data => {
+                if(data.success && data.job_id) {
+                    pollJobStatus(data.job_id, this, originalIcon);
+                } else {
+                    alert("Erro ao enviar tarefa de PDF para a fila.");
+                    this.innerHTML = originalIcon;
+                    this.disabled = false;
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert("Erro ao conectar com o servidor.");
+                this.innerHTML = originalIcon;
+                this.disabled = false;
+            });
+    });
+});
+
+function pollJobStatus(jobId, btnElement, originalIcon) {
+    const statusUrl = `/api/jobs/${jobId}/status`;
+    const interval = setInterval(() => {
+        fetch(statusUrl)
+            .then(res => {
+                if(!res.ok) { throw new Error('Network error or server error'); }
+                return res.json();
+            })
+            .then(data => {
+                if(data.error) {
+                    clearInterval(interval);
+                    alert("Erro do servidor: " + data.error);
+                    btnElement.innerHTML = originalIcon;
+                    btnElement.disabled = false;
+                } else if(data.status === 'completed') {
+                    clearInterval(interval);
+                    btnElement.innerHTML = originalIcon;
+                    btnElement.disabled = false;
+                    window.location.href = `/api/jobs/${jobId}/download`;
+                } else if(data.status === 'failed') {
+                    clearInterval(interval);
+                    alert("A geração do PDF falhou no servidor.");
+                    btnElement.innerHTML = originalIcon;
+                    btnElement.disabled = false;
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                clearInterval(interval);
+                alert("Erro ao verificar o status na fila.");
+                btnElement.innerHTML = originalIcon;
+                btnElement.disabled = false;
+            });
+    }, 2000);
 }
 </script>
 {% endblock %}

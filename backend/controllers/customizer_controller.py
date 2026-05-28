@@ -116,7 +116,7 @@ def update():
     """
     school_id = session.get('active_school_id') or UserService.get_current_school_id()
     
-    if not school_id and not current_user.is_programador:
+    if not school_id:
          return jsonify({'success': False, 'message': 'Erro: Nenhuma escola selecionada.'}), 400
 
     try:

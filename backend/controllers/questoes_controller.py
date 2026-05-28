@@ -1,7 +1,7 @@
 import re
 import json
 import random
-from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, session
+from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, session, g
 from flask_login import login_required, current_user
 from markupsafe import escape
 
@@ -36,7 +36,11 @@ def api_get_disciplinas(school_id):
     """
     Retorna as disciplinas unificadas (materia) exclusivas da escola selecionada.
     """
-    materias = db.session.query(Disciplina.materia).join(Turma).filter(Turma.school_id == school_id).distinct().all()
+    active_edicao_id = g.active_edicao.id if g.get('active_edicao') else None
+    query = db.session.query(Disciplina.materia).join(Turma).filter(Turma.school_id == school_id)
+    if active_edicao_id:
+        query = query.filter(Turma.edicao_id == active_edicao_id)
+    materias = query.distinct().all()
     lista_materias = [m[0] for m in materias]
     return jsonify(sorted(lista_materias))
 
@@ -50,7 +54,8 @@ def api_configuracao_envio():
     """
     school_id = request.args.get('school_id', type=int)
     materia = request.args.get('materia', type=str)
-    edicao_get = request.args.get('edicao', type=str, default="Geral")
+    # Usa o edicao_id da edição ativa no contexto
+    edicao_id = g.active_edicao.id if g.get('active_edicao') else None
 
     if not school_id or not materia:
         return jsonify({'success': False, 'message': 'Escola ou matéria não fornecidas.'}), 400
@@ -61,18 +66,16 @@ def api_configuracao_envio():
             papel_usuario = str(getattr(current_user, 'role', '')).lower().strip()
             is_comandante = getattr(current_user, 'is_admin_escola', False)
 
-            if papel_usuario not in ['super_admin', 'programador'] and not is_comandante:
+            if papel_usuario != 'super_admin' and not is_comandante:
                 return jsonify({'success': False, 'message': 'Acesso negado.'}), 403
 
             status = request.json.get('envio_ativo')
-            edicao_post = request.json.get('edicao', 'Geral').strip()
-            if not edicao_post:
-                edicao_post = "Geral"
+            edicao_id_post = request.json.get('edicao_id', edicao_id)
 
-            config = ConfiguracaoEnvio.query.filter_by(escola_id=school_id, materia=materia, edicao=edicao_post).first()
+            config = ConfiguracaoEnvio.query.filter_by(escola_id=school_id, materia=materia, edicao_id=edicao_id_post).first()
 
             if not config:
-                config = ConfiguracaoEnvio(escola_id=school_id, materia=materia, edicao=edicao_post, envio_ativo=status)
+                config = ConfiguracaoEnvio(escola_id=school_id, materia=materia, edicao_id=edicao_id_post, envio_ativo=status)
                 db.session.add(config)
             else:
                 config.envio_ativo = status
@@ -81,7 +84,7 @@ def api_configuracao_envio():
             return jsonify({'success': True})
 
         # Para chamadas GET (quando a tela carrega)
-        config = ConfiguracaoEnvio.query.filter_by(escola_id=school_id, materia=materia, edicao=edicao_get).first()
+        config = ConfiguracaoEnvio.query.filter_by(escola_id=school_id, materia=materia, edicao_id=edicao_id).first()
         return jsonify({'envio_ativo': config.envio_ativo if config else False})
 
     except Exception as e:
@@ -102,10 +105,14 @@ def api_get_instrutores():
     if not school_id or not materia:
         return jsonify([])
 
-    vinculos = db.session.query(DisciplinaTurma).join(Disciplina).join(Turma).filter(
+    active_edicao_id = g.active_edicao.id if g.get('active_edicao') else None
+    query = db.session.query(DisciplinaTurma).join(Disciplina).join(Turma).filter(
         Turma.school_id == school_id,
         Disciplina.materia == materia
-    ).all()
+    )
+    if active_edicao_id:
+        query = query.filter(Turma.edicao_id == active_edicao_id)
+    vinculos = query.all()
 
     instrutores_ids = set()
     for v in vinculos:
@@ -136,13 +143,15 @@ def api_listar_delegacoes():
     """Retorna a lista de instrutores autorizados a gerar provas para a matéria e edição."""
     school_id = request.args.get('school_id', type=int)
     materia = request.args.get('materia', type=str)
-    edicao = request.args.get('edicao', type=str, default="Geral")
+    edicao_id = g.active_edicao.id if g.get('active_edicao') else None
 
-    delegacoes = DelegacaoProva.query.join(Disciplina).filter(
+    query = DelegacaoProva.query.join(Disciplina).filter(
         DelegacaoProva.escola_gestora_id == school_id,
-        Disciplina.materia == materia,
-        DelegacaoProva.edicao == edicao
-    ).all()
+        Disciplina.materia == materia
+    )
+    if edicao_id:
+        query = query.filter(DelegacaoProva.edicao_id == edicao_id)
+    delegacoes = query.all()
 
     return jsonify([{
         'id': d.id,
@@ -181,16 +190,19 @@ def delegar_prova():
     dados = request.get_json()
     school_id = dados.get('escola_id')
     materia = dados.get('materia')
-    edicao = dados.get('edicao', 'Geral')
     instrutores_ids = dados.get('instrutor_ids', [])
 
     if not instrutores_ids:
         return jsonify({'success': False, 'message': 'Nenhum instrutor selecionado.'})
 
-    disciplina_ref = Disciplina.query.join(Turma).filter(
+    edicao_id = g.active_edicao.id if g.get('active_edicao') else None
+    query = Disciplina.query.join(Turma).filter(
         Turma.school_id == school_id,
         Disciplina.materia == materia
-    ).first()
+    )
+    if edicao_id:
+        query = query.filter(Turma.edicao_id == edicao_id)
+    disciplina_ref = query.first()
 
     if not disciplina_ref:
         return jsonify({'success': False, 'message': 'Disciplina não encontrada.'})
@@ -201,7 +213,7 @@ def delegar_prova():
             instrutor_id=instrutor_id,
             escola_gestora_id=school_id,
             disciplina_id=disciplina_ref.id,
-            edicao=edicao
+            edicao_id=edicao_id
         ).first()
 
         if not exists:
@@ -209,7 +221,7 @@ def delegar_prova():
                 instrutor_id=instrutor_id,
                 escola_gestora_id=school_id,
                 disciplina_id=disciplina_ref.id,
-                edicao=edicao,
+                edicao_id=edicao_id,
                 escolas_fontes=[]
             )
             db.session.add(nova)
@@ -264,29 +276,29 @@ def tela_envio():
     # 1. Busca quais matérias e edições estão abertas nesta escola
     configs_ativas = ConfiguracaoEnvio.query.filter_by(escola_id=escola_id, envio_ativo=True).all()
 
-    # Monta uma lista de dicionários contendo a Matéria e a respectiva Edição que está aberta
-    opcoes_abertas = [{"materia": c.materia, "edicao": c.edicao} for c in configs_ativas]
+    # Monta uma lista de dicionários contendo a Matéria e a edição que está aberta
+    opcoes_abertas = [{"materia": c.materia, "edicao_id": c.edicao_id, "edicao_nome": c.edicao.nome if c.edicao else 'Geral'} for c in configs_ativas]
 
     instrutor = Instrutor.query.filter_by(user_id=current_user.id).first()
 
     # 2. Descobre o que este instrutor já enviou nesta escola
     ja_enviados = []
     if instrutor:
-        enviadas_db = db.session.query(Disciplina.materia, QuestaoBanco.edicao)\
+        enviadas_db = db.session.query(Disciplina.materia, QuestaoBanco.edicao_id)\
             .join(QuestaoBanco)\
             .filter(
                 QuestaoBanco.instrutor_id == instrutor.id,
                 QuestaoBanco.escola_id == escola_id
             ).distinct().all()
-        ja_enviados = [{"materia": m[0], "edicao": m[1]} for m in enviadas_db]
+        ja_enviados = [{"materia": m[0], "edicao_id": m[1]} for m in enviadas_db]
 
     # 3. A Mágica do Filtro Quádruplo:
     # Só libera se a combinação (Matéria + Edição) estiver Aberta e NÃO estiver nos Já Enviados
     lista_final_para_dropdown = []
     for opcao in opcoes_abertas:
-        if opcao not in ja_enviados:
-            # Formata bonitinho pro usuário ver: "Direito Penal (CTSP - 6ª Edição)"
-            lista_final_para_dropdown.append(f"{opcao['materia']} | {opcao['edicao']}")
+        chave = {"materia": opcao["materia"], "edicao_id": opcao["edicao_id"]}
+        if chave not in ja_enviados:
+            lista_final_para_dropdown.append(f"{opcao['materia']} | {opcao['edicao_nome']}")
 
     lista_final_para_dropdown.sort()
 
@@ -322,7 +334,7 @@ def salvar_questoes():
         instrutor = Instrutor.query.filter_by(user_id=current_user.id).first()
 
         papel_usuario = str(getattr(current_user, 'role', '')).lower().strip()
-        if not instrutor and papel_usuario in ['super_admin', 'programador']:
+        if not instrutor and papel_usuario == 'super_admin':
             instrutor = Instrutor.query.first() # Fallback para testes do admin
 
         disciplina = Disciplina.query.filter_by(materia=materia).first()

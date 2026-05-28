@@ -20,6 +20,11 @@
                         <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary">
                             <i class="fas fa-arrow-left me-1"></i> Voltar
                         </a>
+                        {% if current_user.role == 'super_admin' %}
+                            <button type="button" class="btn btn-primary ms-2" data-bs-toggle="modal" data-bs-target="#vincularUsuarioModal">
+                                <i class="fas fa-link me-1"></i> Vincular Usuário
+                            </button>
+                        {% endif %}
                         <a href="{{ url_for('user.criar_admin_escola') }}" class="btn btn-success ms-2">
                             <i class="fas fa-plus me-1"></i> Novo Admin
                         </a>
@@ -45,6 +50,10 @@
                     <option value="admin_cal">Chefe CAL (Justiça)</option>
                     <option value="instrutor">Instrutor</option>
                     <option value="aluno">Aluno / Acesso Básico</option>
+                    {% if current_user.role == 'super_admin' %}
+                        <option value="orfao">Órfãos (Sem Escola)</option>
+                        <option value="preregistered">Pré-Cadastrados (Inativos)</option>
+                    {% endif %}
                 </select>
             </div>
         </div>
@@ -89,8 +98,6 @@
                                 <td>
                                     {% if vinculo.role == 'admin_escola' %}
                                         <span class="badge bg-dark">Comandante / Admin Geral</span>
-                                    {% elif usuario.role == 'programador' %}
-                                        <span class="badge bg-danger">Programador</span>
                                     {% elif vinculo.role == 'admin_cal' %}
                                         <span class="badge bg-warning text-dark border border-warning">Chefe CAL (Justiça)</span>
                                     {% elif vinculo.role == 'admin_sens' %}
@@ -102,7 +109,7 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    {% if vinculo.role == 'admin_escola' or usuario.role == 'programador' %}
+                                    {% if vinculo.role == 'admin_escola' %}
                                         <div class="text-success small"><i class="fas fa-check-double me-1"></i> Acesso Total</div>
                                     {% elif vinculo.role == 'admin_cal' %}
                                         <div class="text-dark small"><i class="fas fa-balance-scale me-1"></i> Apenas Justiça/Disciplina</div>
@@ -115,10 +122,21 @@
                                     {% endif %}
                                 </td>
                                 <td class="text-end pe-4">
-                                    {% if usuario.id != current_user.id and usuario.role != 'programador' %}
-                                        <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalRole{{ usuario.id }}">
+                                    {% if usuario.id != current_user.id %}
+                                        <button class="btn btn-sm btn-outline-primary mb-1" data-bs-toggle="modal" data-bs-target="#modalRole{{ usuario.id }}">
                                             <i class="fas fa-user-cog me-1"></i> Alterar Permissão
                                         </button>
+                                        {% if current_user.role == 'super_admin' %}
+                                            <form class="d-inline" method="POST" action="{{ url_for('super_admin.reset_user_password') }}" onsubmit="return confirm('Resetar a senha de {{ usuario.nome_completo or usuario.username }}?');">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                                <input type="hidden" name="user_id" value="{{ usuario.id }}">
+                                                <button type="submit" class="btn btn-sm btn-outline-info mb-1" title="Resetar Senha"><i class="fas fa-key"></i></button>
+                                            </form>
+                                            <form class="d-inline" method="POST" action="{{ url_for('super_admin.delete_user', user_id=usuario.id) }}" onsubmit="return confirm('Excluir este usuário permanentemente?');">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                                <button type="submit" class="btn btn-sm btn-outline-danger mb-1" title="Excluir Usuário"><i class="fas fa-trash"></i></button>
+                                            </form>
+                                        {% endif %}
                                     {% else %}
                                         <button class="btn btn-sm btn-outline-secondary disabled" title="Não é possível alterar este usuário">
                                             <i class="fas fa-lock"></i>
@@ -127,7 +145,92 @@
                                 </td>
                             </tr>
                             {% endfor %}
-                        {% else %}
+                        {% endif %}
+                        
+                        {# Rendereização de Órfãos e Pré-cadastrados para Super Admin #}
+                        {% if current_user.role == 'super_admin' %}
+                            {% for usuario in orfaos %}
+                            <tr data-role="orfao" style="display: none;">
+                                <td class="ps-4">
+                                    <div class="d-flex align-items-center">
+                                        <div class="avatar-circle me-3 bg-light text-danger d-flex align-items-center justify-content-center rounded-circle border" style="width: 40px; height: 40px; font-weight: bold;">
+                                            {{ (usuario.nome_completo or usuario.username or '?')[:1] }}
+                                        </div>
+                                        <div>
+                                            <div class="fw-bold text-dark user-name">{{ usuario.nome_completo or usuario.username }}</div>
+                                            <small class="text-muted user-email">{{ usuario.email or 'Sem e-mail' }}</small>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="d-block text-dark fw-medium user-posto">{{ usuario.posto_graduacao or '-' }}</span>
+                                    <small class="text-muted">Matrícula: <span class="user-matricula">{{ usuario.matricula or '-' }}</span></small>
+                                </td>
+                                <td>
+                                    <span class="badge bg-danger">Órfão</span>
+                                </td>
+                                <td>
+                                    <div class="text-danger small"><i class="fas fa-exclamation-circle me-1"></i> Sem Escola Vinculada</div>
+                                </td>
+                                <td class="text-end pe-4">
+                                    <button class="btn btn-sm btn-outline-primary mb-1" data-bs-toggle="modal" data-bs-target="#modalRole{{ usuario.id }}">
+                                        <i class="fas fa-link me-1"></i> Vincular
+                                    </button>
+                                    <form class="d-inline" method="POST" action="{{ url_for('super_admin.reset_user_password') }}" onsubmit="return confirm('Resetar a senha de {{ usuario.nome_completo or usuario.username }}?');">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                        <input type="hidden" name="user_id" value="{{ usuario.id }}">
+                                        <button type="submit" class="btn btn-sm btn-outline-info mb-1" title="Resetar Senha"><i class="fas fa-key"></i></button>
+                                    </form>
+                                    <form class="d-inline" method="POST" action="{{ url_for('super_admin.delete_user', user_id=usuario.id) }}" onsubmit="return confirm('Excluir este usuário permanentemente?');">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                        <button type="submit" class="btn btn-sm btn-outline-danger mb-1" title="Excluir Usuário"><i class="fas fa-trash"></i></button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+
+                            {% for usuario in pre_cadastrados %}
+                            <tr data-role="preregistered" style="display: none;">
+                                <td class="ps-4">
+                                    <div class="d-flex align-items-center">
+                                        <div class="avatar-circle me-3 bg-light text-warning d-flex align-items-center justify-content-center rounded-circle border" style="width: 40px; height: 40px; font-weight: bold;">
+                                            {{ (usuario.nome_completo or usuario.username or '?')[:1] }}
+                                        </div>
+                                        <div>
+                                            <div class="fw-bold text-dark user-name">{{ usuario.nome_completo or usuario.username }}</div>
+                                            <small class="text-muted user-email">{{ usuario.email or 'Sem e-mail' }}</small>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="d-block text-dark fw-medium user-posto">{{ usuario.posto_graduacao or '-' }}</span>
+                                    <small class="text-muted">Matrícula: <span class="user-matricula">{{ usuario.matricula or '-' }}</span></small>
+                                </td>
+                                <td>
+                                    <span class="badge bg-warning text-dark">Pré-Cadastrado</span>
+                                </td>
+                                <td>
+                                    <div class="text-warning text-dark small"><i class="fas fa-clock me-1"></i> Inativo / Pendente</div>
+                                </td>
+                                <td class="text-end pe-4">
+                                    <button class="btn btn-sm btn-outline-primary mb-1" data-bs-toggle="modal" data-bs-target="#modalRole{{ usuario.id }}">
+                                        <i class="fas fa-link me-1"></i> Vincular e Ativar
+                                    </button>
+                                    <form class="d-inline" method="POST" action="{{ url_for('super_admin.reset_user_password') }}" onsubmit="return confirm('Resetar a senha de {{ usuario.nome_completo or usuario.username }}?');">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                        <input type="hidden" name="user_id" value="{{ usuario.id }}">
+                                        <button type="submit" class="btn btn-sm btn-outline-info mb-1" title="Resetar Senha"><i class="fas fa-key"></i></button>
+                                    </form>
+                                    <form class="d-inline" method="POST" action="{{ url_for('super_admin.delete_user', user_id=usuario.id) }}" onsubmit="return confirm('Excluir este usuário permanentemente?');">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                        <button type="submit" class="btn btn-sm btn-outline-danger mb-1" title="Excluir Usuário"><i class="fas fa-trash"></i></button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% endif %}
+
+                        {% if not usuarios_com_role and not orfaos and not pre_cadastrados %}
                             <tr id="noResultsRow">
                                 <td colspan="5" class="text-center py-5">
                                     <div class="text-muted opacity-50 mb-3">
@@ -152,7 +255,7 @@
 
 {% if usuarios_com_role %}
     {% for usuario, vinculo in usuarios_com_role %}
-        {% if usuario.id != current_user.id and usuario.role != 'programador' %}
+        {% if usuario.id != current_user.id %}
         <div class="modal fade permission-modal" id="modalRole{{ usuario.id }}" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content shadow-lg">
@@ -237,20 +340,131 @@
     {% endfor %}
 {% endif %}
 
-<script>
-    document.addEventListener("DOMContentLoaded", function() {
-        // Move os modais para o final do body para evitar problemas de z-index/backdrop
-        let modals = document.querySelectorAll('.permission-modal');
-        modals.forEach(modal => document.body.appendChild(modal));
-    });
+{# Modais para Órfãos e Pré-Cadastrados #}
+{% if current_user.role == 'super_admin' %}
+    {% for usuario in orfaos + pre_cadastrados %}
+        <div class="modal fade permission-modal" id="modalRole{{ usuario.id }}" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content shadow-lg">
+                    <form action="{{ url_for('user.alterar_papel_usuario', user_id=usuario.id) }}" method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <div class="modal-header bg-light">
+                            <h5 class="modal-title">
+                                <i class="fas fa-link me-2 text-primary"></i>
+                                Vincular à Escola Atual
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="mb-3">Selecione o nível de acesso para: <br><strong>{{ usuario.nome_completo or usuario.username }}</strong></p>
+                            
+                            <div class="list-group">
+                                <label class="list-group-item d-flex gap-3 align-items-center list-group-item-action p-3">
+                                    <input class="form-check-input flex-shrink-0" type="radio" name="novo_role" value="admin_escola">
+                                    <div class="w-100">
+                                        <div class="d-flex justify-content-between">
+                                            <strong>Comandante / Admin Geral</strong>
+                                            <i class="fas fa-user-shield text-dark"></i>
+                                        </div>
+                                    </div>
+                                </label>
+                                <label class="list-group-item d-flex gap-3 align-items-center list-group-item-action p-3">
+                                    <input class="form-check-input flex-shrink-0" type="radio" name="novo_role" value="instrutor" checked>
+                                    <div class="w-100">
+                                        <div class="d-flex justify-content-between">
+                                            <strong>Instrutor</strong>
+                                            <i class="fas fa-chalkboard-teacher text-secondary"></i>
+                                        </div>
+                                    </div>
+                                </label>
+                                <label class="list-group-item d-flex gap-3 align-items-center list-group-item-action p-3">
+                                    <input class="form-check-input flex-shrink-0" type="radio" name="novo_role" value="aluno">
+                                    <div class="w-100">
+                                        <div class="d-flex justify-content-between">
+                                            <strong>Aluno / Usuário Básico</strong>
+                                            <i class="fas fa-user text-muted"></i>
+                                        </div>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="modal-footer bg-light">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="submit" class="btn btn-primary px-4">Vincular Usuário</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    {% endfor %}
 
-    function filterTable() {
-        // Obter valores dos inputs
-        let textInput = document.getElementById("searchInput");
-        let textFilter = textInput.value.toUpperCase();
-        
-        let roleSelect = document.getElementById("roleFilter");
-        let roleFilter = roleSelect.value; // 'all', 'admin_escola', etc.
+    {# Modal Vincular Usuário Existente #}
+    <div class="modal fade permission-modal" id="vincularUsuarioModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content shadow-lg">
+                <form action="{{ url_for('user.vincular_usuario_escola') }}" method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <div class="modal-header bg-primary text-white">
+                        <h5 class="modal-title">
+                            <i class="fas fa-link me-2"></i>
+                            Vincular Usuário Existente
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="user_id" class="form-label fw-bold">Buscar Usuário</label>
+                            <select class="form-select" id="user_id" name="user_id" required style="width: 100%">
+                                <option value="">-- Busque por nome ou matrícula --</option>
+                                {% for user in todos_usuarios_ativos %}
+                                    <option value="{{ user.id }}">{{ user.nome_completo or user.username }} ({{ user.matricula }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="role" class="form-label fw-bold">Papel na Escola</label>
+                            <select class="form-select" id="role" name="role" required>
+                                <option value="admin_escola">Comandante / Admin Geral</option>
+                                <option value="admin_sens">Chefe SENS (Ensino)</option>
+                                <option value="admin_cal">Chefe CAL (Justiça)</option>
+                                <option value="instrutor" selected>Instrutor</option>
+                                <option value="aluno">Aluno / Acesso Básico</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary px-4">Vincular Usuário</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+{% endif %}
+
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            // Move os modais para o final do body para evitar problemas de z-index/backdrop
+            let modals = document.querySelectorAll('.permission-modal');
+            modals.forEach(modal => document.body.appendChild(modal));
+
+            // Iniciar Select2
+            if (typeof $ !== 'undefined') {
+                $('#user_id').select2({
+                    theme: 'bootstrap-5',
+                    dropdownParent: $('#vincularUsuarioModal')
+                });
+            }
+        });
+
+        function filterTable() {
+            // Obter valores dos inputs
+            let textInput = document.getElementById("searchInput");
+            let textFilter = textInput.value.toUpperCase();
+            
+            let roleSelect = document.getElementById("roleFilter");
+            let roleFilter = roleSelect.value; // 'all', 'admin_escola', 'orfao', etc.
 
         let table = document.getElementById("usersTable");
         let tr = table.getElementsByTagName("tr");
@@ -286,7 +500,13 @@
                 );
 
                 // Verifica correspondência de role
-                let roleMatch = (roleFilter === 'all' || rowRole === roleFilter);
+                let roleMatch = false;
+                if (roleFilter === 'all') {
+                    // Quando 'Todos os Acessos' está marcado, escondemos orfãos e preregistrados
+                    roleMatch = (rowRole !== 'orfao' && rowRole !== 'preregistered');
+                } else {
+                    roleMatch = (rowRole === roleFilter);
+                }
 
                 // Exibe apenas se AMBOS corresponderem
                 if (textMatch && roleMatch) {

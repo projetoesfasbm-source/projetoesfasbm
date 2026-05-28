@@ -1,0 +1,340 @@
+{% extends "base.html" %}
+
+{% block title %}Gerenciar Edições{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm border-0">
+                <div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-3">
+                    <div>
+                        <h4 class="card-title text-primary mb-1">
+                            <i class="fas fa-tags me-2"></i>Gerenciar Edições
+                        </h4>
+                        <p class="text-muted mb-0 small">
+                            Cadastre e configure as Edições (turmas/anos letivos) da escola atual, incluindo as datas de vigência do preenchimento da FADA.
+                        </p>
+                    </div>
+                    <div>
+                        <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-arrow-left me-1"></i> Voltar
+                        </a>
+                        <button class="btn btn-success ms-2" data-bs-toggle="modal" data-bs-target="#modalCriarEdicao">
+                            <i class="fas fa-plus me-1"></i> Nova Edição
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-md-6 col-12">
+            <div class="input-group shadow-sm">
+                <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted"></i></span>
+                <input type="text" id="searchInput" class="form-control border-start-0" placeholder="Buscar por nome ou tipo..." onkeyup="filterTable()">
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" id="edicoesTable">
+                    <thead class="bg-light text-secondary">
+                        <tr>
+                            <th class="ps-4">Nome da Edição</th>
+                            <th>Tipo de NPCCAL</th>
+                            <th>Data de Formatura</th>
+                            <th>FADA Início</th>
+                            <th>FADA Fim</th>
+                            <th class="text-end pe-4">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if edicoes %}
+                            {% for ed in edicoes %}
+                            <tr>
+                                <td class="ps-4 fw-bold text-dark edicao-nome">
+                                    {{ ed.nome }}
+                                </td>
+                                <td>
+                                    <span class="badge bg-secondary edicao-tipo">{{ ed.npccal_type|upper }}</span>
+                                </td>
+                                <td>
+                                    {{ ed.data_formatura.strftime('%d/%m/%Y') if ed.data_formatura else 'Não definida' }}
+                                </td>
+                                <td>
+                                    {% if ed.npccal_type == 'ctsp' %}
+                                        <span class="text-muted fst-italic">N/A</span>
+                                    {% else %}
+                                        {{ ed.fada_data_inicio.strftime('%d/%m/%Y %H:%M') if ed.fada_data_inicio else 'Não definida' }}
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if ed.npccal_type == 'ctsp' %}
+                                        <span class="text-muted fst-italic">N/A</span>
+                                    {% else %}
+                                        {{ ed.fada_data_fim.strftime('%d/%m/%Y %H:%M') if ed.fada_data_fim else 'Não definida' }}
+                                    {% endif %}
+                                </td>
+                                <td class="text-end pe-4">
+                                    <button class="btn btn-sm btn-outline-info me-1" data-bs-toggle="modal" data-bs-target="#modalInstrutoresEdicao{{ ed.id }}" title="Selecionar Instrutores">
+                                        <i class="fas fa-users-cog"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalEditarEdicao{{ ed.id }}">
+                                        <i class="fas fa-edit me-1"></i> Editar
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr id="noResultsRow">
+                                <td colspan="6" class="text-center py-5">
+                                    <div class="text-muted opacity-50 mb-3">
+                                        <i class="fas fa-tags fa-3x"></i>
+                                    </div>
+                                    <h5>Nenhuma edição cadastrada nesta escola</h5>
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+                <div id="searchNoResults" class="text-center py-5 d-none">
+                    <div class="text-muted opacity-50 mb-3">
+                        <i class="fas fa-search fa-3x"></i>
+                    </div>
+                    <h5>Nenhum resultado encontrado para a busca</h5>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Modal Criar Edição #}
+<div class="modal fade" id="modalCriarEdicao" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content shadow-lg">
+            <form action="{{ url_for('edicao.criar') }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title">
+                        <i class="fas fa-plus-circle me-2 text-success"></i> Nova Edição
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="nome" class="form-label fw-medium">Nome da Edição *</label>
+                        <input type="text" class="form-control" id="nome" name="nome" placeholder="Ex: CTSP 2026" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="npccal_type" class="form-label fw-medium">Tipo de NPCCAL</label>
+                        <select class="form-select npccal-select" id="npccal_type" name="npccal_type" data-fada-target="#fadaRowNovo">
+                            <option value="ctsp">CTSP</option>
+                            <option value="cbfpm">CBFPM</option>
+                            <option value="cba">CBA</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="data_formatura" class="form-label fw-medium">Data de Formatura</label>
+                        <input type="date" class="form-control" id="data_formatura" name="data_formatura">
+                    </div>
+                    <div class="row" id="fadaRowNovo">
+                        <div class="col-6 mb-3">
+                            <label for="fada_data_inicio" class="form-label fw-medium">FADA Data Início</label>
+                            <input type="datetime-local" class="form-control" id="fada_data_inicio" name="fada_data_inicio">
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label for="fada_data_fim" class="form-label fw-medium">FADA Data Fim</label>
+                            <input type="datetime-local" class="form-control" id="fada_data_fim" name="fada_data_fim">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success px-4">Salvar Edição</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{# Modais de Editar Edição #}
+{% if edicoes %}
+    {% for ed in edicoes %}
+    <div class="modal fade edicao-edit-modal" id="modalEditarEdicao{{ ed.id }}" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content shadow-lg">
+                <form action="{{ url_for('edicao.editar', edicao_id=ed.id) }}" method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="modal-header bg-light">
+                        <h5 class="modal-title">
+                            <i class="fas fa-edit me-2 text-primary"></i> Editar Edição
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="nome{{ ed.id }}" class="form-label fw-medium">Nome da Edição *</label>
+                            <input type="text" class="form-control" id="nome{{ ed.id }}" name="nome" value="{{ ed.nome }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="npccal_type{{ ed.id }}" class="form-label fw-medium">Tipo de NPCCAL</label>
+                            <select class="form-select npccal-select" id="npccal_type{{ ed.id }}" name="npccal_type" data-fada-target="#fadaRow{{ ed.id }}">
+                                <option value="ctsp" {{ 'selected' if ed.npccal_type == 'ctsp' else '' }}>CTSP</option>
+                                <option value="cbfpm" {{ 'selected' if ed.npccal_type == 'cbfpm' else '' }}>CBFPM</option>
+                                <option value="cba" {{ 'selected' if ed.npccal_type == 'cba' else '' }}>CBA</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="data_formatura{{ ed.id }}" class="form-label fw-medium">Data de Formatura</label>
+                            <input type="date" class="form-control" id="data_formatura{{ ed.id }}" name="data_formatura" value="{{ ed.data_formatura.strftime('%Y-%m-%d') if ed.data_formatura else '' }}">
+                        </div>
+                        <div class="row" id="fadaRow{{ ed.id }}">
+                            <div class="col-6 mb-3">
+                                <label for="fada_data_inicio{{ ed.id }}" class="form-label fw-medium">FADA Data Início</label>
+                                <input type="datetime-local" class="form-control" id="fada_data_inicio{{ ed.id }}" name="fada_data_inicio" value="{{ ed.fada_data_inicio.strftime('%Y-%m-%dT%H:%M') if ed.fada_data_inicio else '' }}">
+                            </div>
+                            <div class="col-6 mb-3">
+                                <label for="fada_data_fim{{ ed.id }}" class="form-label fw-medium">FADA Data Fim</label>
+                                <input type="datetime-local" class="form-control" id="fada_data_fim{{ ed.id }}" name="fada_data_fim" value="{{ ed.fada_data_fim.strftime('%Y-%m-%dT%H:%M') if ed.fada_data_fim else '' }}">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary px-4">Salvar Alterações</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    {# Modal Gerenciar Instrutores #}
+    <div class="modal fade edicao-instrutores-modal" id="modalInstrutoresEdicao{{ ed.id }}" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content shadow-lg">
+                <form action="{{ url_for('edicao.gerenciar_instrutores', edicao_id=ed.id) }}" method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="modal-header bg-light">
+                        <h5 class="modal-title">
+                            <i class="fas fa-users-cog me-2 text-info"></i> Instrutores: {{ ed.nome }}
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="text-muted small mb-3">Selecione os instrutores que darão aula nesta edição.</p>
+                        
+                        <div class="list-group">
+                            {% for instrutor in todos_instrutores %}
+                            <label class="list-group-item d-flex align-items-center">
+                                <input class="form-check-input me-2" type="checkbox" name="instrutores" value="{{ instrutor.id }}"
+                                    {% if instrutor in ed.instrutores %}checked{% endif %}>
+                                {{ instrutor.user.nome_completo if instrutor.user else 'Desconhecido' }}
+                                {% if instrutor.user and instrutor.user.matricula %}
+                                    <small class="text-muted ms-auto">{{ instrutor.user.matricula }}</small>
+                                {% endif %}
+                            </label>
+                            {% endfor %}
+                            {% if not todos_instrutores %}
+                                <div class="alert alert-warning mb-0">Nenhum instrutor cadastrado nesta escola.</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-info px-4 text-white">Salvar Vínculos</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+{% endif %}
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // Move os modais para o final do body para evitar problemas de z-index
+        const modals = document.querySelectorAll('.edicao-edit-modal, .edicao-instrutores-modal, #modalCriarEdicao')
+        modals.forEach(modal => document.body.appendChild(modal))
+
+        // Lógica para esconder FADA se for CTSP
+        const selects = document.querySelectorAll('.npccal-select');
+        selects.forEach(select => {
+            const toggleFada = () => {
+                const target = document.querySelector(select.dataset.fadaTarget);
+                if (target) {
+                    if (select.value === 'ctsp') {
+                        target.style.display = 'none';
+                        // Limpa os valores quando esconde
+                        const inputs = target.querySelectorAll('input');
+                        inputs.forEach(input => input.value = '');
+                    } else {
+                        target.style.display = 'flex';
+                    }
+                }
+            };
+            
+            // Dispara no load
+            toggleFada();
+            // Dispara na mudança
+            select.addEventListener('change', toggleFada);
+        });
+    })
+
+    function filterTable() {
+        const textInput = document.getElementById("searchInput")
+        const textFilter = textInput.value.toUpperCase()
+
+        const table = document.getElementById("edicoesTable")
+        const tr = table.getElementsByTagName("tr")
+        let hasVisibleRow = false
+
+        for (let i = 1; i < tr.length; i++) {
+            const row = tr[i]
+            if (row.id === "noResultsRow") continue
+
+            const nameEl = row.querySelector(".edicao-nome")
+            const tipoEl = row.querySelector(".edicao-tipo")
+
+            if (nameEl) {
+                const nameValue = nameEl.textContent || nameEl.innerText
+                const tipoValue = tipoEl ? (tipoEl.textContent || tipoEl.innerText) : ""
+
+                const match = (
+                    nameValue.toUpperCase().indexOf(textFilter) > -1 ||
+                    tipoValue.toUpperCase().indexOf(textFilter) > -1
+                )
+
+                if (match) {
+                    row.style.display = ""
+                    hasVisibleRow = true
+                } else {
+                    row.style.display = "none"
+                }
+            }
+        }
+
+        const noResultDiv = document.getElementById("searchNoResults")
+        const tableHead = table.getElementsByTagName("thead")[0]
+        const noResultsRowOriginal = document.getElementById("noResultsRow")
+
+        if (noResultDiv) {
+            if (!hasVisibleRow) {
+                if (noResultsRowOriginal && noResultsRowOriginal.style.display !== "none") {
+                    noResultDiv.classList.add("d-none")
+                } else {
+                    noResultDiv.classList.remove("d-none")
+                    if (tableHead) tableHead.style.display = "none"
+                }
+            } else {
+                noResultDiv.classList.add("d-none")
+                if (tableHead) tableHead.style.display = ""
+                if (noResultsRowOriginal) noResultsRowOriginal.style.display = "none"
+            }
+        }
+    }
+</script>
+{% endblock %}

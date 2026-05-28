@@ -1,10 +1,11 @@
 {% extends "base.html" %}
 
-{% block title %}Meu CTSP{% endblock %}
+{% set curso_nome = g.active_edicao.npccal_type|upper if g.active_edicao and g.active_edicao.npccal_type else 'CTSP' %}
+{% block title %}Meu {{ curso_nome }}{% endblock %}
 
 {% block content %}
 <div class="content-header">
-    <h1>Meu CTSP</h1>
+    <h1>Meu {{ curso_nome }}</h1>
     <p>Acesse aqui suas informações acadêmicas e funcionais relacionadas ao curso.</p>
 </div>
 

@@ -57,10 +57,12 @@ from backend.models.diario_classe import DiarioClasse
 from backend.models.frequencia import FrequenciaAluno
 # ### NOVO MODELO ###
 from backend.models.elogio import Elogio
+from backend.models.edicao import Edicao
 # --- NOVO MÓDULO: BANCO DE QUESTÕES E PROVAS ---
 from backend.models.banco_questoes import QuestaoBanco, DelegacaoProva, RascunhoProva, ConfiguracaoEnvio
 # --- NOVO MÓDULO: RECURSOS ---
 from backend.models.recurso import ProvaRecurso, Recurso, DisciplinaHabilitada
+from backend.models.background_job import BackgroundJob
 # ------------------------------------------------------------
 from datetime import datetime, timezone, timedelta
 try:
@@ -145,7 +147,7 @@ def create_app(config_class=Config):
     @app.before_request
     def set_user_context():
         if current_user.is_authenticated:
-            if current_user.role in ['super_admin', 'programador']:
+            if current_user.role == 'super_admin':
                 view_as = session.get('view_as_school_id')
                 if view_as:
                     current_user.temp_active_school_id = int(view_as)
@@ -188,6 +190,7 @@ def register_blueprints(app):
     from backend.controllers.relatorios_controller import relatorios_bp
     from backend.controllers.semana_controller import semana_bp
     from backend.controllers.super_admin_controller import super_admin_bp
+    from backend.controllers.jobs_controller import jobs_bp
     from backend.controllers.turma_controller import turma_bp
     from backend.controllers.user_controller import user_bp
     from backend.controllers.vinculo_controller import vinculo_bp
@@ -199,6 +202,7 @@ def register_blueprints(app):
     from backend.controllers.diario_controller import diario_bp
     from backend.controllers.questoes_controller import questoes_bp
     from backend.controllers.recursos_controller import recursos_bp
+    from backend.controllers.edicao_controller import edicao_bp
 
     app.register_blueprint(admin_escola_bp)
     app.register_blueprint(tools_bp)
@@ -218,6 +222,7 @@ def register_blueprints(app):
     app.register_blueprint(relatorios_bp)
     app.register_blueprint(semana_bp)
     app.register_blueprint(super_admin_bp)
+    app.register_blueprint(jobs_bp)
     app.register_blueprint(turma_bp)
     app.register_blueprint(user_bp)
     app.register_blueprint(vinculo_bp)
@@ -229,6 +234,7 @@ def register_blueprints(app):
     app.register_blueprint(diario_bp)
     app.register_blueprint(questoes_bp)
     app.register_blueprint(recursos_bp)
+    app.register_blueprint(edicao_bp)
 
 def register_handlers_and_processors(app):
 
@@ -244,10 +250,11 @@ def register_handlers_and_processors(app):
             g.site_config = {c.config_key: c.config_value for c in configs}
 
         g.active_school = None
+        g.active_edicao = None
         school_id_to_load = None
 
         if current_user.is_authenticated:
-            if current_user.role in ['super_admin', 'programador']:
+            if current_user.role == 'super_admin':
                 school_id_to_load = session.get('view_as_school_id')
 
             if school_id_to_load is None:
@@ -259,12 +266,42 @@ def register_handlers_and_processors(app):
             if school_id_to_load:
                 g.active_school = db.session.get(School, int(school_id_to_load))
 
+            # Carregar Edição Ativa da sessão
+            edicao_id = session.get('active_edicao_id')
+            if edicao_id:
+                from backend.models.edicao import Edicao
+                edicao = db.session.get(Edicao, int(edicao_id))
+                # Valida que a edição pertence à escola ativa
+                if edicao and g.active_school and edicao.school_id == g.active_school.id:
+                    g.active_edicao = edicao
+                else:
+                    session.pop('active_edicao_id', None)
+                    
+            # Se ainda não tem edição ativa, seleciona a mais recente automaticamente
+            if not g.active_edicao and g.active_school:
+                from backend.models.edicao import Edicao
+                latest_edicao = Edicao.query.filter_by(school_id=g.active_school.id).order_by(Edicao.id.desc()).first()
+                if latest_edicao:
+                    g.active_edicao = latest_edicao
+                    session['active_edicao_id'] = latest_edicao.id
+
 
     @app.context_processor
     def inject_globals_to_template():
+        # Listar edições da escola ativa para o dropdown da navbar
+        edicoes_disponiveis = []
+        if g.get('active_school'):
+            from backend.models.edicao import Edicao
+            edicoes_disponiveis = Edicao.query.filter_by(school_id=g.active_school.id).order_by(Edicao.id.desc()).all()
+
+        dec_mode_active = session.get('is_dec_mode', False) and current_user.is_authenticated and current_user.role == 'super_admin'
+
         return {
             'site_config': g.get('site_config'),
-            'active_school': g.get('active_school')
+            'active_school': g.get('active_school'),
+            'active_edicao': g.get('active_edicao'),
+            'edicoes_disponiveis': edicoes_disponiveis,
+            'dec_mode_active': dec_mode_active
         }
 
     @app.after_request
@@ -343,29 +380,7 @@ def register_cli_commands(app):
             db.session.commit()
             print("Comando executado com sucesso!")
 
-    @app.cli.command("create-programmer")
-    def create_programmer():
-        with app.app_context():
-            prog_password = os.environ.get('PROGRAMMER_PASSWORD')
-            if not prog_password:
-                print("A variável de ambiente PROGRAMMER_PASSWORD não está definida.")
-                return
-            user = db.session.execute(db.select(User).filter_by(matricula='PROG001')).scalar_one_or_none()
-            if user:
-                print("O usuário 'programador' já existe.")
-            else:
-                print("Criando o usuário programador...")
-                user = User(
-                    matricula='PROG001',
-                    username='programador',
-                    email='dev@escola.com.br',
-                    role='programador',
-                    is_active=True
-                )
-                user.set_password(prog_password)
-                db.session.add(user)
-            db.session.commit()
-            print("Usuário programador criado com sucesso!")
+
 
     @app.cli.command("clear-data")
     @click.option('--app', is_flag=True, help='Limpa apenas os dados da aplicação (alunos, turmas, etc).')
@@ -394,4 +409,4 @@ def register_cli_commands(app):
 
 if __name__ == '__main__':
     app = create_app()
-    app.run(debug=False)
+    app.run(debug=True)

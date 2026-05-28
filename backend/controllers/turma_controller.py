@@ -1,6 +1,6 @@
 # backend/controllers/turma_controller.py
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, abort
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, abort, session
 from flask_login import login_required, current_user
 from sqlalchemy import select, or_
 from flask_wtf import FlaskForm
@@ -54,7 +54,8 @@ def listar_turmas():
         flash('Nenhuma escola associada.', 'warning')
         return redirect(url_for('main.dashboard'))
         
-    turmas = TurmaService.get_turmas_by_school(school_id)
+    active_edicao_id = session.get('active_edicao_id')
+    turmas = TurmaService.get_turmas_by_school(school_id, edicao_id=active_edicao_id)
     if current_user.role == 'aluno' and current_user.aluno_profile and current_user.aluno_profile.turma_id:
         user_turma_id = current_user.aluno_profile.turma_id
         turmas = sorted(turmas, key=lambda t: t.id != user_turma_id)
@@ -109,11 +110,13 @@ def cadastrar_turma():
     school_id = UserService.get_current_school_id()
     if not school_id: return redirect(url_for('turma.listar_turmas'))
 
-    alunos_sem_turma = db.session.scalars(select(Aluno).join(User).join(UserSchool).where(Aluno.turma_id.is_(None), UserSchool.school_id == school_id)).all()
+    active_edicao = session.get('active_edicao_id')
+    alunos_sem_turma = db.session.scalars(select(Aluno).join(User).join(UserSchool).where(Aluno.turma_id.is_(None), UserSchool.school_id == school_id, Aluno.edicao_id == active_edicao)).all()
     form.alunos_ids.choices = [(a.id, f"{a.user.nome_completo}") for a in alunos_sem_turma]
 
     if form.validate_on_submit():
-        success, message = TurmaService.create_turma(form.data, school_id)
+        active_edicao_id = session.get('active_edicao_id')
+        success, message = TurmaService.create_turma(form.data, school_id, edicao_id=active_edicao_id)
         if success:
             flash(message, 'success')
             return redirect(url_for('turma.listar_turmas'))
@@ -132,7 +135,8 @@ def editar_turma(turma_id):
     # Preenche o formulário com os dados existentes, incluindo a data
     form = TurmaForm(obj=turma)
     
-    alunos = db.session.scalars(select(Aluno).join(User).join(UserSchool).where(UserSchool.school_id == school_id, or_(Aluno.turma_id.is_(None), Aluno.turma_id == turma_id))).all()
+    active_edicao = session.get('active_edicao_id')
+    alunos = db.session.scalars(select(Aluno).join(User).join(UserSchool).where(UserSchool.school_id == school_id, Aluno.edicao_id == active_edicao, or_(Aluno.turma_id.is_(None), Aluno.turma_id == turma_id))).all()
     form.alunos_ids.choices = [(a.id, f"{a.user.nome_completo}") for a in alunos]
     
     if form.validate_on_submit():

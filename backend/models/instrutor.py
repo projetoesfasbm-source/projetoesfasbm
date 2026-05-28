@@ -12,7 +12,13 @@ from .database import db
 if t.TYPE_CHECKING:
     from .user import User
     from .school import School
+    from .edicao import Edicao
 
+instrutor_edicoes = db.Table(
+    'instrutor_edicoes',
+    db.Column('instrutor_id', db.Integer, db.ForeignKey('instrutores.id', ondelete='CASCADE'), primary_key=True),
+    db.Column('edicao_id', db.Integer, db.ForeignKey('edicoes.id', ondelete='CASCADE'), primary_key=True)
+)
 
 class Instrutor(db.Model):
     __tablename__ = "instrutores"
@@ -45,6 +51,7 @@ class Instrutor(db.Model):
 
     user: Mapped["User"] = relationship("User", back_populates="instrutor_profile")
     school: Mapped["School"] = relationship("School")
+    edicoes: Mapped[list["Edicao"]] = relationship("Edicao", secondary=instrutor_edicoes, back_populates="instrutores")
 
     # Restrição: Único par User+School
     __table_args__ = (

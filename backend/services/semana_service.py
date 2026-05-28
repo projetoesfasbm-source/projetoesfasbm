@@ -20,20 +20,23 @@ class SemanaService:
     
     @staticmethod
     def get_semana_selecionada(semana_id_str=None, ciclo_id=None):
+        from flask import session
         active_school_id = UserService.get_current_school_id()
+        active_edicao = session.get('active_edicao_id')
+        
         if not active_school_id:
             return None
 
         if semana_id_str and str(semana_id_str).isdigit():
             semana = db.session.get(Semana, int(semana_id_str))
-            if semana and semana.ciclo and semana.ciclo.school_id == active_school_id:
+            if semana and semana.ciclo and semana.ciclo.school_id == active_school_id and semana.ciclo.edicao_id == active_edicao:
                 return semana
 
         today = date.today()
         stmt = (
             select(Semana)
             .join(Ciclo)
-            .where(Ciclo.school_id == active_school_id)
+            .where(Ciclo.school_id == active_school_id, Ciclo.edicao_id == active_edicao)
         )
         
         if ciclo_id:

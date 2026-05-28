@@ -10,8 +10,10 @@ from weasyprint import HTML
 from urllib.parse import quote
 import json
 import traceback
+import uuid
 
 from ..models.database import db
+from ..models.background_job import BackgroundJob
 from ..models.horario import Horario
 from ..models.disciplina import Disciplina
 from ..models.instrutor import Instrutor
@@ -89,9 +91,10 @@ def index():
             flash("Nenhuma escola selecionada.", "warning")
             return redirect(url_for('main.dashboard'))
 
-        todas_as_turmas = TurmaService.get_turmas_by_school(school_id)
+        active_edicao = session.get('active_edicao_id')
+        todas_as_turmas = TurmaService.get_turmas_by_school(school_id, active_edicao)
 
-        if not current_user.is_sens and not current_user.is_admin_escola and not current_user.is_programador:
+        if not current_user.is_sens and not current_user.is_admin_escola:
             my_instrutor_ids = db.session.scalars(
                 select(Instrutor.id).where(Instrutor.user_id == current_user.id)
             ).all()
@@ -104,6 +107,7 @@ def index():
                         .join(DisciplinaTurma, DisciplinaTurma.disciplina_id == Disciplina.id)
                         .where(
                             Turma.school_id == school_id,
+                            Turma.edicao_id == active_edicao,
                             or_(
                                 DisciplinaTurma.instrutor_id_1.in_(my_instrutor_ids),
                                 DisciplinaTurma.instrutor_id_2.in_(my_instrutor_ids)
@@ -128,12 +132,12 @@ def index():
 
     turma_atual_obj = None
     if turma_selecionada_nome:
-        turma_atual_obj = db.session.scalar(select(Turma).where(Turma.nome == turma_selecionada_nome, Turma.school_id == school_id))
+        turma_atual_obj = db.session.scalar(select(Turma).where(Turma.nome == turma_selecionada_nome, Turma.school_id == school_id, Turma.edicao_id == active_edicao))
 
     ciclo_selecionado_id = request.args.get('ciclo', session.get('ultimo_ciclo_horario'), type=int)
 
     ciclos = db.session.scalars(
-        select(Ciclo).where(Ciclo.school_id == school_id).order_by(Ciclo.nome)
+        select(Ciclo).where(Ciclo.school_id == school_id, Ciclo.edicao_id == active_edicao).order_by(Ciclo.nome)
     ).all()
 
     if not ciclo_selecionado_id or ciclo_selecionado_id not in [c.id for c in ciclos]:
@@ -170,7 +174,7 @@ def index():
             all_materias_names = db.session.scalars(
                 select(Disciplina.materia)
                 .join(Turma)
-                .where(Turma.school_id == school_id)
+                .where(Turma.school_id == school_id, Turma.edicao_id == active_edicao)
                 .distinct()
                 .order_by(Disciplina.materia)
             ).all()
@@ -184,7 +188,7 @@ def index():
         except:
             priority_allowed_names = []
 
-        if current_user.is_sens or current_user.is_admin_escola or current_user.is_programador:
+        if current_user.is_sens or current_user.is_admin_escola:
             can_schedule_in_this_turma = True
         else:
             my_instrutor_ids = db.session.scalars(
@@ -198,6 +202,7 @@ def index():
                     .join(DisciplinaTurma, DisciplinaTurma.disciplina_id == Disciplina.id)
                     .where(
                         Turma.school_id == school_id,
+                        Turma.edicao_id == active_edicao,
                         or_(
                             DisciplinaTurma.instrutor_id_1.in_(my_instrutor_ids),
                             DisciplinaTurma.instrutor_id_2.in_(my_instrutor_ids)
@@ -266,12 +271,14 @@ def dashboard_instrutor():
             .join(Disciplina)
             .join(Semana)
             .join(Turma, Turma.nome == Horario.pelotao)
+            .options(joinedload(Horario.semana), joinedload(Horario.disciplina))
             .where(
                 Turma.school_id == school_id,
+                Turma.edicao_id == session.get('active_edicao_id'),
                 or_(Horario.instrutor_id == instrutor.id, Horario.instrutor_id_2 == instrutor.id)
             )
             .order_by(desc(Semana.data_inicio), Horario.dia_semana, Horario.periodo)
-        ).all()
+        ).unique().all()
 
         hoje = date.today()
         aulas_passadas = []
@@ -407,13 +414,21 @@ def exportar_pdf():
                                     tempos=tempos,
                                     intervalos=intervalos)
     try:
-        pdf_content = HTML(string=rendered_html, base_url=request.url_root).write_pdf()
-        filename_utf8 = f'horario_{pelotao}_{semana.nome}.pdf'.replace(' ', '_')
-        filename_ascii = 'quadro_horario.pdf'
-        return Response(pdf_content, mimetype='application/pdf', headers={'Content-Disposition': f'attachment; filename="{filename_ascii}"; filename*=UTF-8\'\'{quote(filename_utf8)}'})
+        # Em vez de write_pdf(), enviamos para a fila
+        job_id = str(uuid.uuid4())
+        job = BackgroundJob(
+            id=job_id,
+            task_type='generate_pdf',
+            payload=rendered_html,
+            user_id=current_user.id
+        )
+        db.session.add(job)
+        db.session.commit()
+        
+        return jsonify({'success': True, 'job_id': job_id})
     except Exception as e:
-        flash(f'Erro ao gerar PDF: {e}', 'danger')
-        return redirect(url_for('horario.index', pelotao=pelotao, semana_id=semana_id))
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)})
 
 @horario_bp.route('/editar/<path:pelotao>/<int:semana_id>/<int:ciclo_id>')
 @login_required
@@ -533,7 +548,7 @@ def proximas_aulas_admin():
 
     # Para buscar o histórico, precisamos obrigatoriamente de um ciclo.
     ciclos = db.session.scalars(
-        select(Ciclo).where(Ciclo.school_id == school_id).order_by(Ciclo.nome)
+        select(Ciclo).where(Ciclo.school_id == school_id, Ciclo.edicao_id == active_edicao).order_by(Ciclo.nome)
     ).all()
     
     ciclo_selecionado_id = request.args.get('ciclo', session.get('ultimo_ciclo_horario'), type=int)
@@ -561,9 +576,13 @@ def proximas_aulas_admin():
             })
 
     # 2. Buscar todas as Turmas da Escola para o Select
+    active_edicao = session.get('active_edicao_id')
     turmas_banco = db.session.scalars(
         select(Turma)
-        .where(Turma.school_id == school_id)
+        .where(
+            Turma.school_id == school_id,
+            Turma.edicao_id == active_edicao
+        )
         .order_by(Turma.nome)
     ).all()
     
@@ -584,6 +603,7 @@ def proximas_aulas_admin():
             .options(joinedload(DisciplinaTurma.disciplina))
             .where(
                 Turma.school_id == school_id,
+                Turma.edicao_id == active_edicao,
                 or_(
                     DisciplinaTurma.instrutor_id_1 == instrutor_id,
                     DisciplinaTurma.instrutor_id_2 == instrutor_id

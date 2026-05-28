@@ -52,7 +52,8 @@ def listar_disciplinas():
     turma_selecionada_id = request.args.get('turma_id', type=int)
     ciclo_selecionado_id = request.args.get('ciclo_id', type=int)
     
-    turmas_disponiveis = TurmaService.get_turmas_by_school(school_id)
+    active_edicao = session.get('active_edicao_id')
+    turmas_disponiveis = TurmaService.get_turmas_by_school(school_id, active_edicao)
     todas_disciplinas = DisciplinaService.get_disciplinas_by_school(school_id)
 
     disciplinas_filtradas = []
@@ -86,7 +87,8 @@ def listar_disciplinas():
         disciplinas_com_progresso.append({'disciplina': d, 'progresso': progresso})
 
     delete_form = DeleteForm()
-    ciclos = db.session.scalars(select(Ciclo).where(Ciclo.school_id == school_id).order_by(Ciclo.nome)).all()
+    active_edicao = session.get('active_edicao_id')
+    ciclos = db.session.scalars(select(Ciclo).where(Ciclo.school_id == school_id, Ciclo.edicao_id == active_edicao).order_by(Ciclo.nome)).all()
     
     return render_template('listar_disciplinas.html', 
                            disciplinas_com_progresso=disciplinas_com_progresso,
@@ -107,7 +109,8 @@ def dashboard_disciplinas():
 
     ciclo_id_arg = request.args.get('ciclo_id')
     
-    ciclos = db.session.scalars(select(Ciclo).where(Ciclo.school_id == school_id).order_by(Ciclo.nome)).all()
+    active_edicao = session.get('active_edicao_id')
+    ciclos = db.session.scalars(select(Ciclo).where(Ciclo.school_id == school_id, Ciclo.edicao_id == active_edicao).order_by(Ciclo.nome)).all()
     
     # Seleciona o ciclo: Prioridade para o argumento da URL, senão o último ciclo cadastrado
     ciclo_selecionado_id = None
@@ -133,10 +136,12 @@ def adicionar_disciplina():
         return redirect(url_for('disciplina.listar_disciplinas'))
         
     form = DisciplinaForm()
-    ciclos = db.session.scalars(select(Ciclo).where(Ciclo.school_id == school_id).order_by(Ciclo.nome)).all()
+    active_edicao = session.get('active_edicao_id')
+    ciclos = db.session.scalars(select(Ciclo).where(Ciclo.school_id == school_id, Ciclo.edicao_id == active_edicao).order_by(Ciclo.nome)).all()
     form.ciclo_id.choices = [(c.id, c.nome) for c in ciclos]
     
-    turmas = TurmaService.get_turmas_by_school(school_id)
+    active_edicao = session.get('active_edicao_id')
+    turmas = TurmaService.get_turmas_by_school(school_id, active_edicao)
     form.turma_ids.choices = [(t.id, t.nome) for t in turmas]
     
     if form.validate_on_submit():
@@ -184,7 +189,8 @@ def editar_disciplina(disciplina_id):
         submit = SubmitField('Salvar')
 
     form = EditDisciplinaForm(obj=disciplina)
-    ciclos = db.session.scalars(select(Ciclo).where(Ciclo.school_id == school_id).order_by(Ciclo.nome)).all()
+    active_edicao = session.get('active_edicao_id')
+    ciclos = db.session.scalars(select(Ciclo).where(Ciclo.school_id == school_id, Ciclo.edicao_id == active_edicao).order_by(Ciclo.nome)).all()
     form.ciclo_id.choices = [(c.id, c.nome) for c in ciclos]
     form.turma_id.choices = [(disciplina.turma.id, disciplina.turma.nome)]
     

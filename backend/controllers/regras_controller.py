@@ -18,7 +18,7 @@ ATRIBUTOS_FADA = {
 @login_required
 @admin_or_programmer_required
 def index():
-    tipo = g.active_school.npccal_type or 'cbfpm'
+    tipo = (g.active_edicao.npccal_type if g.get('active_edicao') else None) or 'ctsp'
     
     # Busca todas as regras do tipo (sem order_by no banco para ordenar no Python)
     regras_query = DisciplineRule.query.filter_by(npccal_type=tipo).all()
@@ -62,7 +62,7 @@ def nova():
             db.session.rollback()
             flash(f'Erro: {e}', 'danger')
 
-    return render_template('regras/editar.html', regra=None, atributos=ATRIBUTOS_FADA, tipo_padrao=g.active_school.npccal_type)
+    return render_template('regras/editar.html', regra=None, atributos=ATRIBUTOS_FADA, tipo_padrao=(g.active_edicao.npccal_type if g.get('active_edicao') else 'ctsp'))
 
 @regras_bp.route('/editar/<int:id>', methods=['GET', 'POST'])
 @login_required

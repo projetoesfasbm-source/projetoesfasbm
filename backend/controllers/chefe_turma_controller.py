@@ -84,6 +84,7 @@ def debug_screen():
         
         semanas = db.session.query(Semana).join(Ciclo).filter(
             Ciclo.school_id == escola_id,
+            Ciclo.edicao_id == aluno.turma.edicao_id,
             Semana.data_inicio <= data_hoje, 
             Semana.data_fim >= data_hoje
         ).all()
@@ -163,6 +164,7 @@ def painel():
         
         semanas_ativas = db.session.query(Semana).join(Ciclo).filter(
             Ciclo.school_id == aluno.turma.school_id,
+            Ciclo.edicao_id == aluno.turma.edicao_id,
             Semana.data_inicio <= data_selecionada,
             Semana.data_fim >= data_selecionada
         ).all()

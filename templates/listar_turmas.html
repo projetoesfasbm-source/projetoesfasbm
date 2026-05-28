@@ -13,7 +13,7 @@
         <h3>Turmas Cadastradas</h3>
         
         {# CORREÇÃO: Adicionado 'is_sens' para liberar gestão de turmas #}
-        {% if current_user.is_sens or current_user.role in ['programador', 'admin_escola'] %}
+        {% if current_user.is_sens or current_user.role in ['admin_escola'] %}
         <div class="header-actions">
             <a href="{{ url_for('turma.cadastrar_turma') }}" class="btn btn-primary">
                 <span>+</span> Cadastrar Nova Turma
@@ -59,7 +59,7 @@
             <h2>Nenhuma Turma Cadastrada</h2>
             
             {# CORREÇÃO: Adicionado 'is_sens' no botão de cadastro vazio #}
-            {% if current_user.is_sens or current_user.role in ['programador', 'admin_escola'] %}
+            {% if current_user.is_sens or current_user.role in ['admin_escola'] %}
             <p>Clique no botão acima para cadastrar a primeira turma.</p>
             {% endif %}
         </div>

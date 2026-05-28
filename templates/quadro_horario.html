@@ -70,9 +70,9 @@
                         {% if priority_active %}Prioridade ATIVA{% else %}Configurar Restrições{% endif %}
                     </button>
 
-                    <a href="{{ url_for('horario.exportar_pdf', pelotao=pelotao_selecionado, semana_id=semana_selecionada.id) }}" class="btn btn-danger" target="_blank">
+                    <button type="button" class="btn btn-danger btn-horario-pdf" data-url="{{ url_for('horario.exportar_pdf', pelotao=pelotao_selecionado, semana_id=semana_selecionada.id) }}">
                         <i class="fas fa-file-pdf me-1"></i> PDF
-                    </a>
+                    </button>
                 {% endif %}
                 
                 {% if can_schedule_in_this_turma or current_user.is_sens %}
@@ -652,6 +652,69 @@
             else { alert('Erro ao salvar: ' + (data.message || 'Erro desconhecido')); btn.innerHTML = originalText; btn.disabled = false; }
         })
         .catch(err => { console.error(err); alert('Erro de conexão.'); btn.innerHTML = originalText; btn.disabled = false; });
+    }
+
+    // Lógica de Polling do PDF
+    document.querySelectorAll('.btn-horario-pdf').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const originalHtml = this.innerHTML;
+            this.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Gerando...';
+            this.disabled = true;
+            
+            fetch(this.dataset.url)
+                .then(res => res.json())
+                .then(data => {
+                    if(data.success && data.job_id) {
+                        pollJobStatus(data.job_id, this, originalHtml);
+                    } else {
+                        alert("Erro ao enviar tarefa de PDF para a fila.");
+                        this.innerHTML = originalHtml;
+                        this.disabled = false;
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert("Erro ao conectar com o servidor.");
+                    this.innerHTML = originalHtml;
+                    this.disabled = false;
+                });
+        });
+    });
+
+    function pollJobStatus(jobId, btnElement, originalHtml) {
+        const statusUrl = `/api/jobs/${jobId}/status`;
+        const interval = setInterval(() => {
+            fetch(statusUrl)
+                .then(res => {
+                    if(!res.ok) { throw new Error('Network error or server error'); }
+                    return res.json();
+                })
+                .then(data => {
+                    if(data.error) {
+                        clearInterval(interval);
+                        alert("Erro do servidor: " + data.error);
+                        btnElement.innerHTML = originalHtml;
+                        btnElement.disabled = false;
+                    } else if(data.status === 'completed') {
+                        clearInterval(interval);
+                        btnElement.innerHTML = originalHtml;
+                        btnElement.disabled = false;
+                        window.location.href = `/api/jobs/${jobId}/download`;
+                    } else if(data.status === 'failed') {
+                        clearInterval(interval);
+                        alert("A geração do PDF falhou no servidor.");
+                        btnElement.innerHTML = originalHtml;
+                        btnElement.disabled = false;
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    clearInterval(interval);
+                    alert("Erro ao verificar o status na fila.");
+                    btnElement.innerHTML = originalHtml;
+                    btnElement.disabled = false;
+                });
+        }, 2000);
     }
 </script>
 <style>

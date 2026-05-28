@@ -10,7 +10,7 @@ class QuestaoBanco(db.Model):
     disciplina_id = db.Column(db.Integer, db.ForeignKey('disciplinas.id'), nullable=False)
     escola_id = db.Column(db.Integer, db.ForeignKey('schools.id'), nullable=False)
     instrutor_id = db.Column(db.Integer, db.ForeignKey('instrutores.id'), nullable=False)
-    edicao = db.Column(db.String(100), nullable=False, default="Geral", server_default="Geral")
+    edicao_id = db.Column(db.Integer, db.ForeignKey('edicoes.id'), nullable=True)
 
     assunto = db.Column(db.String(255), nullable=True)
     enunciado = db.Column(db.Text, nullable=False)
@@ -24,6 +24,7 @@ class QuestaoBanco(db.Model):
     disciplina = db.relationship('Disciplina', backref=db.backref('questoes_banco', cascade='all, delete-orphan'))
     escola = db.relationship('School', backref=db.backref('questoes_banco', cascade='all, delete-orphan'))
     instrutor = db.relationship('Instrutor', backref=db.backref('questoes_enviadas', cascade='all, delete-orphan'))
+    edicao = db.relationship('Edicao', backref='questoes_banco')
 
 class ConfiguracaoEnvio(db.Model):
     """Tabela que salva se o envio está aberto ou fechado"""
@@ -33,9 +34,11 @@ class ConfiguracaoEnvio(db.Model):
     escola_id = db.Column(db.Integer, db.ForeignKey('schools.id'), nullable=False)
     materia = db.Column(db.String(100), nullable=False)
     envio_ativo = db.Column(db.Boolean, default=False)
-    edicao = db.Column(db.String(100), nullable=False, default="Geral", server_default="Geral")
+    edicao_id = db.Column(db.Integer, db.ForeignKey('edicoes.id'), nullable=True)
 
-    __table_args__ = (db.UniqueConstraint('escola_id', 'materia', 'edicao', name='uq_escola_mat_edicao'),)
+    __table_args__ = (db.UniqueConstraint('escola_id', 'materia', 'edicao_id', name='uq_escola_mat_edicao_id'),)
+
+    edicao = db.relationship('Edicao', backref='configuracoes_envio')
 
 class DelegacaoProva(db.Model):
     __tablename__ = 'delegacoes_prova'
@@ -44,7 +47,7 @@ class DelegacaoProva(db.Model):
     instrutor_id = db.Column(db.Integer, db.ForeignKey('instrutores.id'), nullable=False)
     escola_gestora_id = db.Column(db.Integer, db.ForeignKey('schools.id'), nullable=False)
     disciplina_id = db.Column(db.Integer, db.ForeignKey('disciplinas.id'), nullable=False)
-    edicao = db.Column(db.String(100), nullable=False, default="Geral", server_default="Geral")
+    edicao_id = db.Column(db.Integer, db.ForeignKey('edicoes.id'), nullable=True)
 
     escolas_fontes = db.Column(db.JSON, nullable=False)
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
@@ -53,6 +56,7 @@ class DelegacaoProva(db.Model):
     instrutor = db.relationship('Instrutor', backref=db.backref('delegacoes_recebidas', cascade='all, delete-orphan'))
     escola_gestora = db.relationship('School', backref=db.backref('provas_geridas', cascade='all, delete-orphan'))
     disciplina = db.relationship('Disciplina', backref=db.backref('delegacoes_prova', cascade='all, delete-orphan'))
+    edicao = db.relationship('Edicao', backref='delegacoes_prova')
 
 class RascunhoProva(db.Model):
     __tablename__ = 'rascunhos_prova'

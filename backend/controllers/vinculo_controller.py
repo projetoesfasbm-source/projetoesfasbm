@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 from flask_login import login_required, current_user
 from sqlalchemy import select
 from flask_wtf import FlaskForm
@@ -44,7 +44,8 @@ def gerenciar_vinculos():
             turma_filtrada_id = None 
 
     vinculos = VinculoService.get_all_vinculos(turma_filtrada_id, school_id)
-    turmas = TurmaService.get_turmas_by_school(school_id)
+    active_edicao = session.get('active_edicao_id')
+    turmas = TurmaService.get_turmas_by_school(school_id, active_edicao)
     delete_form = DeleteForm()
     
     return render_template('gerenciar_vinculos.html', 
@@ -64,7 +65,8 @@ def adicionar_vinculo():
 
     form = VinculoForm()
     instrutores = InstrutorService.get_all_instrutores_sem_paginacao(user=current_user)
-    turmas = TurmaService.get_turmas_by_school(school_id)
+    active_edicao = session.get('active_edicao_id')
+    turmas = TurmaService.get_turmas_by_school(school_id, active_edicao)
 
     instrutor_choices = []
     for i in instrutores:

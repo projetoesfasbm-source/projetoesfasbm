@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, jsonify, session
 from flask_login import login_required, current_user
 from datetime import datetime
 import os
@@ -68,8 +68,9 @@ def assinar(diario_id):
             DiarioClasse.disciplina_id == diario.disciplina_id,
             DiarioClasse.is_deleted == False,
             DiarioClasse.status == 'pendente'
-        ).order_by(DiarioClasse.periodo, DiarioClasse.id)
-    ).all()
+        ).options(db.joinedload(DiarioClasse.frequencias))
+        .order_by(DiarioClasse.periodo, DiarioClasse.id)
+    ).unique().all()
 
     if not diarios_bloco:
         flash("Este bloco de diários já foi assinado ou não está disponível para edição.", "info")
@@ -209,6 +210,7 @@ def faltas_por_dia():
             Disciplina, DiarioClasse.disciplina_id == Disciplina.id 
         ).filter(
             Turma.school_id == school_id,
+            Turma.edicao_id == session.get('active_edicao_id'),
             DiarioClasse.data_aula == data_busca,
             DiarioClasse.is_deleted == False,
             FrequenciaAluno.presente == False
@@ -244,7 +246,7 @@ def faltas_por_dia():
 @diario_bp.route('/admin/lixeira', methods=['GET'])
 @login_required
 def listar_lixeira():
-    if not (current_user.is_sens or current_user.is_admin_escola or current_user.is_programador):
+    if not (current_user.is_sens or current_user.is_admin_escola):
         flash("Acesso negado.", "danger")
         return redirect(url_for('main.dashboard'))
         
@@ -262,9 +264,14 @@ def listar_lixeira():
         .join(Turma, DiarioClasse.turma_id == Turma.id)
         .where(
             Turma.school_id == school_id,
+            Turma.edicao_id == session.get('active_edicao_id'),
             DiarioClasse.is_deleted == True
-        ).order_by(DiarioClasse.data_aula.desc(), DiarioClasse.turma_id, DiarioClasse.disciplina_id, DiarioClasse.periodo.asc())
-    ).all()
+        ).options(
+            db.joinedload(DiarioClasse.turma),
+            db.joinedload(DiarioClasse.disciplina)
+        )
+        .order_by(DiarioClasse.data_aula.desc(), DiarioClasse.turma_id, DiarioClasse.disciplina_id, DiarioClasse.periodo.asc())
+    ).unique().all()
     
     grouped = []
     if diarios_apagados:
@@ -321,7 +328,7 @@ def listar_lixeira():
 @diario_bp.route('/admin/restaurar/<int:diario_id>', methods=['POST'])
 @login_required
 def restaurar(diario_id):
-    if not (current_user.is_sens or current_user.is_admin_escola or current_user.is_programador):
+    if not (current_user.is_sens or current_user.is_admin_escola):
         return jsonify({"success": False, "message": "Acesso negado"}), 403
         
     ok, msg = DiarioService.restaurar_diario_admin(diario_id, current_user)

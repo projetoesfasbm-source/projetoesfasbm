@@ -39,8 +39,8 @@ class UserService:
         if not has_request_context(): return None
         if not current_user or not current_user.is_authenticated: return None
 
-        # Super Admins e Programadores podem ter uma escola "Visualizar Como"
-        if getattr(current_user, 'role', '') in ['super_admin', 'programador']:
+        # Super Admins podem ter uma escola "Visualizar Como"
+        if getattr(current_user, 'role', '') == 'super_admin':
             view_as = session.get('view_as_school_id')
             if view_as: return int(view_as)
 
@@ -130,7 +130,7 @@ class UserService:
         return True
 
     @staticmethod
-    def pre_register_user(data, school_id):
+    def pre_register_user(data, school_id, edicao_id=None):
         matricula = normalize_matricula(data.get('matricula'))
         role = (data.get('role') or 'aluno').strip()
 
@@ -159,7 +159,7 @@ class UserService:
 
                 # CORREÇÃO DO ERRO 'opm required': Passamos um valor padrão '-'
                 if role == 'aluno':
-                    db.session.add(Aluno(user_id=user.id, opm='-'))
+                    db.session.add(Aluno(user_id=user.id, opm='-', edicao_id=edicao_id))
 
             # 2. Garante o Vínculo SOMENTE com a Escola Solicitada
             # Se ele já existir em outra escola, isso não afeta nada aqui.
@@ -180,7 +180,7 @@ class UserService:
             return False, f"Erro interno: {str(e)}"
 
     @staticmethod
-    def batch_pre_register_users(matriculas, role, school_id):
+    def batch_pre_register_users(matriculas, role, school_id, edicao_id=None):
         if not role or not school_id: return False, 0, 0
 
         novos = 0
@@ -214,7 +214,7 @@ class UserService:
                     
                     # CORREÇÃO DO ERRO 'opm required'
                     if role == 'aluno':
-                        db.session.add(Aluno(user_id=user.id, opm='-'))
+                        db.session.add(Aluno(user_id=user.id, opm='-', edicao_id=edicao_id))
                     
                     UserService._ensure_user_school(user.id, school_id, role)
                     if role == 'instrutor':
@@ -230,7 +230,7 @@ class UserService:
             return False, 0, 0
 
     @staticmethod
-    def create_user(data, school_id=None):
+    def create_user(data, school_id=None, edicao_id=None):
         """
         Criação completa de usuário (geralmente via Admin Tools ou Cadastro Manual).
         """
@@ -265,10 +265,10 @@ class UserService:
             
             # CORREÇÃO DO ERRO 'opm required'
             if role == 'aluno':
-                db.session.add(Aluno(user_id=user.id, opm='-'))
+                db.session.add(Aluno(user_id=user.id, opm='-', edicao_id=edicao_id))
 
             # VINCULAÇÃO
-            if school_id and role not in ['programador', 'super_admin']:
+            if school_id and role != 'super_admin':
                 UserService._ensure_user_school(user.id, school_id, role)
                 if role == 'instrutor':
                     UserService._ensure_instrutor_profile(user.id, school_id)
@@ -283,9 +283,6 @@ class UserService:
     def set_user_role_for_school(user_id, school_id, new_role):
         user = db.session.get(User, user_id)
         if not user: return False, "Usuário não encontrado."
-            
-        if user.role == User.ROLE_PROGRAMADOR:
-             return False, "Não é possível alterar cargo de Programador via escola."
 
         try:
             # Usa o método centralizado para garantir o vínculo/atualização
@@ -355,7 +352,7 @@ class UserService:
     @staticmethod
     def remove_school_role(user_id, school_id):
         user = db.session.get(User, user_id)
-        if user and user.role in ['super_admin', 'programador']:
+        if user and user.role == 'super_admin':
             return False, "Não permitido."
 
         assignment = db.session.scalar(select(UserSchool).filter_by(user_id=user_id, school_id=school_id))
@@ -379,7 +376,7 @@ class UserService:
             user = db.session.get(User, user_id)
             if not user: return False, "Usuário não encontrado."
             
-            if user.role in ['super_admin', 'programador'] and (not current_user or current_user.role != 'programador'):
+            if user.role == 'super_admin':
                  return False, "Não é permitido excluir administradores globais."
 
             # Limpezas profundas

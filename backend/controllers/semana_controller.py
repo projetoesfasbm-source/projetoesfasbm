@@ -1,5 +1,5 @@
 # backend/controllers/semana_controller.py
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session
 from flask_login import login_required
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -51,9 +51,11 @@ def gerenciar_semanas(ciclo_id):
 
     school_id = UserService.get_current_school_id()
 
-    # Busca apenas Ciclos da escola atual
+    active_edicao = session.get('active_edicao_id')
+    
+    # Busca apenas Ciclos da escola atual e da edição ativa
     ciclos = db.session.execute(
-        select(Ciclo).where(Ciclo.school_id == school_id).order_by(Ciclo.nome)
+        select(Ciclo).where(Ciclo.school_id == school_id, Ciclo.edicao_id == active_edicao).order_by(Ciclo.nome)
     ).scalars().all()
 
     form.ciclo_id.choices = [(c.id, c.nome) for c in ciclos]
@@ -68,7 +70,7 @@ def gerenciar_semanas(ciclo_id):
         ciclo_id = ultimo_ciclo.id
 
     # Query Base: Semanas
-    query = select(Semana).join(Ciclo).where(Ciclo.school_id == school_id).order_by(Semana.data_inicio.desc())
+    query = select(Semana).join(Ciclo).where(Ciclo.school_id == school_id, Ciclo.edicao_id == active_edicao).order_by(Semana.data_inicio.desc())
 
     if ciclo_id:
         query = query.where(Semana.ciclo_id == ciclo_id)
@@ -92,8 +94,9 @@ def adicionar_semana():
     form = AddSemanaForm()
     school_id = UserService.get_current_school_id()
 
+    active_edicao = session.get('active_edicao_id')
     ciclos = db.session.execute(
-        select(Ciclo).where(Ciclo.school_id == school_id).order_by(Ciclo.nome)
+        select(Ciclo).where(Ciclo.school_id == school_id, Ciclo.edicao_id == active_edicao).order_by(Ciclo.nome)
     ).scalars().all()
     form.ciclo_id.choices = [(c.id, c.nome) for c in ciclos]
 
@@ -124,8 +127,9 @@ def editar_semana(semana_id):
         return redirect(url_for('semana.gerenciar_semanas'))
 
     form = AddSemanaForm(obj=semana)
+    active_edicao = session.get('active_edicao_id')
     ciclos = db.session.execute(
-        select(Ciclo).where(Ciclo.school_id == school_id).order_by(Ciclo.nome)
+        select(Ciclo).where(Ciclo.school_id == school_id, Ciclo.edicao_id == active_edicao).order_by(Ciclo.nome)
     ).scalars().all()
     form.ciclo_id.choices = [(c.id, c.nome) for c in ciclos]
 
@@ -171,14 +175,15 @@ def deletar_semana(semana_id):
 def adicionar_ciclo():
     nome_ciclo = request.form.get('nome_ciclo')
     school_id = UserService.get_current_school_id()
+    active_edicao = session.get('active_edicao_id')
 
     if nome_ciclo and school_id:
         exists = db.session.scalar(
-            select(Ciclo).where(Ciclo.nome == nome_ciclo, Ciclo.school_id == school_id)
+            select(Ciclo).where(Ciclo.nome == nome_ciclo, Ciclo.school_id == school_id, Ciclo.edicao_id == active_edicao)
         )
         if not exists:
             try:
-                novo_ciclo = Ciclo(nome=nome_ciclo, school_id=school_id)
+                novo_ciclo = Ciclo(nome=nome_ciclo, school_id=school_id, edicao_id=active_edicao)
                 db.session.add(novo_ciclo)
                 db.session.commit()
                 flash(f"Ciclo '{nome_ciclo}' criado com sucesso!", "success")

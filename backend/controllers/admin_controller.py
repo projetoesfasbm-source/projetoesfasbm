@@ -32,7 +32,6 @@ def sens_permission_required(f):
         
         if not (current_user.is_sens_in_school(school_id) or 
                 current_user.is_admin_escola_in_school(school_id) or
-                current_user.is_programador or 
                 getattr(current_user, 'is_super_admin', False)):
             
             flash("Acesso restrito. Área exclusiva para a Seção de Ensino (SENS) nesta escola.", "danger")

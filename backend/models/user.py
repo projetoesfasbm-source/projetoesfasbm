@@ -6,7 +6,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from sqlalchemy import select
 from .database import db
-from flask import session
+from flask import session, has_request_context
 
 if t.TYPE_CHECKING:
     from .site_config import SiteConfig
@@ -21,7 +21,7 @@ class User(UserMixin, db.Model):
     __tablename__ = 'users'
 
     # --- CONSTANTES DE PERMISSÃO ---
-    ROLE_PROGRAMADOR = 'programador'
+
     ROLE_ADMIN_ESCOLA = 'admin_escola'
     ROLE_ADMIN_CAL = 'admin_cal'
     ROLE_ADMIN_SENS = 'admin_sens'
@@ -47,8 +47,8 @@ class User(UserMixin, db.Model):
     is_totp_enabled: Mapped[bool] = mapped_column(db.Boolean, default=False, server_default='0', nullable=False)
 
     # --- RELACIONAMENTOS ---
-    # useList=False garante que seja tratado como objeto único (1-to-1)
-    aluno_profile: Mapped['Aluno'] = relationship('Aluno', back_populates='user', uselist=False, cascade="all, delete-orphan")
+    # Removido uselist=False para suportar múltiplos perfis (1 por edição)
+    alunos_profiles: Mapped[list['Aluno']] = relationship('Aluno', back_populates='user', cascade="all, delete-orphan")
     instrutor_profile: Mapped['Instrutor'] = relationship('Instrutor', back_populates='user', uselist=False, cascade="all, delete-orphan")
     user_schools: Mapped[list['UserSchool']] = relationship('UserSchool', back_populates='user', cascade="all, delete-orphan", lazy='selectin')
 
@@ -56,6 +56,24 @@ class User(UserMixin, db.Model):
 
     notifications: Mapped[list['Notification']] = relationship('Notification', back_populates='user', cascade="all, delete-orphan")
     push_subscriptions: Mapped[list['PushSubscription']] = relationship('PushSubscription', back_populates='user', cascade="all, delete-orphan")
+
+    @property
+    def aluno_profile(self) -> t.Optional['Aluno']:
+        if not self.alunos_profiles:
+            return None
+        
+        # Se estiver fora de um request (ex: CLI, tarefas cron), retorna o mais recente
+        if not has_request_context():
+            return sorted(self.alunos_profiles, key=lambda x: x.id, reverse=True)[0]
+            
+        active_edicao_id = session.get('active_edicao_id')
+        if active_edicao_id:
+            for profile in self.alunos_profiles:
+                if profile.edicao_id == active_edicao_id:
+                    return profile
+                    
+        # Fallback: Se não encontrou pela edição, retorna o perfil mais recente
+        return sorted(self.alunos_profiles, key=lambda x: x.id, reverse=True)[0]
 
     @property
     def schools(self) -> list['School']:
@@ -90,11 +108,12 @@ class User(UserMixin, db.Model):
     def get_role_in_school(self, school_id: int | str | None) -> str | None:
         current_global_role = str(self.role).lower().strip()
 
-        # Superusuários ignoram barreiras de escola
-        if current_global_role == self.ROLE_PROGRAMADOR: return self.ROLE_PROGRAMADOR
-        if current_global_role == 'super_admin': return 'super_admin'
+        # Superusuários só ignoram barreiras se estiverem em Modo DEC
+        if current_global_role == 'super_admin' and session.get('is_dec_mode'):
+            return 'super_admin'
 
         if not school_id:
+            # Se não tem escola, e não tá em DEC, retorna a global (pode ser útil fora da escola)
             return current_global_role
 
         # Verifica se existe um VÍNCULO EXPLÍCITO nesta escola
@@ -108,42 +127,42 @@ class User(UserMixin, db.Model):
         # Agora retorna None se não encontrar vínculo explícito.
         return None
 
+    @property
+    def is_super_admin(self) -> bool:
+        return str(self.role).lower().strip() == 'super_admin'
+
     # --- Verificadores Contextuais ---
 
-    def is_programador_check(self) -> bool:
-        return str(self.role).lower().strip() == self.ROLE_PROGRAMADOR
-
     def is_admin_escola_in_school(self, school_id: int | None) -> bool:
-        if self.is_programador_check(): return True
+        if self.is_super_admin and session.get('is_dec_mode') and school_id:
+            return True
         return self.get_role_in_school(school_id) == self.ROLE_ADMIN_ESCOLA
 
     def is_cal_in_school(self, school_id: int | None) -> bool:
-        if self.is_programador_check(): return True
+        if self.is_super_admin and session.get('is_dec_mode') and school_id:
+            return True
         role = self.get_role_in_school(school_id)
         return role in [self.ROLE_ADMIN_CAL, self.ROLE_ADMIN_ESCOLA]
 
     def is_sens_in_school(self, school_id: int | None) -> bool:
         """SENS inclui ADMIN_SENS e ADMIN_ESCOLA (Comandante tem acesso total)"""
-        if self.is_programador_check(): return True
+        if self.is_super_admin and session.get('is_dec_mode') and school_id:
+            return True
         role = self.get_role_in_school(school_id)
         return role in [self.ROLE_ADMIN_SENS, self.ROLE_ADMIN_ESCOLA]
 
     def is_instrutor_in_school(self, school_id: int | None) -> bool:
-        if self.is_programador_check(): return True
+        if self.is_super_admin and session.get('is_dec_mode') and school_id:
+            return True
         role = self.get_role_in_school(school_id)
         return role == self.ROLE_INSTRUTOR
 
     def is_staff_in_school(self, school_id: int | None) -> bool:
         """Staff inclui SENS, CAL e Comandante"""
-        if self.is_programador_check(): return True
+        if self.is_super_admin and session.get('is_dec_mode') and school_id:
+            return True
         role = self.get_role_in_school(school_id)
         return role in [self.ROLE_ADMIN_SENS, self.ROLE_ADMIN_CAL, self.ROLE_ADMIN_ESCOLA]
-
-    # --- PROPRIEDADES INTELIGENTES ---
-
-    @property
-    def is_programador(self):
-        return self.is_programador_check()
 
     @property
     def is_admin_escola(self):
@@ -188,8 +207,6 @@ class User(UserMixin, db.Model):
 
     @property
     def pode_enviar_questoes(self) -> bool:
-        """Verifica se há alguma matéria com envio aberto para a escola ativa deste instrutor"""
-        if self.is_programador: return True
         sid = self._get_active_school_id()
         if not sid: return False
 
@@ -204,8 +221,6 @@ class User(UserMixin, db.Model):
 
     @property
     def tem_delegacao_prova(self) -> bool:
-        """Verifica se este usuário foi delegado para montar prova"""
-        if self.is_programador: return True
         if not self.instrutor_profile: return False
 
         from .banco_questoes import DelegacaoProva

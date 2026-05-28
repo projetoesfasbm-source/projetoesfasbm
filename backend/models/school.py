@@ -31,12 +31,6 @@ class School(db.Model):
         nullable=False,
     )
 
-    # --- NOVO CAMPO ADICIONADO ---
-    # ### INÍCIO DA ALTERAÇÃO ###
-    # O 'default' e 'server_default' foram alterados para 'ctsp' (que é o "sem pontos")
-    npccal_type: Mapped[str] = mapped_column(db.String(20), nullable=False, default='ctsp', server_default='ctsp')
-    # ### FIM DA ALTERAÇÃO ###
-    # -------------------------------
 
     user_schools: Mapped[list['UserSchool']] = relationship('UserSchool', back_populates='school', cascade="all, delete-orphan")
 

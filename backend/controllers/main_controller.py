@@ -140,9 +140,9 @@ def trocar_escola(school_id):
     Rota para forçar a mudança de contexto (Isolamento).
     """
     # --- A CARTEIRADA DO SUPER ADMIN ---
-    # Se você é Super Admin, o sistema injeta a escola direto na sua sessão, 
+    # Se você é Super Admin E está com o modo DEC ativado, o sistema injeta a escola direto na sua sessão, 
     # ignorando as travas de vínculo formal do UserService.
-    if current_user.role == 'super_admin':
+    if current_user.role == 'super_admin' and session.get('is_dec_mode'):
         session['active_school_id'] = school_id
         session.permanent = True
         flash("Contexto escolar alterado com sucesso.", "success")
@@ -211,7 +211,8 @@ def dashboard():
         return redirect(url_for('main.selecionar_escola'))
 
     try:
-        dashboard_data = DashboardService.get_dashboard_data(school_id=school_id_to_load)
+        active_edicao_id = session.get('active_edicao_id')
+        dashboard_data = DashboardService.get_dashboard_data(school_id=school_id_to_load, edicao_id=active_edicao_id)
     except Exception as e:
         print(f"Erro silenciado no DashboardService: {e}")
         dashboard_data = {
@@ -251,6 +252,8 @@ def pre_cadastro():
         if not school_id:
             flash("Escola não selecionada.", "danger")
             return redirect(url_for('main.selecionar_escola'))
+            
+        active_edicao_id = session.get('active_edicao_id')
 
         role = (request.form.get('role') or role_arg or 'aluno').strip()
         if role not in valid_roles:
@@ -269,15 +272,21 @@ def pre_cadastro():
             flash('Informe pelo menos uma matrícula.', 'warning')
             return redirect(url_for('main.pre_cadastro', role=role_arg))
 
+        edicao_id_to_pass = active_edicao_id if role == 'aluno' else None
+
+        if role == 'aluno' and not edicao_id_to_pass:
+             flash("Você precisa selecionar uma edição ativa para pré-cadastrar alunos.", "danger")
+             return redirect(url_for('main.pre_cadastro', role=role_arg))
+
         if len(matriculas) == 1:
             form_data = {'matricula': matriculas[0], 'role': role}
-            success, message = UserService.pre_register_user(form_data, school_id)
+            success, message = UserService.pre_register_user(form_data, school_id, edicao_id=edicao_id_to_pass)
             if success:
                 flash(message, 'success')
             else:
                 flash(message or 'Erro ao pré-cadastrar usuário.', 'danger')
         else:
-            success, novos, existentes = UserService.batch_pre_register_users(matriculas, role, school_id)
+            success, novos, existentes = UserService.batch_pre_register_users(matriculas, role, school_id, edicao_id=edicao_id_to_pass)
             if success:
                 flash(f'Pré-cadastro concluído: {novos} novo(s), {existentes} já existente(s). Função: {role}.', 'success')
             else:

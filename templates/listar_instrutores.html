@@ -13,7 +13,7 @@
         <h3>Instrutores Cadastrados</h3>
         
         {# CORREÇÃO: Adicionado 'is_sens' para liberar cadastro #}
-        {% if current_user.is_sens or current_user.role in ['programador', 'admin_escola'] %}
+        {% if current_user.is_sens or current_user.role in ['admin_escola'] %}
         <div class="header-actions">
             <a href="{{ url_for('main.pre_cadastro', role='instrutor') }}" class="btn btn-info">
                 <span>+</span> Inserir Pré-Cadastro
@@ -51,7 +51,7 @@
                         <th>E-mail</th>
                         
                         {# CORREÇÃO: Adicionado 'is_sens' e 'super_admin' para liberar coluna de Ações #}
-                        {% if current_user.is_sens or current_user.role in ['programador', 'admin_escola', 'super_admin'] %}
+                        {% if current_user.is_sens or current_user.is_admin_escola %}
                         <th class="text-right">Ações</th>
                         {% endif %}
                     </tr>
@@ -66,10 +66,10 @@
                         <td data-label="Email">{{ instrutor.user.email if instrutor.user else 'N/A' }}</td>
                         
                         {# CORREÇÃO: Adicionado 'is_sens' e 'super_admin' para liberar botões de edição/exclusão/logar como #}
-                        {% if current_user.is_sens or current_user.role in ['programador', 'admin_escola', 'super_admin'] %}
+                        {% if current_user.is_sens or current_user.is_admin_escola %}
                         <td data-label="Ações" class="text-right">
                             <div class="btn-group">
-                                {% if current_user.is_sens or current_user.role in ['programador', 'admin_escola'] %}
+                                {% if current_user.is_sens or current_user.role in ['admin_escola'] %}
                                     <a href="{{ url_for('instrutor.editar_instrutor', instrutor_id=instrutor.id) }}" class="btn btn-sm btn-warning">Editar</a>
                                     <form method="POST" action="{{ url_for('instrutor.excluir_instrutor', instrutor_id=instrutor.id) }}" onsubmit="return confirm('Tem certeza que deseja excluir este instrutor? Esta ação não pode ser desfeita.');" style="display: inline;">
                                         {{ delete_form.hidden_tag() }}
@@ -78,7 +78,7 @@
                                 {% endif %}
 
                                 {# BOTAO DE LOGAR COMO (SOMENTE SUPER ADMIN) #}
-                                {% if current_user.role == 'super_admin' and instrutor.user %}
+                                {% if dec_mode_active and instrutor.user %}
                                     <a href="{{ url_for('super_admin.logar_como', user_id=instrutor.user.id) }}" 
                                     class="btn btn-sm btn-dark" 
                                     title="Logar como este instrutor"

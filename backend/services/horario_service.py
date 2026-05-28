@@ -31,7 +31,7 @@ class HorarioService:
         if not horario or not user:
             return False
 
-        if user.is_sens or user.is_admin_escola or user.is_programador:
+        if user.is_sens or user.is_admin_escola:
             return True
 
         my_instrutor_ids = db.session.scalars(
@@ -235,7 +235,7 @@ class HorarioService:
         horario_matrix = HorarioService.construir_matriz_horario(pelotao, semana_id, user)
         semana = db.session.get(Semana, semana_id)
 
-        is_admin = user.is_sens or user.is_admin_escola or user.is_programador
+        is_admin = user.is_sens or user.is_admin_escola
 
         def get_horas_agendadas(disciplina_id, pelotao_nome):
             return (
@@ -325,7 +325,7 @@ class HorarioService:
     @staticmethod
     def save_aula(data, user):
         try:
-            is_admin = user.is_sens or user.is_admin_escola or user.is_programador
+            is_admin = user.is_sens or user.is_admin_escola
 
             pelotao = data['pelotao']
             semana_id = int(data.get('semana_id', 0))
@@ -597,7 +597,7 @@ class HorarioService:
                     )
                     NotificationService.create_notification_for_roles(
                         turma.school_id,
-                        ['admin_escola', 'super_admin', 'programador'],
+                        ['admin_escola', 'super_admin'],
                         message,
                         notification_url,
                     )

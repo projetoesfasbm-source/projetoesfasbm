@@ -15,19 +15,41 @@
         </div>
         <div class="ciclos-list">
             {% for ciclo in todos_os_ciclos %}
-                <div class="ciclo-item {% if ciclo.id == ciclo_selecionado_id %}active{% endif %}">
-                    <a href="{{ url_for('semana.gerenciar_semanas', ciclo_id=ciclo.id) }}" class="ciclo-name">{{ ciclo.nome }}</a>
+                <div class="ciclo-item {% if ciclo.id == ciclo_selecionado_id %}active{% endif %} flex-column align-items-start gap-2">
                     
-                    {# Botão Excluir Vermelho e Alerta Completo #}
-                    <form method="POST" action="{{ url_for('semana.deletar_ciclo', ciclo_id=ciclo.id) }}" 
-                          onsubmit="return confirm('⚠️ ATENÇÃO CRÍTICA ⚠️\n\nAo excluir o ciclo \'{{ ciclo.nome }}\', você apagará PERMANENTEMENTE:\n- Todas as SEMANAS\n- Todas as AULAS\n- Todas as DISCIPLINAS associadas a este ciclo.\n\nEsta ação é irreversível. Deseja realmente EXCLUIR TUDO?');" 
-                          style="display: inline;">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="btn btn-sm btn-danger fw-bold" style="min-width: 80px;">
-                            Excluir
-                        </button>
-                    </form>
-                    
+                    <!-- Modo Visualização -->
+                    <div id="ciclo-display-{{ ciclo.id }}" class="d-flex w-100 align-items-center justify-content-between">
+                        <a href="{{ url_for('semana.gerenciar_semanas', ciclo_id=ciclo.id) }}" class="ciclo-name flex-grow-1 text-decoration-none fw-bold" style="color: inherit;">
+                            {{ ciclo.nome }}
+                        </a>
+                        
+                        <div class="d-flex gap-2 align-items-center">
+                            <!-- Botão Editar -->
+                            <button type="button" class="btn btn-sm btn-warning fw-bold text-dark" onclick="toggleEditCiclo({{ ciclo.id }}, true)" title="Renomear">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            
+                            <!-- Botão Excluir Vermelho e Alerta Completo -->
+                            <form method="POST" action="{{ url_for('semana.deletar_ciclo', ciclo_id=ciclo.id) }}" 
+                                  onsubmit="return confirm('⚠️ ATENÇÃO CRÍTICA ⚠️\n\nAo excluir o ciclo \'{{ ciclo.nome }}\', você apagará PERMANENTEMENTE:\n- Todas as SEMANAS\n- Todas as AULAS\n- Todas as DISCIPLINAS associadas a este ciclo.\n\nEsta ação é irreversível. Deseja realmente EXCLUIR TUDO?');" 
+                                  class="m-0">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-sm btn-danger fw-bold" title="Excluir">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Modo Edição -->
+                    <div id="ciclo-edit-{{ ciclo.id }}" class="w-100 d-none mt-2">
+                        <form method="POST" action="{{ url_for('semana.renomear_ciclo', ciclo_id=ciclo.id) }}" class="d-flex gap-2 w-100">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="text" name="novo_nome" class="form-control form-control-sm" value="{{ ciclo.nome }}" required>
+                            <button type="submit" class="btn btn-sm btn-success fw-bold" title="Salvar"><i class="fas fa-check"></i></button>
+                            <button type="button" class="btn btn-sm btn-secondary fw-bold" onclick="toggleEditCiclo({{ ciclo.id }}, false)" title="Cancelar"><i class="fas fa-times"></i></button>
+                        </form>
+                    </div>
                 </div>
             {% else %}
                 <p class="text-muted p-3">Nenhum ciclo criado.</p>
@@ -207,6 +229,22 @@ document.addEventListener('DOMContentLoaded', function() {
         toggleInput(); // Executa ao carregar para definir estado inicial
     });
 });
+
+// Lógica para mostrar/esconder campo de renomear ciclo
+function toggleEditCiclo(cicloId, showEdit) {
+    const displayDiv = document.getElementById(`ciclo-display-${cicloId}`);
+    const editDiv = document.getElementById(`ciclo-edit-${cicloId}`);
+    
+    if (showEdit) {
+        displayDiv.classList.add('d-none');
+        displayDiv.classList.remove('d-flex');
+        editDiv.classList.remove('d-none');
+    } else {
+        editDiv.classList.add('d-none');
+        displayDiv.classList.remove('d-none');
+        displayDiv.classList.add('d-flex');
+    }
+}
 </script>
 
 {% endblock %}

@@ -9,18 +9,17 @@
 
     <div class="row">
         <!-- Card para Visualizar como Admin de Escola -->
-        <div class="col-md-6 mb-4">
-            <div class="card h-100">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">Visualizar como Administrador de Escola</h5>
+        <div class="col-md-12 mb-4">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="card-title mb-0"><i class="fas fa-sign-in-alt me-2"></i>Entrar no Modo de Intervenção de uma Escola</h5>
                 </div>
                 <div class="card-body">
-                    <p class="card-text">Selecione uma escola para visualizar o painel principal como se fosse um administrador daquela unidade.</p>
+                    <p class="card-text">Selecione uma escola para visualizar o painel principal e gerenciar usuários, turmas e configurações daquela unidade.</p>
                     <div class="mb-3">
-                        <label for="school_select_view" class="form-label">Selecione uma Escola:</label>
-                        <select class="form-select" id="school_select_view" name="school_id_view" onchange="if(this.value) { window.location.href = '{{ url_for('main.dashboard') }}?view_as_school=' + this.value; }">
-                            <option value="">-- Selecione para visualizar --</option>
-                            {% for school in all_schools %}
+                        <select class="form-select" id="school_select_view" name="school_id_view" onchange="if(this.value) { window.location.href = '{{ url_for('super_admin.set_active_school', school_id=0) }}'.replace('0', this.value); }">
+                            <option value="">-- Selecione uma escola para entrar --</option>
+                            {% for school in schools %}
                                 <option value="{{ school.id }}">{{ school.nome }}</option>
                             {% endfor %}
                         </select>
@@ -28,25 +27,176 @@
                 </div>
             </div>
         </div>
+    </div>
 
-        <!-- Card para Gerenciamento -->
-        <div class="col-md-6 mb-4">
-            <div class="card h-100">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">Gerenciamento do Sistema</h5>
+    {# --- Formulário de Criação de Escola --- #}
+    <div class="card mb-4">
+        <div class="card-header">
+            Adicionar Nova Escola
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('super_admin.dashboard') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                
+                <div class="row mb-3">
+                    <div class="col-md-6 mb-3 mb-md-0">
+                        <div class="form-group">
+                            <label for="school_name" class="form-label fw-semibold">Nome da Escola</label>
+                            <input type="text" class="form-control" id="school_name" name="school_name" required placeholder="Digite o nome da escola">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="admin_id" class="form-label fw-semibold">Administrador da Escola</label>
+                            <select class="form-select select2-basic" id="admin_id" name="admin_id" required style="width: 100%">
+                                <option value="">-- Selecione o Administrador --</option>
+                                {% for instrutor in instrutores %}
+                                    <option value="{{ instrutor.id }}" data-matricula="{{ instrutor.matricula }}">{{ instrutor.nome_completo or instrutor.nome_de_guerra }} (Matrícula: {{ instrutor.matricula }})</option>
+                                {% endfor %}
+                            </select>
+                            <small class="text-muted d-block mt-1">
+                                <i class="fas fa-info-circle"></i> O administrador da escola obrigatoriamente deve ser um <strong>Instrutor já cadastrado</strong> no sistema.
+                            </small>
+                        </div>
+                    </div>
                 </div>
-                <div class="card-body">
-                    <p class="card-text">Crie novas escolas ou gerencie as atribuições de usuários às escolas existentes.</p>
-                    <a href="{{ url_for('super_admin.manage_schools') }}" class="btn btn-primary">
-                        <i class="fas fa-school me-2"></i>Gerenciar Escolas
-                    </a>
-                    <a href="{{ url_for('super_admin.manage_assignments') }}" class="btn btn-secondary">
-                        <i class="fas fa-user-cog me-2"></i>Gerenciar Atribuições
-                    </a>
-                </div>
-            </div>
+                
+                <button type="submit" class="btn btn-primary">Criar Escola</button>
+            </form>
         </div>
     </div>
 
+    {# --- Tabela de Escolas Existentes --- #}
+    <div class="card">
+        <div class="card-header">
+            Escolas Cadastradas
+        </div>
+        <div class="card-body">
+            {% if schools %}
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th scope="col">ID</th>
+                            <th scope="col">Nome</th>
+                            <th scope="col">Ativa</th>
+                            <th scope="col">Criada em</th>
+                            <th scope="col">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for school in schools %}
+                        <tr>
+                            <th scope="row">{{ school.id }}</th>
+                            <td>{{ school.nome }}</td>
+                            <td>{{ 'Sim' if school.is_active else 'Não' }}</td>
+                            <td>{{ school.created_at | br_time('%d/%m/%Y %H:%M') }}</td>
+                            <td>
+                                <div class="d-flex gap-2">
+                                    <button type="button" 
+                                            class="btn btn-warning btn-sm" 
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#editSchoolModal{{ school.id }}">
+                                        Editar
+                                    </button>
+
+                                    <button type="button"
+                                            class="btn btn-danger btn-sm"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#deleteSchoolModal{{ school.id }}">
+                                        Excluir
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <p class="text-center">Nenhuma escola cadastrada ainda.</p>
+            {% endif %}
+        </div>
+    </div>
 </div>
+
+{# --- ÁREA DE MODAIS (Invisíveis) --- #}
+{% for school in schools %}
+
+<div class="modal fade" id="editSchoolModal{{ school.id }}" tabindex="-1" aria-labelledby="editSchoolModalLabel{{ school.id }}" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editSchoolModalLabel{{ school.id }}">Editar Escola</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" action="{{ url_for('super_admin.edit_school', school_id=school.id) }}">
+                <div class="modal-body">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    
+                     <div class="mb-3">
+                        <label for="edit_school_name_{{ school.id }}" class="form-label">Nome da Escola</label>
+                        <input type="text" class="form-control" id="edit_school_name_{{ school.id }}" name="school_name" value="{{ school.nome }}" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar Alterações</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="deleteSchoolModal{{ school.id }}" tabindex="-1" aria-labelledby="deleteSchoolModalLabel{{ school.id }}" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="deleteSchoolModalLabel{{ school.id }}">Confirmar Exclusão</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" action="{{ url_for('super_admin.delete_school', school_id=school.id) }}">
+                <div class="modal-body">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    
+                    <p class="fw-bold">ATENÇÃO!</p>
+                    <p>Você está prestes a excluir a escola <strong>{{ school.nome }}</strong>.</p>
+                    <p class="text-danger">
+                        Esta ação irá apagar PERMANENTEMENTE todos os dados (turmas, diários) desta escola.<br>
+                        <strong>Usuários:</strong> Quem estiver cadastrado APENAS nesta escola será excluído. Quem tiver vínculo com outras escolas será mantido.
+                    </p>
+                    
+                    <div class="mb-3">
+                        <label for="password_{{ school.id }}" class="form-label">Digite sua senha para confirmar:</label>
+                        <input type="password" class="form-control" id="password_{{ school.id }}" name="password" required placeholder="Sua senha de Super Admin">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-danger">Confirmar Exclusão Total</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endfor %}
+
+{# --- SCRIPT DE CORREÇÃO DO MODAL E INTEGRAÇÃO SELECT2 --- #}
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // Move todos os modais para o final do body para evitar problemas de sobreposição (backdrop)
+        var modals = document.querySelectorAll('.modal');
+        modals.forEach(function(modal) {
+            document.body.appendChild(modal);
+        });
+
+        // Inicializa o Select2
+        if (typeof $ !== 'undefined') {
+            $('#admin_id').select2({
+                theme: 'bootstrap-5',
+                placeholder: "-- Selecione o Administrador (Busca Global) --",
+                allowClear: true
+            });
+        }
+    });
+</script>
 {% endblock %}

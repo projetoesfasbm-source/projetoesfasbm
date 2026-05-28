@@ -85,6 +85,11 @@ def listar_alunos():
         UserSchool.role == 'aluno'
     )
 
+    # 3. Filtrar pela Edição Ativa (se selecionada)
+    active_edicao_id = session.get('active_edicao_id')
+    if active_edicao_id:
+        query = query.filter(Aluno.edicao_id == active_edicao_id)
+
     # Filtros
     if search_term:
         term = f"%{search_term}%"
@@ -106,8 +111,9 @@ def listar_alunos():
     # Paginação
     alunos_paginados = query.order_by(User.nome_completo).paginate(page=page, per_page=15, error_out=False)
 
-    # Carrega turmas para o filtro
-    turmas = TurmaService.get_turmas_by_school(school_id)
+    # Carrega turmas para o filtro (Respeitando a edição)
+    active_edicao = session.get('active_edicao_id')
+    turmas = TurmaService.get_turmas_by_school(school_id, active_edicao)
 
     return render_template(
         'listar_alunos.html',
@@ -141,8 +147,9 @@ def editar_aluno(aluno_id):
 
     form = EditAlunoForm(obj=aluno)
 
-    # Carrega turmas apenas da escola atual
-    turmas = TurmaService.get_turmas_by_school(school_id)
+    # Carrega turmas apenas da escola atual e da edição atual
+    active_edicao = session.get('active_edicao_id')
+    turmas = TurmaService.get_turmas_by_school(school_id, active_edicao)
     # Adiciona opção "Sem Turma"
     turma_choices = [(0, '-- Selecione --')] + [(t.id, t.nome) for t in turmas]
     form.turma_id.choices = turma_choices

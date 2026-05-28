@@ -51,7 +51,7 @@
                 </div>
             </div>
 
-            {% if school_in_context and current_user.role in ['super_admin', 'programador', 'admin_escola'] and dashboard_data.aulas_pendentes > 0 %}
+            {% if school_in_context and current_user.role in ['super_admin', 'admin_escola'] and dashboard_data.aulas_pendentes > 0 %}
             <a href="{{ url_for('horario.aprovar_horarios') }}" class="stat-compact stat-warning">
                 <span class="stat-icon">⚠️</span>
                 <div class="stat-info">
@@ -96,7 +96,7 @@
             </div>
 
             {# --- CORREÇÃO APLICADA AQUI --- #}
-            {% if current_user.role in ['super_admin', 'programador', 'admin_escola'] %}
+            {% if current_user.role in ['super_admin', 'admin_escola'] %}
             <div class="info-panel">
                 <div class="panel-header">
                     <h4>Atividade Recente</h4>

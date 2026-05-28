@@ -31,8 +31,13 @@ class Aluno(db.Model):
     turma_id: Mapped[t.Optional[int]] = mapped_column(ForeignKey('turmas.id'))
     turma: Mapped[t.Optional["Turma"]] = relationship(back_populates="alunos")
 
-    user_id: Mapped[int] = mapped_column(ForeignKey('users.id'), unique=True)
-    user: Mapped["User"] = relationship(back_populates="aluno_profile")
+    # Alterado para suportar múltiplos perfis (1 usuário pode fazer mais de 1 edição)
+    user_id: Mapped[int] = mapped_column(ForeignKey('users.id'))
+    user: Mapped["User"] = relationship(back_populates="alunos_profiles")
+
+    # Vinculação direta com a Edição
+    edicao_id: Mapped[t.Optional[int]] = mapped_column(ForeignKey('edicoes.id'))
+    edicao: Mapped[t.Optional["Edicao"]] = relationship(back_populates="alunos")
 
     # Relacionamentos
     historico: Mapped[list["HistoricoAluno"]] = relationship(back_populates="aluno", cascade="all, delete-orphan")
@@ -48,11 +53,11 @@ class Aluno(db.Model):
                  id_aluno: t.Optional[str] = None, num_aluno: t.Optional[str] = None,
                  funcao_atual: t.Optional[str] = None, foto_perfil: str = 'default.png',
                  telefone: t.Optional[str] = None, data_nascimento: t.Optional[date] = None,
-                 turma_id: t.Optional[int] = None, **kw: t.Any) -> None:
+                 turma_id: t.Optional[int] = None, edicao_id: t.Optional[int] = None, **kw: t.Any) -> None:
         super().__init__(user_id=user_id, opm=opm,
                          id_aluno=id_aluno, num_aluno=num_aluno,
                          funcao_atual=funcao_atual, foto_perfil=foto_perfil,
-                         telefone=telefone, data_nascimento=data_nascimento, turma_id=turma_id, **kw)
+                         telefone=telefone, data_nascimento=data_nascimento, turma_id=turma_id, edicao_id=edicao_id, **kw)
 
     def __repr__(self):
         matricula_repr = self.user.matricula if self.user else 'N/A'

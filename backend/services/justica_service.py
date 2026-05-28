@@ -51,17 +51,17 @@ class JusticaService:
         return datetime(3000, 1, 1).astimezone()
 
     @staticmethod
-    def _is_curso_pontuado(aluno_id=None, school=None, turma=None):
+    def _is_curso_pontuado(aluno_id=None, school=None, turma=None, edicao=None):
         try:
             tipo = None
-            if school: 
-                tipo = getattr(school, 'npccal_type', '')
-            elif turma: 
-                tipo = getattr(turma.school, 'npccal_type', '') if turma.school else ''
+            if edicao:
+                tipo = edicao.npccal_type
+            elif turma and turma.edicao: 
+                tipo = turma.edicao.npccal_type
             elif aluno_id:
                 aluno = db.session.get(Aluno, aluno_id)
-                if aluno and aluno.turma and aluno.turma.school:
-                    tipo = getattr(aluno.turma.school, 'npccal_type', '')
+                if aluno and aluno.turma and aluno.turma.edicao:
+                    tipo = aluno.turma.edicao.npccal_type
             
             tipo = str(tipo).lower().strip() if tipo else ''
             return tipo in ['cbfpm', 'cspm']
@@ -84,11 +84,19 @@ class JusticaService:
     @staticmethod
     def get_datas_limites(turma_id):
         turma = db.session.get(Turma, turma_id)
-        if not turma: return None, None
+        if not turma or not turma.edicao: return None, None
+        
+        # 1. Verificação Customizada (FADA na Edição)
+        if turma.edicao.fada_data_inicio or turma.edicao.fada_data_fim:
+            dt_inicio = JusticaService._ensure_datetime(turma.edicao.fada_data_inicio) if turma.edicao.fada_data_inicio else None
+            dt_fim = JusticaService._ensure_datetime(turma.edicao.fada_data_fim) if turma.edicao.fada_data_fim else JusticaService._get_safe_far_future()
+            return dt_inicio, dt_fim
+
+        # 2. Fallback Automático (Regra Antiga via Ciclo/Formatura)
         dt_inicio_2_ciclo = JusticaService.get_data_inicio_2_ciclo(turma_id)
         dt_limite = JusticaService._get_safe_far_future() 
-        if turma.data_formatura:
-            dt_form = JusticaService._ensure_datetime(turma.data_formatura)
+        if turma.edicao.data_formatura:
+            dt_form = JusticaService._ensure_datetime(turma.edicao.data_formatura)
             dt_limite = dt_form - timedelta(days=40)
         return dt_inicio_2_ciclo, dt_limite
 

@@ -77,8 +77,11 @@ class DisciplinaService:
         Gera o Painel de Alertas detectando assincronia entre turmas da mesma escola.
         """
         try:
-            # Busca turmas APENAS da escola atual
-            query_turmas = select(Turma).where(Turma.school_id == school_id)
+            from flask import session
+            active_edicao = session.get('active_edicao_id')
+            
+            # Busca turmas APENAS da escola atual e edição ativa
+            query_turmas = select(Turma).where(Turma.school_id == school_id, Turma.edicao_id == active_edicao)
             turmas = db.session.scalars(query_turmas).all()
             turma_ids = [t.id for t in turmas]
             total_turmas = len(turma_ids) # CONTAGEM REAL DE TURMAS (Ex: 10 em Montenegro)

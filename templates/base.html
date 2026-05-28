@@ -221,6 +221,7 @@
 
     {# Variável de Controle Global #}
     {% set dec_mode_active = session.get('is_dec_mode') %}
+    {% set is_global_dec_view = (dec_mode_active and not session.get('view_as_school_id')) %}
 
     {# --- ALERTA DE MODO ESPIÃO / LOGAR COMO --- #}
     {% if session.get('impersonator_id') %}
@@ -290,6 +291,35 @@
                         {% endif %}
                     </span>
                 </div>
+
+                {# --- SELECTOR DE EDIÇÃO ATIVA --- #}
+                {% if active_school and edicoes_disponiveis and not is_global_dec_view %}
+                <div class="dropdown ms-2 d-inline-block">
+                    <button class="btn btn-sm btn-outline-primary dropdown-toggle align-baseline py-1 px-2" type="button" id="dropdownEdicao" data-bs-toggle="dropdown" aria-expanded="false" style="font-size: 0.85rem; border-radius: 20px; font-weight: 600;">
+                        <i class="fas fa-bookmark me-1 text-warning"></i>
+                        {% if active_edicao %}
+                            {{ active_edicao.nome }}
+                        {% else %}
+                            Selecione...
+                        {% endif %}
+                    </button>
+                    <ul class="dropdown-menu shadow" aria-labelledby="dropdownEdicao">
+                        {% for ed in edicoes_disponiveis %}
+                        <li>
+                            <form action="{{ url_for('edicao.selecionar', edicao_id=ed.id) }}" method="POST" class="d-inline">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="dropdown-item d-flex justify-content-between align-items-center {% if active_edicao and active_edicao.id == ed.id %}active{% endif %}">
+                                    <span><i class="fas fa-tag me-2"></i> {{ ed.nome }}</span>
+                                    <span class="badge bg-secondary ms-2">{{ ed.npccal_type|upper }}</span>
+                                </button>
+                            </form>
+                        </li>
+                        {% else %}
+                        <li><span class="dropdown-item text-muted">Nenhuma edição</span></li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
             </div>
 
             <div class="top-navbar-right-items">
@@ -367,8 +397,7 @@
 
             <nav class="sidebar-nav">
                 {% set active_sid = session.get('active_school_id')|int if session.get('active_school_id') else None %}
-                {% set is_global_dec_view = (dec_mode_active and not session.get('view_as_school_id')) %}
-
+                {# --- CONTROLE GLOBAL DEC vs VISÃO ESCOLA --- #}
                 <a href="{{ url_for('main.dashboard') }}" class="nav-link {% if request.endpoint == 'main.dashboard' %}active{% endif %}"><div class="nav-icon">🏠</div> Início</a>
 
                 {# === CONTROLE DE INTERVENÇÃO === #}
@@ -387,22 +416,22 @@
                             <a href="{{ url_for('super_admin.clear_school_selection') }}" class="nav-link text-warning fw-bold" style="background-color: rgba(255, 193, 7, 0.1);">
                                 <div class="nav-icon">🔙</div> Sair da Escola (Ir p/ DEC)
                             </a>
+                        {% else %}
+                            <a href="{{ url_for('auth.desativar_modo_dec') }}" class="nav-link text-danger fw-bold" style="background-color: rgba(220, 53, 69, 0.1);">
+                                <div class="nav-icon">🛑</div> Sair do Modo DEC
+                            </a>
                         {% endif %}
-
-                        <a href="{{ url_for('auth.desativar_modo_dec') }}" class="nav-link text-danger fw-bold" style="background-color: rgba(220, 53, 69, 0.1);">
-                            <div class="nav-icon">🛑</div> Sair do Modo DEC
-                        </a>
                     {% endif %}
                 {% endif %}
                 {# ======================================================== #}
 
                 {# --- TUDO QUE PERTENCE A UMA ESCOLA FICA ESCONDIDO DO PAINEL GLOBAL DEC --- #}
                 {% if not is_global_dec_view %}
-
+                    {% if active_sid %}
                     <div class="nav-separator">GERAL</div>
                     <a href="{{ url_for('main.safebrowser') }}" class="nav-link {% if request.endpoint == 'main.safebrowser' %}active{% endif %}"><div class="nav-icon">🛡️</div> SafeBrowser</a>
 
-                    {% if current_user.is_staff_in_school(active_sid) or current_user.is_instrutor_in_school(active_sid) or current_user.role in ['super_admin', 'aluno'] %}
+                    {% if current_user.is_staff_in_school(active_sid) or current_user.is_instrutor_in_school(active_sid) or current_user.role == 'aluno' %}
                         <a href="{{ url_for('aluno.listar_alunos') }}" class="nav-link {% if request.endpoint and 'aluno.' in request.endpoint and 'historico' not in request.endpoint %}active{% endif %}"><div class="nav-icon">👥</div> Alunos</a>
                         <a href="{{ url_for('instrutor.listar_instrutores') }}" class="nav-link {% if request.endpoint and 'instrutor.' in request.endpoint %}active{% endif %}"><div class="nav-icon">🎓</div> Instrutores</a>
                         <a href="{{ url_for('turma.listar_turmas') }}" class="nav-link {% if request.endpoint and 'turma.' in request.endpoint %}active{% endif %}"><div class="nav-icon">🏫</div> Turmas</a>
@@ -413,7 +442,7 @@
                         <a href="{{ url_for('vinculo.gerenciar_vinculos') }}" class="nav-link {% if request.endpoint and 'vinculo.' in request.endpoint %}active{% endif %}"><div class="nav-icon">🔗</div> Vínculos</a>
                     {% endif %}
 
-                    {% if current_user.is_staff_in_school(active_sid) or current_user.is_instrutor_in_school(active_sid) or current_user.role in ['super_admin', 'aluno'] %}
+                    {% if current_user.is_staff_in_school(active_sid) or current_user.is_instrutor_in_school(active_sid) or current_user.role == 'aluno' %}
                         <div class="nav-separator">ACADÊMICO</div>
                         <a href="{{ url_for('horario.index') }}" class="nav-link {% if request.endpoint and ('horario.' in request.endpoint or 'semana.' in request.endpoint) and request.endpoint != 'horario.proximas_aulas_admin' %}active{% endif %}"><div class="nav-icon">📅</div> Quadro Horário</a>
                         
@@ -424,7 +453,7 @@
 
                         <a href="{{ url_for('recursos.index') }}" class="nav-link {% if request.endpoint and 'recursos.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📑</div> Recursos</a>
 
-                        {% if current_user.is_instrutor_in_school(active_sid) or current_user.is_sens_in_school(active_sid) or current_user.is_cal_in_school(active_sid) or current_user.role == 'super_admin' %}
+                        {% if current_user.is_instrutor_in_school(active_sid) or current_user.is_sens_in_school(active_sid) or current_user.is_cal_in_school(active_sid) %}
                             <a href="{{ url_for('diario.listar_pendentes') }}" class="nav-link {% if request.endpoint and 'diario.' in request.endpoint %}active{% endif %}"><div class="nav-icon">✍️</div> Validar Diários</a>
                         {% endif %}
                     {% endif %}
@@ -433,7 +462,7 @@
                         <a href="{{ url_for('admin_escola.espelho_diarios') }}" class="nav-link {% if request.endpoint == 'admin_escola.espelho_diarios' %}active{% endif %}"><div class="nav-icon">📖</div> Diários de Classe (Adm)</a>
                     {% endif %}
 
-                    {% if current_user.is_cal_in_school(active_sid) or current_user.role == 'aluno' or dec_mode_active or current_user.is_programador %}
+                    {% if current_user.is_cal_in_school(active_sid) or current_user.role == 'aluno' or dec_mode_active %}
                         <div class="nav-separator">JUSTIÇA E DISCIPLINA</div>
                         <a href="{{ url_for('justica.index') }}" class="nav-link {% if request.endpoint and 'justica.' in request.endpoint %}active{% endif %}"><div class="nav-icon">⚖️</div> Justiça e Disciplina</a>
                         <a href="{{ url_for('questionario.index') }}" class="nav-link {% if request.endpoint and 'questionario.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📝</div> Questionários</a>
@@ -449,18 +478,20 @@
 
                     {% if current_user.role == 'aluno' and current_user.aluno_profile %}
                         <div class="nav-separator">PORTAL DO ALUNO</div>
-                        <a href="{{ url_for('historico.index') }}" class="nav-link {% if request.endpoint and 'historico.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📊</div> Meu CTSP</a>
+                        <a href="{{ url_for('historico.index') }}" class="nav-link {% if request.endpoint and 'historico.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📊</div> Meu {{ g.active_edicao.npccal_type|upper if g.active_edicao and g.active_edicao.npccal_type else 'CTSP' }}</a>
                         {% if current_user.is_chefe_turma %}
                             <a href="{{ url_for('chefe.painel') }}" class="nav-link {% if request.endpoint and 'chefe.' in request.endpoint %}active{% endif %}"><div class="nav-icon">📋</div> Chefe de Turma</a>
                         {% endif %}
                     {% endif %}
 
                     {# ADMINISTRAÇÃO DA ESCOLA #}
-                    {% if current_user.is_admin_escola_in_school(active_sid) or current_user.is_programador or dec_mode_active %}
+                    {% if current_user.is_admin_escola_in_school(active_sid) or dec_mode_active %}
                         <div class="nav-separator">ADMINISTRAÇÃO</div>
                         <a href="{{ url_for('tools.index') }}" class="nav-link {% if request.endpoint and ('tools.' in request.endpoint or 'assets.' in request.endpoint or 'customizer.' in request.endpoint) %}active{% endif %}"><div class="nav-icon">🛠️</div> Ferramentas Admin</a>
-                        <a href="{{ url_for('user.listar_admins_escola') }}" class="nav-link {% if request.endpoint == 'user.listar_admins_escola' %}active{% endif %}"><div class="nav-icon">🛡️</div> Usuários e Permissões</a>
+                        <a href="{{ url_for('edicao.index') }}" class="nav-link {% if request.endpoint and 'edicao.' in request.endpoint %}active{% endif %}"><div class="nav-icon">🏷️</div> Gerenciar Edições</a>
+                        <a href="{{ url_for('user.gerenciar_usuarios') }}" class="nav-link {% if request.endpoint == 'user.gerenciar_usuarios' %}active{% endif %}"><div class="nav-icon">🛡️</div> Usuários e Permissões</a>
                     {% endif %}
+                    {% endif %} {# FIM DO BLOCO active_sid #}
 
                 {% endif %} {# FIM DO BLOCO "NÃO É VISÃO GLOBAL" #}
 
@@ -468,6 +499,7 @@
                 {% if is_global_dec_view %}
                     <div class="nav-separator">VISÃO GLOBAL (DEC)</div>
                     <a href="{{ url_for('super_admin.dashboard') }}" class="nav-link {% if request.endpoint and 'super_admin.' in request.endpoint and 'dashboard' in request.endpoint %}active{% endif %}"><div class="nav-icon">👑</div> Painel DEC (Global)</a>
+                    <a href="{{ url_for('super_admin.global_users') }}" class="nav-link {% if request.endpoint == 'super_admin.global_users' %}active{% endif %}"><div class="nav-icon">🌍</div> Painel Global de Usuários</a>
                     <a href="{{ url_for('super_admin.manage_gestores') }}" class="nav-link {% if request.endpoint == 'super_admin.manage_gestores' %}active{% endif %}"><div class="nav-icon">👮</div> Gestores DEC</a>
                     <a href="{{ url_for('questoes.painel_gestao') }}" class="nav-link {% if request.endpoint and 'questoes.' in request.endpoint %}active{% endif %}"><div class="nav-icon">🗂️</div> Banco de Questões</a>
                 {% endif %}

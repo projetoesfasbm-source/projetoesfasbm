@@ -1,11 +1,12 @@
 {% extends "base.html" %}
 
-{% block title %}Minhas Notas - Meu CTSP{% endblock %}
+{% set curso_nome = g.active_edicao.npccal_type|upper if g.active_edicao and g.active_edicao.npccal_type else 'CTSP' %}
+{% block title %}Minhas Notas - Meu {{ curso_nome }}{% endblock %}
 
 {% block content %}
 <div class="content-header">
     <h1>Minhas Notas</h1>
-    <p>Acompanhe suas notas e médias das disciplinas do Curso Técnico em Segurança Pública.</p>
+    <p>Acompanhe suas notas e médias das disciplinas do Curso ({{ curso_nome }}).</p>
 </div>
 
 <div class="media-final-curso-container">
@@ -87,7 +88,7 @@
                                name="nota_rec" id="nota_rec_{{ registro.id }}"
                                class="form-control nota-input"
                                value="{{ registro.nota_rec if registro.nota_rec is not none else '' }}"
-                               {% if not current_user.role in ['super_admin', 'programador', 'admin_escola'] %}readonly{% endif %}>
+                               {% if not current_user.role in ['super_admin', 'admin_escola'] %}readonly{% endif %}>
                     </div>
                 </div>
             </div>
@@ -97,7 +98,7 @@
                     <span class="media-final-label">Média Final na Disciplina</span>
                     <span class="media-final-valor-disciplina" data-output-for="{{ registro.id }}">{{ "%.3f"|format(registro.nota) if registro.nota is not none else 'N/A' }}</span>
                 </div>
-                {% if is_own_profile or current_user.role in ['super_admin', 'programador', 'admin_escola'] %}
+                {% if is_own_profile or current_user.role in ['super_admin', 'admin_escola'] %}
                     <button type="submit" class="btn btn-sm btn-primary">Salvar</button>
                 {% endif %}
             </div>

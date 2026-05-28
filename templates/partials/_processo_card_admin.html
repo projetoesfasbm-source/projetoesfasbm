@@ -67,7 +67,7 @@
                 <p class="bg-white p-2 border rounded mb-2"><em>"{{ processo.texto_recurso }}"</em></p>
                 <small class="text-muted">Data: {{ processo.data_recurso.strftime('%d/%m %H:%M') if processo.data_recurso else '' }}</small>
 
-                {% if current_user.role == 'super_admin' or current_user.is_programador %}
+                {% if current_user.role == 'super_admin' %}
                     <hr>
                     <h6 class="text-danger">Decisão do Comandante:</h6>
                     <form action="{{ url_for('justica.julgar_recurso', pid=processo.id) }}" method="POST">

@@ -96,6 +96,11 @@ class DiarioService:
         stmt = (
             select(DiarioClasse)
             .join(Turma, DiarioClasse.turma_id == Turma.id)
+            .options(
+                db.joinedload(DiarioClasse.turma),
+                db.joinedload(DiarioClasse.disciplina),
+                db.joinedload(DiarioClasse.instrutor_assinante)
+            )
             .where(
                 Turma.school_id == school_id,
                 DiarioClasse.is_deleted == False
@@ -128,7 +133,7 @@ class DiarioService:
             DiarioClasse.disciplina_id, 
             DiarioClasse.periodo.asc()
         )
-        return db.session.scalars(stmt.distinct()).all()
+        return db.session.scalars(stmt.distinct()).unique().all()
 
     @staticmethod
     def get_diarios_agrupados(school_id, user_id=None, turma_id=None, disciplina_id=None, status=None):
@@ -200,11 +205,18 @@ class DiarioService:
     @staticmethod
     def get_filtros_disponiveis(school_id, user_id=None, turma_selected_id=None):
         instrutor = DiarioService.get_current_instrutor(user_id) if user_id else None
+        active_edicao = session.get('active_edicao_id')
         
-        stmt_turmas = select(Turma).where(Turma.school_id == school_id).order_by(Turma.nome)
+        stmt_turmas = select(Turma).where(
+            Turma.school_id == school_id,
+            Turma.edicao_id == active_edicao
+        ).order_by(Turma.nome)
         turmas = db.session.scalars(stmt_turmas).all()
 
-        stmt_disc = select(Disciplina).join(Turma).where(Turma.school_id == school_id)
+        stmt_disc = select(Disciplina).join(Turma).where(
+            Turma.school_id == school_id,
+            Turma.edicao_id == active_edicao
+        )
         if turma_selected_id:
             stmt_disc = stmt_disc.where(Disciplina.turma_id == turma_selected_id)
             

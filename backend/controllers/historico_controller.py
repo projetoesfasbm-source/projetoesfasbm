@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 from flask_login import login_required, current_user
 from flask_wtf import FlaskForm
 from sqlalchemy import select
@@ -75,9 +75,10 @@ def minhas_notas():
     if aluno.turma and aluno.turma.school:
         school_id = aluno.turma.school.id
         
-        # Filtra disciplinas da escola correta
+        edicao_id_aluno = aluno.turma.edicao_id
+        # Filtra disciplinas da escola correta e edição específica da turma do aluno
         disciplinas_da_escola = db.session.scalars(
-            select(Disciplina).join(Turma).where(Turma.school_id == school_id)
+            select(Disciplina).join(Turma).where(Turma.school_id == school_id, Turma.edicao_id == edicao_id_aluno)
         ).all()
 
         matriculas_existentes_ids = {h.disciplina_id for h in aluno.historico_disciplinas}
@@ -110,7 +111,7 @@ def minhas_notas():
 @login_required
 @can_view_management_pages_required
 def ver_historico_aluno(aluno_id):
-    if current_user.role not in ['super_admin', 'programador', 'admin_escola']:
+    if current_user.role not in ['super_admin', 'admin_escola']:
         flash("Você não tem permissão para visualizar este histórico.", 'danger')
         return redirect(url_for('main.dashboard'))
 
@@ -143,7 +144,7 @@ def avaliar_aluno_disciplina(historico_id):
         return redirect(url_for('main.dashboard'))
 
     is_own_profile = hasattr(current_user, 'aluno_profile') and current_user.aluno_profile.id == registro.aluno_id
-    is_admin = getattr(current_user, 'role', None) in ['super_admin', 'programador', 'admin_escola']
+    is_admin = getattr(current_user, 'role', None) in ['super_admin', 'admin_escola']
 
     if not (is_own_profile or is_admin):
         flash("Você não tem permissão para realizar esta ação.", 'danger')

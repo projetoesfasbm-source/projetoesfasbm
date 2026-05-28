@@ -1,0 +1,18 @@
+# Regras de Engenharia e Fluxo do Projeto (SisGEn)
+
+Sempre que atuar neste projeto, obedeça as seguintes regras de desenvolvimento e infraestrutura:
+
+1. WORKFLOW DE BRANCHES:
+   - A branch `main` é o espelho da produção. NUNCA faça commits diretos, automáticos ou edições nela.
+   - Todo trabalho de desenvolvimento (features, fixes, refatorações) deve ocorrer em branches secundárias (ex: `feature/refatoracao-arquitetura`, `fix/barra-de-progresso`).
+   
+2. TESTES E HOMOLOGAÇÃO:
+   - Sempre certifique-se de que o ambiente local (`app.debug = True`) esteja rodando.
+   - Antes de sugerir um Merge para a `main`, o código deve ter sido testado de ponta a ponta.
+
+3. ESTILO DE CÓDIGO (Python/Flask):
+   - Mantenha a separação de responsabilidades (Controllers lidam com rotas, Services lidam com a regra de negócio e consultas ao banco).
+   - Use o SQLAlchemy 2.0 style (ex: `db.session.scalars(select(...))`).
+
+4. AUDITORIA DE IA:
+   - Você, como Assistente de IA, está estritamente proibido de iniciar refatorações pesadas sem antes apresentar um plano e ter a aprovação explícita do desenvolvedor humano.

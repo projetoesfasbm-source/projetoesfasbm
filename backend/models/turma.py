@@ -9,7 +9,8 @@ from enum import Enum
 if t.TYPE_CHECKING:
     from .aluno import Aluno
     from .school import School
-    from .disciplina import Disciplina 
+    from .disciplina import Disciplina
+    from .edicao import Edicao
 
 class TurmaStatus(str, Enum):
     # Novos status
@@ -32,8 +33,7 @@ class Turma(db.Model):
     ano: Mapped[str] = mapped_column(db.String(20), nullable=False)
     
     school_id: Mapped[int] = mapped_column(db.ForeignKey('schools.id'), nullable=False)
-
-    data_formatura: Mapped[t.Optional[Date]] = mapped_column(Date, nullable=True)
+    edicao_id: Mapped[t.Optional[int]] = mapped_column(db.ForeignKey('edicoes.id'), nullable=True)
 
     status: Mapped[TurmaStatus] = mapped_column(
         db.String(30), 
@@ -45,6 +45,7 @@ class Turma(db.Model):
     # Relações
     alunos: Mapped[list["Aluno"]] = relationship(back_populates="turma")
     school: Mapped["School"] = relationship(back_populates="turmas")
+    edicao: Mapped[t.Optional["Edicao"]] = relationship(back_populates="turmas")
     disciplinas: Mapped[list["Disciplina"]] = relationship(back_populates="turma", cascade="all, delete-orphan")
     cargos: Mapped[list["TurmaCargo"]] = relationship(back_populates="turma", cascade="all, delete-orphan")
 

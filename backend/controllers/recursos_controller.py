@@ -1,7 +1,7 @@
 # backend/controllers/recursos_controller.py
 
 import os
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app, session, g
 from flask_login import login_required, current_user
 from backend.models.database import db
 from backend.models.recurso import ProvaRecurso, Recurso, DisciplinaHabilitada
@@ -23,11 +23,21 @@ def index():
     """
     active_school_id = getattr(current_user, 'temp_active_school_id', None)
 
-    if current_user.role in ['super_admin', 'admin_escola', 'programador']:
-        # Agrupamos por Disciplina.materia para não repetir se houver em várias turmas
-        disciplinas = Disciplina.query.join(Turma).join(DisciplinaHabilitada).filter(
+    if current_user.role in ['super_admin', 'admin_escola']:
+        # Busca IDs de disciplinas habilitadas filtradas por escola e edição
+        edicao_id = g.active_edicao.id if g.get('active_edicao') else None
+        query = Disciplina.query.join(Turma).join(DisciplinaHabilitada).filter(
             Turma.school_id == active_school_id
-        ).group_by(Disciplina.materia).all()
+        )
+        if edicao_id:
+            query = query.filter(Turma.edicao_id == edicao_id)
+        # Agrupa por materia para não repetir
+        materias_vistas = set()
+        disciplinas = []
+        for d in query.all():
+            if d.materia not in materias_vistas:
+                materias_vistas.add(d.materia)
+                disciplinas.append(d)
         
         return render_template('recursos/admin_dashboard.html', disciplinas=disciplinas)
     
@@ -36,14 +46,14 @@ def index():
         recursos_vinculados = Recurso.query.filter_by(instrutor_id=current_user.id).all()
         return render_template('recursos/admin_analise_lista.html', recursos=recursos_vinculados)
     
-    meus_recursos = Recurso.query.filter_by(aluno_id=current_user.id).order_by(Recurso.created_at.desc()).all()
+    meus_recursos = Recurso.query.options(db.joinedload(Recurso.prova)).filter_by(aluno_id=current_user.id).order_by(Recurso.created_at.desc()).all()
     return render_template('recursos/aluno_lista.html', recursos=meus_recursos)
 
 @recursos_bp.route('/configurar-disciplinas', methods=['GET', 'POST'])
 @login_required
 def configurar_disciplinas():
     """Checklist baseado no NOME da matéria, mesclando todas as turmas."""
-    if current_user.role not in ['super_admin', 'admin_escola', 'programador']:
+    if current_user.role not in ['super_admin', 'admin_escola']:
         flash("Acesso negado.", "danger")
         return redirect(url_for('main.dashboard'))
 
@@ -53,8 +63,11 @@ def configurar_disciplinas():
         # Recebemos os NOMES das matérias que o admin quer habilitar
         materias_selecionadas = request.form.getlist('materias_nomes[]')
         
-        # Todas as disciplinas da escola
-        disciplinas_escola = Disciplina.query.join(Turma).filter(Turma.school_id == active_school_id).all()
+        edicao_id = g.active_edicao.id if g.get('active_edicao') else None
+        query = Disciplina.query.join(Turma).filter(Turma.school_id == active_school_id)
+        if edicao_id:
+            query = query.filter(Turma.edicao_id == edicao_id)
+        disciplinas_escola = query.all()
         
         try:
             for d in disciplinas_escola:
@@ -76,9 +89,13 @@ def configurar_disciplinas():
             flash(f"Erro ao salvar: {str(e)}", "danger")
 
     # GET: Lista NOMES únicos das matérias da escola
-    materias_unicas = db.session.query(Disciplina.materia).join(Turma).filter(
+    edicao_id = g.active_edicao.id if g.get('active_edicao') else None
+    query = db.session.query(Disciplina.materia).join(Turma).filter(
         Turma.school_id == active_school_id
-    ).distinct().all()
+    )
+    if edicao_id:
+        query = query.filter(Turma.edicao_id == edicao_id)
+    materias_unicas = query.distinct().all()
     
     # Pega os nomes das matérias que já têm pelo menos um ID habilitado
     nomes_habilitados = db.session.query(Disciplina.materia).join(DisciplinaHabilitada).distinct().all()
@@ -111,8 +128,13 @@ def listar_recursos_pendentes():
     """Administrador vê tudo e gerencia encaminhamentos. Instrutor vê o que lhe cabe."""
     active_school_id = getattr(current_user, 'temp_active_school_id', None)
     
-    query = Recurso.query.join(ProvaRecurso).join(Disciplina).join(Turma).filter(
-        Turma.school_id == active_school_id
+    query = Recurso.query.join(ProvaRecurso).join(Disciplina).join(Turma).options(
+        db.joinedload(Recurso.prova),
+        db.joinedload(Recurso.aluno),
+        db.joinedload(Recurso.instrutor)
+    ).filter(
+        Turma.school_id == active_school_id,
+        Turma.edicao_id == session.get('active_edicao_id')
     )
 
     # Se for instrutor, filtra apenas o que foi destinado a ele
@@ -123,7 +145,7 @@ def listar_recursos_pendentes():
 
     # CORREÇÃO DA CONSULTA: Filtrando apenas por role para evitar erro de atributo school_id inexistente
     instrutores = User.query.filter_by(role='instrutor').all()
-    comandantes = User.query.filter(User.role.in_(['admin_escola', 'super_admin', 'programador'])).all()
+    comandantes = User.query.filter(User.role.in_(['admin_escola', 'super_admin'])).all()
 
     return render_template('recursos/admin_analise_lista.html', 
                            recursos=recursos, 
@@ -134,7 +156,7 @@ def listar_recursos_pendentes():
 @login_required
 def encaminhar_recurso(recurso_id):
     """Administrador encaminha o processo para o próximo nível."""
-    if current_user.role not in ['super_admin', 'admin_escola', 'programador']:
+    if current_user.role not in ['super_admin', 'admin_escola']:
         flash("Acesso negado.", "danger")
         return redirect(url_for('main.dashboard'))
 
@@ -161,7 +183,7 @@ def encaminhar_recurso(recurso_id):
 @login_required
 def detalhes_recurso(recurso_id):
     """Página dedicada para visualização e redação técnica do parecer/decisão."""
-    if current_user.role not in ['super_admin', 'admin_escola', 'programador', 'instrutor']:
+    if current_user.role not in ['super_admin', 'admin_escola', 'instrutor']:
         flash("Acesso negado.", "danger")
         return redirect(url_for('main.dashboard'))
         
@@ -227,7 +249,8 @@ def novo_recurso():
     active_school_id = getattr(current_user, 'temp_active_school_id', None)
     # Lista matérias que tenham pelo menos uma prova cadastrada em algum dos seus IDs
     disciplinas_com_prova = Disciplina.query.join(DisciplinaHabilitada).join(ProvaRecurso).join(Turma).filter(
-        Turma.school_id == active_school_id
+        Turma.school_id == active_school_id,
+        Turma.edicao_id == session.get('active_edicao_id')
     ).group_by(Disciplina.materia).all()
     
     return render_template('recursos/aluno_form.html', disciplinas=disciplinas_com_prova)

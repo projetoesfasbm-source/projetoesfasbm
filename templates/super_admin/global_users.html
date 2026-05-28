@@ -1,0 +1,262 @@
+{% extends "base.html" %}
+
+{% block title %}Gerenciar Atribuições de Papéis{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <h2 class="mb-4 text-secondary text-center fw-light">Gerenciar Atribuições de Papéis</h2>
+
+    <!-- Form: Atribuir Papel -->
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header bg-white border-bottom-0 pt-3">
+            <h6 class="mb-0 text-muted">Atribuir Papel a Usuário em uma Escola</h6>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('super_admin.atribuir_papel_global') }}" class="row g-3 align-items-end">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                
+                <div class="col-md-3">
+                    <label class="form-label small text-muted">Usuário</label>
+                    <select name="user_id" id="user_id" class="form-select select2-basic" required>
+                        <option value="">-- Selecione um Usuário --</option>
+                        {% for user in usuarios %}
+                            <option value="{{ user.id }}">{{ user.nome_completo or user.username }} ({{ user.matricula }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="col-md-3">
+                    <label class="form-label small text-muted">Escola</label>
+                    <select name="school_id" id="school_id" class="form-select select2-basic" required>
+                        <option value="">-- Selecione uma Escola --</option>
+                        {% for escola in escolas %}
+                            <option value="{{ escola.id }}">{{ escola.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label small text-muted">Papel</label>
+                    <select name="role" class="form-select" required>
+                        <option value="admin_escola">Comandante / Admin Geral</option>
+                        <option value="admin_sens">Chefe SENS (Ensino)</option>
+                        <option value="admin_cal">Chefe CAL (Justiça)</option>
+                        <option value="instrutor" selected>Instrutor</option>
+                        <option value="aluno">Aluno / Acesso Básico</option>
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary w-100 fw-bold">Atribuir</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Table: Gerenciamento -->
+    <div class="card shadow-sm border-0">
+        <div class="card-header bg-white border-bottom-0 pt-3 pb-0">
+            <h6 class="mb-0 text-muted">Atribuições e Gerenciamento de Usuários</h6>
+        </div>
+        <div class="card-body">
+            
+            <div class="row mb-4 bg-light p-3 rounded mx-0 border">
+                <div class="col-md-4 mb-3 mb-md-0">
+                    <label class="form-label fw-bold small">Filtrar por Escola:</label>
+                    <select id="schoolFilter" class="form-select form-select-sm" onchange="filterGlobalTable()">
+                        <option value="all">-- Todas as Escolas --</option>
+                        {% for escola in escolas %}
+                            <option value="{{ escola.id }}">{{ escola.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="col-md-8">
+                    <label class="form-label fw-bold small">Filtrar por Status/Papel:</label>
+                    <div class="d-flex flex-wrap gap-2 role-filters" id="statusFilters">
+                        <button type="button" class="btn btn-sm btn-primary active" data-filter="all">Todos</button>
+                        <button type="button" class="btn btn-sm btn-outline-primary" data-filter="admin_escola">Admins</button>
+                        <button type="button" class="btn btn-sm btn-outline-primary" data-filter="instrutor">Instrutores</button>
+                        <button type="button" class="btn btn-sm btn-outline-primary" data-filter="aluno">Alunos</button>
+                        <button type="button" class="btn btn-sm btn-outline-warning" data-filter="preregistered">Pré-Cadastrados</button>
+                        <button type="button" class="btn btn-sm btn-outline-danger" data-filter="orfao">Órfãos</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <input type="text" id="searchInput" class="form-control" placeholder="Digite um nome ou matrícula para refinar a busca na lista atual...">
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" id="globalUsersTable">
+                    <thead class="bg-white text-dark border-bottom" style="font-size: 0.9rem;">
+                        <tr>
+                            <th class="border-0">Posto/Grad.</th>
+                            <th class="border-0">Nome Completo</th>
+                            <th class="border-0">Matrícula</th>
+                            <th class="border-0">Papel</th>
+                            <th class="border-0 text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody style="font-size: 0.9rem;">
+                        {% if usuarios %}
+                            {% for usuario in usuarios %}
+                                {% set is_preregistered = not usuario.is_active %}
+                                {% set num_escolas = usuario.user_schools|length if usuario.user_schools else 0 %}
+                                {% set is_orfao = not is_preregistered and num_escolas == 0 %}
+                                
+                                {% if num_escolas > 0 %}
+                                    {# Renderiza uma linha para CADA escola que o usuário pertence #}
+                                    {% for vinculo in usuario.user_schools %}
+                                    <tr class="user-row" data-school="{{ vinculo.school_id }}" data-role="{{ vinculo.role }}" data-status="ativo" data-search="{{ (usuario.nome_completo or '') | upper }} {{ (usuario.matricula or '') | upper }}">
+                                        <td>{{ usuario.posto_graduacao or 'N/D' }}</td>
+                                        <td class="user-name">{{ usuario.nome_completo or 'None' }}<br><small class="text-muted">{{ vinculo.school.nome }}</small></td>
+                                        <td class="user-matricula">{{ usuario.matricula or 'None' }}</td>
+                                        <td>
+                                            {% if vinculo.role == 'admin_escola' or vinculo.role == 'admin_sens' or vinculo.role == 'admin_cal' %}
+                                                <span class="badge bg-primary">Admin</span>
+                                            {% elif vinculo.role == 'instrutor' %}
+                                                <span class="badge bg-secondary">Instrutor</span>
+                                            {% else %}
+                                                <span class="badge bg-primary text-white">aluno</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-center">
+                                            <form class="d-inline" method="POST" action="{{ url_for('super_admin.reset_user_password') }}" onsubmit="return confirm('Resetar a senha deste usuário?');">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                                <input type="hidden" name="user_id" value="{{ usuario.id }}">
+                                                <button type="submit" class="btn btn-sm btn-info text-white fw-bold px-2 py-1" style="font-size: 0.75rem;">Resetar Senha</button>
+                                            </form>
+                                            <form class="d-inline" method="POST" action="{{ url_for('super_admin.remover_vinculo_global') }}" onsubmit="return confirm('Remover vínculo deste usuário com esta escola?');">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                                <input type="hidden" name="user_id" value="{{ usuario.id }}">
+                                                <input type="hidden" name="school_id" value="{{ vinculo.school_id }}">
+                                                <button type="submit" class="btn btn-sm btn-warning text-white fw-bold px-2 py-1" style="font-size: 0.75rem;">Remover Vínculo</button>
+                                            </form>
+                                            <form class="d-inline" method="POST" action="{{ url_for('super_admin.delete_user', user_id=usuario.id) }}" onsubmit="return confirm('Excluir este usuário permanentemente de TODO O SISTEMA?');">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                                <button type="submit" class="btn btn-sm btn-danger text-white fw-bold px-2 py-1" style="font-size: 0.75rem;">Excluir</button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    {# Renderiza uma única linha se for órfão ou pré-cadastrado #}
+                                    <tr class="user-row" data-school="none" data-role="none" data-status="{{ 'preregistered' if is_preregistered else 'orfao' }}" data-search="{{ (usuario.nome_completo or '') | upper }} {{ (usuario.matricula or '') | upper }}">
+                                        <td>{{ usuario.posto_graduacao or 'N/D' }}</td>
+                                        <td class="user-name">{{ usuario.nome_completo or 'None' }}</td>
+                                        <td class="user-matricula">{{ usuario.matricula or 'None' }}</td>
+                                        <td>
+                                            {% if is_preregistered %}
+                                                <span class="badge bg-warning text-dark">Pendente</span>
+                                            {% else %}
+                                                <span class="badge bg-danger">Órfão</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-center">
+                                            <form class="d-inline" method="POST" action="{{ url_for('super_admin.reset_user_password') }}" onsubmit="return confirm('Resetar a senha deste usuário?');">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                                <input type="hidden" name="user_id" value="{{ usuario.id }}">
+                                                <button type="submit" class="btn btn-sm btn-info text-white fw-bold px-2 py-1" style="font-size: 0.75rem;">Resetar Senha</button>
+                                            </form>
+                                            <button type="button" class="btn btn-sm btn-secondary text-white fw-bold px-2 py-1 disabled" style="font-size: 0.75rem;">Remover Vínculo</button>
+                                            <form class="d-inline" method="POST" action="{{ url_for('super_admin.delete_user', user_id=usuario.id) }}" onsubmit="return confirm('Excluir este usuário permanentemente de TODO O SISTEMA?');">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                                <button type="submit" class="btn btn-sm btn-danger text-white fw-bold px-2 py-1" style="font-size: 0.75rem;">Excluir</button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                {% endif %}
+                                
+                            {% endfor %}
+                        {% endif %}
+                        <tr id="noResultsRow" style="display: none;">
+                            <td colspan="5" class="text-center py-5 text-muted">
+                                Nenhum resultado encontrado para os filtros aplicados.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let activeRoleFilter = 'all';
+    let filterTimeout = null;
+
+    document.addEventListener("DOMContentLoaded", function() {
+        if (typeof $ !== 'undefined') {
+            $('.select2-basic').select2({ theme: 'bootstrap-5' });
+        }
+
+        const roleButtons = document.querySelectorAll('#statusFilters button');
+        roleButtons.forEach(btn => {
+            btn.addEventListener('click', function() {
+                roleButtons.forEach(b => {
+                    b.classList.remove('active');
+                    if(b.dataset.filter === 'preregistered' || b.dataset.filter === 'orfao'){
+                         b.classList.remove('text-white');
+                    }
+                });
+                
+                this.classList.add('active');
+                if(this.dataset.filter === 'preregistered' || this.dataset.filter === 'orfao'){
+                     this.classList.add('text-white');
+                }
+                
+                activeRoleFilter = this.dataset.filter;
+                filterGlobalTable();
+            });
+        });
+
+        const searchInput = document.getElementById("searchInput");
+        searchInput.addEventListener('keyup', function() {
+            if (filterTimeout) clearTimeout(filterTimeout);
+            filterTimeout = setTimeout(filterGlobalTable, 300); // 300ms debounce
+        });
+    });
+
+    function filterGlobalTable() {
+        let textInput = document.getElementById("searchInput").value.toUpperCase();
+        let schoolFilter = document.getElementById("schoolFilter").value;
+
+        let table = document.getElementById("globalUsersTable");
+        let rows = table.getElementsByClassName("user-row");
+        let hasVisibleRow = false;
+
+        for (let i = 0; i < rows.length; i++) {
+            let row = rows[i];
+            
+            // OTIMIZAÇÃO: Busca no data-attribute em vez de innerText para não forçar reflow
+            let searchValue = row.getAttribute('data-search') || "";
+            let textMatch = searchValue.includes(textInput);
+            
+            let rowSchool = row.getAttribute('data-school');
+            let schoolMatch = (schoolFilter === 'all') || (rowSchool === schoolFilter);
+
+            let rowRole = row.getAttribute('data-role');
+            let rowStatus = row.getAttribute('data-status');
+            
+            let roleMatch = false;
+            if (activeRoleFilter === 'all') roleMatch = true;
+            else if (activeRoleFilter === 'admin_escola') roleMatch = (rowRole && rowRole.includes('admin'));
+            else if (activeRoleFilter === 'instrutor') roleMatch = (rowRole === 'instrutor');
+            else if (activeRoleFilter === 'aluno') roleMatch = (rowRole === 'aluno');
+            else if (activeRoleFilter === 'preregistered') roleMatch = (rowStatus === 'preregistered');
+            else if (activeRoleFilter === 'orfao') roleMatch = (rowStatus === 'orfao');
+
+            if (textMatch && schoolMatch && roleMatch) {
+                row.style.display = "";
+                hasVisibleRow = true;
+            } else {
+                row.style.display = "none";
+            }
+        }
+
+        document.getElementById("noResultsRow").style.display = hasVisibleRow ? "none" : "";
+    }
+</script>
+{% endblock %}

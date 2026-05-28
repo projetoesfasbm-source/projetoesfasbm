@@ -20,7 +20,7 @@
         <input type="hidden" name="role" value="{{ role_predefinido }}">
         {% endif %}
 
-        {% if current_user.role in ['super_admin', 'programador'] %}
+        {% if current_user.role in ['super_admin'] %}
         <div class="form-group mb-3">
             <label for="school_id">Selecione a Escola</label>
             <select id="school_id" name="school_id" class="form-control" required>

@@ -9,7 +9,7 @@
 </div>
 
 <div class="table-container" style="max-width: 1000px; margin: 0 auto;">
-    <form method="POST" action="{{ url_for('relatorios.gerar_relatorio_horas_aula', tipo=report_type) }}" target="_blank">
+    <form id="relatorioForm" method="POST" action="{{ url_for('relatorios.gerar_relatorio_horas_aula', tipo=report_type) }}" target="_blank">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="is_final_export" value="true">
         
@@ -87,7 +87,15 @@
 
         <div class="form-actions" style="display: flex; justify-content: space-between; align-items: center; background: #f1f1f1; padding: 1.5rem; border-radius: 8px; position: sticky; bottom: 10px; z-index: 100; box-shadow: 0 -2px 10px rgba(0,0,0,0.1);">
             <a href="javascript:history.back()" class="btn btn-secondary">← Voltar e Corrigir Filtros</a>
-            <div class="d-flex gap-2">
+            
+            <div id="loadingContainer" style="display: none; align-items: center; gap: 10px;">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Gerando PDF...</span>
+                </div>
+                <span style="font-weight: bold; color: var(--color-primary);">Gerando PDF na Fila, por favor aguarde...</span>
+            </div>
+
+            <div class="d-flex gap-2" id="actionButtons">
                 <button type="submit" name="action" value="download_xlsx" class="btn btn-primary" style="padding: 0.75rem 1.5rem;">
                     <i class="fas fa-file-excel"></i> Exportar para Excel (.xlsx)
                 </button>
@@ -127,5 +135,81 @@ function atualizarSaldo(instrutorIdx, discIdx) {
         badge.className = 'badge bg-secondary';
     }
 }
+
+document.getElementById('relatorioForm').addEventListener('submit', function(e) {
+    // Só interceptamos se o botão clicado foi o de PDF
+    if (e.submitter && e.submitter.value === 'download') {
+        e.preventDefault(); // Evita que a página recarregue
+        
+        const form = e.target;
+        const formData = new FormData(form);
+        formData.append('action', 'download'); // Adiciona o valor do botão
+
+        // Mostra o spinner, esconde os botões
+        document.getElementById('actionButtons').style.display = 'none';
+        document.getElementById('loadingContainer').style.display = 'flex';
+        
+        fetch(form.action, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.job_id) {
+                // Inicia o polling do Job
+                pollJobStatus(data.job_id);
+            } else {
+                alert("Erro ao iniciar geração do PDF.");
+                resetUI();
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            alert("Erro de conexão ao solicitar PDF.");
+            resetUI();
+        });
+    }
+});
+
+function pollJobStatus(jobId) {
+    const statusUrl = `/api/jobs/${jobId}/status`;
+    const interval = setInterval(() => {
+        fetch(statusUrl)
+            .then(res => {
+                if(!res.ok) { throw new Error('Network error or server error'); }
+                return res.json();
+            })
+            .then(data => {
+                if (data.error) {
+                    clearInterval(interval);
+                    alert("Erro do servidor: " + data.error);
+                    resetUI();
+                } else if (data.status === 'completed') {
+                    clearInterval(interval);
+                    resetUI();
+                    window.location.href = `/api/jobs/${jobId}/download`;
+                } else if (data.status === 'failed') {
+                    clearInterval(interval);
+                    alert("A geração do PDF falhou no servidor.");
+                    resetUI();
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                clearInterval(interval);
+                alert("Erro ao verificar o status na fila.");
+                resetUI();
+            });
+    }, 2000);
+}
+
+function resetUI() {
+    document.getElementById('actionButtons').style.display = 'flex';
+    document.getElementById('loadingContainer').style.display = 'none';
+}
+
 </script>
 {% endblock %}

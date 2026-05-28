@@ -115,7 +115,7 @@
             {% set matricula = p.aluno.user.matricula or 'Não Informada' %}
             {% set nome_completo = (p.aluno.user.posto_graduacao ~ ' ' ~ p.aluno.user.nome_completo) | trim %}
             {% set intro = "Tendo em vista as informações constantes em Parte, evidenciando a existência, em tese, de infração das Normas de Procedimentos e Condutas do Corpo de Alunos e proporcionando assegurar o direito de defesa, formulo o seguinte termo de justificação: " %}
-            {% set base_text = intro ~ "1. Justificante: " ~ nome_completo ~ ", Id Func. " ~ matricula ~ ". 2. Descrição da conduta infracional: O militar " ~ (p.fato_constatado or '') ~ ". Enquadramento: " ~ (p.codigo_infracao or '') ~ "." %}
+            {% set base_text = intro ~ "1. Justificante: " ~ nome_completo ~ ", Id Func. " ~ matricula ~ ". 2. Descrição da conduta infracional: O militar " ~ (p.fato_constatado or '') ~ " no dia " ~ (p.data_ocorrencia.strftime('%d/%m/%Y') if p.data_ocorrencia else 'N/A') ~ " às " ~ (p.data_ocorrencia.strftime('%H:%M') if p.data_ocorrencia else 'N/A') ~ ". Enquadramento: " ~ (p.codigo_infracao or '') ~ "." %}
         {% endif %}
 
         {# 4. CONSTRUÇÃO DINÂMICA DO ITEM 3 (A Defesa) #}

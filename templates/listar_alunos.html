@@ -3,149 +3,160 @@
 {% block title %}Lista de Alunos{% endblock %}
 
 {% block content %}
-<div class="content-header">
-    <h1>Lista de Alunos</h1>
-    <p>Consulte e gerencie os alunos matriculados na escola.</p>
-</div>
-
-<div class="table-container">
-    <div class="table-header">
-        <h3>
-            {% if turma_filtrada %}
-                Alunos da Turma: {{ turma_filtrada }}
-            {% else %}
-                Todos os Alunos
-            {% endif %}
-        </h3>
-        
-        {# CORREÇÃO: Adicionado 'is_sens' para permitir que o SENS cadastre alunos #}
-        {% if current_user.is_sens or current_user.role in ['programador', 'admin_escola', 'super_admin'] %}
-        <div class="header-actions">
-            <a href="{{ url_for('main.pre_cadastro', role='aluno') }}" class="btn btn-info">
-                <span>+</span> Inserir Pré-Cadastro
-            </a>
-            <a href="{{ url_for('auth.register') }}" class="btn btn-primary">
-                <span>+</span> Cadastrar Novo Aluno
-            </a>
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm border-0">
+                <div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-3">
+                    <div>
+                        <h4 class="card-title text-primary mb-1">
+                            <i class="fas fa-user-graduate me-2"></i>Alunos Matriculados
+                        </h4>
+                        <p class="text-muted mb-0 small">
+                            {% if turma_filtrada %}
+                                Mostrando alunos da turma: <strong>{{ turma_filtrada }}</strong>
+                            {% else %}
+                                Consulte e gerencie todos os alunos matriculados na escola.
+                            {% endif %}
+                        </p>
+                    </div>
+                    <div>
+                        {% if current_user.is_sens or current_user.role in ['admin_escola', 'super_admin'] %}
+                            <a href="{{ url_for('main.pre_cadastro', role='aluno') }}" class="btn btn-outline-info">
+                                <i class="fas fa-file-import me-1"></i> Inserir Pré-Cadastro
+                            </a>
+                            <a href="{{ url_for('auth.register') }}" class="btn btn-primary ms-2">
+                                <i class="fas fa-plus me-1"></i> Cadastrar Aluno
+                            </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
         </div>
-        {% endif %}
     </div>
 
-    <div class="search-and-filters">
-        <div class="search-form-container">
+    <div class="row mb-3">
+        <div class="col-md-5 col-12 mb-2 mb-md-0">
             <form method="GET" action="{{ url_for('aluno.listar_alunos') }}">
                 <input type="hidden" name="turma" value="{{ turma_filtrada or '' }}">
-                <div class="input-group">
-                    <input type="search" name="q" class="form-control" placeholder="Buscar por nome ou matrícula..." value="{{ search_term or '' }}">
+                <div class="input-group shadow-sm">
+                    <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted"></i></span>
+                    <input type="search" name="q" class="form-control border-start-0 border-end-0" placeholder="Buscar por nome ou matrícula..." value="{{ search_term or '' }}">
                     <button class="btn btn-primary" type="submit">Buscar</button>
                 </div>
             </form>
         </div>
-        <div class="table-filters">
-            <strong>Filtrar por Turma:</strong>
-            <div class="filter-buttons">
-                {% for turma in turmas %}
+        
+        <div class="col-md-7 col-12 d-flex align-items-center justify-content-md-end gap-2 flex-wrap">
+            <span class="fw-bold text-muted small me-2"><i class="fas fa-filter me-1"></i>Turmas:</span>
+            {% for turma in turmas %}
                 <a href="{{ url_for('aluno.listar_alunos', turma=turma.nome, q=search_term or '') }}"
-                   class="btn btn-sm {% if turma_filtrada == turma.nome %}btn-primary{% else %}btn-secondary{% endif %}">
+                   class="badge {% if turma_filtrada == turma.nome %}bg-primary{% else %}bg-secondary text-decoration-none{% endif %} p-2 px-3 shadow-sm" style="font-size: 0.85rem;">
                     {{ turma.nome }}
                 </a>
+            {% else %}
+                <span class="text-muted small">Nenhuma turma</span>
+            {% endfor %}
+            
+            {% if turma_filtrada or search_term %}
+                <a href="{{ url_for('aluno.listar_alunos') }}" class="btn btn-sm btn-outline-danger ms-2" title="Limpar Filtros"><i class="fas fa-times"></i></a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                {% if alunos_paginados.items %}
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light text-secondary">
+                        <tr>
+                            <th class="ps-4">Identificação</th>
+                            <th>Contato / Turma</th>
+                            <th>Função / Status</th>
+                            <th class="text-end pe-4">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for aluno in alunos_paginados.items %}
+                        <tr>
+                            <td class="ps-4">
+                                <div class="d-flex align-items-center">
+                                    <div class="avatar-circle me-3 bg-light text-primary d-flex align-items-center justify-content-center rounded-circle border" style="width: 45px; height: 45px; font-weight: bold; font-size: 1.2rem;">
+                                        {% if aluno.foto_perfil %}
+                                            <img src="{{ url_for('static', filename='uploads/profile_pics/' + aluno.foto_perfil) }}" class="rounded-circle" style="width: 45px; height: 45px; object-fit: cover;">
+                                        {% else %}
+                                            {{ (aluno.user.nome_completo or aluno.user.username or '?')[:1] }}
+                                        {% endif %}
+                                    </div>
+                                    <div>
+                                        <div class="fw-bold text-dark">{{ aluno.user.posto_graduacao if aluno.user else '' }} {{ aluno.user.nome_completo or aluno.user.username }}</div>
+                                        <small class="text-muted">Matrícula: <span class="fw-medium">{{ aluno.user.matricula if aluno.user else 'N/A' }}</span></small>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="text-dark small mb-1"><i class="fas fa-envelope text-muted me-1"></i>{{ aluno.user.email if aluno.user and aluno.user.email else 'Sem e-mail' }}</div>
+                                <span class="badge bg-info text-dark border border-info shadow-sm"><i class="fas fa-users me-1"></i>{{ aluno.turma.nome if aluno.turma else 'Sem Turma' }}</span>
+                            </td>
+                            <td>
+                                {% if aluno.funcao_atual %}
+                                    <span class="badge bg-secondary"><i class="fas fa-user-tag me-1"></i>{{ aluno.funcao_atual }}</span>
+                                {% else %}
+                                    <span class="text-muted small">Sem função especial</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end pe-4">
+                                <a href="{{ url_for('historico.historico_funcional', aluno_id=aluno.id) }}" class="btn btn-sm btn-outline-primary mb-1" title="Ver Histórico">
+                                    <i class="fas fa-clipboard-list me-1"></i>Histórico
+                                </a>
+                                
+                                {% if current_user.is_sens or current_user.is_admin_escola %}
+                                    <a href="{{ url_for('aluno.editar_aluno', aluno_id=aluno.id) }}" class="btn btn-sm btn-outline-warning mb-1" title="Editar">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <form method="POST" action="{{ url_for('aluno.excluir_aluno', aluno_id=aluno.id) }}" onsubmit="return confirm('Tem certeza que deseja excluir este aluno permanentemente?');" style="display: inline;">
+                                        {{ delete_form.hidden_tag() }}
+                                        <button type="submit" class="btn btn-sm btn-outline-danger mb-1" title="Excluir"><i class="fas fa-trash"></i></button>
+                                    </form>
+                                {% endif %}
+
+                                {% if dec_mode_active and aluno.user %}
+                                    <a href="{{ url_for('super_admin.logar_como', user_id=aluno.user.id) }}" 
+                                       class="btn btn-sm btn-dark mb-1 ms-1" 
+                                       title="Logar como este aluno"
+                                       onclick="return confirm('Assumir a identidade de {{ aluno.user.nome_completo or aluno.user.username }}?');">
+                                        <i class="fas fa-sign-in-alt"></i> Logar
+                                    </a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
                 {% else %}
-                <p style="margin: 0.5rem; color: var(--color-text-muted);">Nenhuma turma cadastrada.</p>
-                {% endfor %}
-                {% if turma_filtrada or search_term %}
-                <a href="{{ url_for('aluno.listar_alunos') }}" class="btn btn-sm btn-danger">Limpar Filtros</a>
+                    <div class="text-center py-5">
+                        <div class="text-muted mb-3"><i class="fas fa-user-slash fa-4x opacity-50"></i></div>
+                        <h4 class="text-secondary fw-bold">Nenhum Aluno Encontrado</h4>
+                        <p class="text-muted">
+                            {% if turma_filtrada or search_term %}
+                                Não encontramos alunos correspondentes aos filtros aplicados.
+                            {% else %}
+                                Ainda não há alunos cadastrados no sistema.
+                            {% endif %}
+                        </p>
+                    </div>
                 {% endif %}
             </div>
         </div>
     </div>
 
-    <div class="table-responsive">
-        {% if alunos_paginados.items %}
-            <table class="table-styled">
-                <thead>
-                    <tr>
-                        <th>Posto/Graduação</th>
-                        <th>Nome Completo</th>
-                        <th>Matrícula</th>
-                        <th>Turma</th>
-                        <th>Função Atual</th>
-                        <th class="text-right">Ações</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for aluno in alunos_paginados.items %}
-                    <tr>
-                        <td data-label="Posto/Graduação">{{ aluno.user.posto_graduacao if aluno.user else 'N/A' }}</td>
-                        <td data-label="Nome">{{ aluno.user.nome_completo or aluno.user.username }}</td>
-                        <td data-label="Matrícula">{{ aluno.user.matricula if aluno.user else 'N/A' }}</td>
-                        <td data-label="Turma">{{ aluno.turma.nome if aluno.turma else 'Sem Turma' }}</td>
-                        <td data-label="Função">{{ aluno.funcao_atual if aluno.funcao_atual else 'N/A' }}</td>
-                        <td data-label="Ações" class="text-right">
-                            <div class="btn-group">
-                                <a href="{{ url_for('historico.historico_funcional', aluno_id=aluno.id) }}" class="btn btn-sm btn-info">Ver Histórico</a>
-                                
-                                {# CORREÇÃO: Adicionado 'is_sens' para liberar edição/exclusão #}
-                                {% if current_user.is_sens or current_user.role in ['super_admin', 'programador', 'admin_escola'] %}
-                                <a href="{{ url_for('aluno.editar_aluno', aluno_id=aluno.id) }}" class="btn btn-sm btn-warning">Editar</a>
-                                <form method="POST" action="{{ url_for('aluno.excluir_aluno', aluno_id=aluno.id) }}" onsubmit="return confirm('Tem certeza que deseja excluir este aluno? Esta ação não pode ser desfeita.');" style="display: inline;">
-                                    {{ delete_form.hidden_tag() }}
-                                    <button type="submit" class="btn btn-sm btn-danger">Excluir</button>
-                                </form>
-                                {% endif %}
-
-                                {# BOTAO DE LOGAR COMO (SOMENTE SUPER ADMIN) #}
-                                {% if current_user.role == 'super_admin' and aluno.user %}
-                                    <a href="{{ url_for('super_admin.logar_como', user_id=aluno.user.id) }}" 
-                                    class="btn btn-sm btn-dark" 
-                                    title="Logar como este aluno"
-                                    onclick="return confirm('Tem certeza que deseja assumir a identidade de {{ aluno.user.nome_completo or aluno.user.username }}?');">
-                                        Logar Como
-                                    </a>
-                                {% endif %}
-                            </div>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        {% else %}
-            <div class="empty-state">
-                <div class="empty-icon">👥</div>
-                <h2>Nenhum Aluno Encontrado</h2>
-                <p>
-                    {% if turma_filtrada or search_term %}
-                        Nenhum aluno corresponde aos filtros aplicados.
-                    {% else %}
-                        Nenhum aluno cadastrado no sistema.
-                    {% endif %}
-                </p>
-            </div>
-        {% endif %}
-    </div>
-
     {% if alunos_paginados.pages > 1 %}
-    <div class="pagination-container">
+    <div class="d-flex justify-content-center mt-4">
         {% with pagination_object=alunos_paginados %}
             {% include 'partials/_pagination.html' %}
         {% endwith %}
     </div>
     {% endif %}
 </div>
-
-<style>
-.search-and-filters {
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
-    margin-bottom: 2rem;
-}
-.search-form-container {
-    max-width: 400px;
-}
-.pagination-container {
-    margin-top: 2rem;
-    display: flex;
-    justify-content: center;
-}
-</style>
 {% endblock %}

@@ -17,19 +17,32 @@ from sqlalchemy import select, func
 
 class SchoolService:
     @staticmethod
-    def create_school(name: str, npccal_type: str):
-        """Cria uma nova escola."""
+    def create_school(name: str, admin_id: int = None):
+        """Cria uma nova escola e opcionalmente associa um administrador."""
         if not name:
             return False, "O nome da escola não pode estar vazio."
-            
-        if not npccal_type:
-            return False, "O Tipo de NPCCAL é obrigatório."
 
         try:
-            new_school = School(nome=name, npccal_type=npccal_type)
+            new_school = School(nome=name)
             db.session.add(new_school)
+            db.session.flush() # Gera o ID da nova escola
+
+            if admin_id:
+                admin_user = db.session.get(User, admin_id)
+                if not admin_user:
+                    db.session.rollback()
+                    return False, "Administrador selecionado não encontrado."
+                
+                # Criar o vínculo do administrador com a nova escola
+                user_school = UserSchool(
+                    user_id=admin_id,
+                    school_id=new_school.id,
+                    role='admin_escola'
+                )
+                db.session.add(user_school)
+
             db.session.commit()
-            return True, f"Escola '{name}' (Tipo: {npccal_type.upper()}) criada com sucesso."
+            return True, f"Escola '{name}' criada com sucesso e administrador associado."
         except IntegrityError:
             db.session.rollback()
             return False, f"Uma escola com o nome '{name}' já existe."
@@ -38,7 +51,7 @@ class SchoolService:
             return False, f"Ocorreu um erro inesperado: {e}"
 
     @staticmethod
-    def update_school(school_id: int, name: str, npccal_type: str):
+    def update_school(school_id: int, name: str):
         """Atualiza os dados de uma escola existente."""
         school = db.session.get(School, school_id)
         if not school:
@@ -46,13 +59,9 @@ class SchoolService:
             
         if not name:
             return False, "O nome da escola não pode estar vazio."
-            
-        if not npccal_type:
-            return False, "O Tipo de NPCCAL é obrigatório."
 
         try:
             school.nome = name
-            school.npccal_type = npccal_type
             db.session.commit()
             return True, f"Escola '{name}' atualizada com sucesso."
         except IntegrityError:
@@ -114,7 +123,7 @@ class SchoolService:
                 )
                 if count_links == 1:
                     user = db.session.get(User, uid)
-                    if user and user.role not in ['super_admin', 'programador']:
+                    if user and user.role != 'super_admin':
                         users_to_delete.append(user)
 
             # === FASE 3: Excluir a Escola ===

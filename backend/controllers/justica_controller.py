@@ -1,5 +1,5 @@
 # backend/controllers/justica_controller.py
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, g, Response
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, g, Response, session
 from flask_login import login_required, current_user
 from urllib.parse import quote
 from weasyprint import HTML
@@ -23,6 +23,7 @@ from ..services.justica_service import JusticaService
 from ..services.user_service import UserService
 from ..services.turma_service import TurmaService
 from ..services.email_service import EmailService
+from ..models.background_job import BackgroundJob
 from ..services.notification_service import NotificationService
 from ..services.log_service import LogService
 
@@ -55,8 +56,8 @@ def index():
     school_id = UserService.get_current_school_id()
 
     tipo_npccal = 'ctsp'
-    if g.active_school and hasattr(g.active_school, 'npccal_type') and g.active_school.npccal_type:
-        tipo_npccal = g.active_school.npccal_type.lower()
+    if g.get('active_edicao') and g.active_edicao.npccal_type:
+        tipo_npccal = g.active_edicao.npccal_type.lower()
 
     fatos_predefinidos = db.session.scalars(
         select(DisciplineRule).where(DisciplineRule.npccal_type == tipo_npccal)
@@ -108,6 +109,7 @@ def index():
             joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.turma)
         ).where(
             Turma.school_id == school_id,
+            Turma.edicao_id == session.get('active_edicao_id'),
             ProcessoDisciplina.status != StatusProcesso.FINALIZADO.value,
             ProcessoDisciplina.status != StatusProcesso.ARQUIVADO.value
         ).order_by(ProcessoDisciplina.data_ocorrencia.desc())
@@ -118,6 +120,7 @@ def index():
             joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.turma)
         ).where(
             Turma.school_id == school_id,
+            Turma.edicao_id == session.get('active_edicao_id'),
             or_(ProcessoDisciplina.status == StatusProcesso.FINALIZADO.value, ProcessoDisciplina.status == StatusProcesso.ARQUIVADO.value)
         )
 
@@ -156,7 +159,8 @@ def index():
     # Aqui o sistema "pica" os resultados da pesquisa global em páginas
     finalizados_paginados = db.paginate(stmt_finalizados, page=page, per_page=50, error_out=False)
 
-    turmas = TurmaService.get_turmas_by_school(school_id) if school_id else []
+    active_edicao_id = g.active_edicao.id if g.get('active_edicao') else session.get('active_edicao_id')
+    turmas = TurmaService.get_turmas_by_school(school_id, edicao_id=active_edicao_id) if school_id else []
 
     agora_hora = datetime.now().strftime('%H:%M')
     hoje = datetime.now().strftime('%Y-%m-%d')
@@ -247,11 +251,24 @@ def registrar_em_massa():
     flash(f"{count} registros criados.", "success")
     return redirect(url_for('justica.index'))
 
+def _check_processo_permission(processo):
+    if not processo or not processo.aluno or not processo.aluno.turma:
+        return False
+    if g.get('active_school') and processo.aluno.turma.school_id != g.active_school.id:
+        return False
+    if g.get('active_edicao') and processo.aluno.turma.edicao_id != g.active_edicao.id:
+        return False
+    return True
+
 @justica_bp.route('/editar-processo/<int:pid>', methods=['POST'])
 @login_required
 @can_manage_justice_required
 def editar_processo(pid):
     processo = db.session.get(ProcessoDisciplina, pid)
+    if not _check_processo_permission(processo):
+        flash("Processo não encontrado ou pertence a outra edição/escola.", "danger")
+        return redirect(url_for('justica.index'))
+
     if processo and processo.status == StatusProcesso.AGUARDANDO_CIENCIA.value:
         processo.fato_constatado = request.form.get('fato_constatado', processo.fato_constatado)
         processo.observacao = request.form.get('observacao', processo.observacao)
@@ -267,6 +284,10 @@ def editar_processo(pid):
 @can_manage_justice_required
 def cobrar_ciencia(pid):
     processo = db.session.get(ProcessoDisciplina, pid)
+    if not _check_processo_permission(processo):
+        flash("Processo não encontrado ou pertence a outra edição/escola.", "danger")
+        return redirect(url_for('justica.index'))
+
     if processo and processo.status == StatusProcesso.AGUARDANDO_CIENCIA.value:
         aluno = db.session.get(Aluno, processo.aluno_id)
         if aluno and aluno.user:
@@ -393,8 +414,9 @@ def enviar_recurso(pid):
 @can_manage_justice_required
 def finalizar_processo(pid):
     processo = db.session.get(ProcessoDisciplina, pid)
-    if not processo:
-        flash("Processo não encontrado.", "error"); return redirect(url_for('justica.index'))
+    if not _check_processo_permission(processo):
+        flash("Processo não encontrado ou pertence a outra edição/escola.", "danger")
+        return redirect(url_for('justica.index'))
 
     if processo.status not in [StatusProcesso.DEFESA_ENVIADA.value, StatusProcesso.EM_ANALISE.value]:
         flash("O processo ainda não está pronto para julgamento.", "warning")
@@ -445,8 +467,8 @@ def finalizar_processo(pid):
     processo.observacao_decisao = fundamentacao_texto
 
     tipo_npccal = 'ctsp'
-    if g.active_school and hasattr(g.active_school, 'npccal_type') and g.active_school.npccal_type:
-        tipo_npccal = g.active_school.npccal_type.lower()
+    if g.get('active_edicao') and g.active_edicao.npccal_type:
+        tipo_npccal = g.active_edicao.npccal_type.lower()
 
     if decisao == 'Justificado':
         processo.status = StatusProcesso.FINALIZADO.value
@@ -525,7 +547,7 @@ def julgar_recurso(pid):
     school_id = UserService.get_current_school_id()
     is_comandante = current_user.is_admin_escola_in_school(school_id)
 
-    if not (current_user.is_programador or is_comandante):
+    if not is_comandante:
         flash("Apenas o Comandante (Admin Escola) pode julgar recursos.", "error")
         return redirect(url_for('justica.index'))
 
@@ -600,7 +622,7 @@ def deletar_processo(pid):
 
     school_id = UserService.get_current_school_id()
     if processo.aluno and processo.aluno.turma and processo.aluno.turma.school_id != school_id:
-         if not (current_user.is_programador or current_user.is_admin_escola_in_school(school_id)):
+         if not current_user.is_admin_escola_in_school(school_id):
              flash("Este processo pertence a outra escola.", "danger")
              return redirect(url_for('justica.index'))
 
@@ -652,12 +674,15 @@ def fada_boletim():
 
     turma_id = request.args.get('turma_id', type=int)
 
+    active_edicao_id = session.get('active_edicao_id')
     query = select(Aluno).join(Turma).join(User).where(Turma.school_id == school_id)
+    if active_edicao_id:
+        query = query.where(Turma.edicao_id == active_edicao_id)
     if turma_id: query = query.where(Turma.id == turma_id)
     query = query.order_by(Turma.nome, User.nome_completo)
     alunos = db.session.scalars(query).all()
 
-    turmas = TurmaService.get_turmas_by_school(school_id)
+    turmas = TurmaService.get_turmas_by_school(school_id, edicao_id=active_edicao_id)
 
     query_staff = select(User).where(User.role != 'aluno').order_by(User.nome_completo)
     all_users = db.session.scalars(query_staff).all()
@@ -959,12 +984,15 @@ def exportar_fada_pdf(fada_id):
         now=datetime.now().astimezone()
     )
     
-    pdf = HTML(string=html).write_pdf()
-    
-    nome_arquivo = f"FADA_{aluno.user.matricula if aluno.user else 'ALUNO'}.pdf"
-    
-    return Response(
-        pdf,
-        mimetype="application/pdf",
-        headers={"Content-disposition": f"attachment; filename={nome_arquivo}"}
+    # Em vez de write_pdf() diretamente, mandamos pra fila
+    job_id = str(uuid.uuid4())
+    job = BackgroundJob(
+        id=job_id,
+        task_type='generate_pdf',
+        payload=html,
+        user_id=current_user.id
     )
+    db.session.add(job)
+    db.session.commit()
+    
+    return jsonify({'success': True, 'job_id': job_id})

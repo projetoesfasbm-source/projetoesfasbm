@@ -192,7 +192,7 @@ def change_password_ajax():
 @login_required
 def criar_admin_escola():
     school_id = UserService.get_current_school_id()
-    if not (current_user.is_programador or current_user.is_admin_escola_in_school(school_id)):
+    if not current_user.is_admin_escola_in_school(school_id):
         flash("Você não tem permissão para criar administradores.", "danger")
         return redirect(url_for("main.dashboard"))
 
@@ -240,7 +240,7 @@ def criar_admin_escola():
             db.session.commit()
 
             flash(f"Administrador criado com sucesso. Username: {username} • Senha temporária: {temp_pass}", "success")
-            return redirect(url_for("user.listar_admins_escola"))
+            return redirect(url_for("user.gerenciar_usuarios"))
 
         except IntegrityError as ie:
             db.session.rollback()
@@ -253,10 +253,10 @@ def criar_admin_escola():
 
     return render_template("criar_admin_escola.html")
 
-@user_bp.route("/admins", methods=["GET"])
+@user_bp.route("/gerenciar-usuarios", methods=["GET"])
 @login_required
 @admin_required
-def listar_admins_escola():
+def gerenciar_usuarios():
     school_id = UserService.get_current_school_id()
     if not school_id:
         flash("Selecione uma escola para gerenciar usuários.", "warning")
@@ -277,7 +277,31 @@ def listar_admins_escola():
         .order_by(role_priority, User.nome_completo)
     ).all()
 
-    return render_template("listar_admins_escola.html", usuarios_com_role=results)
+    # Se for super_admin, carregar pré-cadastrados e órfãos e usuários avulsos para permitir vínculo
+    orfãos = []
+    pre_cadastrados = []
+    todos_usuarios_ativos = []
+    if current_user.role == 'super_admin':
+        assigned_user_ids = db.session.scalars(db.select(UserSchool.user_id).distinct()).all()
+        orfãos = db.session.scalars(
+            select(User).where(User.id.notin_(assigned_user_ids), User.role != 'super_admin', User.is_active == True)
+        ).all()
+        
+        pre_cadastrados = db.session.scalars(
+            select(User).where(User.is_active == False)
+        ).all()
+
+        todos_usuarios_ativos = db.session.scalars(
+            select(User).where(User.role != 'super_admin', User.is_active == True).order_by(User.nome_completo)
+        ).all()
+
+    return render_template(
+        "manage_users.html", 
+        usuarios_com_role=results, 
+        orfaos=orfãos, 
+        pre_cadastrados=pre_cadastrados,
+        todos_usuarios_ativos=todos_usuarios_ativos
+    )
 
 
 @user_bp.route("/alterar-papel/<int:user_id>", methods=["POST"])
@@ -291,22 +315,18 @@ def alterar_papel_usuario(user_id):
     user = db.session.get(User, user_id)
     if not user:
         flash("Usuário não encontrado.", "danger")
-        return redirect(url_for('user.listar_admins_escola'))
+        return redirect(url_for('user.gerenciar_usuarios'))
 
     if user.id == current_user.id:
         flash("Você não pode alterar seu próprio papel por aqui.", "warning")
-        return redirect(url_for('user.listar_admins_escola'))
-
-    if user.role == 'programador':
-        flash("Não é permitido alterar o papel de um Programador.", "danger")
-        return redirect(url_for('user.listar_admins_escola'))
+        return redirect(url_for('user.gerenciar_usuarios'))
 
     novo_role = request.form.get('novo_role')
     papeis_validos = ['admin_cal', 'admin_sens', 'admin_escola', 'instrutor', 'aluno']
 
     if novo_role not in papeis_validos:
         flash("Papel inválido selecionado.", "danger")
-        return redirect(url_for('user.listar_admins_escola'))
+        return redirect(url_for('user.gerenciar_usuarios'))
 
     success, msg = UserService.set_user_role_for_school(user.id, school_id, novo_role)
 
@@ -315,4 +335,24 @@ def alterar_papel_usuario(user_id):
     else:
         flash(msg, "danger")
 
-    return redirect(url_for('user.listar_admins_escola'))
+    return redirect(url_for('user.gerenciar_usuarios'))
+
+@user_bp.route("/vincular-usuario", methods=["POST"])
+@login_required
+@super_admin_required
+def vincular_usuario_escola():
+    school_id = UserService.get_current_school_id()
+    if not school_id:
+        return redirect(url_for('main.dashboard'))
+
+    user_id = request.form.get('user_id')
+    role = request.form.get('role')
+
+    if not user_id or not role:
+        flash("Selecione um usuário e um papel.", "danger")
+        return redirect(url_for('user.gerenciar_usuarios'))
+
+    success, message = UserService.assign_school_role(int(user_id), school_id, role)
+    flash(message, 'success' if success else 'danger')
+
+    return redirect(url_for('user.gerenciar_usuarios'))

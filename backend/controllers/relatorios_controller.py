@@ -1,6 +1,6 @@
 # backend/controllers/relatorios_controller.py
 
-from flask import Blueprint, render_template, request, flash, redirect, url_for, send_file
+from flask import Blueprint, render_template, request, flash, redirect, url_for, send_file, jsonify
 from flask_login import login_required, current_user
 from datetime import datetime
 from typing import Optional
@@ -10,8 +10,11 @@ import json
 
 from weasyprint import HTML
 from werkzeug.utils import secure_filename
+import uuid
 
 from ..services.relatorio_service import RelatorioService
+from ..models.background_job import BackgroundJob
+from ..models.database import db
 from ..services.instrutor_service import InstrutorService
 from ..services.site_config_service import SiteConfigService
 from ..services.user_service import UserService
@@ -195,14 +198,20 @@ def processar_exportacao_final(form_data):
 
     if action == 'download':
         rendered_html = render_template('relatorios/pdf_template.html', **contexto)
-        try:
-            pdf_content = HTML(string=rendered_html, base_url=request.url_root).write_pdf()
-        except Exception as e:
-            flash(f'Erro ao gerar PDF: {str(e)}', 'danger')
-            return redirect(url_for('relatorios.index'))
-            
-        pdf_name = _build_filename('relatorio_horas_aula', contexto.get("nome_mes_ano"), 'pdf')
-        return send_file(io.BytesIO(pdf_content), as_attachment=True, download_name=pdf_name, mimetype='application/pdf')
+        
+        # Cria o Job na fila
+        job_id = str(uuid.uuid4())
+        job = BackgroundJob(
+            id=job_id,
+            task_type='generate_pdf',
+            payload=rendered_html,
+            user_id=current_user.id
+        )
+        db.session.add(job)
+        db.session.commit()
+        
+        # Retorna JSON para a tela indicando sucesso e o ID do job
+        return jsonify({'success': True, 'job_id': job_id})
 
     elif action == 'download_xlsx':
         try:
