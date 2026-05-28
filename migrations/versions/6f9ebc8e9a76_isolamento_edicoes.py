@@ -27,7 +27,7 @@ def upgrade():
     # )
     # op.drop_table('fada_avaliacao')
     with op.batch_alter_table('alunos', schema=None) as batch_op:
-        # batch_op.add_column(sa.Column('edicao_id', sa.Integer(), nullable=True))
+        batch_op.add_column(sa.Column('edicao_id', sa.Integer(), nullable=True))
         batch_op.drop_constraint('alunos_ibfk_2', type_='foreignkey')
         batch_op.drop_index('user_id')
         batch_op.create_index('user_id', ['user_id'])
