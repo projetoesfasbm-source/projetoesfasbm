@@ -138,7 +138,10 @@ def index():
     ciclo_selecionado_id = request.args.get('ciclo', session.get('ultimo_ciclo_horario'), type=int)
 
     ciclos = db.session.scalars(
-        select(Ciclo).where(Ciclo.school_id == school_id, Ciclo.edicao_id == active_edicao).order_by(Ciclo.nome)
+        select(Ciclo).where(
+            Ciclo.school_id == school_id, 
+            or_(Ciclo.edicao_id == active_edicao, Ciclo.edicao_id == None)
+        ).order_by(Ciclo.nome)
     ).all()
 
     if not ciclo_selecionado_id or ciclo_selecionado_id not in [c.id for c in ciclos]:
@@ -518,7 +521,10 @@ def proximas_aulas_admin():
 
     # Para buscar o histórico, precisamos obrigatoriamente de um ciclo.
     ciclos = db.session.scalars(
-        select(Ciclo).where(Ciclo.school_id == school_id, Ciclo.edicao_id == active_edicao).order_by(Ciclo.nome)
+        select(Ciclo).where(
+            Ciclo.school_id == school_id, 
+            or_(Ciclo.edicao_id == active_edicao, Ciclo.edicao_id == None)
+        ).order_by(Ciclo.nome)
     ).all()
     
     ciclo_selecionado_id = request.args.get('ciclo', session.get('ultimo_ciclo_horario'), type=int)

@@ -27,14 +27,10 @@ class DashboardService:
             alunos_query = alunos_query.where(Turma.edicao_id == edicao_id)
         total_alunos = db.session.scalar(alunos_query) or 0
 
-        # CORREÇÃO: Mesma lógica para instrutores, garantindo que só conta quem tem role 'instrutor'
+        # Instrutores são filtrados diretamente pela escola a qual pertencem
         instrutores_query = select(func.count(Instrutor.id)).join(User, Instrutor.user_id == User.id).where(User.is_active == True)
         if school_id:
-            instrutores_query = instrutores_query.join(UserSchool, UserSchool.user_id == User.id).where(
-                UserSchool.school_id == school_id,
-                UserSchool.role == 'instrutor' # <--- Filtro Adicionado
-            )
-        # instrutores não são filtrados por edição, pois pertencem à escola inteira.
+            instrutores_query = instrutores_query.where(Instrutor.school_id == school_id)
         total_instrutores = db.session.scalar(instrutores_query) or 0
 
         disciplinas_query = select(func.count(func.distinct(Disciplina.materia)))
