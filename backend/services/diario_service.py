@@ -192,11 +192,19 @@ class DiarioService:
             vinculo = db.session.scalar(
                 select(DisciplinaTurma).where(DisciplinaTurma.disciplina_id == rep.disciplina_id)
             )
-            if vinculo and getattr(vinculo, 'instrutor_1', None) and getattr(vinculo.instrutor_1, 'user', None):
-                u = vinculo.instrutor_1.user
-                posto = u.posto_graduacao or ""
-                guerra = u.nome_de_guerra or u.nome_completo or ""
-                rep.instrutor_nome_exibicao = f"{posto} {guerra} (Vinculado)".strip()
+            if vinculo:
+                if getattr(vinculo, 'instrutor_1', None) and getattr(vinculo.instrutor_1, 'user', None):
+                    u = vinculo.instrutor_1.user
+                    posto = u.posto_graduacao or ""
+                    guerra = u.nome_de_guerra or u.nome_completo or ""
+                    rep.instrutor_nome_exibicao = f"{posto} {guerra} (Vinculado)".strip()
+                elif getattr(vinculo, 'instrutor_2', None) and getattr(vinculo.instrutor_2, 'user', None):
+                    u = vinculo.instrutor_2.user
+                    posto = u.posto_graduacao or ""
+                    guerra = u.nome_de_guerra or u.nome_completo or ""
+                    rep.instrutor_nome_exibicao = f"{posto} {guerra} (Auxiliar Vinculado)".strip()
+                else:
+                    rep.instrutor_nome_exibicao = "Sem Vínculo de Instrutor"
             else:
                 rep.instrutor_nome_exibicao = "Sem Vínculo de Instrutor"
 
