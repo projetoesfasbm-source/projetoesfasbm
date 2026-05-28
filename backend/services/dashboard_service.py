@@ -17,15 +17,14 @@ class DashboardService:
     def get_dashboard_data(school_id=None, edicao_id=None):
 
         # --- Contagens Básicas ---
-        # Retornado para UserSchool, pois é a forma correta de contar alunos pré-cadastrados e matriculados
+        # Retornado para buscar através da Turma, pois alunos pré-cadastrados não devem contar na edição ativa.
         alunos_query = select(func.count(Aluno.id)).join(User, Aluno.user_id == User.id).where(User.is_active == True)
         if school_id:
-            alunos_query = alunos_query.join(UserSchool, UserSchool.user_id == User.id).where(
-                UserSchool.school_id == school_id,
-                UserSchool.role == 'aluno'
-            )
-        # Alunos não são filtrados estritamente por edição aqui no contador global, 
-        # pois alunos antigos/pré-cadastrados podem não ter edicao_id ou turma vinculada ainda.
+            # Exige INNER JOIN com Turma (apenas alunos matriculados)
+            alunos_query = alunos_query.join(Turma, Aluno.turma_id == Turma.id).where(Turma.school_id == school_id)
+        if edicao_id:
+            # Filtra estritamente pela edição da turma
+            alunos_query = alunos_query.where(Turma.edicao_id == edicao_id)
         total_alunos = db.session.scalar(alunos_query) or 0
 
         # CORREÇÃO: Mesma lógica para instrutores, garantindo que só conta quem tem role 'instrutor'

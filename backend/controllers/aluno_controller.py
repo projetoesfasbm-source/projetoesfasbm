@@ -88,7 +88,8 @@ def listar_alunos():
     # 3. Filtrar pela Edição Ativa (se selecionada)
     active_edicao_id = session.get('active_edicao_id')
     if active_edicao_id:
-        query = query.filter(Aluno.edicao_id == active_edicao_id)
+        # Filtra pela edição da Turma do aluno, para mostrar apenas alunos matriculados na edição
+        query = query.filter(Turma.edicao_id == active_edicao_id)
 
     # Filtros
     if search_term:
