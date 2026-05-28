@@ -196,8 +196,8 @@ def painel():
                 Horario.pelotao.in_(variacoes_nome)
             )
         )
-
-        horarios = query.order_by(Horario.periodo).all()
+        # CORREÇÃO: Ordem dupla para evitar não-determinismo em períodos idênticos
+        horarios = query.order_by(Horario.periodo, Horario.id).all()
 
         diarios_hoje = db.session.query(DiarioClasse).filter_by(
             data_aula=data_selecionada, 
@@ -212,20 +212,27 @@ def painel():
             else:
                 aulas_concluidas_keys.add(f"{d.disciplina_id}_legacy")
 
-        # REFACTORING: Agrupamento Inteligente por Blocos Consecutivos
+        # REFACTORING: Agrupamento Inteligente COM DEDUPLICAÇÃO DE BLOCOS SOBREPOSTOS
         flat_periods = []
+        seen_periods = set()
+        
         if horarios:
             for h in horarios:
                 if not h.disciplina:
                     continue
                 dur = h.duracao if h.duracao and h.duracao > 0 else 1
                 for i in range(dur):
-                    flat_periods.append({
-                        'periodo': h.periodo + i,
-                        'obj': h,
-                        'disc_id': h.disciplina_id,
-                        'instrutor': h.instrutor
-                    })
+                    p = h.periodo + i
+                    key = f"{h.disciplina_id}_{p}"
+                    # A DEDUPLICAÇÃO ACONTECE AQUI: Impede que o mesmo período da mesma matéria gere blocos repetidos
+                    if key not in seen_periods:
+                        flat_periods.append({
+                            'periodo': p,
+                            'obj': h,
+                            'disc_id': h.disciplina_id,
+                            'instrutor': h.instrutor
+                        })
+                        seen_periods.add(key)
                     
         # Ordena todos os períodos do dia cronologicamente
         flat_periods.sort(key=lambda x: x['periodo'])
@@ -263,7 +270,7 @@ def painel():
                         current_block['horarios_reais'].append(fp['obj'])
                     current_block['total_tempos'] += 1
                 else:
-                    # Quebrou a sequência (outra disciplina ou intervalo de tempo), guarda o atual e cria um novo
+                    # Quebrou a sequência, guarda o atual e cria um novo
                     blocos.append(current_block)
                     
                     nome_instrutor = "N/A"
