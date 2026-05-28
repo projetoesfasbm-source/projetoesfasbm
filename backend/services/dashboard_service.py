@@ -35,9 +35,7 @@ class DashboardService:
                 UserSchool.school_id == school_id,
                 UserSchool.role == 'instrutor' # <--- Filtro Adicionado
             )
-        if edicao_id:
-            from ..models.edicao import Edicao
-            instrutores_query = instrutores_query.where(Instrutor.edicoes.any(Edicao.id == edicao_id))
+        # instrutores não são filtrados por edição, pois pertencem à escola inteira.
         total_instrutores = db.session.scalar(instrutores_query) or 0
 
         disciplinas_query = select(func.count(func.distinct(Disciplina.materia)))

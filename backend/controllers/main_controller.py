@@ -216,8 +216,10 @@ def dashboard():
     except Exception as e:
         print(f"Erro silenciado no DashboardService: {e}")
         dashboard_data = {
-            'total_alunos': 0, 'total_instrutores': 0, 'total_turmas': 0, 
-            'proximas_aulas': [], 'atividades': []
+            'total_alunos': 0, 'total_instrutores': 0, 'total_disciplinas': 0, 
+            'aulas_pendentes': 0, 'lista_aulas_pendentes': [],
+            'lista_processos_pendentes': [], 'usuarios_recentes': [],
+            'proximas_aulas': []
         }
 
     school_in_context = db.session.get(School, school_id_to_load)

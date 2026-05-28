@@ -28,7 +28,7 @@ class Edicao(db.Model):
 
     # Relacionamento com alunos e instrutores (isolamento por edição)
     alunos = db.relationship('Aluno', back_populates='edicao', cascade="all, delete-orphan")
-    instrutores = db.relationship('Instrutor', secondary='instrutor_edicoes', back_populates='edicoes')
+
 
     def to_dict(self):
         return {

@@ -83,6 +83,7 @@ def index():
             return redirect(url_for('main.dashboard'))
         turma_do_aluno = current_user.aluno_profile.turma
         school_id = turma_do_aluno.school_id
+        active_edicao = turma_do_aluno.edicao_id
         turma_selecionada_nome = turma_do_aluno.nome
         todas_as_turmas = [turma_do_aluno]
     else:
