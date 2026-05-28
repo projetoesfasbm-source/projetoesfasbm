@@ -26,7 +26,7 @@
                         <div class="d-flex gap-2 align-items-center">
                             <!-- Botão Editar -->
                             <button type="button" class="btn btn-sm btn-warning fw-bold text-dark" onclick="toggleEditCiclo({{ ciclo.id }}, true)" title="Renomear">
-                                <i class="fas fa-edit"></i>
+                                <i class="fas fa-edit me-1"></i> Editar
                             </button>
                             
                             <!-- Botão Excluir Vermelho e Alerta Completo -->
@@ -35,7 +35,7 @@
                                   class="m-0">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <button type="submit" class="btn btn-sm btn-danger fw-bold" title="Excluir">
-                                    <i class="fas fa-trash"></i>
+                                    <i class="fas fa-trash me-1"></i> Excluir
                                 </button>
                             </form>
                         </div>
@@ -46,8 +46,8 @@
                         <form method="POST" action="{{ url_for('semana.renomear_ciclo', ciclo_id=ciclo.id) }}" class="d-flex gap-2 w-100">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <input type="text" name="novo_nome" class="form-control form-control-sm" value="{{ ciclo.nome }}" required>
-                            <button type="submit" class="btn btn-sm btn-success fw-bold" title="Salvar"><i class="fas fa-check"></i></button>
-                            <button type="button" class="btn btn-sm btn-secondary fw-bold" onclick="toggleEditCiclo({{ ciclo.id }}, false)" title="Cancelar"><i class="fas fa-times"></i></button>
+                            <button type="submit" class="btn btn-sm btn-success fw-bold text-white" title="Salvar"><i class="fas fa-check me-1"></i> Salvar</button>
+                            <button type="button" class="btn btn-sm btn-secondary fw-bold" onclick="toggleEditCiclo({{ ciclo.id }}, false)" title="Cancelar"><i class="fas fa-times me-1"></i> Cancelar</button>
                         </form>
                     </div>
                 </div>
