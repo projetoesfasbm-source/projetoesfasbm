@@ -48,10 +48,12 @@ class DashboardService:
 
         # --- PROCESSOS PENDENTES (Para CAL) ---
         processos_pendentes_query = select(ProcessoDisciplina).where(ProcessoDisciplina.status != 'Finalizado')
-        if school_id:
-            processos_pendentes_query = processos_pendentes_query.join(Aluno).join(User, Aluno.user_id == User.id).join(UserSchool, User.id == UserSchool.user_id).where(UserSchool.school_id == school_id)
-        if edicao_id:
-            processos_pendentes_query = processos_pendentes_query.where(ProcessoDisciplina.edicao_id == edicao_id)
+        if school_id or edicao_id:
+            processos_pendentes_query = processos_pendentes_query.join(ProcessoDisciplina.aluno).join(Turma, Aluno.turma_id == Turma.id)
+            if school_id:
+                processos_pendentes_query = processos_pendentes_query.where(Turma.school_id == school_id)
+            if edicao_id:
+                processos_pendentes_query = processos_pendentes_query.where(Turma.edicao_id == edicao_id)
         lista_processos_pendentes = db.session.scalars(processos_pendentes_query).all()
 
         # --- Listas Padrão ---
