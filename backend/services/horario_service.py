@@ -137,6 +137,12 @@ class HorarioService:
                 row.append(cell)
             horario_matrix.append(row)
 
+        # Encontra as semanas que compartilham o mesmo período de data
+        semanas_sobrepostas = select(Semana.id).where(
+            Semana.data_inicio == semana.data_inicio,
+            Semana.data_fim == semana.data_fim
+        )
+
         aulas_query = (
             select(Horario)
             .options(
@@ -144,7 +150,7 @@ class HorarioService:
                 joinedload(Horario.instrutor).joinedload(Instrutor.user),
                 joinedload(Horario.instrutor_2).joinedload(Instrutor.user),
             )
-            .where(Horario.pelotao == pelotao, Horario.semana_id == semana_id)
+            .where(Horario.pelotao == pelotao, Horario.semana_id.in_(semanas_sobrepostas))
         )
         all_aulas = db.session.scalars(aulas_query).all()
 
@@ -343,6 +349,11 @@ class HorarioService:
             if not semana:
                 return False, "Semana não encontrada.", 404
 
+            semanas_sobrepostas = select(Semana.id).where(
+                Semana.data_inicio == semana.data_inicio,
+                Semana.data_fim == semana.data_fim
+            )
+
             # Trava de Segurança lendo em MAIÚSCULO para evitar as falhas que ocorreram
             if not is_admin:
                 blocked_dict = {}
@@ -491,7 +502,7 @@ class HorarioService:
 
             if instructors_to_check:
                 conflict_query = select(Horario).where(
-                    Horario.semana_id == semana_id,
+                    Horario.semana_id.in_(semanas_sobrepostas),
                     Horario.dia_semana == dia,
                     Horario.pelotao != pelotao,
                     Horario.periodo <= periodo_fim,
@@ -517,7 +528,7 @@ class HorarioService:
 
             conflito_query_interno = select(Horario).where(
                 Horario.pelotao == pelotao,
-                Horario.semana_id == semana_id,
+                Horario.semana_id.in_(semanas_sobrepostas),
                 Horario.dia_semana == dia,
                 Horario.periodo <= periodo_fim,
                 (Horario.periodo + Horario.duracao - 1) >= periodo_inicio
