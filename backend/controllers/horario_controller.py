@@ -355,37 +355,6 @@ def dashboard_instrutor():
 def save_priority_config():
     return jsonify({'success': False, 'message': 'Use a rota /semana/<id>/salvar-prioridade'}), 404
 
-@horario_bp.route('/salvar-data-formatura', methods=['POST'])
-@login_required
-@admin_or_programmer_required
-def salvar_data_formatura():
-    turma_id = request.form.get('turma_id')
-    nova_data = request.form.get('data_formatura')
-
-    if not turma_id:
-        flash("Turma não identificada.", "danger")
-        return redirect(url_for('horario.index'))
-
-    turma = db.session.get(Turma, turma_id)
-    if not turma:
-        flash("Turma não encontrada.", "danger")
-        return redirect(url_for('horario.index'))
-
-    try:
-        if nova_data:
-            turma.data_formatura = datetime.strptime(nova_data, '%Y-%m-%d').date()
-        else:
-            turma.data_formatura = None
-        db.session.commit()
-        flash("Data de formatura atualizada com sucesso.", "success")
-    except ValueError:
-        flash("Formato de data inválido.", "danger")
-    except Exception as e:
-        db.session.rollback()
-        flash(f"Erro ao salvar data: {e}", "danger")
-
-    return redirect(url_for('horario.index', pelotao=turma.nome))
-
 @horario_bp.route('/exportar-pdf')
 @login_required
 @admin_or_programmer_required
