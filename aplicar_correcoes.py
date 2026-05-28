@@ -47,14 +47,6 @@ def run_correcoes():
                 a.edicao_id = ed.id
             print(f" - {len(alunos)} Alunos atualizados.")
 
-            # 4. Atualiza Processos Disciplinares
-            processos = db.session.query(ProcessoDisciplina).join(Aluno).join(Turma, Aluno.turma_id == Turma.id).filter(
-                Turma.school_id == s.id, ProcessoDisciplina.edicao_id == None
-            ).all()
-            for p in processos:
-                p.edicao_id = ed.id
-            print(f" - {len(processos)} Processos atualizados.")
-
             db.session.commit()
             
         print("=== TRANSFERÊNCIA CONCLUÍDA COM SUCESSO! ===")
