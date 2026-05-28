@@ -204,8 +204,8 @@
                                         {% if diario.instrutor_assinante.posto_graduacao %}{{ diario.instrutor_assinante.posto_graduacao }} {% endif %}
                                         {{ diario.instrutor_assinante.nome_de_guerra or diario.instrutor_assinante.nome_completo }}
                                     </div>
-                                {% elif diario.disciplina.vinculos %}
-                                    {% set vinculo = diario.disciplina.vinculos[0] %}
+                                {% elif diario.disciplina.associacoes_turmas %}
+                                    {% set vinculo = diario.disciplina.associacoes_turmas[0] %}
                                     <div class="text-dark small lh-sm">
                                         {% if vinculo.instrutor_1 and vinculo.instrutor_1.user %}
                                             <span class="text-muted" style="font-size: 0.7rem; text-transform: uppercase; font-weight: bold;">Vinculado:</span><br>
