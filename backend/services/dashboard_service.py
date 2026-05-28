@@ -17,14 +17,15 @@ class DashboardService:
     def get_dashboard_data(school_id=None, edicao_id=None):
 
         # --- Contagens Básicas ---
-        # Alterado de UserSchool para Turma, pois alunos antigos não têm registro em UserSchool com role='aluno'
+        # Retornado para UserSchool, pois é a forma correta de contar alunos pré-cadastrados e matriculados
         alunos_query = select(func.count(Aluno.id)).join(User, Aluno.user_id == User.id).where(User.is_active == True)
         if school_id:
-            # Pega alunos que estão em turmas da escola
-            alunos_query = alunos_query.outerjoin(Turma, Aluno.turma_id == Turma.id).where(Turma.school_id == school_id)
-        if edicao_id:
-            # Usa o edicao_id da Turma do aluno, pois Aluno.edicao_id pode não estar preenchido para turmas antigas
-            alunos_query = alunos_query.where(Turma.edicao_id == edicao_id)
+            alunos_query = alunos_query.join(UserSchool, UserSchool.user_id == User.id).where(
+                UserSchool.school_id == school_id,
+                UserSchool.role == 'aluno'
+            )
+        # Alunos não são filtrados estritamente por edição aqui no contador global, 
+        # pois alunos antigos/pré-cadastrados podem não ter edicao_id ou turma vinculada ainda.
         total_alunos = db.session.scalar(alunos_query) or 0
 
         # CORREÇÃO: Mesma lógica para instrutores, garantindo que só conta quem tem role 'instrutor'
@@ -53,13 +54,9 @@ class DashboardService:
         # --- PROCESSOS PENDENTES (Para CAL) ---
         processos_pendentes_query = select(ProcessoDisciplina).where(ProcessoDisciplina.status != 'Finalizado')
         if school_id:
-            # Junta com a Turma do aluno para saber a escola, evitando UserSchool que pode não existir
-            processos_pendentes_query = processos_pendentes_query.join(Aluno).outerjoin(Turma, Aluno.turma_id == Turma.id).where(Turma.school_id == school_id)
+            processos_pendentes_query = processos_pendentes_query.join(Aluno).join(User, Aluno.user_id == User.id).join(UserSchool, User.id == UserSchool.user_id).where(UserSchool.school_id == school_id)
         if edicao_id:
-            # E adiciona o filtro da edição, que deve ser a edição do aluno ou da turma
-            processos_pendentes_query = processos_pendentes_query.where(
-                or_(ProcessoDisciplina.edicao_id == edicao_id, Turma.edicao_id == edicao_id)
-            )
+            processos_pendentes_query = processos_pendentes_query.where(ProcessoDisciplina.edicao_id == edicao_id)
         lista_processos_pendentes = db.session.scalars(processos_pendentes_query).all()
 
         # --- Listas Padrão ---
