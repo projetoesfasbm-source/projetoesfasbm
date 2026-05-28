@@ -196,6 +196,32 @@ def adicionar_ciclo():
     else:
         flash("Nome do ciclo inválido.", "danger")
     return redirect(url_for('semana.gerenciar_semanas'))
+@semana_bp.route('/ciclo/renomear/<int:ciclo_id>', methods=['POST'])
+@login_required
+@admin_or_programmer_required
+def renomear_ciclo(ciclo_id):
+    novo_nome = request.form.get('novo_nome')
+    ciclo = db.session.get(Ciclo, ciclo_id)
+    school_id = UserService.get_current_school_id()
+    
+    if not ciclo or (school_id and ciclo.school_id != school_id):
+        flash("Ciclo não encontrado ou não pertence a sua escola.", "danger")
+        return redirect(url_for('semana.gerenciar_semanas'))
+        
+    if novo_nome:
+        exists = db.session.scalar(
+            select(Ciclo).where(Ciclo.nome == novo_nome, Ciclo.school_id == ciclo.school_id, Ciclo.edicao_id == ciclo.edicao_id, Ciclo.id != ciclo_id)
+        )
+        if not exists:
+            ciclo.nome = novo_nome
+            db.session.commit()
+            flash("Ciclo renomeado com sucesso!", "success")
+        else:
+            flash(f"Já existe um ciclo com o nome '{novo_nome}' nesta edição.", "danger")
+    else:
+        flash("Nome do ciclo inválido.", "danger")
+        
+    return redirect(url_for('semana.gerenciar_semanas', ciclo_id=ciclo_id))
 
 @semana_bp.route('/ciclo/deletar/<int:ciclo_id>', methods=['POST'])
 @login_required
