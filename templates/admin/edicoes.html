@@ -134,7 +134,7 @@
                         <select class="form-select npccal-select" id="npccal_type" name="npccal_type" data-fada-target="#fadaRowNovo">
                             <option value="ctsp">CTSP</option>
                             <option value="cbfpm">CBFPM</option>
-                            <option value="cba">CBA</option>
+                            <option value="cspm">CSPM</option>
                         </select>
                     </div>
                     <div class="mb-3">
@@ -185,7 +185,7 @@
                             <select class="form-select npccal-select" id="npccal_type{{ ed.id }}" name="npccal_type" data-fada-target="#fadaRow{{ ed.id }}">
                                 <option value="ctsp" {{ 'selected' if ed.npccal_type == 'ctsp' else '' }}>CTSP</option>
                                 <option value="cbfpm" {{ 'selected' if ed.npccal_type == 'cbfpm' else '' }}>CBFPM</option>
-                                <option value="cba" {{ 'selected' if ed.npccal_type == 'cba' else '' }}>CBA</option>
+                                <option value="cspm" {{ 'selected' if ed.npccal_type == 'cspm' else '' }}>CSPM</option>
                             </select>
                         </div>
                         <div class="mb-3">
@@ -211,7 +211,7 @@
             </div>
         </div>
     </div>
-    
+
     {# Modal Gerenciar Instrutores #}
     <div class="modal fade edicao-instrutores-modal" id="modalInstrutoresEdicao{{ ed.id }}" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
@@ -226,7 +226,7 @@
                     </div>
                     <div class="modal-body">
                         <p class="text-muted small mb-3">Selecione os instrutores que darão aula nesta edição.</p>
-                        
+
                         <div class="list-group">
                             {% for instrutor in todos_instrutores %}
                             <label class="list-group-item d-flex align-items-center">
@@ -276,7 +276,7 @@
                     }
                 }
             };
-            
+
             // Dispara no load
             toggleFada();
             // Dispara na mudança
