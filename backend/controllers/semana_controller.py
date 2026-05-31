@@ -192,7 +192,7 @@ def adicionar_ciclo():
                 db.session.rollback()
                 flash(f"Erro: Já existe um ciclo com o nome '{nome_ciclo}'.", "danger")
         else:
-            flash(f"Já existe um ciclo com o nome '{nome_ciclo}' nesta escola.", "danger")
+            flash(f"Já existe um ciclo com o nome '{nome_ciclo}' nesta edição.", "danger")
     else:
         flash("Nome do ciclo inválido.", "danger")
     return redirect(url_for('semana.gerenciar_semanas'))

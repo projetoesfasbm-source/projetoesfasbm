@@ -13,6 +13,9 @@ if t.TYPE_CHECKING:
 
 class Ciclo(db.Model):
     __tablename__ = 'ciclos'
+    __table_args__ = (
+        db.UniqueConstraint('nome', 'school_id', 'edicao_id', name='uq_ciclo_nome_school_edicao'),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     nome: Mapped[str] = mapped_column(db.String(100), nullable=False)
