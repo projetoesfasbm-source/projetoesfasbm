@@ -104,3 +104,5 @@ WTForms==3.2.1
 zopfli==0.2.3.post1
 pyotp==2.9.0
 qrcode==7.4.2
+gunicorn==22.0.0
+psycopg2-binary==2.9.9
