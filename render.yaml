@@ -8,7 +8,7 @@ services:
   - type: web
     name: sisgem-web
     env: python
-    buildCommand: "pip install -r requirements.txt && flask db upgrade"
+    buildCommand: "pip install -r requirements.txt && FLASK_APP=backend.app flask db upgrade"
     startCommand: "gunicorn 'backend.app:create_app()'"
     plan: starter
     envVars:
