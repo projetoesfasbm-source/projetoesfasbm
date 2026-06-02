@@ -83,7 +83,7 @@ backend/static/uploads/
 *.png
 
 # Exceção: Permite que as imagens fixas do sistema (logos, brasão) subam para o GitHub
-!backend/static/img/
+!static/img/
 
 # Arquivos de desenvolvimento local
 ESTRUTURA_COMPLETA_ATUALIZADA.txt
