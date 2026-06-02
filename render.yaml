@@ -1,9 +1,3 @@
-databases:
-  - name: sisgem-db
-    databaseName: sisgem
-    user: sisgem_user
-    plan: free
-
 services:
   - type: web
     name: sisgen-bm
@@ -12,15 +6,11 @@ services:
     startCommand: "gunicorn 'backend.app:create_app()'"
     plan: starter
     envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: sisgem-db
-          property: connectionString
       - key: PYTHON_VERSION
         value: 3.10.0
       - key: SECRET_KEY
         generateValue: true
-      # As demais chaves (como BREVO_API_KEY) devem ser preenchidas no painel do Render
+      # A variável DATABASE_URL agora deve ser inserida MANUALMENTE no painel do Render!
     disk:
       name: uploads-disk
       mountPath: /opt/render/project/src/static/uploads
