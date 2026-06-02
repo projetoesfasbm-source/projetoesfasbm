@@ -89,7 +89,7 @@ def upgrade():
     sa.Column('id', sa.String(length=36), nullable=False),
     sa.Column('task_type', sa.String(length=50), nullable=False),
     sa.Column('status', sa.String(length=20), nullable=False),
-    sa.Column('payload', sa.Text(length=16777215), nullable=True),
+    sa.Column('payload', sa.Text(), nullable=True),
     sa.Column('meta_data', sa.Text(), nullable=True),
     sa.Column('result_path', sa.String(length=255), nullable=True),
     sa.Column('error_message', sa.Text(), nullable=True),

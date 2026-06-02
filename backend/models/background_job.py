@@ -9,7 +9,7 @@ class BackgroundJob(db.Model):
     status = db.Column(db.String(20), nullable=False, default='pending') # pending, processing, completed, failed
     
     # Payload can be large HTML string for PDF generation, so use Text or MediumText
-    payload = db.Column(db.Text(16777215), nullable=True) # MediumText in MySQL
+    payload = db.Column(db.Text, nullable=True) # Text in PostgreSQL (unlimited)
     
     # Store other metadata as JSON if needed (like school_id, orientacao)
     meta_data = db.Column(db.Text, nullable=True) 
