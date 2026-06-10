@@ -10,6 +10,8 @@ services:
         value: 3.10.0
       - key: SECRET_KEY
         generateValue: true
+      - key: TZ
+        value: America/Sao_Paulo
       # A variável DATABASE_URL agora deve ser inserida MANUALMENTE no painel do Render!
     disk:
       name: uploads-disk
