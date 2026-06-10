@@ -338,3 +338,121 @@ def voltar_admin():
             return redirect(url_for('super_admin.dashboard'))
         
     return redirect(url_for('auth.logout'))
+
+# =========================================================================
+# LÓGICA DE TRANSFERÊNCIA DE ALUNOS
+# =========================================================================
+
+@super_admin_bp.route('/buscar-aluno-transferencia', methods=['GET'])
+@login_required
+@super_admin_required
+def buscar_aluno_transferencia():
+    from flask import jsonify
+    from sqlalchemy import or_, select
+    from ..models.aluno import Aluno
+    from ..models.turma import Turma
+    from ..models.school import School
+    from ..models.user import User
+
+    termo = request.args.get('q', '').strip()
+    
+    if len(termo) < 3:
+        return jsonify({"success": False, "message": "Digite pelo menos 3 caracteres para buscar."})
+
+    try:
+        # Busca o Aluno verificando correspondência no Nome, Matrícula ou Nome de Guerra
+        query = select(Aluno).join(User).where(
+            or_(
+                User.nome_completo.ilike(f"%{termo}%"),
+                User.matricula.ilike(f"%{termo}%"),
+                User.nome_de_guerra.ilike(f"%{termo}%")
+            )
+        )
+        alunos_encontrados = db.session.scalars(query).all()
+
+        resultados = []
+        for aluno in alunos_encontrados:
+            escola_atual = "Sem Escola"
+            turma_atual = "Sem Turma"
+            
+            if aluno.turma:
+                turma_atual = aluno.turma.nome
+                escola_obj = db.session.get(School, aluno.turma.school_id)
+                escola_atual = escola_obj.nome if escola_obj else "Desconhecida"
+
+            resultados.append({
+                "aluno_id": aluno.id,
+                "nome": aluno.user.nome_completo or aluno.user.username,
+                "matricula": aluno.user.matricula,
+                "turma_atual": turma_atual,
+                "escola_atual": escola_atual
+            })
+
+        # Busca todas as escolas para preencher o formulário de destino
+        escolas_db = db.session.scalars(select(School).order_by(School.nome)).all()
+        escolas_disponiveis = [{"id": e.id, "nome": e.nome} for e in escolas_db]
+
+        return jsonify({
+            "success": True,
+            "alunos": resultados,
+            "escolas": escolas_disponiveis
+        })
+
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Erro na busca: {str(e)}"})
+
+
+@super_admin_bp.route('/efetivar-transferencia', methods=['POST'])
+@login_required
+@super_admin_required
+def efetivar_transferencia():
+    aluno_id = request.form.get('aluno_id')
+    nova_escola_id = request.form.get('nova_escola_id')
+
+    if not aluno_id or not nova_escola_id:
+        flash("Dados incompletos para efetivar a transferência.", "danger")
+        return redirect(url_for('super_admin.dashboard'))
+
+    try:
+        from ..models.aluno import Aluno
+        from ..models.school import School
+        
+        aluno = db.session.get(Aluno, int(aluno_id))
+        nova_escola = db.session.get(School, int(nova_escola_id))
+
+        if not aluno or not nova_escola:
+            flash("Aluno ou Escola não encontrados.", "danger")
+            return redirect(url_for('super_admin.dashboard'))
+
+        user = aluno.user
+
+        # 1. Remover acessos antigos de todas as outras escolas
+        vinculos_antigos = db.session.execute(
+            select(UserSchool).where(UserSchool.user_id == user.id, UserSchool.school_id != nova_escola.id)
+        ).scalars().all()
+        
+        for v in vinculos_antigos:
+            db.session.delete(v)
+
+        # 2. Adicionar o acesso global para a nova escola (se já não existir)
+        vinculo_novo = db.session.execute(
+            select(UserSchool).where(UserSchool.user_id == user.id, UserSchool.school_id == nova_escola.id)
+        ).scalar_one_or_none()
+
+        if not vinculo_novo:
+            novo_link = UserSchool(user_id=user.id, school_id=nova_escola.id, role='aluno')
+            db.session.add(novo_link)
+
+        # 3. LIMPEZA DOS VÍNCULOS ACADÊMICOS
+        # Aqui está a correção: desvinculamos o aluno tanto da Turma quanto da Edição antigas.
+        aluno.turma_id = None
+        aluno.edicao_id = None
+
+        db.session.commit()
+        flash(f"Transferência concluída com sucesso! O aluno {user.nome_completo or user.matricula} foi movido para a {nova_escola.nome}. O administrador da escola deverá alocá-lo em uma Edição e Turma local.", "success")
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Erro ao efetivar transferência: {str(e)}", "danger")
+
+    return redirect(url_for('super_admin.dashboard'))

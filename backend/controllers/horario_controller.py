@@ -519,6 +519,9 @@ def proximas_aulas_admin():
         flash("Nenhuma escola selecionada.", "warning")
         return redirect(url_for('main.dashboard'))
 
+    # CORREÇÃO: Pegar a edição ativa ANTES da query de ciclos para não dar UnboundLocalError
+    active_edicao = session.get('active_edicao_id')
+
     # Para buscar o histórico, precisamos obrigatoriamente de um ciclo.
     ciclos = db.session.scalars(
         select(Ciclo).where(
@@ -552,7 +555,6 @@ def proximas_aulas_admin():
             })
 
     # 2. Buscar todas as Turmas da Escola para o Select
-    active_edicao = session.get('active_edicao_id')
     turmas_banco = db.session.scalars(
         select(Turma)
         .where(

@@ -8,7 +8,6 @@
     <p>Bem-vindo ao painel de controle geral do sistema.</p>
 
     <div class="row">
-        <!-- Card para Visualizar como Admin de Escola -->
         <div class="col-md-12 mb-4">
             <div class="card">
                 <div class="card-header bg-primary text-white">
@@ -28,6 +27,25 @@
             </div>
         </div>
     </div>
+
+    {# --- NOVO: BOTAO E CARD DE TRANSFERENCIA DE ALUNOS --- #}
+    {% if current_user.role == 'super_admin' %}
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card border-info">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="card-title text-info mb-1"><i class="fas fa-exchange-alt me-2"></i>Transferência Global de Alunos</h5>
+                        <p class="card-text text-muted mb-0">Mova um aluno de uma escola para outra levando todo o seu histórico (notas, faltas, processos, etc).</p>
+                    </div>
+                    <button type="button" class="btn btn-info text-white shadow-sm" data-bs-toggle="modal" data-bs-target="#modalTransferenciaAluno">
+                        Iniciar Transferência
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 
     {# --- Formulário de Criação de Escola --- #}
     <div class="card mb-4">
@@ -180,6 +198,79 @@
 
 {% endfor %}
 
+{# --- NOVO MODAL DE TRANSFERENCIA --- #}
+{% if current_user.role == 'super_admin' %}
+<div class="modal fade" id="modalTransferenciaAluno" tabindex="-1" aria-labelledby="modalTransferenciaAlunoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="modalTransferenciaAlunoLabel"><i class="fas fa-exchange-alt me-2"></i>Transferir Aluno de Escola</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-4">
+                    <label for="inputBuscaAluno" class="form-label">Buscar Aluno (Nome, Matrícula ou Nome de Guerra)</label>
+                    <div class="input-group">
+                        <input type="text" id="inputBuscaAluno" class="form-control" placeholder="Digite pelo menos 3 caracteres...">
+                        <button class="btn btn-outline-secondary" type="button" id="btnBuscarAluno">Buscar</button>
+                    </div>
+                    <div id="buscaFeedback" class="form-text text-danger d-none"></div>
+                </div>
+
+                <div id="resultadosBuscaContainer" class="d-none">
+                    <h6>Resultados da Busca:</h6>
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Matrícula</th>
+                                    <th>Nome</th>
+                                    <th>Escola / Turma Atual</th>
+                                    <th>Ação</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabelaResultadosBusca">
+                                </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="formTransferenciaContainer" class="d-none mt-4 p-3 border rounded bg-light">
+                    <h6 class="text-info mb-3">Configurar Destino da Transferência</h6>
+                    
+                    <form id="formEfetivarTransferencia" method="POST" action="{{ url_for('super_admin.efetivar_transferencia') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <input type="hidden" id="alunoTransferenciaId" name="aluno_id">
+                        
+                        <div class="mb-3">
+                            <label class="form-label"><strong>Aluno Selecionado:</strong></label>
+                            <p id="alunoTransferenciaNome" class="mb-0 text-success fw-bold"></p>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="selectEscolaDestino" class="form-label">Transferir para qual Escola?</label>
+                            <select id="selectEscolaDestino" name="nova_escola_id" class="form-select" required>
+                                <option value="">Selecione a nova escola do aluno...</option>
+                                </select>
+                        </div>
+                        
+                        <div class="alert alert-warning mb-3">
+                            <i class="fas fa-exclamation-triangle"></i> <strong>Atenção:</strong> 
+                            A transferência desvinculará o aluno da turma atual. O histórico de elogios e processos será movido automaticamente. Após a transferência, o administrador da escola de destino deverá colocar o aluno na turma correta.
+                        </div>
+                        
+                        <div class="text-end mt-4">
+                            <button type="button" class="btn btn-secondary me-2" onclick="cancelarTransferencia()">Voltar para a Busca</button>
+                            <button type="submit" class="btn btn-info text-white" id="btnBotaoFinalTransferir" onclick="this.innerHTML='<i class=\'fas fa-spinner fa-spin\'></i> Transferindo...'; this.disabled=true; this.form.submit();">Efetivar Transferência</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 {# --- SCRIPT DE CORREÇÃO DO MODAL E INTEGRAÇÃO SELECT2 --- #}
 <script>
     document.addEventListener("DOMContentLoaded", function() {
@@ -197,6 +288,112 @@
                 allowClear: true
             });
         }
+        
+        // --- LOGICA DO MODAL DE TRANSFERENCIA ---
+        const btnBuscar = document.getElementById('btnBuscarAluno');
+        const inputBusca = document.getElementById('inputBuscaAluno');
+        const feedback = document.getElementById('buscaFeedback');
+        const containerResultados = document.getElementById('resultadosBuscaContainer');
+        const tbodyResultados = document.getElementById('tabelaResultadosBusca');
+        const formContainer = document.getElementById('formTransferenciaContainer');
+        const selectEscola = document.getElementById('selectEscolaDestino');
+        
+        if(btnBuscar) {
+            btnBuscar.addEventListener('click', realizarBusca);
+        }
+        
+        if(inputBusca) {
+            inputBusca.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    realizarBusca();
+                }
+            });
+        }
+
+        function realizarBusca() {
+            const termo = inputBusca.value.trim();
+            if (termo.length < 3) {
+                feedback.textContent = 'Digite pelo menos 3 caracteres para buscar.';
+                feedback.classList.remove('d-none');
+                return;
+            }
+            
+            feedback.classList.add('d-none');
+            btnBuscar.disabled = true;
+            btnBuscar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Buscando...';
+            
+            fetch(`{{ url_for("super_admin.buscar_aluno_transferencia") }}?q=${encodeURIComponent(termo)}`)
+                .then(response => response.json())
+                .then(data => {
+                    btnBuscar.disabled = false;
+                    btnBuscar.innerHTML = 'Buscar';
+                    
+                    if (!data.success) {
+                        feedback.textContent = data.message || 'Erro ao realizar a busca.';
+                        feedback.classList.remove('d-none');
+                        return;
+                    }
+                    
+                    tbodyResultados.innerHTML = '';
+                    
+                    if (data.alunos.length === 0) {
+                        tbodyResultados.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">Nenhum aluno encontrado com esses dados.</td></tr>';
+                    } else {
+                        data.alunos.forEach(aluno => {
+                            const tr = document.createElement('tr');
+                            tr.innerHTML = `
+                                <td>${aluno.matricula}</td>
+                                <td>${aluno.nome}</td>
+                                <td>
+                                    <span class="badge bg-secondary mb-1">${aluno.escola_atual}</span><br>
+                                    <small>${aluno.turma_atual}</small>
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-info" onclick="selecionarAluno('${aluno.aluno_id}', '${aluno.nome}', '${aluno.matricula}', '${aluno.escola_atual}')">
+                                        Selecionar
+                                    </button>
+                                </td>
+                            `;
+                            tbodyResultados.appendChild(tr);
+                        });
+                    }
+                    
+                    // Preenche escolas
+                    selectEscola.innerHTML = '<option value="">Selecione a nova escola do aluno...</option>';
+                    data.escolas.forEach(escola => {
+                        const option = document.createElement('option');
+                        option.value = escola.id;
+                        option.textContent = escola.nome;
+                        selectEscola.appendChild(option);
+                    });
+                    
+                    containerResultados.classList.remove('d-none');
+                    formContainer.classList.add('d-none');
+                })
+                .catch(error => {
+                    console.error('Erro:', error);
+                    btnBuscar.disabled = false;
+                    btnBuscar.textContent = 'Buscar';
+                    feedback.textContent = 'Erro de comunicação com o servidor. Tente novamente.';
+                    feedback.classList.remove('d-none');
+                });
+        }
     });
+
+    // Funções globais chamadas pelos botões HTML
+    window.selecionarAluno = function(id, nome, matricula, escolaAtual) {
+        document.getElementById('resultadosBuscaContainer').classList.add('d-none');
+        document.getElementById('formTransferenciaContainer').classList.remove('d-none');
+        
+        document.getElementById('alunoTransferenciaId').value = id;
+        document.getElementById('alunoTransferenciaNome').innerHTML = `${nome} <br><small class="text-muted">Matrícula: ${matricula} | Origem: ${escolaAtual}</small>`;
+    };
+
+    window.cancelarTransferencia = function() {
+        document.getElementById('formTransferenciaContainer').classList.add('d-none');
+        document.getElementById('resultadosBuscaContainer').classList.remove('d-none');
+        document.getElementById('alunoTransferenciaId').value = '';
+    };
 </script>
 {% endblock %}

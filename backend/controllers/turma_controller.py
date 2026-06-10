@@ -4,10 +4,10 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_required, current_user
 from sqlalchemy import select, or_
 from flask_wtf import FlaskForm
-from wtforms import StringField, SubmitField, SelectMultipleField, SelectField, DateField # <--- DateField Adicionado
+from wtforms import StringField, SubmitField, SelectMultipleField, SelectField, DateField
 from wtforms.validators import DataRequired, Length, Optional
 from wtforms.widgets import CheckboxInput, ListWidget
-from datetime import datetime # Import necessário para manipulação se preciso
+from datetime import datetime
 
 from ..models.database import db
 from ..models.turma import Turma, TurmaStatus
@@ -140,18 +140,30 @@ def editar_turma(turma_id):
     form.alunos_ids.choices = [(a.id, f"{a.user.nome_completo}") for a in alunos]
     
     if form.validate_on_submit():
-        # form.data já inclui data_formatura se estiver no form
-        success, message = TurmaService.update_turma(turma_id, form.data)
+        # --- CORREÇÃO DEFENSIVA AQUI ---
+        dados_para_salvar = form.data.copy()
+        
+        # Evita que o TurmaService tente salvar um dado que o banco não suporta
+        if not hasattr(turma, 'data_formatura') and 'data_formatura' in dados_para_salvar:
+            dados_para_salvar.pop('data_formatura')
+
+        success, message = TurmaService.update_turma(turma_id, dados_para_salvar)
+        # -------------------------------
+        
         if success:
             flash(message, 'success')
             return redirect(url_for('turma.listar_turmas'))
         else:
             flash(message, 'danger')
+            
     if request.method == 'GET':
         form.alunos_ids.data = [a.id for a in turma.alunos]
-        # Força o carregamento da data no formato correto se não vier automático
-        if turma.data_formatura:
+        
+        # --- CORREÇÃO DEFENSIVA AQUI ---
+        # Força o carregamento da data no formato correto apenas se o atributo existir
+        if hasattr(turma, 'data_formatura') and getattr(turma, 'data_formatura'):
             form.data_formatura.data = turma.data_formatura
+        # -------------------------------
 
     return render_template('editar_turma.html', form=form, turma=turma)
 

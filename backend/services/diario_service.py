@@ -457,3 +457,57 @@ class DiarioService:
         except Exception as e:
             db.session.rollback()
             return False, f"Erro ao devolver diário: {str(e)}"
+
+    @staticmethod
+    def forcar_criacao_diario_manual(school_id, admin_id, turma_id, disciplina_id, data_aula_str, periodos):
+        """
+        MODO MASTER: Força a criação de diários ignorando qualquer regra de horário automático.
+        Isso cria o diário em branco para que ele entre no fluxo do aluno.
+        """
+        try:
+            if isinstance(data_aula_str, str):
+                data_aula = datetime.strptime(data_aula_str, '%Y-%m-%d').date()
+            else:
+                data_aula = data_aula_str
+                
+            criados = 0
+            ignorados = 0
+
+            for periodo in periodos:
+                # Verifica se JÁ EXISTE um diário para não duplicar acidentalmente
+                existe = db.session.scalar(
+                    select(DiarioClasse).where(
+                        DiarioClasse.data_aula == data_aula,
+                        DiarioClasse.turma_id == int(turma_id),
+                        DiarioClasse.disciplina_id == int(disciplina_id),
+                        DiarioClasse.periodo == int(periodo),
+                        DiarioClasse.is_deleted == False
+                    )
+                )
+
+                if existe:
+                    ignorados += 1
+                    continue
+
+                # CORREÇÃO: responsavel_id é None para que o aluno (Chefe de Turma) assuma a autoria ao preencher
+                novo_diario = DiarioClasse(
+                    data_aula=data_aula,
+                    periodo=int(periodo),
+                    turma_id=int(turma_id),
+                    disciplina_id=int(disciplina_id),
+                    responsavel_id=None, 
+                    status='pendente'
+                )
+                db.session.add(novo_diario)
+                criados += 1
+
+            db.session.commit()
+            
+            if criados > 0:
+                return True, f"SUCESSO: {criados} período(s) criado(s) manualmente. ({ignorados} ignorados por já existirem)."
+            else:
+                return False, "Nenhum diário criado. Provavelmente eles já existem para esta data e períodos."
+
+        except Exception as e:
+            db.session.rollback()
+            return False, f"ERRO CRÍTICO ao forçar criação: {str(e)}"

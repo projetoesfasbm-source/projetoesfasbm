@@ -160,6 +160,12 @@ class UserService:
                 # CORREÇÃO DO ERRO 'opm required': Passamos um valor padrão '-'
                 if role == 'aluno':
                     db.session.add(Aluno(user_id=user.id, opm='-', edicao_id=edicao_id))
+            else:
+                # CORREÇÃO DA TRANSFERÊNCIA: Garante a recriação da ficha de aluno caso tenha sido excluída em outra escola
+                if role == 'aluno':
+                    aluno_existente = db.session.scalar(select(Aluno).filter_by(user_id=user.id))
+                    if not aluno_existente:
+                        db.session.add(Aluno(user_id=user.id, opm='-', edicao_id=edicao_id))
 
             # 2. Garante o Vínculo SOMENTE com a Escola Solicitada
             # Se ele já existir em outra escola, isso não afeta nada aqui.
@@ -198,6 +204,13 @@ class UserService:
                     UserService._ensure_user_school(user.id, school_id, role)
                     if role == 'instrutor':
                         UserService._ensure_instrutor_profile(user.id, school_id)
+                        
+                    # CORREÇÃO DA TRANSFERÊNCIA: Garante a recriação da ficha de aluno caso tenha sido excluída
+                    if role == 'aluno':
+                        aluno_existente = db.session.scalar(select(Aluno).filter_by(user_id=user.id))
+                        if not aluno_existente:
+                            db.session.add(Aluno(user_id=user.id, opm='-', edicao_id=edicao_id))
+                            
                     existentes += 1
                 else:
                     # Usuário novo: Cria e vincula

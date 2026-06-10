@@ -119,7 +119,7 @@
 
 {% for diario in diarios %}
 {% if diario.status == 'pendente' %}
-<div class="modal fade" id="modalDevolver-{{ diario.id }}" tabindex="-1" aria-hidden="true" style="z-index: 9999;">
+<div class="modal fade" id="modalDevolver-{{ diario.id }}" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content shadow-lg">
       <form method="POST" action="{{ url_for('diario.devolver_aluno', diario_id=diario.id) }}">
@@ -145,5 +145,14 @@
 </div>
 {% endif %}
 {% endfor %}
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const modals = document.querySelectorAll('.modal');
+        modals.forEach(modal => {
+            document.body.appendChild(modal);
+        });
+    });
+</script>
 
 {% endblock %}

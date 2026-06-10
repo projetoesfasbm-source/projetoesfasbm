@@ -100,6 +100,13 @@
             <p class="text-muted mb-0">Auditoria, Edição, Devolução e Impressão.</p>
         </div>
         <div class="d-flex align-items-center gap-2 bg-white p-2 rounded shadow-sm border">
+            
+            <!-- BOTAO DO MODO MASTER: FORÇAR CRIAÇÃO -->
+            <button class="btn btn-dark btn-sm fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalCriacaoForcada">
+                <i class="fas fa-hammer me-1"></i> Forçar Criação
+            </button>
+            <div class="vr mx-1"></div>
+
             <a href="{{ url_for('diario.listar_lixeira') }}" class="btn btn-outline-danger btn-sm fw-bold">
                 <i class="fas fa-trash-restore me-1"></i> Lixeira
             </a>
@@ -390,6 +397,72 @@
     </div>
 </div>
 
+<!-- Modal de Criação Forçada (God Mode) -->
+<div class="modal fade" id="modalCriacaoForcada" tabindex="-1" aria-hidden="true" style="z-index: 1060;">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-dark shadow-lg">
+            <form action="{{ url_for('admin_escola.forcar_criacao_diario') }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title fw-bold"><i class="fas fa-tools me-2"></i>Criação Manual de Diário</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                
+                <div class="modal-body bg-light text-dark">
+                    <div class="alert alert-secondary border-dark small">
+                        <i class="fas fa-info-circle me-1"></i> Use esta ferramenta apenas se a automação falhou. Isso forçará a criação de diários em branco <strong>imediatamente</strong> com status Pendente, inserindo-os no fluxo do aluno/instrutor.
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Data da Aula</label>
+                        <input type="date" name="data_aula" class="form-control" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Turma</label>
+                        <select name="turma_id" class="form-select" required>
+                            <option value="">-- Selecione a Turma --</option>
+                            {% for t in turmas %}
+                            <option value="{{ t.id }}">{{ t.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Disciplina</label>
+                        <select name="disciplina_id" class="form-select" required>
+                            <option value="">-- Selecione a Disciplina --</option>
+                            {% for d in disciplinas %}
+                            <option value="{{ d.id }}">{{ d.materia }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold d-block">Períodos que devem ser gerados:</label>
+                        <div class="d-flex flex-wrap gap-3 p-3 bg-white border rounded">
+                            {% for i in range(1, 16) %}
+                            <div class="form-check">
+                                <input class="form-check-input border-dark" type="checkbox" name="periodos" value="{{ i }}" id="periodo_{{ i }}">
+                                <label class="form-check-label fw-bold" for="periodo_{{ i }}">{{ i }}º Período</label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="modal-footer bg-dark">
+                    <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary fw-bold">
+                        <i class="fas fa-bolt me-1"></i> Gerar Diários
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
     const todosAlunosData = {{ todos_alunos|tojson if todos_alunos else '[]' }};
     let modalInstance = null;
@@ -398,7 +471,8 @@
     let modalExcluirInstance = null;
 
     document.addEventListener('DOMContentLoaded', function() {
-        const modais = ['modalDevolucao', 'modalFaltasDia', 'modalExcluirDiario'];
+        // Adicionando o modalCriacaoForcada na lista para que o z-index funcione corretamente
+        const modais = ['modalDevolucao', 'modalFaltasDia', 'modalExcluirDiario', 'modalCriacaoForcada'];
         modais.forEach(id => {
             const el = document.getElementById(id);
             if (el) document.body.appendChild(el);

@@ -46,7 +46,7 @@
                 </div>
             </form>
         </div>
-        
+
         <div class="col-md-7 col-12 d-flex align-items-center justify-content-md-end gap-2 flex-wrap">
             <span class="fw-bold text-muted small me-2"><i class="fas fa-filter me-1"></i>Turmas:</span>
             {% for turma in turmas %}
@@ -57,7 +57,7 @@
             {% else %}
                 <span class="text-muted small">Nenhuma turma</span>
             {% endfor %}
-            
+
             {% if turma_filtrada or search_term %}
                 <a href="{{ url_for('aluno.listar_alunos') }}" class="btn btn-sm btn-outline-danger ms-2" title="Limpar Filtros"><i class="fas fa-times"></i></a>
             {% endif %}
@@ -110,20 +110,20 @@
                                 <a href="{{ url_for('historico.historico_funcional', aluno_id=aluno.id) }}" class="btn btn-sm btn-outline-primary mb-1" title="Ver Histórico">
                                     <i class="fas fa-clipboard-list me-1"></i>Histórico
                                 </a>
-                                
+
                                 {% if current_user.is_sens or current_user.is_admin_escola %}
                                     <a href="{{ url_for('aluno.editar_aluno', aluno_id=aluno.id) }}" class="btn btn-sm btn-outline-warning mb-1" title="Editar">
-                                        <i class="fas fa-edit"></i>
+                                        <i class="fas fa-edit"></i>Editar
                                     </a>
                                     <form method="POST" action="{{ url_for('aluno.excluir_aluno', aluno_id=aluno.id) }}" onsubmit="return confirm('Tem certeza que deseja excluir este aluno permanentemente?');" style="display: inline;">
                                         {{ delete_form.hidden_tag() }}
-                                        <button type="submit" class="btn btn-sm btn-outline-danger mb-1" title="Excluir"><i class="fas fa-trash"></i></button>
+                                        <button type="submit" class="btn btn-sm btn-outline-danger mb-1" title="Excluir"><i class="fas fa-trash"></i>Excluir</button>
                                     </form>
                                 {% endif %}
 
                                 {% if dec_mode_active and aluno.user %}
-                                    <a href="{{ url_for('super_admin.logar_como', user_id=aluno.user.id) }}" 
-                                       class="btn btn-sm btn-dark mb-1 ms-1" 
+                                    <a href="{{ url_for('super_admin.logar_como', user_id=aluno.user.id) }}"
+                                       class="btn btn-sm btn-dark mb-1 ms-1"
                                        title="Logar como este aluno"
                                        onclick="return confirm('Assumir a identidade de {{ aluno.user.nome_completo or aluno.user.username }}?');">
                                         <i class="fas fa-sign-in-alt"></i> Logar

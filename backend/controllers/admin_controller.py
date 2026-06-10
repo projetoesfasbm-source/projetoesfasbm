@@ -397,6 +397,40 @@ def excluir_diario(diario_id):
         
     return redirect(url_for('admin_escola.espelho_diarios'))
 
+@admin_escola_bp.route('/forcar-criacao-diario', methods=['POST'])
+@login_required
+@sens_permission_required
+def forcar_criacao_diario():
+    """
+    MODO MASTER: Força a criação de um diário para que apareça para o Aluno e/ou Instrutor
+    """
+    school_id = UserService.get_current_school_id()
+    admin_id = current_user.id
+    
+    turma_id = request.form.get('turma_id')
+    disciplina_id = request.form.get('disciplina_id')
+    data_aula = request.form.get('data_aula')
+    periodos = request.form.getlist('periodos')
+
+    if not all([turma_id, disciplina_id, data_aula, periodos]):
+        flash("Preencha todos os campos e selecione ao menos um período para forçar a criação.", "warning")
+        return redirect(url_for('admin_escola.espelho_diarios'))
+
+    ok, msg = DiarioService.forcar_criacao_diario_manual(
+        school_id=school_id,
+        admin_id=admin_id,
+        turma_id=turma_id,
+        disciplina_id=disciplina_id,
+        data_aula_str=data_aula,
+        periodos=periodos
+    )
+
+    if ok:
+        flash(msg, "success")
+    else:
+        flash(msg, "danger")
+
+    return redirect(url_for('admin_escola.espelho_diarios'))
 
 @admin_escola_bp.route('/imprimir-relatorio')
 @login_required

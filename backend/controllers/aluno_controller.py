@@ -70,11 +70,7 @@ def listar_alunos():
         flash('Nenhuma escola associada ou selecionada.', 'danger')
         return redirect(url_for('main.dashboard'))
 
-    # 2. QUERY BLINDADA (Substitui AlunoService.get_all_alunos para garantir visibilidade)
-    # Explicação: Fazemos JOIN com UserSchool para garantir que o aluno pertence à escola.
-    # Usamos LEFT JOIN com Turma para que alunos "sem turma" não sumam da lista.
-
-    # AJUSTE PARA EVITAR AMBIGUIDADE
+    # 2. QUERY BLINDADA
     query = db.session.query(Aluno).select_from(Aluno).join(User).join(
         UserSchool, Aluno.user_id == UserSchool.user_id
     ).outerjoin(Turma).options(
@@ -85,11 +81,16 @@ def listar_alunos():
         UserSchool.role == 'aluno'
     )
 
-    # 3. Filtrar pela Edição Ativa (se selecionada)
+    # 3. Filtrar pela Edição Ativa + MOSTRAR OS TRANSFERIDOS (Órfãos da Escola)
     active_edicao_id = session.get('active_edicao_id')
     if active_edicao_id:
-        # Filtra pela edição da Turma do aluno, para mostrar apenas alunos matriculados na edição
-        query = query.filter(Turma.edicao_id == active_edicao_id)
+        query = query.filter(
+            or_(
+                Turma.edicao_id == active_edicao_id,
+                Aluno.edicao_id == None,
+                Aluno.turma_id == None
+            )
+        )
 
     # Filtros
     if search_term:
@@ -103,9 +104,10 @@ def listar_alunos():
         )
 
     if turma_filtrada:
-        # Se o filtro for numérico (ID), filtra por ID. Se for texto, tenta filtrar por nome.
         if turma_filtrada.isdigit():
              query = query.filter(Aluno.turma_id == int(turma_filtrada))
+        elif turma_filtrada.lower() == 'sem turma':
+             query = query.filter(Aluno.turma_id == None)
         else:
              query = query.filter(Turma.nome == turma_filtrada)
 
@@ -134,7 +136,7 @@ def editar_aluno(aluno_id):
         flash('Nenhuma escola associada.', 'danger')
         return redirect(url_for('aluno.listar_alunos'))
 
-    # Busca segura garantindo escola - AJUSTE PARA EVITAR AMBIGUIDADE
+    # Busca segura garantindo escola
     aluno = db.session.query(Aluno).select_from(Aluno).join(User).join(
         UserSchool, Aluno.user_id == UserSchool.user_id
     ).filter(
@@ -203,13 +205,20 @@ def editar_aluno(aluno_id):
             else:
                 aluno.user.posto_graduacao = grad
 
-            # Aluno Info
+            # Aluno Info (INCLUINDO VÍNCULO DA EDIÇÃO APÓS A TRANSFERÊNCIA)
             aluno.opm = form.opm.data
             t_id = form.turma_id.data
-            aluno.turma_id = t_id if t_id and t_id != 0 else None
+            
+            if t_id and t_id != 0:
+                aluno.turma_id = t_id
+                # Puxa o edicao_id da turma e atribui ao aluno para finalizar a transferência
+                turma_selecionada = db.session.get(Turma, t_id)
+                if turma_selecionada:
+                    aluno.edicao_id = turma_selecionada.edicao_id
+            else:
+                aluno.turma_id = None
 
             if form.funcao_atual.data:
-                 # Se houver lógica específica para função, implemente aqui ou chame service
                  pass
 
             db.session.commit()
@@ -242,7 +251,6 @@ def excluir_aluno(aluno_id):
              return redirect(url_for('aluno.listar_alunos'))
 
         try:
-            # AJUSTE PARA EVITAR AMBIGUIDADE (ON CLAUSE EXPLICITA)
             aluno = db.session.query(Aluno).select_from(Aluno).join(
                 UserSchool, Aluno.user_id == UserSchool.user_id
             ).filter(
@@ -251,15 +259,9 @@ def excluir_aluno(aluno_id):
             ).first()
 
             if aluno:
-                # Armazena o ID do usuário antes de remover o perfil do aluno
                 current_user_id = aluno.user_id
-
-                # Remove Aluno Profile
                 db.session.delete(aluno)
-
-                # Remove Vínculo UserSchool usando o ID armazenado
                 db.session.query(UserSchool).filter_by(user_id=current_user_id, school_id=school_id).delete()
-
                 db.session.commit()
                 flash('Aluno removido da escola.', 'success')
             else:
