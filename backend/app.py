@@ -240,6 +240,14 @@ def register_handlers_and_processors(app):
 
     @app.before_request
     def load_globals():
+        from flask import request
+        
+        # --- FILTRO DE DESEMPENHO EM PRODUÇÃO ---
+        # Evita consultas pesadas ao banco de dados para assets visuais e PWA
+        if request.path.startswith('/static/') or request.path in ['/sw.js', '/manifest.json', '/favicon.ico']:
+            return
+        # -----------------------------------------
+
         from backend.services.site_config_service import SiteConfigService
 
         if 'site_config' not in g:
@@ -271,7 +279,7 @@ def register_handlers_and_processors(app):
             if edicao_id:
                 from backend.models.edicao import Edicao
                 edicao = db.session.get(Edicao, int(edicao_id))
-                # Valida que a edição pertence à escola ativa
+                # Valida que a edição belongs à escola ativa
                 if edicao and g.active_school and edicao.school_id == g.active_school.id:
                     g.active_edicao = edicao
                 else:
@@ -284,7 +292,6 @@ def register_handlers_and_processors(app):
                 if latest_edicao:
                     g.active_edicao = latest_edicao
                     session['active_edicao_id'] = latest_edicao.id
-
 
     @app.context_processor
     def inject_globals_to_template():
@@ -379,8 +386,6 @@ def register_cli_commands(app):
                 db.session.add(user)
             db.session.commit()
             print("Comando executado com sucesso!")
-
-
 
     @app.cli.command("clear-data")
     @click.option('--app', is_flag=True, help='Limpa apenas os dados da aplicação (alunos, turmas, etc).')
