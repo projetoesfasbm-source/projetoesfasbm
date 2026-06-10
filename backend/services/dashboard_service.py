@@ -39,22 +39,25 @@ class DashboardService:
         total_disciplinas = db.session.scalar(disciplinas_query) or 0
 
         # --- AULAS PENDENTES (Para SENS) ---
-        aulas_pendentes_query = select(Horario).where(Horario.status == 'pendente')
+        aulas_pendentes_query = select(func.count(Horario.id)).where(Horario.status == 'pendente')
         if school_id:
             aulas_pendentes_query = aulas_pendentes_query.join(Turma, Horario.pelotao == Turma.nome).where(Turma.school_id == school_id)
 
-        lista_aulas_pendentes = db.session.scalars(aulas_pendentes_query).all()
-        total_aulas_pendentes = len(lista_aulas_pendentes)
+        total_aulas_pendentes = db.session.scalar(aulas_pendentes_query) or 0
+        lista_aulas_pendentes = [] # Array vazio para não quebrar referências passadas
 
         # --- PROCESSOS PENDENTES (Para CAL) ---
-        processos_pendentes_query = select(ProcessoDisciplina).where(ProcessoDisciplina.status != 'Finalizado')
+        processos_pendentes_query = select(func.count(ProcessoDisciplina.id)).where(ProcessoDisciplina.status != 'Finalizado')
         if school_id or edicao_id:
             processos_pendentes_query = processos_pendentes_query.join(ProcessoDisciplina.aluno).join(Turma, Aluno.turma_id == Turma.id)
             if school_id:
                 processos_pendentes_query = processos_pendentes_query.where(Turma.school_id == school_id)
             if edicao_id:
                 processos_pendentes_query = processos_pendentes_query.where(Turma.edicao_id == edicao_id)
-        lista_processos_pendentes = db.session.scalars(processos_pendentes_query).all()
+        
+        # Guardamos a contagem para uso futuro caso necessário
+        total_processos_pendentes = db.session.scalar(processos_pendentes_query) or 0
+        lista_processos_pendentes = [] # Array vazio para não estourar memória
 
         # --- Listas Padrão ---
         usuarios_recentes_query = select(User).join(UserSchool).where(User.is_active == True).order_by(User.id.desc()).limit(5)
