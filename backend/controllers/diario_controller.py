@@ -21,19 +21,23 @@ def listar_pendentes():
     status = request.args.get('status', 'pendente')
     turma_id = request.args.get('turma_id', type=int)
     disciplina_id = request.args.get('disciplina_id', type=int)
+    page = request.args.get('page', 1, type=int)
     
-    diarios_agrupados = DiarioService.get_diarios_agrupados(
+    diarios_agrupados, pagination = DiarioService.get_diarios_agrupados(
         school_id=school_id,
         user_id=current_user.id, 
         turma_id=turma_id,
         disciplina_id=disciplina_id,
-        status=status
+        status=status,
+        page=page,
+        per_page=30
     )
     
     turmas, disciplinas = DiarioService.get_filtros_disponiveis(school_id, current_user.id, turma_id)
     
     return render_template('diario/instrutor_listar.html', 
                            diarios=diarios_agrupados, 
+                           pagination=pagination,
                            turmas=turmas,
                            disciplinas=disciplinas,
                            sel_status=status,

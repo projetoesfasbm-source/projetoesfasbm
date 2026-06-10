@@ -793,8 +793,8 @@ class HorarioService:
             .join(Turma, Turma.nome == Horario.pelotao)
             .options(
                 joinedload(Horario.disciplina),
-                joinedload(Horario.instrutor).joinedload(Instrutor.user),
-                joinedload(Horario.instrutor_2).joinedload(Instrutor.user),
+                joinedload(Horario.instrutor).joinedload(Instrutor.user).joinedload(User.instrutor_profile),
+                joinedload(Horario.instrutor_2).joinedload(Instrutor.user).joinedload(User.instrutor_profile),
                 joinedload(Horario.semana)
             )
             .where(
@@ -814,7 +814,7 @@ class HorarioService:
 
         aulas = db.session.scalars(
             query.order_by(Semana.data_inicio.asc(), Horario.dia_semana, Horario.periodo.asc())
-        ).all()
+        ).unique().all()
 
         mapa_dias = {
             'segunda': 0, 'terca': 1, 'quarta': 2,
@@ -847,11 +847,6 @@ class HorarioService:
                         if foto_primaria and str(foto_primaria).strip() not in ['', 'None', 'default.png']:
                             foto_final = str(foto_primaria).strip()
 
-                if foto_final != 'default.png':
-                    caminho_foto = os.path.join(current_app.static_folder, 'uploads', 'profile_pics', foto_final)
-                    if not os.path.exists(caminho_foto):
-                        foto_final = 'default.png'
-
                 instrutores_data.append({
                     'nome_exibicao': f"{posto} {nome_guerra}".strip(),
                     'nome_guerra': nome_guerra,
@@ -873,11 +868,6 @@ class HorarioService:
                         foto_primaria2 = getattr(primary_prof2, 'foto_perfil', None)
                         if foto_primaria2 and str(foto_primaria2).strip() not in ['', 'None', 'default.png']:
                             foto_final2 = str(foto_primaria2).strip()
-
-                if foto_final2 != 'default.png':
-                    caminho_foto2 = os.path.join(current_app.static_folder, 'uploads', 'profile_pics', foto_final2)
-                    if not os.path.exists(caminho_foto2):
-                        foto_final2 = 'default.png'
 
                 instrutores_data.append({
                     'nome_exibicao': f"{posto2} {nome_guerra2}".strip(),

@@ -66,20 +66,67 @@ class RelatorioService:
         instrutor_ids_filter: List[int] | None
     ) -> List[Dict[str, Any]]:
         
-        from ..models import db, Horario, User, Instrutor, Disciplina, Semana, Ciclo, DiarioClasse
+        from ..models import db, Horario, User, Instrutor, Disciplina, Semana, Ciclo, DiarioClasse, Turma
         from ..services.user_service import UserService
+        from sqlalchemy.orm import joinedload
 
         school_id = UserService.get_current_school_id()
         if not school_id:
             return []
 
-        # Aliases para permitir joins complexos de instrutores
+        # 1. PRÉ-CARREGAMENTO (BULK FETCH) para evitar N+1
+        
+        # 1.a Carga Horária Anterior (todas as disciplinas da escola antes da data_inicio)
+        query_ant = (
+            select(Horario.disciplina_id, Horario.id, Horario.duracao, Semana.data_inicio, Horario.dia_semana, Horario.periodo)
+            .join(Semana, Horario.semana_id == Semana.id)
+            .join(Ciclo, Semana.ciclo_id == Ciclo.id)
+            .filter(
+                or_(Horario.status == 'confirmado', Horario.status == 'concluido'),
+                Ciclo.school_id == school_id
+            )
+        )
+        rows_ant = db.session.execute(query_ant).all()
+        
+        # Mapear ch_anterior por disciplina_id: {disciplina_id: ch_total_anterior}
+        ch_anterior_map = {}
+        slots_ant = set()
+        for disc_id, h_id, duracao_ant_val, sem_data_inicio, dia_semana, periodo in rows_ant:
+            offset_dias = RelatorioService._get_dia_offset(dia_semana)
+            data_aula_ant = sem_data_inicio + timedelta(days=offset_dias)
+            if data_aula_ant < data_inicio:
+                chave = (data_aula_ant, periodo, h_id)
+                if chave not in slots_ant:
+                    slots_ant.add(chave)
+                    ch_anterior_map[disc_id] = ch_anterior_map.get(disc_id, 0) + (duracao_ant_val or 1)
+        
+        # 1.b Diários de Classe validados no período (assinado)
+        diarios_query = (
+            select(DiarioClasse)
+            .join(Turma, DiarioClasse.turma_id == Turma.id)
+            .options(joinedload(DiarioClasse.instrutor_assinante))
+            .filter(
+                DiarioClasse.data_aula >= data_inicio,
+                DiarioClasse.data_aula <= data_fim,
+                DiarioClasse.status == 'assinado',
+                Turma.school_id == school_id
+            )
+        )
+        diarios_validos = db.session.scalars(diarios_query).all()
+        diario_assinante_map = {}
+        for d in diarios_validos:
+            diario_assinante_map[(d.data_aula, d.periodo, d.disciplina_id)] = d.instrutor_assinante
+
+        # 1.c Perfis de Instrutor da escola atual
+        instrutores_escola = db.session.scalars(select(Instrutor).where(Instrutor.school_id == school_id)).all()
+        instrutor_perfil_map = {inst.user_id: inst for inst in instrutores_escola}
+        
+        # 2. Busca base de horários confirmados
         Instrutor1 = aliased(Instrutor)
         User1 = aliased(User)
         Instrutor2 = aliased(Instrutor)
         User2 = aliased(User)
 
-        # Busca base de horários confirmados
         query = (
             select(
                 Horario,
@@ -107,36 +154,6 @@ class RelatorioService:
 
         dados_agrupados = {}
         slots_pagos = set()
-
-        def get_ch_anterior_disciplina(disciplina_id, data_limite):
-            query_ant = (
-                select(Horario, Semana)
-                .join(Semana, Horario.semana_id == Semana.id)
-                .join(Ciclo, Semana.ciclo_id == Ciclo.id)
-                .filter(
-                    Horario.disciplina_id == disciplina_id,
-                    or_(Horario.status == 'confirmado', Horario.status == 'concluido'),
-                    Ciclo.school_id == school_id
-                )
-            )
-            rows_ant = db.session.execute(query_ant).all()
-            total_ant = 0
-            slots_ant = set()
-            
-            for h_ant, s_ant in rows_ant:
-                offset_dias = RelatorioService._get_dia_offset(h_ant.dia_semana)
-                data_aula_ant = s_ant.data_inicio + timedelta(days=offset_dias)
-                
-                if data_aula_ant < data_limite:
-                    duracao_ant = h_ant.duracao or 1
-                    # Chave única baseada no ID do horário para evitar duplicidade no histórico
-                    chave = (data_aula_ant, h_ant.periodo, h_ant.id)
-                    
-                    if chave not in slots_ant:
-                        slots_ant.add(chave)
-                        total_ant += duracao_ant
-                        
-            return float(total_ant)
 
         def processar_instrutor(user_obj, instrutor_obj, disciplina_obj, data_aula, periodo_aula, duracao, pelotao_str):
             if not user_obj or not instrutor_obj: return
@@ -168,7 +185,8 @@ class RelatorioService:
 
             nome_disc = disciplina_obj.materia
             if nome_disc not in dados_agrupados[chave_agrupamento]["disciplinas_map"]:
-                ch_paga_historico = get_ch_anterior_disciplina(disciplina_obj.id, data_inicio)
+                # Pega a carga horária anterior do mapa pré-carregado
+                ch_paga_historico = float(ch_anterior_map.get(disciplina_obj.id, 0))
                 
                 dados_agrupados[chave_agrupamento]["disciplinas_map"][nome_disc] = {
                     "nome_disciplina": nome_disc,
@@ -195,25 +213,11 @@ class RelatorioService:
             offset_dias = RelatorioService._get_dia_offset(horario.dia_semana)
             data_aula = semana.data_inicio + timedelta(days=offset_dias)
 
-            # CORREÇÃO: Busca o diário assinado para pagar o instrutor real.
-            # Removido DiarioClasse.turma_id == horario.turma_id pois causava AttributeError
-            diario_validado = db.session.scalar(
-                select(DiarioClasse).where(
-                    DiarioClasse.data_aula == data_aula,
-                    DiarioClasse.periodo == periodo,
-                    DiarioClasse.disciplina_id == disciplina.id,
-                    DiarioClasse.status == 'assinado'
-                ).limit(1)
-            )
+            # Usa o mapa pré-carregado para achar o diário e o perfil
+            user_assinante = diario_assinante_map.get((data_aula, periodo, disciplina.id))
 
-            if diario_validado and diario_validado.instrutor_assinante:
-                user_assinante = diario_validado.instrutor_assinante
-                instrutor_perfil = db.session.scalar(
-                    select(Instrutor).where(
-                        Instrutor.user_id == user_assinante.id,
-                        Instrutor.school_id == school_id
-                    )
-                )
+            if user_assinante:
+                instrutor_perfil = instrutor_perfil_map.get(user_assinante.id)
                 
                 if instrutor_perfil:
                     processar_instrutor(user_assinante, instrutor_perfil, disciplina, data_aula, periodo, duracao, pelotao)

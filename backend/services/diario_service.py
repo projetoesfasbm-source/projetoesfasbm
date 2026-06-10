@@ -92,7 +92,7 @@ class DiarioService:
         return db.session.scalars(query).first()
 
     @staticmethod
-    def get_diarios_pendentes(school_id, user_id=None, turma_id=None, disciplina_id=None, status=None):
+    def get_diarios_pendentes(school_id, user_id=None, turma_id=None, disciplina_id=None, status=None, page=1, per_page=30):
         stmt = (
             select(DiarioClasse)
             .join(Turma, DiarioClasse.turma_id == Turma.id)
@@ -121,7 +121,15 @@ class DiarioService:
                 )
                 stmt = stmt.where(DiarioClasse.disciplina_id.in_(subquery_vinculos))
             else:
-                return []
+                class EmptyPagination:
+                    items = []
+                    has_prev = False
+                    has_next = False
+                    page = 1
+                    pages = 0
+                    total = 0
+                    def iter_pages(self): return []
+                return EmptyPagination()
 
         if turma_id: stmt = stmt.where(DiarioClasse.turma_id == turma_id)
         if disciplina_id: stmt = stmt.where(DiarioClasse.disciplina_id == disciplina_id)
@@ -133,13 +141,14 @@ class DiarioService:
             DiarioClasse.disciplina_id, 
             DiarioClasse.periodo.asc()
         )
-        return db.session.scalars(stmt.distinct()).unique().all()
+        return db.paginate(stmt, page=page, per_page=per_page, error_out=False)
 
     @staticmethod
-    def get_diarios_agrupados(school_id, user_id=None, turma_id=None, disciplina_id=None, status=None):
-        raw_diarios = DiarioService.get_diarios_pendentes(school_id, user_id, turma_id, disciplina_id, status)
+    def get_diarios_agrupados(school_id, user_id=None, turma_id=None, disciplina_id=None, status=None, page=1, per_page=30):
+        pagination = DiarioService.get_diarios_pendentes(school_id, user_id, turma_id, disciplina_id, status, page, per_page)
+        raw_diarios = pagination.items
         
-        if not raw_diarios: return []
+        if not raw_diarios: return [], pagination
 
         grouped_diarios = []
         current_group = [raw_diarios[0]]
@@ -169,7 +178,7 @@ class DiarioService:
         if current_group:
             grouped_diarios.append(DiarioService._criar_representante_grupo(current_group))
 
-        return grouped_diarios
+        return grouped_diarios, pagination
 
     @staticmethod
     def _criar_representante_grupo(group_items):

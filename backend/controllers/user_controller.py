@@ -262,6 +262,9 @@ def gerenciar_usuarios():
         flash("Selecione uma escola para gerenciar usuários.", "warning")
         return redirect(url_for('main.dashboard'))
 
+    q = request.args.get('q', '').strip()
+    page = request.args.get('page', 1, type=int)
+
     role_priority = case(
         (UserSchool.role == 'admin_escola', 1),
         (UserSchool.role == 'admin_sens', 2),
@@ -270,34 +273,39 @@ def gerenciar_usuarios():
         else_=4
     )
 
-    results = db.session.execute(
-        select(User, UserSchool)
-        .join(UserSchool)
-        .where(UserSchool.school_id == school_id)
-        .order_by(role_priority, User.nome_completo)
-    ).all()
+    stmt_assigned = select(User, UserSchool).join(UserSchool).where(UserSchool.school_id == school_id)
+    if q:
+        stmt_assigned = stmt_assigned.where(
+            or_(User.nome_completo.ilike(f"%{q}%"), User.matricula.ilike(f"%{q}%"), User.email.ilike(f"%{q}%"))
+        )
+    stmt_assigned = stmt_assigned.order_by(role_priority, User.nome_completo)
+    
+    pagination_assigned = db.paginate(stmt_assigned, page=page, per_page=50, error_out=False)
 
-    # Se for super_admin, carregar pré-cadastrados e órfãos e usuários avulsos para permitir vínculo
+    # Se for super_admin, carregar limitadamente pré-cadastrados, órfãos e usuários ativos para a tela
     orfãos = []
     pre_cadastrados = []
     todos_usuarios_ativos = []
     if current_user.role == 'super_admin':
         assigned_user_ids = db.session.scalars(db.select(UserSchool.user_id).distinct()).all()
-        orfãos = db.session.scalars(
-            select(User).where(User.id.notin_(assigned_user_ids), User.role != 'super_admin', User.is_active == True)
-        ).all()
         
-        pre_cadastrados = db.session.scalars(
-            select(User).where(User.is_active == False)
-        ).all()
+        stmt_orfaos = select(User).where(User.id.notin_(assigned_user_ids), User.role != 'super_admin', User.is_active == True)
+        if q: stmt_orfaos = stmt_orfaos.where(or_(User.nome_completo.ilike(f"%{q}%"), User.matricula.ilike(f"%{q}%")))
+        orfãos = db.session.scalars(stmt_orfaos.limit(50)).all()
+        
+        stmt_pre = select(User).where(User.is_active == False)
+        if q: stmt_pre = stmt_pre.where(or_(User.nome_completo.ilike(f"%{q}%"), User.matricula.ilike(f"%{q}%")))
+        pre_cadastrados = db.session.scalars(stmt_pre.limit(50)).all()
 
-        todos_usuarios_ativos = db.session.scalars(
-            select(User).where(User.role != 'super_admin', User.is_active == True).order_by(User.nome_completo)
-        ).all()
+        stmt_ativos = select(User).where(User.role != 'super_admin', User.is_active == True)
+        if q: stmt_ativos = stmt_ativos.where(or_(User.nome_completo.ilike(f"%{q}%"), User.matricula.ilike(f"%{q}%")))
+        todos_usuarios_ativos = db.session.scalars(stmt_ativos.order_by(User.nome_completo).limit(100)).all()
 
     return render_template(
         "manage_users.html", 
-        usuarios_com_role=results, 
+        usuarios_com_role=pagination_assigned.items, 
+        pagination=pagination_assigned,
+        q=q,
         orfaos=orfãos, 
         pre_cadastrados=pre_cadastrados,
         todos_usuarios_ativos=todos_usuarios_ativos

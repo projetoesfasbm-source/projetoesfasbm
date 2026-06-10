@@ -91,25 +91,30 @@ class SchoolService:
         try:
             # === FASE 1: Limpeza de dados da ESCOLA (Desbloqueia exclusão de Turmas e Alunos) ===
             
-            # Recuperar IDs das turmas para limpar dependências
             turmas_ids = db.session.scalars(select(Turma.id).where(Turma.school_id == school_id)).all()
             
+            def chunked_delete(model, column, values, chunk_size=500):
+                for i in range(0, len(values), chunk_size):
+                    chunk = values[i:i+chunk_size]
+                    db.session.execute(model.__table__.delete().where(column.in_(chunk)))
+                db.session.flush()
+
             if turmas_ids:
                 # 1.1 Excluir Diários de Classe ligados às turmas dessa escola
-                db.session.query(DiarioClasse).filter(DiarioClasse.turma_id.in_(turmas_ids)).delete(synchronize_session=False)
+                chunked_delete(DiarioClasse, DiarioClasse.turma_id, turmas_ids)
 
                 # 1.2 Excluir Horários (via Semanas)
                 semanas_ids = db.session.scalars(select(Semana.id).where(Semana.turma_id.in_(turmas_ids))).all()
                 if semanas_ids:
-                    db.session.query(Horario).filter(Horario.semana_id.in_(semanas_ids)).delete(synchronize_session=False)
+                    chunked_delete(Horario, Horario.semana_id, semanas_ids)
 
                 # 1.3 Limpar dados vinculados aos Alunos dessas turmas (Processos e Avaliações)
                 alunos_ids = db.session.scalars(select(Aluno.id).where(Aluno.turma_id.in_(turmas_ids))).all()
                 if alunos_ids:
                     # Processos onde o aluno é o réu
-                    db.session.query(ProcessoDisciplina).filter(ProcessoDisciplina.aluno_id.in_(alunos_ids)).delete(synchronize_session=False)
+                    chunked_delete(ProcessoDisciplina, ProcessoDisciplina.aluno_id, alunos_ids)
                     # Avaliações FADA recebidas pelo aluno
-                    db.session.query(FadaAvaliacao).filter(FadaAvaliacao.aluno_id.in_(alunos_ids)).delete(synchronize_session=False)
+                    chunked_delete(FadaAvaliacao, FadaAvaliacao.aluno_id, alunos_ids)
 
             # === FASE 2: Identificar Usuários Exclusivos ===
             linked_user_ids = db.session.scalars(
@@ -134,23 +139,17 @@ class SchoolService:
             # === FASE 4: Limpar e Excluir Usuários Órfãos (Instrutores/Admins) ===
             count_deleted = 0
             
-            with db.session.no_autoflush:
-                for user in users_to_delete:
-                    # A. Limpar Avaliações FADA (onde usuário é Avaliador)
-                    db.session.query(FadaAvaliacao).filter(FadaAvaliacao.avaliador_id == user.id).delete()
-                    
-                    # B. Limpar Processos Disciplinares (onde usuário é Relator)
-                    db.session.query(ProcessoDisciplina).filter(ProcessoDisciplina.relator_id == user.id).delete()
-
-                    # C. Limpar Respostas de Questionários (onde usuário respondeu)
-                    db.session.query(Resposta).filter(Resposta.user_id == user.id).delete()
-                    
-                    # D. Limpar Diários de Classe (onde usuário é Responsável - caso tenha sobrado de outras escolas bugadas ou orfãs)
-                    db.session.query(DiarioClasse).filter(DiarioClasse.responsavel_id == user.id).delete()
-
-                    # E. Excluir o Usuário
-                    db.session.delete(user)
-                    count_deleted += 1
+            user_ids_to_delete = [u.id for u in users_to_delete]
+            if user_ids_to_delete:
+                chunked_delete(FadaAvaliacao, FadaAvaliacao.avaliador_id, user_ids_to_delete)
+                chunked_delete(ProcessoDisciplina, ProcessoDisciplina.relator_id, user_ids_to_delete)
+                chunked_delete(Resposta, Resposta.user_id, user_ids_to_delete)
+                chunked_delete(DiarioClasse, DiarioClasse.responsavel_id, user_ids_to_delete)
+                
+                with db.session.no_autoflush:
+                    for user in users_to_delete:
+                        db.session.delete(user)
+                        count_deleted += 1
 
             db.session.commit()
             return True, f"Escola '{school_name}' excluída com sucesso. {count_deleted} usuários exclusivos foram removidos e seus vínculos limpos."

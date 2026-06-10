@@ -17,7 +17,7 @@ class AssetService:
 
     @staticmethod
     def get_all_assets():
-        return db.session.scalars(select(ImageAsset).order_by(ImageAsset.created_at.desc())).all()
+        return db.session.scalars(select(ImageAsset).order_by(ImageAsset.created_at.desc()).limit(100)).all()
 
     @staticmethod
     def upload_asset(file, asset_type, category, description, uploaded_by_user_id):

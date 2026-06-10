@@ -147,13 +147,18 @@ class JusticaService:
         return limites, None
 
     @staticmethod
-    def calcular_ndisc_aluno(aluno_id):
-        if not JusticaService._is_curso_pontuado(aluno_id=aluno_id): return 10.0
-        aluno = db.session.get(Aluno, aluno_id)
+    def calcular_ndisc_aluno(aluno_id, aluno_obj=None, processos_list=None):
+        aluno = aluno_obj or db.session.get(Aluno, aluno_id)
         if not aluno: return 0.0
+        if not JusticaService._is_curso_pontuado(turma=aluno.turma): return 10.0
+        
         dt_inicio, dt_limite = JusticaService.get_datas_limites(aluno.turma_id)
-        query = select(ProcessoDisciplina).where(ProcessoDisciplina.aluno_id == aluno_id, ProcessoDisciplina.status == StatusProcesso.FINALIZADO.value)
-        processos = db.session.scalars(query).all()
+        if processos_list is None:
+            query = select(ProcessoDisciplina).where(ProcessoDisciplina.aluno_id == aluno_id, ProcessoDisciplina.status == StatusProcesso.FINALIZADO.value)
+            processos = db.session.scalars(query).all()
+        else:
+            processos = [p for p in processos_list if p.status == StatusProcesso.FINALIZADO.value]
+            
         pontos_perdidos = 0.0
         for p in processos:
             if JusticaService.verificar_elegibilidade_punicao(p, dt_inicio, dt_limite):
@@ -163,13 +168,18 @@ class JusticaService:
         return max(0.0, min(10.0, ndisc))
 
     @staticmethod
-    def calcular_fada_estimada(aluno_id):
-        if not JusticaService._is_curso_pontuado(aluno_id=aluno_id): return 10.0
-        aluno = db.session.get(Aluno, aluno_id)
+    def calcular_fada_estimada(aluno_id, aluno_obj=None, processos_list=None):
+        aluno = aluno_obj or db.session.get(Aluno, aluno_id)
         if not aluno: return 0.0
+        if not JusticaService._is_curso_pontuado(turma=aluno.turma): return 10.0
+        
         dt_inicio, dt_limite = JusticaService.get_datas_limites(aluno.turma_id)
-        query_proc = select(ProcessoDisciplina).where(ProcessoDisciplina.aluno_id == aluno_id, ProcessoDisciplina.status == StatusProcesso.FINALIZADO.value)
-        processos = db.session.scalars(query_proc).all()
+        if processos_list is None:
+            query_proc = select(ProcessoDisciplina).where(ProcessoDisciplina.aluno_id == aluno_id, ProcessoDisciplina.status == StatusProcesso.FINALIZADO.value)
+            processos = db.session.scalars(query_proc).all()
+        else:
+            processos = [p for p in processos_list if p.status == StatusProcesso.FINALIZADO.value]
+            
         query_elogios = select(Elogio).where(Elogio.aluno_id == aluno_id)
         elogios = db.session.scalars(query_elogios).all()
 
@@ -194,12 +204,18 @@ class JusticaService:
 
     @staticmethod
     def calcular_aat_final(aluno_id):
-        if not JusticaService._is_curso_pontuado(aluno_id=aluno_id): return None, None, None
-        ndisc = JusticaService.calcular_ndisc_aluno(aluno_id)
+        aluno = db.session.scalar(select(Aluno).options(joinedload(Aluno.turma).joinedload(Turma.edicao)).where(Aluno.id == aluno_id))
+        if not aluno: return None, None, None
+        if not JusticaService._is_curso_pontuado(turma=aluno.turma): return None, None, None
+        
+        query_proc = select(ProcessoDisciplina).where(ProcessoDisciplina.aluno_id == aluno_id, ProcessoDisciplina.status == StatusProcesso.FINALIZADO.value)
+        processos = db.session.scalars(query_proc).all()
+        
+        ndisc = JusticaService.calcular_ndisc_aluno(aluno_id, aluno_obj=aluno, processos_list=processos)
         fada_oficial = db.session.scalar(select(FadaAvaliacao).where(FadaAvaliacao.aluno_id == aluno_id).order_by(FadaAvaliacao.data_avaliacao.desc()))
         
         if fada_oficial: nota_fada = fada_oficial.media_final
-        else: nota_fada = JusticaService.calcular_fada_estimada(aluno_id)
+        else: nota_fada = JusticaService.calcular_fada_estimada(aluno_id, aluno_obj=aluno, processos_list=processos)
             
         aat = (ndisc + nota_fada) / 2.0
         return round(aat, 2), round(ndisc, 2), round(nota_fada, 4)

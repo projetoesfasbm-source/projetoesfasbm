@@ -193,27 +193,19 @@ class UserService:
         existentes = 0
 
         try:
-            for m in matriculas:
-                matricula = normalize_matricula(m)
-                if not matricula: continue
-
-                user = db.session.scalar(select(User).filter_by(matricula=matricula))
-                
-                if user:
-                    # Usuário existe: Apenas garante o vínculo com ESTA escola
-                    UserService._ensure_user_school(user.id, school_id, role)
-                    if role == 'instrutor':
-                        UserService._ensure_instrutor_profile(user.id, school_id)
-                        
-                    # CORREÇÃO DA TRANSFERÊNCIA: Garante a recriação da ficha de aluno caso tenha sido excluída
-                    if role == 'aluno':
-                        aluno_existente = db.session.scalar(select(Aluno).filter_by(user_id=user.id))
-                        if not aluno_existente:
-                            db.session.add(Aluno(user_id=user.id, opm='-', edicao_id=edicao_id))
-                            
-                    existentes += 1
-                else:
-                    # Usuário novo: Cria e vincula
+            matriculas_normalizadas = list(set([normalize_matricula(m) for m in matriculas if normalize_matricula(m)]))
+            if not matriculas_normalizadas: return False, 0, 0
+            
+            existing_users = db.session.scalars(
+                select(User).filter(User.matricula.in_(matriculas_normalizadas))
+            ).all()
+            
+            existing_users_by_matricula = {u.matricula: u for u in existing_users}
+            
+            users_to_add = []
+            
+            for matricula in matriculas_normalizadas:
+                if matricula not in existing_users_by_matricula:
                     user = User(
                         matricula=matricula,
                         username=matricula,
@@ -222,18 +214,80 @@ class UserService:
                         must_change_password=True
                     )
                     user.set_password(matricula)
-                    db.session.add(user)
-                    db.session.flush()
+                    users_to_add.append(user)
                     
-                    # CORREÇÃO DO ERRO 'opm required'
-                    if role == 'aluno':
-                        db.session.add(Aluno(user_id=user.id, opm='-', edicao_id=edicao_id))
-                    
-                    UserService._ensure_user_school(user.id, school_id, role)
-                    if role == 'instrutor':
-                        UserService._ensure_instrutor_profile(user.id, school_id)
-                        
-                    novos += 1
+            if users_to_add:
+                db.session.add_all(users_to_add)
+                db.session.flush()
+                for u in users_to_add:
+                    existing_users_by_matricula[u.matricula] = u
+                novos = len(users_to_add)
+                
+            existentes = len(matriculas_normalizadas) - novos
+            
+            all_users = existing_users_by_matricula.values()
+            all_user_ids = [u.id for u in all_users]
+            
+            existing_user_schools = db.session.scalars(
+                select(UserSchool).where(
+                    UserSchool.user_id.in_(all_user_ids),
+                    UserSchool.school_id == school_id
+                )
+            ).all()
+            user_school_map = {us.user_id: us for us in existing_user_schools}
+            
+            user_schools_to_add = []
+            for u in all_users:
+                if u.id in user_school_map:
+                    if user_school_map[u.id].role != role:
+                        user_school_map[u.id].role = role
+                else:
+                    user_schools_to_add.append(UserSchool(user_id=u.id, school_id=school_id, role=role))
+            if user_schools_to_add:
+                db.session.add_all(user_schools_to_add)
+                
+            if role == 'instrutor':
+                existing_instrutores = db.session.scalars(
+                    select(Instrutor).where(
+                        Instrutor.user_id.in_(all_user_ids),
+                        Instrutor.school_id == school_id
+                    )
+                ).all()
+                instrutor_map = {i.user_id: i for i in existing_instrutores}
+                
+                other_instrutores = db.session.execute(
+                    select(Instrutor.user_id, Instrutor.telefone, Instrutor.is_rr, Instrutor.foto_perfil)
+                    .where(Instrutor.user_id.in_(all_user_ids))
+                ).all()
+                other_instrutores_map = {row.user_id: row for row in other_instrutores}
+
+                instrutores_to_add = []
+                for u in all_users:
+                    if u.id not in instrutor_map:
+                        other = other_instrutores_map.get(u.id)
+                        instrutores_to_add.append(
+                            Instrutor(
+                                user_id=u.id, school_id=school_id,
+                                telefone=other.telefone if other else None,
+                                is_rr=other.is_rr if other else False,
+                                foto_perfil=other.foto_perfil if other else 'default.png'
+                            )
+                        )
+                if instrutores_to_add:
+                    db.session.add_all(instrutores_to_add)
+
+            if role == 'aluno':
+                existing_alunos = db.session.scalars(
+                    select(Aluno).where(Aluno.user_id.in_(all_user_ids))
+                ).all()
+                aluno_map = {a.user_id: a for a in existing_alunos}
+                
+                alunos_to_add = []
+                for u in all_users:
+                    if u.id not in aluno_map:
+                        alunos_to_add.append(Aluno(user_id=u.id, opm='-', edicao_id=edicao_id))
+                if alunos_to_add:
+                    db.session.add_all(alunos_to_add)
 
             db.session.commit()
             return True, novos, existentes
