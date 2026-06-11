@@ -718,17 +718,36 @@
             const list = document.getElementById('notification-list');
             const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
+            let notificationInterval;
+
             function fetchNotifications() {
-                fetch("{{ url_for('notification.get_dropdown_data') }}")
+                if (document.hidden) return; // Não bombardear o servidor se a aba estiver oculta
+
+                fetch("{{ url_for('notification.get_dropdown_data') }}", {
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
                     .then(response => {
-                        if (!response.ok) { throw new Error('Network response was not ok'); }
-                        return response.json();
+                        if (response.redirected || !response.ok) { 
+                            throw new Error('Sessão expirada ou resposta inválida'); 
+                        }
+                        const contentType = response.headers.get("content-type");
+                        if (contentType && contentType.indexOf("application/json") !== -1) {
+                            return response.json();
+                        } else {
+                            throw new Error('Resposta não é JSON');
+                        }
                     })
                     .then(data => {
                         updateNotificationUI(data.unread_count, data.notifications);
                     })
                     .catch(error => {
-                        console.error('Erro ao buscar notificações:', error);
+                        console.warn('Busca de notificações abortada (Sessão provavelmente expirou).', error);
+                        if (notificationInterval) {
+                            clearInterval(notificationInterval);
+                        }
                     });
             }
 
@@ -775,7 +794,8 @@
 
             if ({{ current_user.is_authenticated | tojson }} && "{{ request.endpoint }}" !== "auth.configurar_2fa" && "{{ request.endpoint }}" !== "auth.recuperar_senha") {
                 fetchNotifications();
-                setInterval(fetchNotifications, 60000);
+                // O usuário solicitou verificação a cada 30 minutos (1.800.000 ms) para economizar banda e CPU
+                notificationInterval = setInterval(fetchNotifications, 1800000); 
             }
         });
     </script>

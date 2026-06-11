@@ -3,7 +3,7 @@ services:
     name: sisgen-bm
     env: python
     buildCommand: "pip install -r requirements.txt && FLASK_APP=backend.app flask db upgrade"
-    startCommand: "gunicorn --workers 1 --threads 4 --max-requests 500 --max-requests-jitter 50 'backend.app:create_app()'"
+    startCommand: "gunicorn --workers 1 --threads 10 --max-requests 500 --max-requests-jitter 50 'backend.app:create_app()'"
     plan: starter
     envVars:
       - key: PYTHON_VERSION
