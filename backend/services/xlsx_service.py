@@ -22,7 +22,7 @@ except locale.Error:
     except locale.Error:
         print("Aviso: Não foi possível definir o locale para pt_BR.")
 
-__all__ = ["gerar_mapa_gratificacao_xlsx"]
+__all__ = ["gerar_mapa_gratificacao_xlsx", "gerar_quadro_horario_xlsx"]
 
 # --- Helpers ---
 def _safe(obj: Any, path: str, default: Any = None) -> Any:
@@ -196,6 +196,176 @@ def gerar_mapa_gratificacao_xlsx(
     _apply_border_to_range(ws, f"G{bottom_block_start_row}:H{bottom_block_start_row + 8}", border_all)
 
     # 8. Exportação
+    out = BytesIO()
+    wb.save(out)
+    return out.getvalue()
+
+# --- Nova Função: Gerar Quadro de Horário ---
+def gerar_quadro_horario_xlsx(pelotao, semana, horario_matrix, datas_semana, tempos, intervalos):
+    """
+    Gera um arquivo Excel (.xlsx) em memória baseado na matriz do quadro de horários.
+    """
+    wb = Workbook()
+    ws = wb.active
+    ws.title = f"Horário - {pelotao}"
+    
+    # Exibir as linhas de grade padrão
+    ws.sheet_view.showGridLines = True
+    
+    # --- ESTILOS ---
+    font_titulo = Font(name='Arial', size=14, bold=True, color='FFFFFF')
+    font_header = Font(name='Arial', size=11, bold=True, color='FFFFFF')
+    font_corpo = Font(name='Arial', size=10)
+    font_intervalo = Font(name='Arial', size=10, italic=True, bold=True, color='555555')
+    font_tempo = Font(name='Arial', size=9, bold=True)
+    
+    fill_titulo = PatternFill(start_color='1F4E78', end_color='1F4E78', fill_type='solid') # Azul
+    fill_header = PatternFill(start_color='2C3E50', end_color='2C3E50', fill_type='solid') # Grafite
+    fill_intervalo = PatternFill(start_color='F2F4F4', end_color='F2F4F4', fill_type='solid') # Cinza
+    
+    border_fina = Border(
+        left=Side(style='thin', color='BDC3C7'),
+        right=Side(style='thin', color='BDC3C7'),
+        top=Side(style='thin', color='BDC3C7'),
+        bottom=Side(style='thin', color='BDC3C7')
+    )
+    
+    # --- CABEÇALHO PRINCIPAL ---
+    # Conta quantas colunas teremos (Tempo + 5 dias úteis + fds se houver)
+    total_colunas = 6
+    if getattr(semana, 'mostrar_sabado', False): total_colunas += 1
+    if getattr(semana, 'mostrar_domingo', False): total_colunas += 1
+    
+    letra_ultima_coluna = get_column_letter(total_colunas)
+    
+    ws.merge_cells(f'A1:{letra_ultima_coluna}1')
+    data_formatada = semana.data_inicio.strftime('%d/%m/%Y') if semana.data_inicio else 'N/D'
+    ws['A1'] = f"QUADRO DE HORÁRIOS - PELOTÃO: {pelotao} (Semana de {data_formatada})"
+    ws['A1'].font = font_titulo
+    ws['A1'].fill = fill_titulo
+    ws['A1'].alignment = Alignment(horizontal='center', vertical='center')
+    ws.row_dimensions[1].height = 40
+    
+    # --- COLUNAS DOS DIAS DA SEMANA ---
+    colunas_textos = ['Tempo/Horário', 
+                      f"Segunda\n({datas_semana.get('segunda', '')})",
+                      f"Terça\n({datas_semana.get('terca', '')})",
+                      f"Quarta\n({datas_semana.get('quarta', '')})",
+                      f"Quinta\n({datas_semana.get('quinta', '')})",
+                      f"Sexta\n({datas_semana.get('sexta', '')})"]
+                      
+    if getattr(semana, 'mostrar_sabado', False):
+        colunas_textos.append(f"Sábado\n({datas_semana.get('sabado', '')})")
+    if getattr(semana, 'mostrar_domingo', False):
+        colunas_textos.append(f"Domingo\n({datas_semana.get('domingo', '')})")
+        
+    for col_idx, texto in enumerate(colunas_textos, 1):
+        cell = ws.cell(row=2, column=col_idx, value=texto)
+        cell.font = font_header
+        cell.fill = fill_header
+        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        cell.border = border_fina
+    ws.row_dimensions[2].height = 35
+    
+    # --- PREENCHIMENTO DOS DADOS ---
+    row_atual = 3
+    # Mapeamento dos dias em matriz para a planilha (0=Segunda, 1=Terça...)
+    dias_loop = list(range(total_colunas - 1))
+    
+    # Posições de intervalo convertidas para zero-index (igual ao HTML)
+    pos_int_1 = int(intervalos.get('pos_int_1', 3)) - 1
+    pos_almoco = int(intervalos.get('pos_almoco', 6)) - 1
+    pos_int_2 = int(intervalos.get('pos_int_2', 9)) - 1
+
+    for row_idx in range(15): # 15 períodos possíveis
+        periodo_num = row_idx + 1
+        
+        # Lógica para ocultar períodos noturnos se não estiverem ativos na semana
+        if periodo_num > 12:
+            if periodo_num == 13 and not getattr(semana, 'mostrar_periodo_13', False): continue
+            if periodo_num == 14 and not getattr(semana, 'mostrar_periodo_14', False): continue
+            if periodo_num == 15 and not getattr(semana, 'mostrar_periodo_15', False): continue
+
+        # 1. Célula de Tempo (Coluna A)
+        tempo_str = f"{tempos[row_idx][0]}\n{tempos[row_idx][1]}"
+        cell_tempo = ws.cell(row=row_atual, column=1, value=tempo_str)
+        cell_tempo.font = font_tempo
+        cell_tempo.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        cell_tempo.border = border_fina
+        
+        # 2. Células das Aulas (Colunas B em diante)
+        for d_idx, col_matriz in enumerate(dias_loop):
+            col_planilha = d_idx + 2
+            
+            # Verifica se passa do limite de períodos do FDS
+            pular_celula = False
+            if col_matriz == 5 and periodo_num > getattr(semana, 'periodos_sabado', 0): pular_celula = True
+            if col_matriz == 6 and periodo_num > getattr(semana, 'periodos_domingo', 0): pular_celula = True
+            
+            cell_aula = ws.cell(row=row_atual, column=col_planilha)
+            cell_aula.border = border_fina
+            cell_aula.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+            
+            if not pular_celula:
+                try:
+                    aula = horario_matrix[row_idx][col_matriz]
+                except (IndexError, KeyError):
+                    aula = None
+                
+                if aula and aula != 'SKIP':
+                    # Extrai os dados reais se a aula existir
+                    disciplina = getattr(aula, 'disciplina', {}).get('materia', 'N/D') if isinstance(getattr(aula, 'disciplina', None), dict) else getattr(getattr(aula, 'disciplina', None), 'materia', 'N/D')
+                    if disciplina == 'N/D' and isinstance(aula, dict):
+                        disciplina = aula.get('disciplina_nome', 'N/D')
+                    
+                    # Nome do instrutor
+                    instrutor = ""
+                    if isinstance(aula, dict) and 'instrutores_nomes' in aula:
+                        instrutor = "\n".join(aula['instrutores_nomes'])
+                    elif getattr(aula, 'instrutor_1', None):
+                        instrutor = getattr(aula.instrutor_1.user, 'nome_de_guerra', 'Instrutor')
+                        if getattr(aula, 'instrutor_2', None):
+                            instrutor += f" / {getattr(aula.instrutor_2.user, 'nome_de_guerra', 'Instrutor')}"
+                            
+                    cell_aula.value = f"{disciplina}\n{instrutor}"
+                    cell_aula.font = font_corpo
+                elif aula == 'SKIP':
+                    cell_aula.value = "↳" # Indica que é continuação da aula acima
+                    cell_aula.font = Font(color="CCCCCC")
+            else:
+                cell_aula.fill = PatternFill(start_color='F8F9FA', end_color='F8F9FA', fill_type='solid')
+
+        ws.row_dimensions[row_atual].height = 40
+        row_atual += 1
+        
+        # 3. Inserção de Linhas de Intervalo
+        if row_idx == pos_int_1 and intervalos.get('intervalo_1') and intervalos.get('intervalo_1') not in ['N/D', '-', '']:
+            ws.merge_cells(start_row=row_atual, start_column=1, end_row=row_atual, end_column=total_colunas)
+            c = ws.cell(row=row_atual, column=1, value=f"INTERVALO MANHÃ: {intervalos.get('intervalo_1')}")
+            c.font, c.fill, c.alignment = font_intervalo, fill_intervalo, Alignment(horizontal='center', vertical='center')
+            ws.row_dimensions[row_atual].height = 20
+            row_atual += 1
+            
+        if row_idx == pos_almoco and intervalos.get('almoco') and intervalos.get('almoco') not in ['N/D', '-', '']:
+            ws.merge_cells(start_row=row_atual, start_column=1, end_row=row_atual, end_column=total_colunas)
+            c = ws.cell(row=row_atual, column=1, value=f"ALMOÇO: {intervalos.get('almoco')}")
+            c.font, c.fill, c.alignment = font_intervalo, fill_intervalo, Alignment(horizontal='center', vertical='center')
+            ws.row_dimensions[row_atual].height = 20
+            row_atual += 1
+            
+        if row_idx == pos_int_2 and intervalos.get('intervalo_2') and intervalos.get('intervalo_2') not in ['N/D', '-', '']:
+            ws.merge_cells(start_row=row_atual, start_column=1, end_row=row_atual, end_column=total_colunas)
+            c = ws.cell(row=row_atual, column=1, value=f"INTERVALO TARDE: {intervalos.get('intervalo_2')}")
+            c.font, c.fill, c.alignment = font_intervalo, fill_intervalo, Alignment(horizontal='center', vertical='center')
+            ws.row_dimensions[row_atual].height = 20
+            row_atual += 1
+
+    # --- AJUSTE DE LARGURA DAS COLUNAS ---
+    ws.column_dimensions['A'].width = 14
+    for col_letter in [get_column_letter(i) for i in range(2, total_colunas + 1)]:
+        ws.column_dimensions[col_letter].width = 22
+
+    # --- RETORNO DOS BYTES ---
     out = BytesIO()
     wb.save(out)
     return out.getvalue()
