@@ -360,6 +360,9 @@ def dashboard_instrutor():
 def save_priority_config():
     return jsonify({'success': False, 'message': 'Use a rota /semana/<id>/salvar-prioridade'}), 404
 
+# ==========================================
+# ROTA RESTAURADA DO PDF
+# ==========================================
 @horario_bp.route('/exportar-pdf')
 @login_required
 @admin_or_programmer_required
@@ -380,7 +383,54 @@ def exportar_pdf():
     datas_semana = HorarioService.get_datas_da_semana(semana)
     tempos, intervalos = _get_horario_context_data()
     
-    # === GERAÇÃO XLSX (SUBSTITUINDO O PDF TEMPORARIAMENTE) ===
+    rendered_html = render_template('horario_pdf.html', 
+                                    pelotao_selecionado=pelotao, 
+                                    semana_selecionada=semana, 
+                                    horario_matrix=horario_matrix, 
+                                    datas_semana=datas_semana,
+                                    tempos=tempos,
+                                    intervalos=intervalos)
+    try:
+        job_id = str(uuid.uuid4())
+        job = BackgroundJob(
+            id=job_id,
+            task_type='generate_pdf',
+            payload=rendered_html,
+            user_id=current_user.id
+        )
+        db.session.add(job)
+        db.session.commit()
+        
+        return jsonify({'success': True, 'job_id': job_id})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)})
+
+
+# ==========================================
+# NOVA ROTA EXCLUSIVA PARA EXCEL
+# ==========================================
+@horario_bp.route('/exportar-excel')
+@login_required
+@admin_or_programmer_required
+def exportar_excel():
+    pelotao = request.args.get('pelotao')
+    semana_id = request.args.get('semana_id', type=int)
+    if not pelotao or not semana_id:
+        flash('Parâmetros inválidos.', 'danger')
+        return redirect(url_for('horario.index'))
+        
+    semana = db.session.get(Semana, semana_id)
+    active_school = UserService.get_current_school_id()
+    
+    if not semana or (active_school and semana.ciclo.school_id != active_school):
+        flash('Semana não encontrada ou permissão negada.', 'danger')
+        return redirect(url_for('horario.index'))
+
+    horario_matrix = HorarioService.construir_matriz_horario(pelotao, semana_id, current_user)
+    datas_semana = HorarioService.get_datas_da_semana(semana)
+    tempos, intervalos = _get_horario_context_data()
+    
     try:
         from ..services.xlsx_service import gerar_quadro_horario_xlsx
         
@@ -407,32 +457,6 @@ def exportar_pdf():
         flash(f'Erro ao gerar documento Excel: {str(e)}', 'danger')
         return redirect(url_for('horario.index'))
 
-    # === CÓDIGO PDF ORIGINAL DESATIVADO ===
-    """
-    rendered_html = render_template('horario_pdf.html', 
-                                    pelotao_selecionado=pelotao, 
-                                    semana_selecionada=semana, 
-                                    horario_matrix=horario_matrix, 
-                                    datas_semana=datas_semana,
-                                    tempos=tempos,
-                                    intervalos=intervalos)
-    try:
-        # Em vez de write_pdf(), enviamos para a fila
-        job_id = str(uuid.uuid4())
-        job = BackgroundJob(
-            id=job_id,
-            task_type='generate_pdf',
-            payload=rendered_html,
-            user_id=current_user.id
-        )
-        db.session.add(job)
-        db.session.commit()
-        
-        return jsonify({'success': True, 'job_id': job_id})
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'success': False, 'error': str(e)})
-    """
 
 @horario_bp.route('/editar/<path:pelotao>/<int:semana_id>/<int:ciclo_id>')
 @login_required
