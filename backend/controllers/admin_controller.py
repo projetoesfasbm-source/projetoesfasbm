@@ -168,7 +168,7 @@ def espelho_diarios():
         except ValueError:
             pass
 
-    total_items = len(diarios_todos)
+    total_items = diarios_todos.total
     per_page = 20
     start = (page - 1) * per_page
     end = start + per_page
