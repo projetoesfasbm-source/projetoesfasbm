@@ -112,9 +112,19 @@ class SiteConfigService:
             
         return default_value
 
+    _cache = None
+    _cache_time = 0
+
     @staticmethod
     def get_all_configs():
-        """Retorna todas as configs do banco (globais) + defaults não salvos."""
+        """Retorna todas as configs do banco (globais) + defaults não salvos (COM CACHE)."""
+        import time
+        now = time.time()
+        
+        # Retorna cache se válido (5 minutos)
+        if SiteConfigService._cache is not None and (now - SiteConfigService._cache_time) < 300:
+            return SiteConfigService._cache
+
         db_configs = db.session.execute(select(SiteConfig)).scalars().all()
         db_configs_map = {c.config_key: c for c in db_configs}
         final_configs = []
@@ -127,6 +137,10 @@ class SiteConfigService:
                     description=description, category=category
                 )
                 final_configs.append(temp_config)
+                
+        # Atualiza o cache
+        SiteConfigService._cache = final_configs
+        SiteConfigService._cache_time = now
         return final_configs
 
     @staticmethod
@@ -150,6 +164,7 @@ class SiteConfigService:
                 )
                 db.session.add(config)
         db.session.commit()
+        SiteConfigService._cache = None
     
     @staticmethod
     def _parse_number_ptbr(value: str):
@@ -202,6 +217,7 @@ class SiteConfigService:
             db.session.add(config)
         
         db.session.commit()
+        SiteConfigService._cache = None
         return config
 
     @staticmethod
@@ -212,11 +228,13 @@ class SiteConfigService:
             
         db.session.query(SiteConfig).filter(SiteConfig.config_key == target_key).delete()
         db.session.commit()
+        SiteConfigService._cache = None
 
     @staticmethod
     def delete_all_configs():
         db.session.query(SiteConfig).delete()
         db.session.commit()
+        SiteConfigService._cache = None
 
     @staticmethod
     def get_valor_hora_aula(default: float = 55.19) -> float:

@@ -25,13 +25,14 @@ main_bp = Blueprint('main', __name__)
 # ---------------------------------------
 @main_bp.context_processor
 def inject_active_school():
+    from flask import g
     if current_user.is_authenticated:
-        school_id = UserService.get_current_school_id()
-        current_school = db.session.get(School, school_id) if school_id else None
+        active = g.get('active_school')
+        school_id = active.id if active else None
         return dict(
             current_school_id=school_id, 
-            current_school=current_school,
-            active_school=current_school 
+            current_school=active,
+            active_school=active 
         )
     return dict(current_school_id=None, current_school=None, active_school=None)
 

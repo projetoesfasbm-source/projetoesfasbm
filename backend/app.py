@@ -314,9 +314,13 @@ def register_handlers_and_processors(app):
     @app.after_request
     def add_header(response):
         # Controle de Cache (Evita que páginas sensíveis fiquem gravadas no navegador)
-        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-        response.headers["Pragma"] = "no-cache"
-        response.headers["Expires"] = "0"
+        from flask import request
+        if request.path.startswith('/static/') or request.path in ['/sw.js', '/manifest.json', '/favicon.ico']:
+            response.headers["Cache-Control"] = "public, max-age=31536000" # 1 ano de cache
+        else:
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
 
         # Prevenção contra ataques MIME Sniffing
         response.headers["X-Content-Type-Options"] = "nosniff"
