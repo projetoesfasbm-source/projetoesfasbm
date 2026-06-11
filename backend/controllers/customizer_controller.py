@@ -101,7 +101,7 @@ def index():
 
     # Passa assets para os seletores de imagem
     from backend.models.image_asset import ImageAsset
-    assets = ImageAsset.query.all()
+    assets = ImageAsset.query.limit(200).all()
 
     return render_template('customizer/index.html', configs_by_category=configs_by_category, assets=assets)
 

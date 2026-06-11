@@ -16,7 +16,7 @@ assets_bp = Blueprint('assets', __name__, url_prefix='/assets')
 @admin_or_programmer_required
 def manage_assets():
     """Página principal de gerenciamento de assets"""
-    assets = db.session.query(ImageAsset).order_by(ImageAsset.created_at.desc()).all()
+    assets = db.session.query(ImageAsset).order_by(ImageAsset.created_at.desc()).limit(200).all()
     return render_template('manage_assets.html', assets=assets)
 
 @assets_bp.route('/upload', methods=['GET', 'POST'])
