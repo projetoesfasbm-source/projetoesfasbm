@@ -215,13 +215,15 @@ def gerar_quadro_horario_xlsx(pelotao, semana, horario_matrix, datas_semana, tem
     # --- ESTILOS ---
     font_titulo = Font(name='Arial', size=14, bold=True, color='FFFFFF')
     font_header = Font(name='Arial', size=11, bold=True, color='FFFFFF')
-    font_corpo = Font(name='Arial', size=10)
+    font_corpo = Font(name='Arial', size=10, bold=True)
+    font_corpo_skip = Font(name='Arial', size=14, color='A6ACAF')
     font_intervalo = Font(name='Arial', size=10, italic=True, bold=True, color='555555')
     font_tempo = Font(name='Arial', size=9, bold=True)
     
     fill_titulo = PatternFill(start_color='1F4E78', end_color='1F4E78', fill_type='solid') # Azul
     fill_header = PatternFill(start_color='2C3E50', end_color='2C3E50', fill_type='solid') # Grafite
     fill_intervalo = PatternFill(start_color='F2F4F4', end_color='F2F4F4', fill_type='solid') # Cinza
+    fill_blocked = PatternFill(start_color='F8F9FA', end_color='F8F9FA', fill_type='solid') # Cinza claro bloqueado
     
     border_fina = Border(
         left=Side(style='thin', color='BDC3C7'),
@@ -231,7 +233,6 @@ def gerar_quadro_horario_xlsx(pelotao, semana, horario_matrix, datas_semana, tem
     )
     
     # --- CABEÇALHO PRINCIPAL ---
-    # Conta quantas colunas teremos (Tempo + 5 dias úteis + fds se houver)
     total_colunas = 6
     if getattr(semana, 'mostrar_sabado', False): total_colunas += 1
     if getattr(semana, 'mostrar_domingo', False): total_colunas += 1
@@ -269,35 +270,32 @@ def gerar_quadro_horario_xlsx(pelotao, semana, horario_matrix, datas_semana, tem
     
     # --- PREENCHIMENTO DOS DADOS ---
     row_atual = 3
-    # Mapeamento dos dias em matriz para a planilha (0=Segunda, 1=Terça...)
     dias_loop = list(range(total_colunas - 1))
     
-    # Posições de intervalo convertidas para zero-index (igual ao HTML)
     pos_int_1 = int(intervalos.get('pos_int_1', 3)) - 1
     pos_almoco = int(intervalos.get('pos_almoco', 6)) - 1
     pos_int_2 = int(intervalos.get('pos_int_2', 9)) - 1
 
-    for row_idx in range(15): # 15 períodos possíveis
+    for row_idx in range(15): 
         periodo_num = row_idx + 1
         
-        # Lógica para ocultar períodos noturnos se não estiverem ativos na semana
+        # Ocultar períodos noturnos não ativos
         if periodo_num > 12:
             if periodo_num == 13 and not getattr(semana, 'mostrar_periodo_13', False): continue
             if periodo_num == 14 and not getattr(semana, 'mostrar_periodo_14', False): continue
             if periodo_num == 15 and not getattr(semana, 'mostrar_periodo_15', False): continue
 
-        # 1. Célula de Tempo (Coluna A)
+        # 1. Célula de Tempo
         tempo_str = f"{tempos[row_idx][0]}\n{tempos[row_idx][1]}"
         cell_tempo = ws.cell(row=row_atual, column=1, value=tempo_str)
         cell_tempo.font = font_tempo
         cell_tempo.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
         cell_tempo.border = border_fina
         
-        # 2. Células das Aulas (Colunas B em diante)
+        # 2. Células das Aulas 
         for d_idx, col_matriz in enumerate(dias_loop):
             col_planilha = d_idx + 2
             
-            # Verifica se passa do limite de períodos do FDS
             pular_celula = False
             if col_matriz == 5 and periodo_num > getattr(semana, 'periodos_sabado', 0): pular_celula = True
             if col_matriz == 6 and periodo_num > getattr(semana, 'periodos_domingo', 0): pular_celula = True
@@ -313,29 +311,63 @@ def gerar_quadro_horario_xlsx(pelotao, semana, horario_matrix, datas_semana, tem
                     aula = None
                 
                 if aula and aula != 'SKIP':
-                    # Extrai os dados reais se a aula existir
-                    disciplina = getattr(aula, 'disciplina', {}).get('materia', 'N/D') if isinstance(getattr(aula, 'disciplina', None), dict) else getattr(getattr(aula, 'disciplina', None), 'materia', 'N/D')
-                    if disciplina == 'N/D' and isinstance(aula, dict):
-                        disciplina = aula.get('disciplina_nome', 'N/D')
+                    disciplina_str = ""
+                    instrutor_str = ""
                     
-                    # Nome do instrutor
-                    instrutor = ""
-                    if isinstance(aula, dict) and 'instrutores_nomes' in aula:
-                        instrutor = "\n".join(aula['instrutores_nomes'])
-                    elif getattr(aula, 'instrutor_1', None):
-                        instrutor = getattr(aula.instrutor_1.user, 'nome_de_guerra', 'Instrutor')
-                        if getattr(aula, 'instrutor_2', None):
-                            instrutor += f" / {getattr(aula.instrutor_2.user, 'nome_de_guerra', 'Instrutor')}"
+                    # -> SE FOR DICIONÁRIO (JSON)
+                    if isinstance(aula, dict):
+                        # Pega Disciplina
+                        disc = aula.get('disciplina')
+                        if isinstance(disc, dict):
+                            disciplina_str = disc.get('materia', '')
+                        elif isinstance(disc, str):
+                            disciplina_str = disc
+                        else:
+                            disciplina_str = aula.get('materia', aula.get('disciplina_nome', ''))
                             
-                    cell_aula.value = f"{disciplina}\n{instrutor}"
+                        # Pega Instrutor
+                        instrutor_str = aula.get('instrutor_nome', '') or aula.get('instrutor_sobrenome', '') or aula.get('instrutor', '')
+                        inst2 = aula.get('instrutor_2_nome', '') or aula.get('instrutor_2_sobrenome', '')
+                        if inst2:
+                            instrutor_str = f"{instrutor_str} / {inst2}" if instrutor_str else inst2
+                            
+                    # -> SE FOR OBJETO DO BANCO (SQLAlchemy)
+                    else:
+                        # Pega Disciplina
+                        disc_obj = getattr(aula, 'disciplina', None)
+                        if disc_obj:
+                            disciplina_str = getattr(disc_obj, 'materia', '')
+                        elif hasattr(aula, 'materia'):
+                            disciplina_str = getattr(aula, 'materia')
+                            
+                        # Pega Instrutores
+                        inst_1 = getattr(aula, 'instrutor_1', None) or getattr(aula, 'instrutor', None)
+                        if inst_1 and hasattr(inst_1, 'user'):
+                            instrutor_str = getattr(inst_1.user, 'nome_de_guerra', getattr(inst_1.user, 'username', ''))
+                        else:
+                            instrutor_str = getattr(aula, 'instrutor_nome', getattr(aula, 'instrutor_sobrenome', ''))
+                            
+                        inst_2 = getattr(aula, 'instrutor_2', None)
+                        if inst_2 and hasattr(inst_2, 'user'):
+                            nome2 = getattr(inst_2.user, 'nome_de_guerra', getattr(inst_2.user, 'username', ''))
+                            if nome2:
+                                instrutor_str = f"{instrutor_str} / {nome2}" if instrutor_str else nome2
+                                
+                    # Coloca na Célula
+                    if disciplina_str or instrutor_str:
+                        if instrutor_str:
+                            cell_aula.value = f"{disciplina_str}\n{instrutor_str}"
+                        else:
+                            cell_aula.value = disciplina_str
                     cell_aula.font = font_corpo
-                elif aula == 'SKIP':
-                    cell_aula.value = "↳" # Indica que é continuação da aula acima
-                    cell_aula.font = Font(color="CCCCCC")
-            else:
-                cell_aula.fill = PatternFill(start_color='F8F9FA', end_color='F8F9FA', fill_type='solid')
 
-        ws.row_dimensions[row_atual].height = 40
+                elif aula == 'SKIP':
+                    cell_aula.value = "↳" 
+                    cell_aula.font = font_corpo_skip
+            else:
+                cell_aula.fill = fill_blocked
+
+        ws.row_dimensions[row_atual].height = 45
         row_atual += 1
         
         # 3. Inserção de Linhas de Intervalo
@@ -361,11 +393,10 @@ def gerar_quadro_horario_xlsx(pelotao, semana, horario_matrix, datas_semana, tem
             row_atual += 1
 
     # --- AJUSTE DE LARGURA DAS COLUNAS ---
-    ws.column_dimensions['A'].width = 14
+    ws.column_dimensions['A'].width = 16
     for col_letter in [get_column_letter(i) for i in range(2, total_colunas + 1)]:
-        ws.column_dimensions[col_letter].width = 22
+        ws.column_dimensions[col_letter].width = 24
 
-    # --- RETORNO DOS BYTES ---
     out = BytesIO()
     wb.save(out)
     return out.getvalue()
