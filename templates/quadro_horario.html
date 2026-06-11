@@ -64,6 +64,10 @@
                     <button type="button" class="btn btn-danger btn-horario-pdf" data-url="{{ url_for('horario.exportar_pdf', pelotao=pelotao_selecionado, semana_id=semana_selecionada.id) }}">
                         <i class="fas fa-file-pdf me-1"></i> PDF
                     </button>
+
+                    <a href="{{ url_for('horario.exportar_pdf', pelotao=pelotao_selecionado, semana_id=semana_selecionada.id) }}" class="btn btn-success fw-bold shadow-sm">
+                        <i class="fas fa-file-excel me-1"></i> Excel
+                    </a>
                 {% endif %}
                 
                 {% if can_schedule_in_this_turma or current_user.is_sens %}
@@ -372,7 +376,7 @@
 
                 <div class="border-top pt-4">
                     <h5 class="fw-bold text-danger mb-2"><i class="fas fa-ban"></i> Bloqueio de Períodos Específicos</h5>
-                    <p class="small text-muted mb-3">Marque os períodos onde <strong>nenhum instrutor</strong> poderá agendar aulas. Esta configuração se aplica apenas para a turma <strong class="text-dark">{{ pelotao_selecionado }}</strong>, a menos que você marque a opção abaixo para aplicar a todas as turmas da escola.</p>
+                    <p class="small text-muted mb-3">Marque os períodos onde <strong>nenhum instrutor</strong> poderá agendar aulas. Esta configuração se aplica apenas para a turma <strong class="text-dark">{{ pelotao_selecionado }}</strong>, a menos que você marque a option abaixo para aplicar a todas as turmas da escola.</p>
                     
                     <div class="table-responsive bg-white border rounded">
                         <table class="table table-sm table-bordered text-center table-hover mb-0" id="blockGridTable">
