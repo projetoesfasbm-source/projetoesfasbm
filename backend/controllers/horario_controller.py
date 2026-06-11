@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session, Response, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session, Response, current_app, send_file
 from flask_login import login_required, current_user
 from sqlalchemy import select, or_, desc, and_
 from sqlalchemy.orm import joinedload
@@ -11,6 +11,7 @@ from urllib.parse import quote
 import json
 import traceback
 import uuid
+import io
 
 from ..models.database import db
 from ..models.background_job import BackgroundJob
@@ -379,6 +380,35 @@ def exportar_pdf():
     datas_semana = HorarioService.get_datas_da_semana(semana)
     tempos, intervalos = _get_horario_context_data()
     
+    # === GERAÇÃO XLSX (SUBSTITUINDO O PDF TEMPORARIAMENTE) ===
+    try:
+        from ..services.xlsx_service import gerar_quadro_horario_xlsx
+        
+        xlsx_bytes = gerar_quadro_horario_xlsx(
+            pelotao=pelotao,
+            semana=semana,
+            horario_matrix=horario_matrix,
+            datas_semana=datas_semana,
+            tempos=tempos,
+            intervalos=intervalos
+        )
+        
+        data_str = semana.data_inicio.strftime('%Y-%m-%d') if semana.data_inicio else 'semana'
+        filename = f"quadro_horario_{pelotao.replace(' ', '_')}_{data_str}.xlsx"
+        
+        return send_file(
+            io.BytesIO(xlsx_bytes),
+            as_attachment=True,
+            download_name=filename,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+    except Exception as e:
+        current_app.logger.error(f"Erro ao gerar Excel: {str(e)}\n{traceback.format_exc()}")
+        flash(f'Erro ao gerar documento Excel: {str(e)}', 'danger')
+        return redirect(url_for('horario.index'))
+
+    # === CÓDIGO PDF ORIGINAL DESATIVADO ===
+    """
     rendered_html = render_template('horario_pdf.html', 
                                     pelotao_selecionado=pelotao, 
                                     semana_selecionada=semana, 
@@ -402,6 +432,7 @@ def exportar_pdf():
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)})
+    """
 
 @horario_bp.route('/editar/<path:pelotao>/<int:semana_id>/<int:ciclo_id>')
 @login_required
