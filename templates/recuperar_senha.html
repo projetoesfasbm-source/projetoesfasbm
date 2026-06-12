@@ -5,13 +5,123 @@
 {% block navbar_content %}{% endblock %}
 
 {% block content %}
+<style>
+    /* Oculta qualquer barra lateral ou menu superior que venha do base.html */
+    .sidebar, .navbar, .topbar {
+        display: none !important;
+    }
+
+    /* Container responsivo: usa min-height e permite rolagem (overflow-y) se o teclado do celular abrir */
+    .auth-page-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100%;
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 1rem; /* Garante que o card não cole nas bordas do celular */
+        overflow-y: auto; 
+        
+        background-color: #2c3e50; 
+        background-size: cover !important;
+        background-position: center !important;
+        background-repeat: no-repeat !important;
+        z-index: 9999; 
+    }
+
+    .auth-page-container::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.4);
+        z-index: 1;
+    }
+
+    .auth-card {
+        position: relative;
+        z-index: 2; 
+        background: #ffffff;
+        padding: 2.5rem;
+        border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        width: 100%;
+        max-width: 420px;
+        text-align: center;
+        /* Impede que o card fique por baixo de barras de navegação mobile */
+        margin: auto; 
+    }
+
+    .card-logo-container img {
+        max-width: 80px;
+        margin-bottom: 1rem;
+    }
+
+    .auth-card h2 {
+        font-weight: 700;
+        color: #1e293b;
+        margin-bottom: 0.5rem;
+    }
+
+    .auth-card p {
+        font-size: 0.9rem;
+        color: #64748b;
+        margin-bottom: 1.5rem;
+    }
+
+    .form-group {
+        margin-bottom: 1.25rem;
+        text-align: left;
+    }
+
+    .form-label {
+        font-weight: 600;
+        color: #334155;
+        font-size: 0.9rem;
+        margin-bottom: 0.5rem;
+        display: inline-block;
+    }
+
+    .btn-primary {
+        width: 100%;
+        padding: 0.75rem;
+        font-weight: bold;
+        font-size: 1rem;
+        border-radius: 8px;
+    }
+
+    .auth-link a {
+        color: #3b82f6;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 0.9rem;
+    }
+
+    .auth-link a:hover {
+        text-decoration: underline;
+        color: #2563eb;
+    }
+
+    /* Ajuste fino para celulares muito pequenos (iPhone SE, etc) */
+    @media (max-width: 480px) {
+        .auth-card {
+            padding: 1.5rem;
+        }
+    }
+</style>
+
 <div class="auth-page-container">
     <div class="auth-card">
         <div class="card-logo-container">
             <img src="{{ url_for('static', filename='img/brasao.png') }}" alt="Brasão da Escola">
         </div>
         <h2>Recuperar Senha</h2>
-        <p style="font-size: 0.9rem; opacity: 0.8; margin-top: -15px; margin-bottom: 20px;">
+        <p>
             Digite seu e-mail cadastrado e enviaremos um link para redefinir sua senha.
         </p>
 
