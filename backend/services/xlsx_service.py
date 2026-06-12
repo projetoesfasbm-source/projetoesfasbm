@@ -216,7 +216,6 @@ def gerar_quadro_horario_xlsx(pelotao, semana, horario_matrix, datas_semana, tem
     font_titulo = Font(name='Arial', size=14, bold=True, color='FFFFFF')
     font_header = Font(name='Arial', size=11, bold=True, color='FFFFFF')
     font_corpo = Font(name='Arial', size=10, bold=True)
-    font_corpo_skip = Font(name='Arial', size=14, color='A6ACAF')
     font_intervalo = Font(name='Arial', size=10, italic=True, bold=True, color='555555')
     font_tempo = Font(name='Arial', size=9, bold=True)
     
@@ -275,6 +274,9 @@ def gerar_quadro_horario_xlsx(pelotao, semana, horario_matrix, datas_semana, tem
     pos_int_1 = int(intervalos.get('pos_int_1', 3)) - 1
     pos_almoco = int(intervalos.get('pos_almoco', 6)) - 1
     pos_int_2 = int(intervalos.get('pos_int_2', 9)) - 1
+
+    # Novo: Dicionário para guardar o texto da última aula encontrada em cada dia
+    ultimo_texto_coluna = {}
 
     for row_idx in range(15): 
         periodo_num = row_idx + 1
@@ -354,16 +356,23 @@ def gerar_quadro_horario_xlsx(pelotao, semana, horario_matrix, datas_semana, tem
                                 instrutor_str = f"{instrutor_str} / {nome2}" if instrutor_str else nome2
                                 
                     # Coloca na Célula
+                    texto_final = ""
                     if disciplina_str or instrutor_str:
                         if instrutor_str:
-                            cell_aula.value = f"{disciplina_str}\n{instrutor_str}"
+                            texto_final = f"{disciplina_str}\n{instrutor_str}"
                         else:
-                            cell_aula.value = disciplina_str
+                            texto_final = disciplina_str
+                            
+                    cell_aula.value = texto_final
                     cell_aula.font = font_corpo
+                    
+                    # Salva o texto desta aula na memória da coluna para os próximos períodos
+                    ultimo_texto_coluna[col_matriz] = texto_final
 
                 elif aula == 'SKIP':
-                    cell_aula.value = "↳" 
-                    cell_aula.font = font_corpo_skip
+                    # Em vez de colocar a seta, ele pega o texto salvo da aula de cima
+                    cell_aula.value = ultimo_texto_coluna.get(col_matriz, "") 
+                    cell_aula.font = font_corpo
             else:
                 cell_aula.fill = fill_blocked
 
