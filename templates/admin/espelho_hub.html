@@ -97,9 +97,17 @@
                         </select>
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-success fw-bold">Gerar Relatório (PDF)</button>
+                <div class="modal-footer" style="position: relative;">
+                    <div id="loadingContainerEspelho" style="display: none; justify-content: center; align-items: center; gap: 10px; width: 100%;">
+                        <div class="spinner-border text-success spinner-border-sm" role="status">
+                            <span class="visually-hidden">Processando...</span>
+                        </div>
+                        <span style="font-weight: bold; color: var(--bs-success);">Gerando Relatório, aguarde...</span>
+                    </div>
+                    <div id="actionButtonsEspelho" class="d-flex w-100 justify-content-end gap-2">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-success fw-bold" onclick="document.getElementById('actionButtonsEspelho').style.setProperty('display', 'none', 'important'); document.getElementById('loadingContainerEspelho').style.setProperty('display', 'flex', 'important'); setTimeout(()=> { document.getElementById('actionButtonsEspelho').style.setProperty('display', 'flex', 'important'); document.getElementById('loadingContainerEspelho').style.setProperty('display', 'none', 'important'); }, 4000);">Gerar Relatório (PDF)</button>
+                    </div>
                 </div>
             </form>
         </div>

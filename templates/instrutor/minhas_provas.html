@@ -29,10 +29,17 @@
                                 <input type="number" name="qtd_questoes" class="form-control border-primary" value="30" min="1" max="100" required>
                                 <div class="form-text">O sistema sorteará esta quantidade aleatoriamente do banco de questões ativas.</div>
                             </div>
-                            
-                            <button type="submit" class="btn btn-success btn-lg w-100 fw-bold shadow-sm">
-                                <i class="fas fa-random"></i> Sortear Banco e Criar Rascunho
-                            </button>
+                            <div id="loadingContainerProva_{{ d.id }}" style="display: none; justify-content: center; align-items: center; gap: 10px; margin-top: 1rem;">
+                                <div class="spinner-border text-primary spinner-border-sm" role="status">
+                                    <span class="visually-hidden">Processando...</span>
+                                </div>
+                                <span style="font-weight: bold; color: var(--color-primary);">Sorteando banco de questões, aguarde...</span>
+                            </div>
+                            <div id="actionButtonsProva_{{ d.id }}">
+                                <button type="submit" class="btn btn-success btn-lg w-100 fw-bold shadow-sm" onclick="document.getElementById('actionButtonsProva_{{ d.id }}').style.setProperty('display', 'none', 'important'); document.getElementById('loadingContainerProva_{{ d.id }}').style.setProperty('display', 'flex', 'important');">
+                                    <i class="fas fa-random"></i> Sortear Banco e Criar Rascunho
+                                </button>
+                            </div>
                         </form>
                     </div>
                 </div>

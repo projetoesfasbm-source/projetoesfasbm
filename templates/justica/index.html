@@ -473,9 +473,17 @@
                                 <input type="checkbox" class="form-check-input" id="checkAllFinalizados" onchange="toggleAllFinalizados(this)">
                                 <label for="checkAllFinalizados" class="fw-bold mb-0 text-primary">Selecionar Todos (Nesta Página)</label>
                             </div>
-                            <div class="d-flex align-items-center gap-2">
+                            
+                            <div id="loadingContainerLote" style="display: none; align-items: center; gap: 10px;">
+                                <div class="spinner-border text-primary spinner-border-sm" role="status">
+                                    <span class="visually-hidden">Processando...</span>
+                                </div>
+                                <span style="font-weight: bold; color: var(--color-primary);">Processando, aguarde...</span>
+                            </div>
+
+                            <div class="d-flex align-items-center gap-2" id="actionButtonsLote">
                                 <input type="text" name="numero_boletim" class="form-control form-control-sm border-dark" placeholder="Nº do Boletim (Opcional)" style="width: 200px;">
-                                <button type="submit" class="btn btn-sm btn-primary fw-bold" onclick="return validarImpressaoLote()">
+                                <button type="submit" class="btn btn-sm btn-primary fw-bold" onclick="if(validarImpressaoLote()){ document.getElementById('actionButtonsLote').style.display='none'; document.getElementById('loadingContainerLote').style.display='flex'; setTimeout(()=> { document.getElementById('actionButtonsLote').style.display='flex'; document.getElementById('loadingContainerLote').style.display='none'; }, 3000); return true; } return false;">
                                     <i class="fas fa-print me-1"></i> Publicar e Imprimir
                                 </button>
                             </div>
