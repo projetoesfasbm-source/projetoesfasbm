@@ -18,7 +18,7 @@ from backend.models.semana import Semana
 from backend.models.disciplina import Disciplina
 from backend.models.turma import Turma
 from backend.models.ciclo import Ciclo
-from backend.models.user import User  
+from backend.models.user import User
 from backend.services.diario_service import DiarioService
 
 chefe_bp = Blueprint('chefe', __name__, url_prefix='/chefe')
@@ -65,74 +65,80 @@ def verify_chefe_permission():
 @login_required
 def debug_screen():
     output = []
-    output.append("<h1>Diagnóstico Chefe de Turma</h1>")
+    output.append("<h1>Diagnóstico Chefe de Turma (Varredura Semanal Segura)</h1>")
     
     try:
-        aluno = verify_chefe_permission()
+        aluno = current_user.aluno_profile
         if not aluno or not aluno.turma:
             return "Erro: Aluno sem turma vinculada."
             
         escola_id = aluno.turma.school_id
-        
-        # Agora o debug aceita a data que queremos investigar!
-        data_str = request.args.get('data')
-        if data_str:
-            data_hoje = datetime.strptime(data_str, '%Y-%m-%d').date()
-        else:
-            data_hoje = get_data_hoje_brasil()
-            
+        data_hoje = get_data_hoje_brasil()
         dia_str = get_dia_semana_str(data_hoje)
 
         output.append(f"<ul>")
         output.append(f"<li><strong>Aluno:</strong> {aluno.user.nome_completo}</li>")
-        output.append(f"<li><strong>Turma ID:</strong> {aluno.turma_id} | <strong>Nome da Turma no Banco (Aluno):</strong> '{aluno.turma.nome}'</li>")
-        output.append(f"<li><strong>Data Base:</strong> {data_hoje} | <strong>Dia Buscado (Código):</strong> '{dia_str}'</li>")
+        output.append(f"<li><strong>Turma ID:</strong> {aluno.turma_id} | <strong>Nome:</strong> {aluno.turma.nome}</li>")
+        output.append(f"<li><strong>Escola ID:</strong> {escola_id}</li>")
+        output.append(f"<li><strong>Data Base:</strong> {data_hoje} ({dia_str})</li>")
         output.append(f"</ul>")
         
-        semanas_ativas = db.session.query(Semana).join(Ciclo).filter(
+        semanas = db.session.query(Semana).join(Ciclo).filter(
             Ciclo.school_id == escola_id,
             Ciclo.edicao_id == aluno.turma.edicao_id,
-            Semana.data_inicio <= data_hoje,
+            Semana.data_inicio <= data_hoje, 
             Semana.data_fim >= data_hoje
         ).all()
-
-        if not semanas_ativas:
-            output.append("<p style='color:orange'>Aviso: Nenhuma semana exata encontrada. Testando o Fallback...</p>")
-            fallback_semana = db.session.query(Semana).join(Ciclo).filter(
-                Ciclo.school_id == escola_id,
-                Ciclo.edicao_id == aluno.turma.edicao_id,
-                Semana.data_inicio <= data_hoje
-            ).order_by(Semana.data_inicio.desc()).first()
-            
-            if fallback_semana:
-                semanas_ativas = [fallback_semana]
-            else:
-                output.append("<h3 style='color:red'>ERRO FATAL: Nem o fallback encontrou uma semana antes dessa data!</h3>")
-                return "<br>".join(output)
         
-        semana_ids = [s.id for s in semanas_ativas]
-        nomes_semanas = ", ".join([f"{s.nome} (ID {s.id})" for s in semanas_ativas])
-        output.append(f"<p><strong>Semanas Detectadas:</strong> {nomes_semanas}</p>")
-
-        # Busca todos os horários brutos apenas dessa semana
-        horarios_raw = db.session.query(Horario).filter(
-            Horario.semana_id.in_(semana_ids)
-        ).all()
-
-        output.append("<table border='1' cellpadding='5'><tr><th>ID Horario</th><th>Dia salvo no Banco</th><th>Pelotão salvo no Horário</th><th>Disciplina ID</th><th>Turma_id da Disc</th></tr>")
+        if not semanas:
+            output.append(f"<h3 style='color:red'>ERRO: Nenhuma semana encontrada para a Escola {escola_id} na data de hoje.</h3>")
+            output.append("<p>Verifique se existe um Ciclo e uma Semana cadastrados para esta data nesta escola.</p>")
+            return "<br>".join(output)
         
+        semana_ids = [s.id for s in semanas]
+        nomes_semanas = ", ".join([f"{s.nome} (ID {s.id})" for s in semanas])
+        output.append(f"<p><strong>Semanas Ativas Detectadas (Escola {escola_id}):</strong> {nomes_semanas}</p>")
+
+        horarios_raw = db.session.query(Horario)\
+            .outerjoin(Horario.disciplina)\
+            .outerjoin(Disciplina.turma)\
+            .filter(
+                Turma.school_id == escola_id,
+                Horario.semana_id.in_(semana_ids)
+            ).all()
+
+        output.append("<table border='1' cellpadding='5'><tr><th>ID</th><th>Matéria</th><th>Turma ID (Disc)</th><th>Pelotão (Txt)</th><th>Dia no Banco</th><th>Semana ID</th><th>Status</th></tr>")
+        
+        variacoes = get_variacoes_nome_turma(aluno.turma.nome)
+
+        if not horarios_raw:
+             output.append(f"<tr><td colspan='7'>Nenhum horário encontrado para esta escola nas semanas IDs: {semana_ids}.</td></tr>")
+
         for h in horarios_raw:
-            disc_turma_id = h.disciplina.turma_id if h.disciplina else "Sem Disciplina"
+            disc_turma_id = h.disciplina.turma_id if h.disciplina else None
+            materia_nome = h.disciplina.materia if h.disciplina else "N/A"
+
+            eh_minha_turma_id = (disc_turma_id == aluno.turma_id)
+            eh_meu_nome = (h.pelotao == aluno.turma.nome) or (h.pelotao in variacoes)
             
-            # Destaca a linha se for o dia que estamos procurando
-            is_target_day = "background-color: #ffffcc;" if dia_str[:4].lower() in (h.dia_semana or "").lower() else ""
+            status_txt = "Invisível"
+            bg = "#f9f9f9"
+
+            if eh_minha_turma_id:
+                status_txt = "<b>Visível (Por ID Turma)</b>"
+                bg = "#dff0d8"
+            elif eh_meu_nome:
+                status_txt = "<b>Visível (Por Nome/Pelotão)</b>"
+                bg = "#d9edf7"
             
-            output.append(f"<tr style='{is_target_day}'>")
+            output.append(f"<tr style='background:{bg}'>")
             output.append(f"<td>{h.id}</td>")
-            output.append(f"<td>'{h.dia_semana}'</td>")
-            output.append(f"<td>'{h.pelotao}'</td>")
-            output.append(f"<td>{h.disciplina_id}</td>")
-            output.append(f"<td>{disc_turma_id}</td>")
+            output.append(f"<td>{materia_nome}</td>")
+            output.append(f"<td>{disc_turma_id} (Meu: {aluno.turma_id})</td>")
+            output.append(f"<td>{h.pelotao}</td>")
+            output.append(f"<td>{h.dia_semana}</td>")
+            output.append(f"<td>{h.semana_id}</td>")
+            output.append(f"<td>{status_txt}</td>")
             output.append("</tr>")
         output.append("</table>")
 
@@ -141,7 +147,6 @@ def debug_screen():
         output.append(f"<pre>{traceback.format_exc()}</pre>")
 
     return "<br>".join(output)
-
 
 @chefe_bp.route('/painel')
 @login_required
@@ -166,13 +171,11 @@ def painel():
         ).all()
 
         if not semanas_ativas:
-            # FALLBACK DE SEGURANÇA: Busca a última semana cadastrada antes dessa data
             fallback_semana = db.session.query(Semana).join(Ciclo).filter(
                 Ciclo.school_id == aluno.turma.school_id,
                 Ciclo.edicao_id == aluno.turma.edicao_id,
                 Semana.data_inicio <= data_selecionada
             ).order_by(Semana.data_inicio.desc()).first()
-            
             if fallback_semana:
                 semanas_ativas = [fallback_semana]
             else:
@@ -430,7 +433,6 @@ def registrar_aula(primeiro_horario_id):
             flash("Todas as aulas desta disciplina já foram registradas para hoje.", "info")
             return redirect(url_for('chefe.painel', data=data_aula))
 
-        # CORREÇÃO APLICADA AQUI: Filtrar apenas usuários ativos e com papel estrito de 'aluno'
         alunos_turma = db.session.query(Aluno).join(User, Aluno.user_id == User.id).filter(
             Aluno.turma_id == aluno_chefe.turma_id,
             User.is_active == True,
