@@ -18,6 +18,7 @@ from backend.models.semana import Semana
 from backend.models.disciplina import Disciplina
 from backend.models.turma import Turma
 from backend.models.ciclo import Ciclo
+from backend.models.user import User  # IMPORTAÇÃO ADICIONADA AQUI
 from backend.services.diario_service import DiarioService
 
 chefe_bp = Blueprint('chefe', __name__, url_prefix='/chefe')
@@ -434,7 +435,12 @@ def registrar_aula(primeiro_horario_id):
             flash("Todas as aulas desta disciplina já foram registradas para hoje.", "info")
             return redirect(url_for('chefe.painel', data=data_aula))
 
-        alunos_turma = db.session.query(Aluno).filter_by(turma_id=aluno_chefe.turma_id).order_by(Aluno.num_aluno).all()
+        # CORREÇÃO APLICADA AQUI: Filtrar apenas usuários ativos e com papel estrito de 'aluno'
+        alunos_turma = db.session.query(Aluno).join(User, Aluno.user_id == User.id).filter(
+            Aluno.turma_id == aluno_chefe.turma_id,
+            User.is_active == True,
+            User.role == 'aluno'
+        ).order_by(Aluno.num_aluno).all()
 
         if request.method == 'POST':
             conteudo_informado = request.form.get('conteudo')
