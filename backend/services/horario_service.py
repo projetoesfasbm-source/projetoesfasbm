@@ -349,6 +349,34 @@ class HorarioService:
             if not semana:
                 return False, "Semana não encontrada.", 404
 
+            # ==============================================================================
+            # TRAVA ANTI-COLISÃO E CLONAGEM DIRETAMENTE NA SEMANA ATUAL
+            # Isso resolve o bug onde o "duplo-clique" ou arrasto gerava aulas duplicadas.
+            # Usamos o semana_id diretamente para não falhar caso as datas do ciclo estejam erradas.
+            # ==============================================================================
+            trava_query = select(Horario).where(
+                Horario.pelotao == pelotao,
+                Horario.semana_id == semana_id,
+                Horario.dia_semana == dia,
+                Horario.periodo <= periodo_fim,
+                (Horario.periodo + Horario.duracao - 1) >= periodo_inicio
+            )
+            
+            # Se for uma edição, ignora a própria aula e o seu grupo para não dar falso positivo
+            if horario_id:
+                aula_edit = db.session.get(Horario, horario_id)
+                if aula_edit:
+                    if aula_edit.group_id:
+                        trava_query = trava_query.where(Horario.group_id != aula_edit.group_id)
+                    else:
+                        trava_query = trava_query.where(Horario.id != horario_id)
+
+            colisao_direta = db.session.scalar(trava_query)
+            if colisao_direta:
+                nome_mat = colisao_direta.disciplina.materia if colisao_direta.disciplina else 'Outra Matéria'
+                return False, f"⚠️ ERRO DE MARCAÇÃO: O {colisao_direta.periodo}º período na {dia.capitalize()} já está ocupado por '{nome_mat}'. Não é possível agendar por cima.", 409
+            # ==============================================================================
+
             semanas_sobrepostas = select(Semana.id).where(
                 Semana.data_inicio == semana.data_inicio,
                 Semana.data_fim == semana.data_fim
@@ -704,7 +732,7 @@ class HorarioService:
                 'id_para_acao': primeira_aula.id,
             })
 
-        aulas_para_template.sort(
+            aulas_para_template.sort(
             key=lambda x: x['aula'].id, reverse=True
         )
         return aulas_para_template
