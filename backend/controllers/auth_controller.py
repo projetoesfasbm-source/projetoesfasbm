@@ -306,7 +306,6 @@ def register():
     form_data = request.form.to_dict()
 
     if request.method == "POST":
-        role = form_data.get("role", "aluno")
         pwd = form_data.get("password", "")
         pwd2 = form_data.get("password2", "")
         matricula_norm = normalize_matricula(form_data.get("matricula"))
@@ -339,7 +338,9 @@ def register():
 
         primeira_escola_id = vinculos[0].school_id
 
-        user.role = role
+        # SEGURANÇA: Fixar a permissão (role) original para evitar Escalonamento de Privilégio
+        role = user.role
+        
         user.nome_completo = normalize_name(form_data.get("nome_completo"))
         user.nome_de_guerra = normalize_name(form_data.get("nome_de_guerra"))
         user.posto_graduacao = form_data.get("posto_graduacao") or None
@@ -366,6 +367,19 @@ def register():
 
         try:
             db.session.commit()
+            
+            # AUDITORIA: Gravar o log de segurança da ativação
+            try:
+                from ..services.log_service import LogService
+                LogService.log_action(
+                    user_id=user.id,
+                    school_id=primeira_escola_id,
+                    action="CONTA_ATIVADA",
+                    details=f"O usuário {user.matricula} finalizou seu cadastro inicial com o perfil de {role.upper()}."
+                )
+            except Exception as e:
+                current_app.logger.error(f"Erro ao registrar log de segurança de ativação: {e}")
+
             flash("Conta ativada!", "success")
             return redirect(url_for("auth.login"))
         except Exception:
