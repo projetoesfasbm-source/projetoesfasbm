@@ -6,6 +6,12 @@ from ..models.notification import Notification
 from ..models.user import User
 from ..models.user_school import UserSchool
 from ..models.push_subscription import PushSubscription
+from cachetools import cached, TTLCache
+import time
+
+# Cache que expira a cada 6 horas (21600 segundos) para economizar queries de JS
+dropdown_cache = TTLCache(maxsize=2000, ttl=21600)
+
 
 class NotificationService:
 
@@ -87,6 +93,7 @@ class NotificationService:
         db.session.flush()
 
     @staticmethod
+    @cached(cache=dropdown_cache)
     def get_notifications_for_dropdown(user_id: int, limit: int = 7):
         """Busca as notificações mais recentes e a contagem de não lidas."""
         unread_count_query = (

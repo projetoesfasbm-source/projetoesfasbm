@@ -19,7 +19,12 @@ class Config:
     SQLALCHEMY_ECHO = False
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True}
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        "pool_pre_ping": True,
+        "pool_size": 5,
+        "max_overflow": 10,
+        "pool_recycle": 1800,
+    }
 
     # --- NOVAS CONFIGURAÇÕES DE SEGURANÇA PARA COOKIES ---
     SESSION_COOKIE_SECURE = True
