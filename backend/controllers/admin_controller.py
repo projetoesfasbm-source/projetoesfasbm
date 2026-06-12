@@ -152,27 +152,34 @@ def espelho_diarios():
     turma_id = request.args.get('turma_id', type=int)
     disciplina_id = request.args.get('disciplina_id', type=int)
     data_str = request.args.get('data')
+    per_page = 20
 
-    diarios_todos = DiarioService.get_diarios_pendentes(
+    resultado_service = DiarioService.get_diarios_pendentes(
         school_id=school_id,
         user_id=None, 
         turma_id=turma_id,
         disciplina_id=disciplina_id,
-        status=None 
+        status=None,
+        page=1,         
+        per_page=10000  
     )
+
+    if hasattr(resultado_service, 'items'):
+        diarios_todos_lista = resultado_service.items
+    else:
+        diarios_todos_lista = resultado_service
 
     if data_str:
         try:
             data_filtro = datetime.strptime(data_str, '%Y-%m-%d').date()
-            diarios_todos = [d for d in diarios_todos if d.data_aula == data_filtro]
+            diarios_todos_lista = [d for d in diarios_todos_lista if d.data_aula == data_filtro]
         except ValueError:
             pass
 
-    total_items = diarios_todos.total
-    per_page = 20
+    total_items = len(diarios_todos_lista)
     start = (page - 1) * per_page
     end = start + per_page
-    diarios_paginados = diarios_todos[start:end]
+    diarios_paginados = diarios_todos_lista[start:end]
     
     class FakePagination:
         def __init__(self, items, page, per_page, total):
@@ -180,7 +187,7 @@ def espelho_diarios():
             self.page = page
             self.per_page = per_page
             self.total = total
-            self.pages = (total + per_page - 1) // per_page
+            self.pages = (total + per_page - 1) // per_page if per_page > 0 else 0
             self.has_prev = page > 1
             self.has_next = page < self.pages
             self.prev_num = page - 1
