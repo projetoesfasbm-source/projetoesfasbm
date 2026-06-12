@@ -12,7 +12,7 @@ from flask import (
     request, url_for, jsonify, abort
 )
 from flask_login import current_user, login_required
-from sqlalchemy import text, select, case
+from sqlalchemy import text, select, case, or_
 from sqlalchemy.exc import IntegrityError
 from werkzeug.security import generate_password_hash
 from flask_wtf import FlaskForm
@@ -282,6 +282,18 @@ def gerenciar_usuarios():
     
     pagination_assigned = db.paginate(stmt_assigned, page=page, per_page=50, error_out=False)
 
+    # -------------------------------------------------------------------------
+    # CORREÇÃO AQUI: Construir manualmente a tupla (usuario, vinculo) 
+    # já que o db.paginate retorna apenas a lista de usuários no .items
+    # -------------------------------------------------------------------------
+    usuarios_com_role_tuples = []
+    for u in pagination_assigned.items:
+        vinculo = db.session.scalar(
+            select(UserSchool).where(UserSchool.user_id == u.id, UserSchool.school_id == school_id)
+        )
+        usuarios_com_role_tuples.append((u, vinculo))
+    # -------------------------------------------------------------------------
+
     # Se for super_admin, carregar limitadamente pré-cadastrados, órfãos e usuários ativos para a tela
     orfãos = []
     pre_cadastrados = []
@@ -303,7 +315,7 @@ def gerenciar_usuarios():
 
     return render_template(
         "manage_users.html", 
-        usuarios_com_role=pagination_assigned.items, 
+        usuarios_com_role=usuarios_com_role_tuples, 
         pagination=pagination_assigned,
         q=q,
         orfaos=orfãos, 
