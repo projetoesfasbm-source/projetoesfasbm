@@ -33,7 +33,7 @@ def get_data_hoje_brasil():
 
 def get_dia_semana_str(data_obj):
     """Retorna o dia da semana formatado conforme padrão do banco."""
-    dias = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
+    dias = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo']
     return dias[data_obj.weekday()]
 
 def get_variacoes_nome_turma(nome_original):
@@ -433,6 +433,7 @@ def registrar_aula(primeiro_horario_id):
             flash("Todas as aulas desta disciplina já foram registradas para hoje.", "info")
             return redirect(url_for('chefe.painel', data=data_aula))
 
+        # CORREÇÃO APLICADA AQUI: Filtrar apenas usuários ativos e com papel estrito de 'aluno'
         alunos_turma = db.session.query(Aluno).join(User, Aluno.user_id == User.id).filter(
             Aluno.turma_id == aluno_chefe.turma_id,
             User.is_active == True,
