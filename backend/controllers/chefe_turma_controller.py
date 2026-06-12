@@ -170,7 +170,17 @@ def painel():
         ).all()
 
         if not semanas_ativas:
-            return render_template('chefe/painel.html', aluno=aluno, aulas_agrupadas=[], data_selecionada=data_selecionada, erro_semana=True)
+            # FALLBACK DE SEGURANÇA: Busca a última semana cadastrada antes dessa data
+            fallback_semana = db.session.query(Semana).join(Ciclo).filter(
+                Ciclo.school_id == aluno.turma.school_id,
+                Ciclo.edicao_id == aluno.turma.edicao_id,
+                Semana.data_inicio <= data_selecionada
+            ).order_by(Semana.data_inicio.desc()).first()
+            
+            if fallback_semana:
+                semanas_ativas = [fallback_semana]
+            else:
+                return render_template('chefe/painel.html', aluno=aluno, aulas_agrupadas=[], data_selecionada=data_selecionada, erro_semana=True)
 
         semana_ids = [s.id for s in semanas_ativas]
         dia_str = get_dia_semana_str(data_selecionada)
