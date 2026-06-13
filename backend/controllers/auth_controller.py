@@ -289,14 +289,22 @@ def api_turmas(matricula):
 
     user = db.session.execute(select(User).where(User.matricula == mat_norm)).scalar_one_or_none()
     if not user:
-        return jsonify([])
+        return jsonify({"role": "desconhecido", "turmas": []})
 
     vinculo = db.session.execute(select(UserSchool).where(UserSchool.user_id == user.id)).scalars().first()
     if not vinculo:
-        return jsonify([])
+        return jsonify({"role": user.role, "turmas": []})
 
     turmas = db.session.execute(select(Turma).where(Turma.school_id == vinculo.school_id).order_by(Turma.nome)).scalars().all()
-    return jsonify([{"id": t.id, "nome": t.nome} for t in turmas])
+    
+    # Check if user has a global role, or use school role
+    # Since auth controller register doesn't have school context yet, we use global user role or vinculo role
+    effective_role = vinculo.role if vinculo.role else user.role
+    
+    return jsonify({
+        "role": effective_role,
+        "turmas": [{"id": t.id, "nome": t.nome} for t in turmas]
+    })
 # ------------------------------------------
 
 @auth_bp.route("/register", methods=["GET", "POST"])

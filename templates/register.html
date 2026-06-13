@@ -49,13 +49,7 @@
             <form method="POST" action="{{ url_for('auth.register') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-                <div class="form-group">
-                    <label for="role">Eu sou:</label>
-                    <select id="role" name="role" class="form-control" required>
-                        <option value="aluno" {% if form_data.get('role', 'aluno') == 'aluno' %}selected{% endif %}>Aluno</option>
-                        <option value="instrutor" {% if form_data.get('role') == 'instrutor' %}selected{% endif %}>Instrutor</option>
-                    </select>
-                </div>
+                <!-- O campo "Eu sou" foi removido. O sistema detecta o papel automaticamente -->
                 <div class="form-group">
                     <label for="matricula">Sua Matrícula:</label>
                     <input type="text" id="matricula" name="matricula" class="form-control"
@@ -152,15 +146,14 @@
 
             <script>
                 document.addEventListener('DOMContentLoaded', function() {
-                    const roleSelect = document.getElementById('role');
                     const alunoFields = document.getElementById('aluno-fields');
                     const opmInput = document.getElementById('opm');
                     const turmaSelect = document.getElementById('turma_id');
                     const matriculaInput = document.getElementById('matricula');
 
                     // Função para mostrar/esconder campos de aluno
-                    function toggleAlunoFields() {
-                        if (roleSelect.value === 'aluno') {
+                    function toggleAlunoFields(userRole) {
+                        if (userRole === 'aluno') {
                             alunoFields.style.display = 'block';
                             opmInput.required = true;
                         } else {
@@ -178,8 +171,13 @@
                             fetch(urlExata)
                                 .then(response => response.json())
                                 .then(data => {
+                                    const role = data.role || 'aluno';
+                                    const turmas = data.turmas || [];
+
+                                    toggleAlunoFields(role);
+
                                     turmaSelect.innerHTML = '<option value="">Não sei ainda / Definir depois</option>';
-                                    data.forEach(turma => {
+                                    turmas.forEach(turma => {
                                         const option = document.createElement('option');
                                         option.value = turma.id;
                                         option.textContent = turma.nome;
@@ -189,11 +187,12 @@
                                 .catch(error => console.error('Erro ao buscar turmas:', error));
                         } else {
                             turmaSelect.innerHTML = '<option value="">Não sei ainda / Definir depois</option>';
+                            toggleAlunoFields('aluno'); // Padrão até a API responder
                         }
                     }
 
-                    toggleAlunoFields();
-                    roleSelect.addEventListener('change', toggleAlunoFields);
+                    // Esconde por padrão até digitar a matrícula
+                    toggleAlunoFields('aluno');
 
                     // Escuta quando o usuário digita ou sai do campo de matrícula
                     matriculaInput.addEventListener('blur', carregarTurmas);

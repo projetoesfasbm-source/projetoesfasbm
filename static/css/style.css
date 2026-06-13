@@ -245,11 +245,10 @@ margin-bottom: 1.5rem; border-bottom: 1px solid var(--color-border); }
 text-align: left; vertical-align: middle; border-bottom: 1px solid #dee2e6; border-right: 1px solid #dee2e6; }
 .table-styled th:last-child, .table-styled td:last-child { border-right: none;
 }
-.table-styled th { font-weight: 600; font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.5px; }
-.table-styled tbody tr:hover { background-color: rgba(59, 130, 246, 0.05);
-}
+.table-styled th { font-weight: 600; font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; }
+.table-styled tbody tr:hover { background-color: rgba(59, 130, 246, 0.05); }
 .text-right { text-align: right; }
-.empty-state { padding: 3rem; text-align: center; }
+.empty-state { padding: 3rem; text-align: center; width: 100%; }
 .empty-state .empty-icon { font-size: 4rem; line-height: 1; margin-bottom: 1rem;
 color: var(--color-primary-light); }
 
@@ -484,6 +483,66 @@ body.no-sidebar .content-wrapper {
 /* Overlay do Menu Mobile */
 .sidebar-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); z-index: 1999; opacity: 0; visibility: hidden; transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out; }
 .sidebar-overlay.active { opacity: 1; visibility: visible; }
+
+/* ==========================================================================
+   18. Otimizações para Notebooks e Telas Médias (992px a 1400px)
+   ========================================================================== */
+@media (max-width: 1400px) and (min-width: 992px) {
+    :root {
+        --sidebar-width: 250px; /* Reduz a barra lateral para dar mais espaço à tabela/conteúdo */
+    }
+    
+    .content-wrapper {
+        padding: 1rem 1.5rem; /* Reduz o padding lateral do conteúdo */
+    }
+    
+    .top-navbar {
+        padding: 0 1rem; /* Evita que os ícones fiquem espremidos na borda */
+    }
+
+    .top-navbar-title {
+        font-size: 1.3rem; /* Fonte do título menor para caber na barra sem empurrar botões */
+    }
+
+    .btn {
+        padding: 0.5rem 1rem; /* Botões levemente mais compactos */
+        font-size: 0.85rem;
+    }
+    
+    /* Garante que se houver muitos botões no título da página, eles quebrem linha suavemente e empurrem o conteúdo */
+    .page-title-with-controls {
+        gap: 0.75rem;
+        margin-bottom: 1.5rem;
+        align-items: center; /* Alinha melhor quando quebra a linha */
+    }
+    
+    /* Ajustes das tabelas para telas não gigantes */
+    .table-container {
+        padding: 1.5rem;
+    }
+}
+
+/* ==========================================================================
+   19. Correções Anti-Sobreposição Globais
+   ========================================================================== */
+/* Garante que tabelas muito largas tenham barra de rolagem e não quebrem o grid nem invadam outras divs */
+.table-responsive {
+    overflow-x: auto;
+    width: 100%;
+    -webkit-overflow-scrolling: touch;
+    display: block; /* Garante o box model correto para overflow */
+    border-radius: 8px; /* Mantém a estética */
+}
+
+/* Garante que botões agrupados não fiquem "encavalados" verticalmente se quebrarem linha */
+.btn-group {
+    flex-wrap: wrap; 
+}
+
+/* Fix global de z-index para dropdowns */
+.dropdown-menu {
+    z-index: 1050; /* Sempre acima da barra superior e botões */
+}
 
 /* --- REGRAS ESPECÍFICAS PARA CELULAR (Telas menores que 992px) --- */
 /* ==========================================================================
