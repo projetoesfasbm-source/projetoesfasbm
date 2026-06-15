@@ -180,12 +180,16 @@
                     {% endfor %}
                 </tr>
                 
-                {% if row_idx == 2 or row_idx == 5 or row_idx == 8 %}
+                {% set pos_manha = intervalos.pos_int_1 - 1 %}
+                {% set pos_almoco = intervalos.pos_almoco - 1 %}
+                {% set pos_tarde = intervalos.pos_int_2 - 1 %}
+
+                {% if row_idx == pos_manha or row_idx == pos_almoco or row_idx == pos_tarde %}
                 <tr class="intervalo-row">
                     <td colspan="{{ dias_count + 1 }}" class="bg-secondary text-white py-1 border-black" style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; font-weight: bold; border: 1px solid #000 !important; background-color: #6c757d !important; color: #fff !important;">
-                        {% if row_idx == 2 %}Intervalo Manhã ({{ intervalos.intervalo_1 }}){% endif %}
-                        {% if row_idx == 5 %}Almoço ({{ intervalos.almoco }}){% endif %}
-                        {% if row_idx == 8 %}Intervalo Tarde ({{ intervalos.intervalo_2 }}){% endif %}
+                        {% if row_idx == pos_manha %}Intervalo Manhã ({{ intervalos.intervalo_1 }}){% endif %}
+                        {% if row_idx == pos_almoco %}Almoço ({{ intervalos.almoco }}){% endif %}
+                        {% if row_idx == pos_tarde %}Intervalo Tarde ({{ intervalos.intervalo_2 }}){% endif %}
                     </td>
                 </tr>
                 {% endif %}
