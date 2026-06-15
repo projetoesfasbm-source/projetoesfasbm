@@ -76,8 +76,14 @@ def detalhes_turma(turma_id):
     # Passa a lista oficial para o template
     cargos_atuais = TurmaService.get_cargos_da_turma(turma_id, CARGOS_LISTA)
     
+    # Ordena a lista de alunos de forma segura, contornando o erro de nome nulo (NoneType)
+    alunos_ordenados = sorted(
+        turma.alunos, 
+        key=lambda a: (a.user.nome_completo.lower() if a.user and a.user.nome_completo else "")
+    )
+    
     return render_template('detalhes_turma.html', turma=turma, cargos_lista=CARGOS_LISTA,
-                           cargos_atuais=cargos_atuais)
+                           cargos_atuais=cargos_atuais, alunos_ordenados=alunos_ordenados)
 
 @turma_bp.route('/<int:turma_id>/salvar-cargos', methods=['POST'])
 @login_required
