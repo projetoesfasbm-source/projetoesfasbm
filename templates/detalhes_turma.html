@@ -107,8 +107,8 @@
                         <label for="modalAlunoSelect" class="form-label">Aluno Responsável</label>
                         <select id="modalAlunoSelect" name="aluno_id" class="form-select">
                             <option value="">-- Ninguém (Cargo Vago) --</option>
-                            {% for aluno in turma.alunos | sort(attribute='user.nome_completo') %}
-                                <option value="{{ aluno.id }}">{{ aluno.user.nome_completo }}</option>
+                            {% for aluno in alunos_ordenados %}
+                                <option value="{{ aluno.id }}">{{ aluno.user.nome_completo or aluno.user.username }}</option>
                             {% endfor %}
                         </select>
                     </div>
