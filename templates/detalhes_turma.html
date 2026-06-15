@@ -23,7 +23,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for aluno in turma.alunos | sort(attribute='user.nome_completo') %}
+                    {% for aluno in alunos_ordenados %}
                     <tr>
                         <td>{{ aluno.user.nome_completo or aluno.user.username }}</td>
                         <td>{{ aluno.user.matricula }}</td>
