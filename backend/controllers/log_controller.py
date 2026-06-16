@@ -49,6 +49,8 @@ def render_logs_page():
     # 3. Busca a escola ativa no momento
     school_id = current_user.temp_active_school_id or current_user.school_id
 
+    LogService.log(action="TESTE DE FUNCIONAMENTO", details="Se você está lendo isso, a tela funciona!", school_id=school_id)
+
     # 4. Busca os logs no banco de dados usando os objetos de data corrigidos
     logs_db = LogService.get_logs(
         school_id=school_id, 
