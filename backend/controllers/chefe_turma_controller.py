@@ -1,5 +1,3 @@
-# backend/controllers/chefe_turma_controller.py
-
 from flask import Blueprint, render_template, request, flash, redirect, url_for, g
 from flask_login import login_required, current_user
 from datetime import date, datetime, timedelta
@@ -20,6 +18,7 @@ from backend.models.turma import Turma
 from backend.models.ciclo import Ciclo
 from backend.models.user import User
 from backend.services.diario_service import DiarioService
+from backend.services.log_service import LogService # <--- ADDED
 
 chefe_bp = Blueprint('chefe', __name__, url_prefix='/chefe')
 
@@ -499,6 +498,16 @@ def registrar_aula(primeiro_horario_id):
                     count_regs += 1
 
                 db.session.commit()
+                
+                # --- AUDIT LOGGING ---
+                if count_regs > 0:
+                    LogService.log(
+                        action="Registrou Frequência",
+                        details=f"O Chefe de Turma salvou {count_regs} tempo(s) do diário da disciplina '{horario_base.disciplina.materia}' (Data: {data_aula}).",
+                        school_id=aluno_chefe.turma.school_id
+                    )
+                # ---------------------
+                
                 flash(f"Salvo com sucesso! {count_regs} tempos registrados.", "success")
                 return redirect(url_for('chefe.painel', data=data_aula))
             except Exception as e:
