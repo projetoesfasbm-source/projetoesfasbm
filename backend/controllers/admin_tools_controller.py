@@ -42,6 +42,15 @@ def mail_merge():
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
+        # --- ESPIÃO: MAIL MERGE ---
+        school_id = UserService.get_current_school_id()
+        LogService.log(
+            action="Utilizou Mail Merge",
+            details=f"O administrador gerou um lote de documentos (formato: {output_format}).",
+            school_id=school_id
+        )
+        # --------------------------
+        
         return send_file(
             zip_buffer,
             as_attachment=True,
@@ -67,6 +76,14 @@ def backup_escola():
         buffer = io.BytesIO(json_str.encode('utf-8'))
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"backup_escola_{school_id}_edicao_{timestamp}.json"
+        
+        # --- ESPIÃO: BACKUP DA ESCOLA ---
+        LogService.log(
+            action="Gerou Backup",
+            details=f"Um arquivo de backup completo da escola foi gerado e baixado ({filename}).",
+            school_id=school_id
+        )
+        # --------------------------------
         
         return send_file(
             buffer,
@@ -120,6 +137,16 @@ def clear_data():
 
     # Se não selecionou instrutores, executa a limpeza direto
     success, message = AdminToolsService.custom_clear_school_data(school_id, opcoes_selecionadas)
+    
+    # --- ESPIÃO: RESETOU DADOS ---
+    if success:
+        LogService.log(
+            action="Reset/Limpeza da Escola",
+            details=f"O administrador realizou a exclusão em massa dos seguintes dados: {', '.join(opcoes_selecionadas)}.",
+            school_id=school_id
+        )
+    # -----------------------------
+    
     flash(message, 'success' if success else 'danger')
     return redirect(url_for('tools.reset_escola'))
 
@@ -143,6 +170,15 @@ def clear_data_confirmado():
 
     # Chama o service passando a lista exata de quem deve sair
     success, message = AdminToolsService.custom_clear_school_data(school_id, opcoes_selecionadas, instructors_to_delete_ids=instrutores_to_delete_ids)
+
+    # --- ESPIÃO: RESETOU DADOS (COM INSTRUTORES) ---
+    if success:
+        LogService.log(
+            action="Reset/Limpeza da Escola",
+            details=f"O administrador realizou a exclusão em massa: {', '.join(opcoes_selecionadas)} (incluindo {len(instrutores_to_delete_ids)} instrutor(es) removido(s)).",
+            school_id=school_id
+        )
+    # -----------------------------------------------
 
     flash(message, 'success' if success else 'danger')
     return redirect(url_for('tools.reset_escola'))
