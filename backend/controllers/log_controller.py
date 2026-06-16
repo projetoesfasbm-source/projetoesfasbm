@@ -45,7 +45,7 @@ def render_logs_page():
 
     # 6. Entrega tudo para o HTML desenhar a tela
     return render_template(
-        'logs_auditoria.html', # Certifique-se de que o nome do arquivo HTML é este mesmo
+        'ferramentas/logs_admin.html', # Certifique-se de que o nome do arquivo HTML é este mesmo
         logs=logs_db,
         users=users,
         data_inicio=data_inicio or '',
