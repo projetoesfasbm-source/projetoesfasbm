@@ -248,6 +248,16 @@ def registrar_em_massa():
                 logger.error(f"Erro no elogio: {e}")
 
     db.session.commit()
+    
+    # --- ESPIÃO: REGISTRO EM MASSA ---
+    school_id = UserService.get_current_school_id()
+    LogService.log(
+        action="Registro em Massa (Justiça)",
+        details=f"O usuário gerou {count} registro(s) do tipo '{tipo}'.",
+        school_id=school_id
+    )
+    # ---------------------------------
+    
     flash(f"{count} registros criados.", "success")
     return redirect(url_for('justica.index'))
 
@@ -274,6 +284,16 @@ def editar_processo(pid):
         processo.observacao = request.form.get('observacao', processo.observacao)
         processo.codigo_infracao = request.form.get('codigo_infracao', processo.codigo_infracao)
         db.session.commit()
+        
+        # --- ESPIÃO: EDITOU PROCESSO ---
+        school_id = UserService.get_current_school_id()
+        LogService.log(
+            action="Editou Processo",
+            details=f"O processo disciplinar ID {pid} foi editado na origem.",
+            school_id=school_id
+        )
+        # -------------------------------
+        
         flash("Processo atualizado com sucesso.", "success")
     else:
         flash("Este processo já avançou de fase e não pode mais ser editado na origem.", "danger")
@@ -340,6 +360,19 @@ def dar_ciente(processo_id):
         flash("Este processo não aguarda ciência inicial.", "warning")
 
     db.session.commit()
+    
+    # --- ESPIÃO: CIÊNCIA NO PROCESSO ---
+    school_id = UserService.get_current_school_id()
+    if not school_id and current_user.role == 'aluno':
+        school_id = current_user.aluno_profile.turma.school_id
+        
+    LogService.log(
+        action="Ciência de Processo",
+        details=f"O aluno ou administrador registrou a ciência no processo ID {processo_id}.",
+        school_id=school_id
+    )
+    # -----------------------------------
+    
     return redirect(url_for('justica.index'))
 
 @justica_bp.route('/enviar-defesa/<int:processo_id>', methods=['POST'])
@@ -371,6 +404,16 @@ def enviar_defesa(processo_id):
 
     try:
         db.session.commit()
+        
+        # --- ESPIÃO: ALUNO ENVIOU DEFESA ---
+        school_id = current_user.aluno_profile.turma.school_id
+        LogService.log(
+            action="Enviou Defesa",
+            details=f"O aluno enviou a defesa/justificativa para o processo ID {processo_id}.",
+            school_id=school_id
+        )
+        # -----------------------------------
+        
         flash("Justificativa/Defesa enviada com sucesso.", "success")
     except Exception as e:
         db.session.rollback()
@@ -406,6 +449,16 @@ def enviar_recurso(pid):
     processo.status = StatusProcesso.EM_RECURSO.value
 
     db.session.commit()
+    
+    # --- ESPIÃO: ALUNO ENVIOU RECURSO ---
+    school_id = current_user.aluno_profile.turma.school_id
+    LogService.log(
+        action="Enviou Recurso",
+        details=f"O aluno interpôs recurso para o processo disciplinar ID {pid}.",
+        school_id=school_id
+    )
+    # ------------------------------------
+    
     flash("Recurso enviando ao Comandante.", "success")
     return redirect(url_for('justica.index'))
 
@@ -502,16 +555,14 @@ def finalizar_processo(pid):
         db.session.commit()
         aluno = db.session.get(Aluno, processo.aluno_id)
         
-        # Tenta salvar no log, ignorando se o método não existir
-        try:
-            if hasattr(LogService, 'log_action'):
-                LogService.log_action(
-                    user_id=current_user.id,
-                    action="FINALIZAR_PROCESSO_DISCIPLINA",
-                    details=f"Julgou o PD {processo.id} do aluno {aluno.user.nome_completo if aluno and aluno.user else 'Desconhecido'}. Veredito: {decisao}. Pontos aplicados: {processo.pontos}"
-                )
-        except Exception as log_e:
-            logger.warning(f"Não foi possível salvar log de auditoria: {log_e}")
+        # --- ESPIÃO: JULGAMENTO DO PROCESSO ---
+        school_id = UserService.get_current_school_id()
+        LogService.log(
+            action="Julgou Processo Disciplinar",
+            details=f"Julgou o processo ID {processo.id} do aluno {aluno.user.nome_completo if aluno and aluno.user else 'Desconhecido'}. Veredito: {decisao}. Pontos: {processo.pontos}",
+            school_id=school_id
+        )
+        # --------------------------------------
 
         if aluno and aluno.user:
             link = url_for('justica.index', _external=True)
@@ -596,6 +647,15 @@ def julgar_recurso(pid):
     processo.status = StatusProcesso.FINALIZADO.value
 
     db.session.commit()
+    
+    # --- ESPIÃO: COMANDANTE JULGOU RECURSO ---
+    LogService.log(
+        action="Julgou Recurso",
+        details=f"O Comandante julgou o recurso do processo ID {pid}. Decisão: {decisao}.",
+        school_id=school_id
+    )
+    # -----------------------------------------
+    
     flash("Recurso julgado. Processo finalizado.", "success")
     return redirect(url_for('justica.index'))
 
@@ -609,6 +669,16 @@ def arquivar_processo(pid):
 
     processo.status = StatusProcesso.ARQUIVADO.value
     db.session.commit()
+    
+    # --- ESPIÃO: ARQUIVOU PROCESSO ---
+    school_id = UserService.get_current_school_id()
+    LogService.log(
+        action="Arquivou Processo",
+        details=f"O processo ID {pid} foi arquivado.",
+        school_id=school_id
+    )
+    # ---------------------------------
+    
     flash("Processo arquivado.", "info")
     return redirect(url_for('justica.index'))
 
@@ -627,6 +697,16 @@ def deletar_processo(pid):
              return redirect(url_for('justica.index'))
 
     success, message = JusticaService.deletar_processo(pid)
+    
+    # --- ESPIÃO: DELETOU PROCESSO ---
+    if success:
+        LogService.log(
+            action="Deletou Processo",
+            details=f"O processo ID {pid} foi removido definitivamente do sistema.",
+            school_id=school_id
+        )
+    # --------------------------------
+    
     flash(message, 'success' if success else 'danger')
     return redirect(url_for('justica.index'))
 
@@ -659,6 +739,16 @@ def imprimir_lote():
             processos_para_imprimir.append(proc)
 
     db.session.commit()
+    
+    # --- ESPIÃO: IMPRIMIU EM LOTE ---
+    school_id = UserService.get_current_school_id()
+    LogService.log(
+        action="Imprimiu Lote de Processos",
+        details=f"O usuário gerou a impressão/boletim para {len(processos_para_imprimir)} processos.",
+        school_id=school_id
+    )
+    # --------------------------------
+    
     return render_template('justica/imprimir_lote.html', processos=processos_para_imprimir, num_boletim=num_boletim)
 
 # --- ROTAS FADA ---
@@ -771,6 +861,16 @@ def salvar_fada():
             db.session.add(nova)
 
         db.session.commit()
+        
+        # --- ESPIÃO: SALVOU FADA ---
+        school_id = UserService.get_current_school_id()
+        LogService.log(
+            action="Salvou Avaliação FADA",
+            details=f"O rascunho da FADA para o aluno ID {aluno_id} foi salvo/atualizado. Média: {media:.4f}",
+            school_id=school_id
+        )
+        # ---------------------------
+        
         flash(f"Avaliação salva com sucesso. Média: {media:.4f}", "success")
     except Exception as e:
         db.session.rollback(); flash("Erro ao salvar avaliação.", "danger")
@@ -791,6 +891,16 @@ def enviar_fada_comissao(fada_id):
         f.status = 'COMISSAO'
         f.data_envio = datetime.now().astimezone()
         db.session.commit()
+        
+        # --- ESPIÃO: FADA PARA COMISSÃO ---
+        school_id = UserService.get_current_school_id()
+        LogService.log(
+            action="Enviou FADA para Comissão",
+            details=f"A avaliação FADA ID {fada_id} foi enviada para colheita de assinaturas.",
+            school_id=school_id
+        )
+        # ----------------------------------
+        
         return jsonify({'success': True})
     return jsonify({'error': 'Avaliação não encontrada ou não está em modo Rascunho.'}), 404
 
@@ -827,6 +937,16 @@ def assinar_fada_membro(fada_id):
         fada.status = 'ALUNO'
 
     db.session.commit()
+    
+    # --- ESPIÃO: MEMBRO ASSINOU FADA ---
+    school_id = UserService.get_current_school_id()
+    LogService.log(
+        action="Assinou FADA (Comissão)",
+        details=f"Um membro da comissão registrou sua assinatura digital na FADA ID {fada_id}.",
+        school_id=school_id
+    )
+    # -----------------------------------
+    
     return jsonify({'success': True, 'message': 'Assinatura registrada.', 'status_atual': fada.status}), 200
 
 @justica_bp.route('/fada/assinar-aluno/<int:fada_id>', methods=['POST'])
@@ -889,6 +1009,19 @@ def assinar_fada_aluno(fada_id):
         flash("Recurso enviado.", "warning")
 
     db.session.commit()
+    
+    # --- ESPIÃO: ALUNO AÇÃO FADA ---
+    school_id = UserService.get_current_school_id()
+    if not school_id and current_user.role == 'aluno':
+        school_id = current_user.aluno_profile.turma.school_id
+        
+    LogService.log(
+        action="Assinou/Recorreu FADA",
+        details=f"O aluno interagiu com a FADA ID {fada_id}. Novo Status: {f.status}",
+        school_id=school_id
+    )
+    # -------------------------------
+    
     return redirect(url_for('justica.index'))
 
 @justica_bp.route('/api/infracoes-pendentes/<int:aluno_id>')
@@ -947,16 +1080,14 @@ def anular_processo(pid):
 
     db.session.commit()
     
-    # Tenta salvar no log, ignorando se falhar
-    try:
-        if hasattr(LogService, 'log_action'):
-            LogService.log_action(
-                user_id=current_user.id,
-                action="ANULAR_PROCESSO_DISCIPLINA",
-                details=f"Anulou o PD {processo.id}. Motivo: {motivo.strip()}"
-            )
-    except Exception as log_e:
-        logger.warning(f"Não foi possível salvar log de auditoria: {log_e}")
+    # --- ESPIÃO: ANULAR PROCESSO ---
+    school_id = UserService.get_current_school_id()
+    LogService.log(
+        action="Anulou Processo Disciplinar",
+        details=f"O administrador anulou o processo ID {processo.id}. Motivo: {motivo.strip()}",
+        school_id=school_id
+    )
+    # -------------------------------
 
     flash(f"Processo Nº {processo.id} anulado com sucesso. O registro foi salvo no histórico.", "success")
     return redirect(url_for('justica.index'))
