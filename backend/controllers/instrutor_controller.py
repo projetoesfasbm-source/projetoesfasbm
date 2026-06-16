@@ -1,5 +1,3 @@
-# backend/controllers/instrutor_controller.py
-
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required, current_user
 from wtforms import StringField, SelectField, BooleanField, PasswordField, SubmitField
@@ -9,6 +7,7 @@ import json
 
 from ..services.instrutor_service import InstrutorService
 from ..services.user_service import UserService
+from ..services.log_service import LogService  # <--- ESPIÃO IMPORTADO AQUI
 from ..models.user import User
 from ..models.database import db  # Importante para o commit manual
 from utils.decorators import (
@@ -106,6 +105,13 @@ def cadastrar_instrutor():
 
         success, message = InstrutorService.create_full_instrutor(form_data, school_id)
         if success:
+            # --- ESPIÃO: CADASTRO DE INSTRUTOR ---
+            LogService.log(
+                action="Cadastrou Instrutor",
+                details=f"Um novo instrutor foi cadastrado: {form_data.get('nome_completo')} (Matrícula: {form_data.get('matricula')}).",
+                school_id=school_id
+            )
+            # -------------------------------------
             flash(message, "success")
             return redirect(url_for("instrutor.listar_instrutores"))
         else:
@@ -178,6 +184,16 @@ def editar_instrutor(instrutor_id):
             instrutor.is_rr = (form.is_rr.data == '1')
 
             db.session.commit()
+            
+            # --- ESPIÃO: EDIÇÃO DE INSTRUTOR ---
+            school_id = UserService.get_current_school_id()
+            LogService.log(
+                action="Editou Instrutor",
+                details=f"Os dados do instrutor {instrutor.user.nome_completo} (Matrícula: {instrutor.user.matricula}) foram atualizados.",
+                school_id=school_id
+            )
+            # -----------------------------------
+            
             flash("Instrutor atualizado com sucesso.", "success")
             return redirect(url_for("instrutor.listar_instrutores"))
 
@@ -194,8 +210,21 @@ def editar_instrutor(instrutor_id):
 def excluir_instrutor(instrutor_id):
     form = DeleteForm()
     if form.validate_on_submit():
+        # Busca os dados do instrutor antes de apagar para registrar no log
+        instrutor_temp = InstrutorService.get_instrutor_by_id(instrutor_id)
+        nome_instrutor = instrutor_temp.user.nome_completo if instrutor_temp and instrutor_temp.user else f"ID {instrutor_id}"
+        matricula_instrutor = instrutor_temp.user.matricula if instrutor_temp and instrutor_temp.user else "N/D"
+
         success, message = InstrutorService.delete_instrutor(instrutor_id)
         if success:
+            # --- ESPIÃO: EXCLUSÃO DE INSTRUTOR ---
+            school_id = UserService.get_current_school_id()
+            LogService.log(
+                action="Excluiu Instrutor",
+                details=f"O instrutor {nome_instrutor} (Matrícula: {matricula_instrutor}) foi removido do sistema.",
+                school_id=school_id
+            )
+            # -------------------------------------
             flash(message, "success")
         else:
             flash(message, "danger")
