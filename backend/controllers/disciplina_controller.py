@@ -18,6 +18,7 @@ from ..models.semana import Semana
 from ..services.disciplina_service import DisciplinaService
 from ..services.turma_service import TurmaService
 from ..services.user_service import UserService
+from ..services.log_service import LogService # <--- ESPIÃO IMPORTADO AQUI
 from utils.decorators import admin_or_programmer_required, school_admin_or_programmer_required, can_view_management_pages_required
 
 disciplina_bp = Blueprint('disciplina', __name__, url_prefix='/disciplina')
@@ -161,6 +162,14 @@ def adicionar_disciplina():
                 }
                 DisciplinaService.create_disciplina(data)
                 success_count += 1
+                
+                # --- ESPIÃO: ADICIONOU DISCIPLINA ---
+                LogService.log(
+                    action="Cadastrou Disciplina",
+                    details=f"A disciplina '{form.materia.data}' ({form.carga_horaria_prevista.data}h) foi cadastrada para a turma ID {t_id}.",
+                    school_id=school_id
+                )
+                # ------------------------------------
             
             flash(f'{success_count} disciplinas criadas com sucesso!', 'success')
             return redirect(url_for('disciplina.listar_disciplinas', turma_id=form.turma_ids.data[0]))
@@ -202,6 +211,15 @@ def editar_disciplina(disciplina_id):
             'ciclo_id': form.ciclo_id.data
         }
         DisciplinaService.update_disciplina(disciplina_id, data)
+        
+        # --- ESPIÃO: EDITOU DISCIPLINA ---
+        LogService.log(
+            action="Editou Disciplina",
+            details=f"A disciplina '{form.materia.data}' (ID {disciplina_id}) teve seus dados alterados (CH: {form.carga_horaria_prevista.data}h).",
+            school_id=school_id
+        )
+        # ---------------------------------
+        
         flash('Disciplina atualizada com sucesso!', 'success')
         return redirect(url_for('disciplina.listar_disciplinas', turma_id=disciplina.turma_id))
 
@@ -219,8 +237,16 @@ def excluir_disciplina(disciplina_id):
             return redirect(url_for('disciplina.listar_disciplinas'))
             
     turma_id = disciplina.turma_id if disciplina else None
+    nome_disciplina = disciplina.materia if disciplina else "N/D"
 
     if DisciplinaService.delete_disciplina(disciplina_id):
+        # --- ESPIÃO: EXCLUIU DISCIPLINA ---
+        LogService.log(
+            action="Excluiu Disciplina",
+            details=f"A disciplina '{nome_disciplina}' (ID {disciplina_id}) foi excluída.",
+            school_id=school_id
+        )
+        # ----------------------------------
         flash('Disciplina excluída com sucesso.', 'success')
     else:
         flash('Erro ao excluir disciplina.', 'danger')

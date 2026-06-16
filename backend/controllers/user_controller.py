@@ -28,6 +28,7 @@ from backend.models.turma import Turma
 from backend.models.school import School
 from backend.models.user_school import UserSchool
 from backend.services.user_service import UserService
+from backend.services.log_service import LogService # <--- ESPIÃO IMPORTADO AQUI
 from utils.decorators import super_admin_required, admin_required
 
 user_bp = Blueprint("user", __name__, url_prefix="/user")
@@ -152,6 +153,19 @@ def meu_perfil():
                     flash(message, 'success' if success else 'danger')
 
             db.session.commit()
+            
+            # --- ESPIÃO: MEU PERFIL ---
+            school_id_log = UserService.get_current_school_id()
+            if not school_id_log and hasattr(current_user, 'aluno_profile') and current_user.aluno_profile and current_user.aluno_profile.turma:
+                school_id_log = current_user.aluno_profile.turma.school_id
+                
+            LogService.log(
+                action="Atualizou Meu Perfil",
+                details=f"O usuário {current_user.nome_completo} atualizou suas próprias informações pessoais/senha.",
+                school_id=school_id_log
+            )
+            # --------------------------
+            
             flash("Perfil atualizado com sucesso.", "success")
             return redirect(url_for("user.meu_perfil"))
         except Exception as e:
@@ -182,6 +196,16 @@ def change_password_ajax():
         set_password_hash_on_user(current_user, new_password)
         current_user.must_change_password = False
         db.session.commit()
+        
+        # --- ESPIÃO: SENHA AJAX ---
+        school_id_log = UserService.get_current_school_id()
+        LogService.log(
+            action="Alterou Senha",
+            details=f"O usuário {current_user.nome_completo} alterou sua senha de acesso via painel.",
+            school_id=school_id_log
+        )
+        # --------------------------
+        
         return jsonify({'success': True, 'message': 'Senha alterada com sucesso!'})
     except Exception as e:
         db.session.rollback()
@@ -238,6 +262,14 @@ def criar_admin_escola():
 
             UserService.set_user_role_for_school(user.id, school_id, "admin_escola")
             db.session.commit()
+            
+            # --- ESPIÃO: CRIOU ADMIN ---
+            LogService.log(
+                action="Criou Administrador",
+                details=f"Um novo administrador de escola foi criado: {nome} (Username: {username}).",
+                school_id=school_id
+            )
+            # ---------------------------
 
             flash(f"Administrador criado com sucesso. Username: {username} • Senha temporária: {temp_pass}", "success")
             return redirect(url_for("user.gerenciar_usuarios"))
@@ -351,6 +383,13 @@ def alterar_papel_usuario(user_id):
     success, msg = UserService.set_user_role_for_school(user.id, school_id, novo_role)
 
     if success:
+        # --- ESPIÃO: ALTEROU PAPEL ---
+        LogService.log(
+            action="Alterou Permissão de Usuário",
+            details=f"A permissão do usuário '{user.nome_completo}' foi alterada para '{novo_role.upper()}'.",
+            school_id=school_id
+        )
+        # -----------------------------
         flash(f"Permissões de {user.nome_completo} atualizadas para: {novo_role.upper()}", "success")
     else:
         flash(msg, "danger")
@@ -373,6 +412,18 @@ def vincular_usuario_escola():
         return redirect(url_for('user.gerenciar_usuarios'))
 
     success, message = UserService.assign_school_role(int(user_id), school_id, role)
+    
+    # --- ESPIÃO: VINCULOU USUÁRIO ---
+    if success:
+        user_vinculado = db.session.get(User, int(user_id))
+        nome_vinculado = user_vinculado.nome_completo if user_vinculado else f"ID {user_id}"
+        LogService.log(
+            action="Vinculou Usuário à Escola",
+            details=f"O usuário '{nome_vinculado}' foi vinculado a esta escola com o papel '{role.upper()}'.",
+            school_id=school_id
+        )
+    # --------------------------------
+    
     flash(message, 'success' if success else 'danger')
 
     return redirect(url_for('user.gerenciar_usuarios'))
