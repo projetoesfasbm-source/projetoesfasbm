@@ -6,6 +6,7 @@ import sys
 
 from ..services.diario_service import DiarioService
 from ..services.user_service import UserService
+from ..services.log_service import LogService # <--- ESPIÃO IMPORTADO AQUI
 from utils.image_utils import compress_image_to_memory, allowed_file
 
 diario_bp = Blueprint('diario', __name__, url_prefix='/diario-classe')
@@ -136,6 +137,14 @@ def assinar(diario_id):
         )
         
         if ok:
+            # --- ESPIÃO: INSTRUTOR ASSINOU DIÁRIO ---
+            school_id = UserService.get_current_school_id()
+            LogService.log(
+                action="Assinou Diário",
+                details=f"O instrutor assinou o diário ID {diario.id} da disciplina '{diario.disciplina.materia if diario.disciplina else 'N/D'}'.",
+                school_id=school_id
+            )
+            # ----------------------------------------
             flash(msg, "success")
             return redirect(url_for('diario.listar_pendentes', status='assinado'))
         else:
@@ -162,6 +171,14 @@ def devolver_aluno(diario_id):
     ok, msg = DiarioService.devolver_diario_aluno(diario_id, current_user, motivo)
     
     if ok:
+        # --- ESPIÃO: INSTRUTOR DEVOLVEU DIÁRIO ---
+        school_id = UserService.get_current_school_id()
+        LogService.log(
+            action="Devolveu Diário",
+            details=f"O instrutor devolveu o diário ID {diario_id} para o Chefe de Turma. Motivo: {motivo}",
+            school_id=school_id
+        )
+        # -----------------------------------------
         flash(msg, "success")
     else:
         flash(msg, "danger")
@@ -337,6 +354,14 @@ def restaurar(diario_id):
         
     ok, msg = DiarioService.restaurar_diario_admin(diario_id, current_user)
     if ok:
+        # --- ESPIÃO: ADMIN RESTAUROU DIÁRIO DA LIXEIRA ---
+        school_id = UserService.get_current_school_id()
+        LogService.log(
+            action="Restaurou Diário",
+            details=f"O administrador restaurou da lixeira o bloco contendo o diário ID {diario_id}.",
+            school_id=school_id
+        )
+        # -------------------------------------------------
         flash(msg, "success")
     else:
         flash(msg, "danger")
