@@ -29,6 +29,7 @@ from ..services.user_service import UserService
 from ..services.turma_service import TurmaService
 from ..services.semana_service import SemanaService
 from ..services.instrutor_service import InstrutorService
+from ..services.log_service import LogService # <--- ESPIÃO IMPORTADO AQUI
 
 horario_bp = Blueprint('horario', __name__, url_prefix='/horario')
 
@@ -519,6 +520,17 @@ def get_instrutores_vinculados(pelotao, disciplina_id):
 def salvar_aula():
     data = request.json
     success, message, status_code = HorarioService.save_aula(data, current_user)
+    
+    # --- ESPIÃO: SALVAR/EDITAR AULA ---
+    if success:
+        school_id = UserService.get_current_school_id()
+        LogService.log(
+            action="Salvou Aula no Horário",
+            details=f"O usuário modificou ou inseriu uma aula no quadro horário. Sistema: {message}",
+            school_id=school_id
+        )
+    # ----------------------------------
+    
     return jsonify({'success': success, 'message': message}), status_code
 
 @horario_bp.route('/remover-aula', methods=['POST'])
@@ -527,8 +539,19 @@ def remover_aula():
     data = request.json
     horario_id = data.get('horario_id')
     success, message = HorarioService.remove_aula(horario_id, current_user)
-    if success: return jsonify({'success': True, 'message': message})
-    else: return jsonify({'success': False, 'message': message}), 403
+    
+    # --- ESPIÃO: REMOVER AULA ---
+    if success:
+        school_id = UserService.get_current_school_id()
+        LogService.log(
+            action="Removeu Aula do Horário",
+            details=f"O usuário removeu a aula de ID {horario_id} da grade horária.",
+            school_id=school_id
+        )
+        return jsonify({'success': True, 'message': message})
+    # ----------------------------
+    else: 
+        return jsonify({'success': False, 'message': message}), 403
 
 @horario_bp.route('/aprovar', methods=['GET', 'POST'])
 @login_required
@@ -539,6 +562,17 @@ def aprovar_horarios():
         horario_id = form.horario_id.data
         action = form.action.data
         success, message = HorarioService.aprovar_horario(horario_id, action)
+        
+        # --- ESPIÃO: APROVAÇÃO/REJEIÇÃO DE HORÁRIO ---
+        if success:
+            school_id = UserService.get_current_school_id()
+            LogService.log(
+                action=f"Revisão de Horário: {action}",
+                details=f"O gestor aplicou a ação '{action}' no horário pendente ID {horario_id}. Resultado: {message}",
+                school_id=school_id
+            )
+        # ---------------------------------------------
+        
         flash(message, 'success' if success else 'danger')
         return redirect(request.referrer or url_for('horario.aprovar_horarios'))
 
@@ -557,6 +591,14 @@ def aprovar_parcial():
     success, message = HorarioService.aprovar_horario_parcialmente(horario_id, periodos)
 
     if success:
+        # --- ESPIÃO: APROVAÇÃO PARCIAL ---
+        school_id = UserService.get_current_school_id()
+        LogService.log(
+            action="Aprovação Parcial de Horário",
+            details=f"O gestor aprovou parcialmente o horário ID {horario_id} para os períodos {periodos}.",
+            school_id=school_id
+        )
+        # ---------------------------------
         return jsonify({'success': True, 'message': message})
     else:
         return jsonify({'success': False, 'message': message}), 400
