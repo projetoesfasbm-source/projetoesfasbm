@@ -17,6 +17,7 @@ from ..models.user_school import UserSchool
 from ..models.turma_cargo import TurmaCargo 
 from ..services.turma_service import TurmaService
 from ..services.user_service import UserService 
+from ..services.log_service import LogService # <--- ESPIÃO IMPORTADO AQUI
 from utils.decorators import admin_or_programmer_required, school_admin_or_programmer_required, can_view_management_pages_required
 
 turma_bp = Blueprint('turma', __name__, url_prefix='/turma')
@@ -105,6 +106,16 @@ def salvar_cargos_turma(turma_id):
         return redirect(url_for('turma.listar_turmas'))
 
     success, message = TurmaService.atualizar_cargos(turma_id, request.form)
+    
+    # --- ESPIÃO: CARGOS DA TURMA ---
+    if success:
+        LogService.log(
+            action="Atualizou Cargos da Turma",
+            details=f"Os cargos/funções da turma '{turma.nome}' foram atualizados.",
+            school_id=school_id
+        )
+    # -------------------------------
+    
     flash(message, 'success' if success else 'danger')
     return redirect(url_for('turma.detalhes_turma', turma_id=turma_id))
 
@@ -124,6 +135,13 @@ def cadastrar_turma():
         active_edicao_id = session.get('active_edicao_id')
         success, message = TurmaService.create_turma(form.data, school_id, edicao_id=active_edicao_id)
         if success:
+            # --- ESPIÃO: CADASTRO DE TURMA ---
+            LogService.log(
+                action="Cadastrou Turma",
+                details=f"A turma '{form.data.get('nome')}' foi criada.",
+                school_id=school_id
+            )
+            # ---------------------------------
             flash(message, 'success')
             return redirect(url_for('turma.listar_turmas'))
         else:
@@ -157,6 +175,13 @@ def editar_turma(turma_id):
         # -------------------------------
         
         if success:
+            # --- ESPIÃO: EDIÇÃO DE TURMA ---
+            LogService.log(
+                action="Editou Turma",
+                details=f"Os dados da turma '{turma.nome}' foram atualizados.",
+                school_id=school_id
+            )
+            # -------------------------------
             flash(message, 'success')
             return redirect(url_for('turma.listar_turmas'))
         else:
@@ -182,6 +207,18 @@ def excluir_turma(turma_id):
     if not turma or turma.school_id != school_id: return redirect(url_for('turma.listar_turmas'))
     form = DeleteForm()
     if form.validate_on_submit():
+        nome_turma = turma.nome # Salva o nome antes de apagar do banco
+        
         success, message = TurmaService.delete_turma(turma_id)
-        flash(message, 'success' if success else 'danger')
+        if success:
+            # --- ESPIÃO: EXCLUSÃO DE TURMA ---
+            LogService.log(
+                action="Excluiu Turma",
+                details=f"A turma '{nome_turma}' foi removida do sistema.",
+                school_id=school_id
+            )
+            # ---------------------------------
+            flash(message, 'success')
+        else:
+            flash(message, 'danger')
     return redirect(url_for('turma.listar_turmas'))
