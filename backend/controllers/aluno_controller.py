@@ -16,6 +16,7 @@ from ..models.turma import Turma
 from ..models.school import School
 from ..models.user_school import UserSchool
 from ..services.user_service import UserService # Importante para resolver escola
+from ..services.log_service import LogService # <--- ESPIÃO IMPORTADO AQUI
 from utils.decorators import admin_or_programmer_required, school_admin_or_programmer_required, can_view_management_pages_required
 
 aluno_bp = Blueprint('aluno', __name__, url_prefix='/aluno')
@@ -222,6 +223,15 @@ def editar_aluno(aluno_id):
                  pass
 
             db.session.commit()
+            
+            # --- ESPIÃO: EDIÇÃO DE ALUNO ---
+            LogService.log(
+                action="Editou Perfil do Aluno",
+                details=f"Atualizou os dados do aluno {aluno.user.nome_completo} (Matrícula: {aluno.user.matricula}).",
+                school_id=school_id
+            )
+            # -------------------------------
+            
             flash('Aluno atualizado com sucesso!', 'success')
             return redirect(url_for('aluno.listar_alunos'))
         except Exception as e:
@@ -235,6 +245,17 @@ def editar_aluno(aluno_id):
 @school_admin_or_programmer_required
 def editar_funcao_aluno(aluno_id):
     success, message = AlunoService.update_funcao_aluno(aluno_id, request.form)
+    
+    # --- ESPIÃO: ALTERAÇÃO DE FUNÇÃO ---
+    if success:
+        school_id = session.get('active_school_id') or UserService.get_current_school_id()
+        LogService.log(
+            action="Alterou Função do Aluno",
+            details=f"Aluno ID {aluno_id}: {message}",
+            school_id=school_id
+        )
+    # -----------------------------------
+
     flash(message, 'success' if success else 'danger')
     return redirect(url_for('aluno.editar_aluno', aluno_id=aluno_id))
 
@@ -260,9 +281,23 @@ def excluir_aluno(aluno_id):
 
             if aluno:
                 current_user_id = aluno.user_id
+                
+                # Salva os dados antes de apagar do banco
+                nome_aluno_removido = aluno.user.nome_completo or "Sem Nome"
+                matricula_aluno_removida = aluno.user.matricula or "Sem Matrícula"
+                
                 db.session.delete(aluno)
                 db.session.query(UserSchool).filter_by(user_id=current_user_id, school_id=school_id).delete()
                 db.session.commit()
+                
+                # --- ESPIÃO: EXCLUSÃO DE ALUNO ---
+                LogService.log(
+                    action="Removeu Aluno da Escola",
+                    details=f"O aluno {nome_aluno_removido} (Matrícula: {matricula_aluno_removida}) foi removido e desvinculado.",
+                    school_id=school_id
+                )
+                # ---------------------------------
+                
                 flash('Aluno removido da escola.', 'success')
             else:
                 flash('Aluno não encontrado.', 'danger')
