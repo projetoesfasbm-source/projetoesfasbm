@@ -13,6 +13,7 @@ from ..services.user_service import UserService
 from ..services.vinculo_service import VinculoService
 from ..services.instrutor_service import InstrutorService
 from ..services.turma_service import TurmaService
+from ..services.log_service import LogService # <--- ESPIÃO IMPORTADO AQUI
 from utils.decorators import sens_or_admin_or_programmer_required
 
 vinculo_bp = Blueprint('vinculo', __name__, url_prefix='/vinculos')
@@ -93,6 +94,16 @@ def adicionar_vinculo():
 
     if form.validate_on_submit():
         success, message = VinculoService.add_vinculo(form.data)
+        
+        # --- ESPIÃO: ADICIONOU VÍNCULO ---
+        if success:
+            LogService.log(
+                action="Criou Vínculo",
+                details=f"Um novo vínculo de instrutor foi criado para a disciplina ID {form.data.get('disciplina_id')}.",
+                school_id=school_id
+            )
+        # ---------------------------------
+        
         flash(message, 'success' if success else 'danger')
         if success:
             return redirect(url_for('vinculo.gerenciar_vinculos'))
@@ -145,6 +156,16 @@ def editar_vinculo(vinculo_id):
     
     if form.validate_on_submit():
         success, message = VinculoService.edit_vinculo(vinculo_id, form.data)
+        
+        # --- ESPIÃO: EDITOU VÍNCULO ---
+        if success:
+            LogService.log(
+                action="Editou Vínculo",
+                details=f"O vínculo ID {vinculo_id} da disciplina '{vinculo.disciplina.materia}' foi atualizado.",
+                school_id=school_id
+            )
+        # ------------------------------
+        
         flash(message, 'success' if success else 'danger')
         return redirect(url_for('vinculo.gerenciar_vinculos', turma_id=turma_real.id))
     
@@ -183,7 +204,20 @@ def excluir_vinculo(vinculo_id):
 
     form = DeleteForm()
     if form.validate_on_submit():
+        nome_disciplina = vinculo.disciplina.materia if vinculo.disciplina else "N/D"
+        turma_nome = turma_real.nome if turma_real else "N/D"
+        
         success, message = VinculoService.delete_vinculo(vinculo_id)
+        
+        # --- ESPIÃO: EXCLUIU VÍNCULO ---
+        if success:
+            LogService.log(
+                action="Excluiu Vínculo",
+                details=f"O vínculo da disciplina '{nome_disciplina}' (Turma: {turma_nome}) foi removido.",
+                school_id=school_id
+            )
+        # -------------------------------
+        
         flash(message, 'success' if success else 'danger')
         
     return redirect(url_for('vinculo.gerenciar_vinculos', turma_id=turma_id_para_redirecionar))
