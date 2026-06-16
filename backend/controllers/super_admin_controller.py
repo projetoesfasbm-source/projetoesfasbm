@@ -11,6 +11,7 @@ from ..models.user import User
 from ..models.user_school import UserSchool
 from ..services.school_service import SchoolService
 from ..services.user_service import UserService
+from ..services.log_service import LogService # <--- ESPIÃO IMPORTADO AQUI
 from sqlalchemy import not_, select
 
 super_admin_bp = Blueprint('super_admin', __name__, url_prefix='/super-admin')
@@ -37,6 +38,16 @@ def dashboard():
             flash('O administrador da escola é obrigatório.', 'danger')
         else:
             success, message = SchoolService.create_school(school_name, int(admin_id))
+            
+            # --- ESPIÃO: CRIOU ESCOLA ---
+            if success:
+                LogService.log(
+                    action="Criou Escola (Global)",
+                    details=f"O Super Admin criou uma nova escola chamada '{school_name}'.",
+                    school_id=None
+                )
+            # ----------------------------
+            
             if success:
                 flash(message, 'success')
             else:
@@ -72,6 +83,15 @@ def edit_school(school_id):
 
     success, message = SchoolService.update_school(school_id, school_name)
     
+    # --- ESPIÃO: EDITOU NOME DA ESCOLA ---
+    if success:
+        LogService.log(
+            action="Editou Escola (Global)",
+            details=f"O Super Admin alterou o nome da escola ID {school_id} para '{school_name}'.",
+            school_id=school_id
+        )
+    # -------------------------------------
+    
     flash(message, 'success' if success else 'danger')
     return redirect(url_for('super_admin.dashboard'))
 
@@ -85,8 +105,21 @@ def delete_school(school_id):
         flash('A senha é obrigatória para confirmar a exclusão.', 'danger')
         return redirect(url_for('super_admin.dashboard'))
 
+    # Salva o nome antes de apagar para o log
+    escola_temp = db.session.get(School, school_id)
+    escola_nome = escola_temp.nome if escola_temp else f"ID {school_id}"
+
     # Passa o current_user e a senha para o Service validar
     success, message = SchoolService.delete_school(school_id, current_user, password)
+    
+    # --- ESPIÃO: DELETOU ESCOLA ---
+    if success:
+        LogService.log(
+            action="Excluiu Escola (Global)",
+            details=f"O Super Admin apagou definitivamente a escola '{escola_nome}'.",
+            school_id=None
+        )
+    # ------------------------------
     
     flash(message, 'success' if success else 'danger')
     return redirect(url_for('super_admin.dashboard'))
@@ -96,7 +129,21 @@ def delete_school(school_id):
 @super_admin_required
 def delete_user(user_id):
     role_filter = request.args.get('filter')
+    
+    user_temp = db.session.get(User, user_id)
+    user_nome = user_temp.nome_completo if user_temp else f"ID {user_id}"
+    
     success, message = UserService.delete_user_by_id(user_id)
+    
+    # --- ESPIÃO: DELETOU USUÁRIO GLOBAL ---
+    if success:
+        LogService.log(
+            action="Excluiu Usuário (Global)",
+            details=f"O Super Admin deletou o usuário '{user_nome}' do sistema.",
+            school_id=None
+        )
+    # --------------------------------------
+    
     flash(message, 'success' if success else 'danger')
     return redirect(request.referrer or url_for('user.gerenciar_usuarios'))
 
@@ -125,6 +172,15 @@ def reset_user_password():
         user.set_password(temp_password)
         user.must_change_password = True
         db.session.commit()
+        
+        # --- ESPIÃO: RESETOU SENHA GLOBAL ---
+        LogService.log(
+            action="Resetou Senha de Usuário (Global)",
+            details=f"O Super Admin resetou a senha do usuário '{user.nome_completo}'.",
+            school_id=None
+        )
+        # ------------------------------------
+        
         flash(f'Senha para o usuário "{user.nome_completo or user.username}" resetada com sucesso! Nova senha temporária: {temp_password}', 'success')
     except Exception as e:
         db.session.rollback()
@@ -179,6 +235,15 @@ def manage_gestores():
                 else:
                     user.role = 'super_admin'
                     db.session.commit()
+                    
+                    # --- ESPIÃO: PROMOVEU GESTOR DEC ---
+                    LogService.log(
+                        action="Promoveu Gestor DEC (Global)",
+                        details=f"O usuário '{user.nome_completo}' foi promovido a Super Administrador (Gestor DEC).",
+                        school_id=None
+                    )
+                    # -----------------------------------
+                    
                     flash(f'{user.nome_de_guerra or user.nome_completo} foi promovido a Gestor DEC com sucesso!', 'success')
             else:
                 flash('Nenhum usuário encontrado com essa matrícula.', 'danger')
@@ -194,6 +259,15 @@ def manage_gestores():
                 else:
                     user.role = 'instrutor' # Rebaixa para instrutor por padrão
                     db.session.commit()
+                    
+                    # --- ESPIÃO: REBAIXOU GESTOR DEC ---
+                    LogService.log(
+                        action="Rebaixou Gestor DEC (Global)",
+                        details=f"Os privilégios de Super Administrador foram removidos do usuário '{user.nome_completo}'.",
+                        school_id=None
+                    )
+                    # -----------------------------------
+                    
                     flash(f'Privilégios de Gestor DEC removidos de {user.nome_de_guerra or user.nome_completo}.', 'info')
                     
         return redirect(url_for('super_admin.manage_gestores'))
@@ -227,6 +301,18 @@ def atribuir_papel_global():
         return redirect(url_for('super_admin.global_users'))
         
     success, message = UserService.assign_school_role(int(user_id), int(school_id), role)
+    
+    # --- ESPIÃO: VINCULOU GLOBALMENTE ---
+    if success:
+        user_temp = db.session.get(User, int(user_id))
+        nome = user_temp.nome_completo if user_temp else f"ID {user_id}"
+        LogService.log(
+            action="Atribuiu Vínculo/Papel Global",
+            details=f"O Super Admin vinculou o usuário '{nome}' à escola ID {school_id} com o papel de '{role.upper()}'.",
+            school_id=int(school_id)
+        )
+    # ------------------------------------
+    
     flash(message, 'success' if success else 'danger')
     return redirect(url_for('super_admin.global_users'))
     
@@ -246,8 +332,20 @@ def remover_vinculo_global():
     ).scalar_one_or_none()
     
     if user_school:
+        user_temp = db.session.get(User, int(user_id))
+        nome = user_temp.nome_completo if user_temp else f"ID {user_id}"
+        
         db.session.delete(user_school)
         db.session.commit()
+        
+        # --- ESPIÃO: REMOVEU VINCULO GLOBAL ---
+        LogService.log(
+            action="Removeu Vínculo Global",
+            details=f"O Super Admin desvinculou o usuário '{nome}' da escola ID {school_id}.",
+            school_id=int(school_id)
+        )
+        # --------------------------------------
+        
         flash("Vínculo removido com sucesso.", "success")
     else:
         flash("Vínculo não encontrado.", "danger")
@@ -276,6 +374,14 @@ def logar_como(user_id):
     admin_id = current_user.id
     escola_id = session.get('view_as_school_id') or session.get('active_school_id')
     escola_nome = session.get('view_as_school_name')
+    
+    # --- ESPIÃO: LOGAR COMO (INICIO) ---
+    LogService.log(
+        action="Personificação de Conta (Início)",
+        details=f"ALERTA: O Super Admin (ID {admin_id}) assumiu controle da conta do usuário '{alvo.nome_completo}' (ID {alvo.id}).",
+        school_id=escola_id
+    )
+    # -----------------------------------
     
     # 2. Faz o login forçado (sem senha)
     login_user(alvo)
@@ -312,6 +418,14 @@ def voltar_admin():
         # Recupera as coordenadas da escola antes de limpar o disfarce
         retorno_escola_id = session.get('impersonator_return_school_id')
         retorno_escola_nome = session.get('impersonator_return_school_name')
+
+        # --- ESPIÃO: LOGAR COMO (FIM) ---
+        LogService.log(
+            action="Personificação de Conta (Fim)",
+            details=f"O Super Admin encerrou a personificação e retornou ao seu próprio acesso.",
+            school_id=retorno_escola_id
+        )
+        # --------------------------------
 
         # 1. Faz o login de volta como Super Admin
         login_user(admin_user)
@@ -425,6 +539,7 @@ def efetivar_transferencia():
             return redirect(url_for('super_admin.dashboard'))
 
         user = aluno.user
+        escola_origem_nome = aluno.turma.school.nome if aluno.turma and aluno.turma.school else "Sem Escola Anterior"
 
         # 1. Remover acessos antigos de todas as outras escolas
         vinculos_antigos = db.session.execute(
@@ -449,6 +564,15 @@ def efetivar_transferencia():
         aluno.edicao_id = None
 
         db.session.commit()
+        
+        # --- ESPIÃO: TRANSFERÊNCIA DE ALUNO ---
+        LogService.log(
+            action="Transferência de Escola (Aluno)",
+            details=f"O Super Admin transferiu o aluno '{user.nome_completo}' da escola '{escola_origem_nome}' para a escola '{nova_escola.nome}'.",
+            school_id=nova_escola.id
+        )
+        # --------------------------------------
+        
         flash(f"Transferência concluída com sucesso! O aluno {user.nome_completo or user.matricula} foi movido para a {nova_escola.nome}. O administrador da escola deverá alocá-lo em uma Edição e Turma local.", "success")
 
     except Exception as e:
