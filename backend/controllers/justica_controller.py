@@ -139,7 +139,7 @@ def index():
 
         stmt_finalizados = stmt_finalizados.order_by(ProcessoDisciplina.data_decisao.desc())
 
-    em_andamento = db.session.scalars(stmt_andamento.limit(500)).unique().all()
+    em_andamento = db.session.scalars(stmt_andamento).unique().all()
     houve_alteracao = JusticaService.verificar_e_atualizar_prazos(em_andamento)
 
     if houve_alteracao:
