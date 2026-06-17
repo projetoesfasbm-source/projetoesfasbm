@@ -19,10 +19,11 @@ from .user_service import UserService
 class SemanaService:
     
     @staticmethod
-    def get_semana_selecionada(semana_id_str=None, ciclo_id=None):
+    def get_semana_selecionada(semana_id_str=None, ciclo_id=None, override_school_id=None, override_edicao_id=None):
         from flask import session
-        active_school_id = UserService.get_current_school_id()
-        active_edicao = session.get('active_edicao_id')
+        active_school_id = override_school_id if override_school_id else UserService.get_current_school_id()
+        # Se um override for passado (mesmo que seja None, indicando turmas globais/sem edição), usamos ele
+        active_edicao = override_edicao_id if override_edicao_id is not None else session.get('active_edicao_id')
         
         if not active_school_id:
             return None

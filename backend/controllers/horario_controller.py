@@ -160,7 +160,7 @@ def index():
         ).all()
 
     semana_id = request.args.get('semana_id', type=int)
-    semana_selecionada = SemanaService.get_semana_selecionada(semana_id, ciclo_selecionado_id)
+    semana_selecionada = SemanaService.get_semana_selecionada(semana_id, ciclo_selecionado_id, override_school_id=school_id, override_edicao_id=active_edicao)
 
     horario_matrix = None
     datas_semana = {}

@@ -104,12 +104,15 @@ def index():
             flash("Nenhuma escola selecionada.", "warning")
             return redirect(url_for('main.dashboard'))
 
+        active_edicao = session.get('active_edicao_id')
+        edicao_filter = or_(Turma.edicao_id == active_edicao, Turma.edicao_id.is_(None)) if active_edicao else True
+
         stmt_andamento = select(ProcessoDisciplina).join(Aluno).join(Turma).options(
             joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.user),
             joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.turma)
         ).where(
             Turma.school_id == school_id,
-            Turma.edicao_id == session.get('active_edicao_id'),
+            edicao_filter,
             ProcessoDisciplina.status != StatusProcesso.FINALIZADO.value,
             ProcessoDisciplina.status != StatusProcesso.ARQUIVADO.value
         ).order_by(ProcessoDisciplina.data_ocorrencia.desc())
@@ -120,7 +123,7 @@ def index():
             joinedload(ProcessoDisciplina.aluno).joinedload(Aluno.turma)
         ).where(
             Turma.school_id == school_id,
-            Turma.edicao_id == session.get('active_edicao_id'),
+            edicao_filter,
             or_(ProcessoDisciplina.status == StatusProcesso.FINALIZADO.value, ProcessoDisciplina.status == StatusProcesso.ARQUIVADO.value)
         )
 
@@ -352,10 +355,12 @@ def dar_ciente(processo_id):
         return redirect(url_for('justica.index'))
 
     if processo.status == StatusProcesso.AGUARDANDO_CIENCIA.value:
-        processo.data_ciencia = datetime.now().astimezone()
+        agora_dt = datetime.now().astimezone()
+        processo.data_ciencia = agora_dt
         processo.status = StatusProcesso.ALUNO_NOTIFICADO.value
         processo.ciente_aluno = True
-        flash("Ciência do processo registrada. O prazo para defesa foi iniciado.", "success")
+        processo.prazo_defesa = agora_dt + timedelta(hours=24)
+        flash("Ciência do processo registrada. O prazo de 24 horas para defesa foi iniciado.", "success")
     else:
         flash("Este processo não aguarda ciência inicial.", "warning")
 
