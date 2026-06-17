@@ -74,6 +74,9 @@ class RelatorioService:
         if not school_id:
             return []
 
+        from flask import session
+        active_edicao = session.get('active_edicao_id')
+
         # 1. PRÉ-CARREGAMENTO (BULK FETCH) para evitar N+1
         
         # 1.a Carga Horária Anterior (todas as disciplinas da escola antes da data_inicio)
@@ -86,6 +89,9 @@ class RelatorioService:
                 Ciclo.school_id == school_id
             )
         )
+        if active_edicao:
+            query_ant = query_ant.filter(Ciclo.edicao_id == active_edicao)
+            
         rows_ant = db.session.execute(query_ant).all()
         
         # Mapear ch_anterior por disciplina_id: {disciplina_id: ch_total_anterior}
@@ -112,6 +118,9 @@ class RelatorioService:
                 Turma.school_id == school_id
             )
         )
+        if active_edicao:
+            diarios_query = diarios_query.filter(Turma.edicao_id == active_edicao)
+            
         diarios_validos = db.session.scalars(diarios_query).all()
         diario_assinante_map = {}
         for d in diarios_validos:
@@ -149,6 +158,8 @@ class RelatorioService:
                 or_(Horario.status == 'confirmado', Horario.status == 'concluido')
             )
         )
+        if active_edicao:
+            query = query.filter(Ciclo.edicao_id == active_edicao)
 
         rows = db.session.execute(query).all()
 
