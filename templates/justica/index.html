@@ -447,6 +447,30 @@
                     {% else %}
                         <div class="alert alert-info">Nenhum processo em andamento.</div>
                     {% endif %}
+
+                    {% if em_andamento_paginados and em_andamento_paginados.pages > 1 %}
+                    <nav aria-label="Navegação de processos em andamento">
+                        <ul class="pagination justify-content-center mt-4">
+                            <li class="page-item {% if not em_andamento_paginados.has_prev %}disabled{% endif %}">
+                                <a class="page-link" href="{{ url_for('justica.index', page_andamento=em_andamento_paginados.prev_num, tab='andamento', q=request.args.get('q', '')) }}" tabindex="-1">Anterior</a>
+                            </li>
+                            
+                            {% for page_num in em_andamento_paginados.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                                {% if page_num %}
+                                    <li class="page-item {% if page_num == em_andamento_paginados.page %}active{% endif %}">
+                                        <a class="page-link" href="{{ url_for('justica.index', page_andamento=page_num, tab='andamento', q=request.args.get('q', '')) }}">{{ page_num }}</a>
+                                    </li>
+                                {% else %}
+                                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                                {% endif %}
+                            {% endfor %}
+
+                            <li class="page-item {% if not em_andamento_paginados.has_next %}disabled{% endif %}">
+                                <a class="page-link" href="{{ url_for('justica.index', page_andamento=em_andamento_paginados.next_num, tab='andamento', q=request.args.get('q', '')) }}">Próximo</a>
+                            </li>
+                        </ul>
+                    </nav>
+                    {% endif %}
                 </div>
 
                 <div class="justice-content {% if active_tab == 'finalizados' %}active{% endif %}" id="finalizadosContent">

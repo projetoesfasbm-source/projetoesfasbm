@@ -142,11 +142,15 @@ def index():
 
         stmt_finalizados = stmt_finalizados.order_by(ProcessoDisciplina.data_decisao.desc())
 
-    em_andamento = db.session.scalars(stmt_andamento.limit(200)).unique().all()
-    houve_alteracao = JusticaService.verificar_e_atualizar_prazos(em_andamento)
+    page_andamento = request.args.get('page_andamento', 1, type=int)
+    em_andamento_paginados = db.paginate(stmt_andamento, page=page_andamento, per_page=50, error_out=False)
+    
+    houve_alteracao = JusticaService.verificar_e_atualizar_prazos(em_andamento_paginados.items)
 
     if houve_alteracao:
-         em_andamento = db.session.scalars(stmt_andamento).unique().all()
+        em_andamento_paginados = db.paginate(stmt_andamento, page=page_andamento, per_page=50, error_out=False)
+        
+    em_andamento = em_andamento_paginados.items
 
     agora_dt = datetime.now().astimezone()
     for p in em_andamento:
@@ -170,6 +174,7 @@ def index():
 
     return render_template('justica/index.html',
                            em_andamento=em_andamento,
+                           em_andamento_paginados=em_andamento_paginados,
                            finalizados=finalizados_paginados,
                            active_tab=active_tab,
                            turmas=turmas,
