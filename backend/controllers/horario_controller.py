@@ -295,13 +295,15 @@ def dashboard_instrutor():
         stats_disciplinas = {}
 
         mapa_dias = {
-            'Segunda-feira': 0, 'Terça-feira': 1, 'Quarta-feira': 2,
-            'Quinta-feira': 3, 'Sexta-feira': 4, 'Sábado': 5, 'Domingo': 6
+            'segunda': 0, 'terca': 1, 'quarta': 2,
+            'quinta': 3, 'sexta': 4, 'sabado': 5, 'domingo': 6,
+            'terça': 1, 'sábado': 5
         }
 
         for aula in todas_aulas:
             try:
-                delta_dias = mapa_dias.get(aula.dia_semana, 0)
+                dia_lower = str(aula.dia_semana).lower().replace('-feira', '').strip() if aula.dia_semana else ''
+                delta_dias = mapa_dias.get(dia_lower, 0)
                 if aula.semana and aula.semana.data_inicio:
                     data_real = aula.semana.data_inicio + timedelta(days=delta_dias)
                 else:
