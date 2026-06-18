@@ -364,7 +364,6 @@ def dar_ciente(processo_id):
         processo.data_ciencia = agora_dt
         processo.status = StatusProcesso.ALUNO_NOTIFICADO.value
         processo.ciente_aluno = True
-        processo.prazo_defesa = agora_dt + timedelta(hours=24)
         flash("Ciência do processo registrada. O prazo de 24 horas para defesa foi iniciado.", "success")
     else:
         flash("Este processo não aguarda ciência inicial.", "warning")
