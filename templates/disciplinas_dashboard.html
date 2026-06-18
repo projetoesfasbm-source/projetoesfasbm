@@ -92,7 +92,7 @@
         
         <div class="card border-0 shadow-lg mb-5">
             <div class="card-header bg-dark text-white py-3 d-flex justify-content-between align-items-center">
-                <h5 class="mb-0"><i class="fas fa-exclamation-circle text-warning me-2"></i>Inconsistências Identificadas em Montenegro</h5>
+                <h5 class="mb-0"><i class="fas fa-exclamation-circle text-warning me-2"></i>Inconsistências Identificadas em {{ active_school.nome if active_school else 'Sua Escola' }}</h5>
                 <span class="badge bg-danger text-uppercase px-3">Correção Urgente</span>
             </div>
             <div class="card-body p-0">
@@ -158,7 +158,7 @@
                 </div>
             </div>
             <div class="card-footer bg-white text-center py-3">
-                <p class="mb-0 text-muted small"><i class="fas fa-info-circle me-1"></i> Dados restritos à unidade de Montenegro / Ciclo selecionado.</p>
+                <p class="mb-0 text-muted small"><i class="fas fa-info-circle me-1"></i> Dados restritos à unidade de {{ active_school.nome if active_school else 'Sua Escola' }} / Ciclo selecionado.</p>
             </div>
         </div>
 
@@ -169,7 +169,7 @@
                     <div class="card-body">
                         <i class="fas fa-check-double fa-5x mb-4 opacity-50"></i>
                         <h2 class="fw-bold h1">Turmas Sincronizadas</h2>
-                        <p class="fs-4">As {{ dashboard_data.total_turmas }} turmas de Montenegro estão avançando juntas.</p>
+                        <p class="fs-4">As {{ dashboard_data.total_turmas }} turmas de {{ active_school.nome if active_school else 'Sua Escola' }} estão avançando juntas.</p>
                         <div class="mt-4 pt-3 border-top border-white border-opacity-25 w-50 mx-auto">
                             <span class="small text-uppercase opacity-75 d-block">Média de Progresso</span>
                             <span class="fs-2 fw-bold">{{ "%.1f"|format(dashboard_data.progresso_global if dashboard_data else 0) }}%</span>
