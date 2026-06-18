@@ -93,6 +93,9 @@ class DiarioService:
 
     @staticmethod
     def get_diarios_pendentes(school_id, user_id=None, turma_id=None, disciplina_id=None, status=None, page=1, per_page=30):
+        # --- ALTERAÇÃO REALIZADA AQUI: Captura da edição ---
+        active_edicao = session.get('active_edicao_id')
+        
         stmt = (
             select(DiarioClasse)
             .join(Turma, DiarioClasse.turma_id == Turma.id)
@@ -103,6 +106,7 @@ class DiarioService:
             )
             .where(
                 Turma.school_id == school_id,
+                Turma.edicao_id == active_edicao, # --- ALTERAÇÃO REALIZADA AQUI: Filtro da edição ---
                 DiarioClasse.is_deleted == False
             )
         )

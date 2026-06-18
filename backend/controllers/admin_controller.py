@@ -1,6 +1,6 @@
 # backend/controllers/admin_controller.py
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, abort
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, abort, session
 from flask_login import login_required, current_user
 from sqlalchemy import select, func, case, desc, and_, distinct
 from sqlalchemy.orm import joinedload, aliased  
@@ -57,6 +57,8 @@ def espelho_diarios():
         flash("Escola não encontrada.", "danger")
         return redirect(url_for('main.dashboard'))
 
+    active_edicao = session.get('active_edicao_id')
+
     # =========================================================================
     # CORREÇÃO: Subquery isolada para contar faltas REAIS (evita duplicação)
     # =========================================================================
@@ -81,7 +83,10 @@ def espelho_diarios():
      .join(subquery_faltas, Aluno.id == subquery_faltas.c.aluno_id)\
      .join(Disciplina, subquery_faltas.c.disciplina_id == Disciplina.id)\
      .options(joinedload(Aluno.user))\
-     .filter(Turma.school_id == school_id).all()
+     .filter(
+         Turma.school_id == school_id,
+         Turma.edicao_id == active_edicao
+     ).all()
 
     alunos_map = defaultdict(lambda: {
         'obj': None, 
@@ -201,7 +206,10 @@ def espelho_diarios():
         select(Aluno, Turma.nome)
         .join(Turma)
         .join(User, Aluno.user_id == User.id)
-        .where(Turma.school_id == school_id)
+        .where(
+            Turma.school_id == school_id,
+            Turma.edicao_id == active_edicao
+        )
         .order_by(Turma.nome, User.nome_completo)
     ).all()
 
