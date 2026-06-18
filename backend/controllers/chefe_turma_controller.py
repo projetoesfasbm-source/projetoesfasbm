@@ -488,22 +488,7 @@ def registrar_aula(primeiro_horario_id):
                     for aluno in alunos_turma:
                         key = f"presenca_{aluno.id}_{periodo_atual}"
                         presente = request.form.get(key) == 'on'
-                        
-                        # NOVA LÓGICA: Captura e limpeza da justificativa
-                        justificativa_texto = None
-                        if not presente:
-                            just_key = f"justificativa_{aluno.id}"
-                            texto_cru = request.form.get(just_key)
-                            if texto_cru and str(texto_cru).strip() != "":
-                                justificativa_texto = str(texto_cru).strip()
-
-                        nova_frequencia = FrequenciaAluno(
-                            diario_id=novo_diario.id, 
-                            aluno_id=aluno.id, 
-                            presente=presente,
-                            justificativa=justificativa_texto # Salva no banco!
-                        )
-                        db.session.add(nova_frequencia)
+                        db.session.add(FrequenciaAluno(diario_id=novo_diario.id, aluno_id=aluno.id, presente=presente))
                     
                     if horario_pai.id not in ids_horarios_pais_atualizados:
                         horario_pai.status = 'concluido'
