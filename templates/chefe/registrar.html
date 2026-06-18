@@ -55,7 +55,7 @@
                                 <tr>
                                     <th class="ps-3 text-dark">Aluno</th>
                                     <th class="text-center text-dark" style="width: 140px;">Status</th>
-                                    <th class="text-center text-dark">Ajuste de Períodos</th>
+                                    <th class="text-center text-dark">Ajuste de Períodos / Justificativa</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -82,30 +82,39 @@
                                         <small class="fw-bold text-success" id="label-master-{{ aluno.id }}">PRESENTE</small>
                                     </td>
 
-                                    <td class="text-center">
-                                        <div id="periods-msg-{{ aluno.id }}" class="text-muted small">
+                                    <td class="text-center pb-3">
+                                        <div id="periods-msg-{{ aluno.id }}" class="text-muted small mt-2">
                                             <span class="badge bg-light text-success border border-success">
                                                 <i class="fas fa-check"></i> Presença Integral
                                             </span>
                                         </div>
 
-                                        <div id="periods-{{ aluno.id }}" class="d-none d-flex flex-wrap gap-1 justify-content-center align-items-center">
-                                            {% for h in horarios %}
-                                                <input type="checkbox" class="btn-check" 
-                                                       name="presenca_{{ aluno.id }}_{{ h['periodo'] }}" 
-                                                       id="btn-check-{{ aluno.id }}-{{ h['periodo'] }}" 
-                                                       autocomplete="off" checked>
-                                                
-                                                <label class="btn btn-outline-primary btn-sm fw-bold shadow-none" 
-                                                       for="btn-check-{{ aluno.id }}-{{ h['periodo'] }}"
-                                                       style="width: 40px; height: 32px; display: flex; align-items: center; justify-content: center;">
-                                                    {{ h['periodo'] }}º
-                                                </label>
-                                            {% endfor %}
-                                        </div>
-                                        
-                                        <div id="periods-help-{{ aluno.id }}" class="d-none mt-1">
-                                            <small class="text-danger" style="font-size: 0.7rem;">Desmarque os tempos de falta</small>
+                                        <div id="absence-container-{{ aluno.id }}" class="d-none mt-2">
+                                            <div class="d-flex flex-wrap gap-1 justify-content-center align-items-center mb-2">
+                                                {% for h in horarios %}
+                                                    <input type="checkbox" class="btn-check" 
+                                                           name="presenca_{{ aluno.id }}_{{ h['periodo'] }}" 
+                                                           id="btn-check-{{ aluno.id }}-{{ h['periodo'] }}" 
+                                                           autocomplete="off" checked>
+                                                    
+                                                    <label class="btn btn-outline-primary btn-sm fw-bold shadow-none" 
+                                                           for="btn-check-{{ aluno.id }}-{{ h['periodo'] }}"
+                                                           style="width: 40px; height: 32px; display: flex; align-items: center; justify-content: center;"
+                                                           title="Desmarque para registrar a falta">
+                                                        {{ h['periodo'] }}º
+                                                    </label>
+                                                {% endfor %}
+                                            </div>
+                                            
+                                            <div class="px-2">
+                                                <input type="text" 
+                                                       name="justificativa_{{ aluno.id }}" 
+                                                       id="justificativa-{{ aluno.id }}"
+                                                       class="form-control form-control-sm border-danger" 
+                                                       placeholder="Descreva a justificativa da falta (Opcional)"
+                                                       style="background-color: transparent;">
+                                            </div>
+                                            <small class="text-danger mt-1 d-block" style="font-size: 0.7rem;">Desmarque os tempos de falta</small>
                                         </div>
                                     </td>
                                 </tr>
@@ -154,24 +163,23 @@
 <script>
     function toggleMaster(alunoId) {
         const masterCheck = document.getElementById(`master-${alunoId}`);
-        const periodsDiv = document.getElementById(`periods-${alunoId}`);
-        const periodsHelp = document.getElementById(`periods-help-${alunoId}`);
+        const absenceContainer = document.getElementById(`absence-container-${alunoId}`);
         const msgDiv = document.getElementById(`periods-msg-${alunoId}`);
         const label = document.getElementById(`label-master-${alunoId}`);
         const row = document.getElementById(`row-${alunoId}`);
-        const subChecks = periodsDiv.querySelectorAll('input.btn-check');
+        const subChecks = absenceContainer.querySelectorAll('input.btn-check');
+        const justificativaInput = document.getElementById(`justificativa-${alunoId}`);
 
         if (masterCheck.checked) {
-            periodsDiv.classList.add('d-none');
-            periodsHelp.classList.add('d-none');
+            absenceContainer.classList.add('d-none');
             msgDiv.classList.remove('d-none');
             label.textContent = "PRESENTE";
             label.className = "fw-bold text-success";
             row.classList.remove('table-danger-custom');
             subChecks.forEach(ch => ch.checked = true);
+            justificativaInput.value = ''; // Limpa a justificativa se voltar pra presente
         } else {
-            periodsDiv.classList.remove('d-none');
-            periodsHelp.classList.remove('d-none');
+            absenceContainer.classList.remove('d-none');
             msgDiv.classList.add('d-none');
             label.textContent = "EDITAR";
             label.className = "fw-bold text-danger";
@@ -186,16 +194,12 @@
         });
     }
 
-    // ====================================================================
-    // TRAVA DE SEGURANÇA: PREVINE DUPLO CLIQUE (DOUBLE SUBMIT)
-    // ====================================================================
     document.addEventListener('DOMContentLoaded', function() {
         const formRegistrar = document.querySelector('form');
         const btnSalvar = document.querySelector('button[type="submit"]');
 
         if (formRegistrar && btnSalvar) {
             formRegistrar.addEventListener('submit', function(e) {
-                // Apenas bloqueia se os campos obrigatórios (como Conteúdo) estiverem preenchidos
                 if (formRegistrar.checkValidity()) {
                     btnSalvar.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Salvando aguarde...';
                     btnSalvar.classList.add('disabled');
