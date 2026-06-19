@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 from flask_login import login_required, current_user
-from sqlalchemy import select, or_
+from sqlalchemy import select, or_, and_
 from sqlalchemy.orm import joinedload
 from flask_wtf import FlaskForm
 from wtforms import StringField, SelectField, SubmitField
@@ -88,8 +88,8 @@ def listar_alunos():
         query = query.filter(
             or_(
                 Turma.edicao_id == active_edicao_id,
-                Aluno.edicao_id == None,
-                Aluno.turma_id == None
+                Aluno.edicao_id == active_edicao_id,
+                and_(Aluno.edicao_id == None, Aluno.turma_id == None)
             )
         )
 
