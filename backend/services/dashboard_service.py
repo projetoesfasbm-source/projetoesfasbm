@@ -11,6 +11,8 @@ from ..models.school import School
 from ..models.user_school import UserSchool
 from ..models.horario import Horario
 from ..models.processo_disciplina import ProcessoDisciplina
+from ..models.semana import Semana
+from ..models.ciclo import Ciclo
 
 class DashboardService:
     @staticmethod
@@ -69,11 +71,11 @@ class DashboardService:
             usuarios_recentes_query = usuarios_recentes_query.where(UserSchool.school_id == school_id)
         usuarios_recentes = db.session.scalars(usuarios_recentes_query).unique().all()
 
-        proximas_aulas_query = select(Horario).join(Turma, Horario.pelotao == Turma.nome).order_by(Horario.id.desc()).limit(5)
+        proximas_aulas_query = select(Horario).join(Semana).join(Ciclo).order_by(Horario.id.desc()).limit(5)
         if school_id:
-            proximas_aulas_query = proximas_aulas_query.where(Turma.school_id == school_id)
+            proximas_aulas_query = proximas_aulas_query.where(Ciclo.school_id == school_id)
         if edicao_id: # <--- FILTRO DE EDIÇÃO ADICIONADO
-            proximas_aulas_query = proximas_aulas_query.where(Turma.edicao_id == edicao_id)
+            proximas_aulas_query = proximas_aulas_query.where(Ciclo.edicao_id == edicao_id)
             
         proximas_aulas = db.session.scalars(proximas_aulas_query).all()
 
