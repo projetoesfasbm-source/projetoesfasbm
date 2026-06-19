@@ -219,8 +219,7 @@ def editar_aluno(aluno_id):
             else:
                 aluno.turma_id = None
 
-            if form.funcao_atual.data:
-                 pass
+            aluno.funcao_atual = form.funcao_atual.data if form.funcao_atual.data else None
 
             db.session.commit()
             
