@@ -26,15 +26,63 @@ main_bp = Blueprint('main', __name__)
 @main_bp.context_processor
 def inject_active_school():
     from flask import g
+    context = {
+        'current_school_id': None, 
+        'current_school': None,
+        'active_school': None,
+        'user_allowed_schools': []
+    }
+    
     if current_user.is_authenticated:
         active = g.get('active_school')
-        school_id = active.id if active else None
-        return dict(
-            current_school_id=school_id, 
-            current_school=active,
-            active_school=active 
-        )
-    return dict(current_school_id=None, current_school=None, active_school=None)
+        context['current_school'] = active
+        context['active_school'] = active
+        context['current_school_id'] = active.id if active else None
+        
+        # --- NOVA LÓGICA: Lista de escolas para o Switcher no Topo ---
+        if current_user.role != 'aluno':
+            escolas_dict = {}
+            
+            # Se for super admin, tem acesso a todas
+            if getattr(current_user, 'is_super_admin', False) or current_user.role == 'super_admin':
+                todas = db.session.scalars(select(School).order_by(School.nome)).all()
+                for s in todas: escolas_dict[s.id] = {'id': s.id, 'nome': s.nome}
+            else:
+                # 1. Vinculos diretos (Admin Escola, SENS, CAL, etc)
+                vinculos = db.session.scalars(select(UserSchool).where(UserSchool.user_id == current_user.id)).all()
+                for v in vinculos:
+                    s = db.session.get(School, v.school_id)
+                    if s: escolas_dict[s.id] = {'id': s.id, 'nome': s.nome}
+                    
+                # 2. Vínculos como Instrutor (Busca Profunda para o Menu Superior)
+                from ..models.instrutor import Instrutor
+                from ..models.disciplina_turma import DisciplinaTurma
+                from ..models.disciplina import Disciplina
+                from ..models.turma import Turma
+                
+                instrutores = db.session.scalars(select(Instrutor).where(Instrutor.user_id == current_user.id)).all()
+                if instrutores:
+                    instrutor_ids = [i.id for i in instrutores]
+                    turmas_instrutor = db.session.scalars(
+                        select(Turma)
+                        .join(Disciplina, Disciplina.turma_id == Turma.id)
+                        .join(DisciplinaTurma, DisciplinaTurma.disciplina_id == Disciplina.id)
+                        .where(
+                            or_(
+                                DisciplinaTurma.instrutor_id_1.in_(instrutor_ids),
+                                DisciplinaTurma.instrutor_id_2.in_(instrutor_ids)
+                            )
+                        )
+                    ).all()
+                    for t in turmas_instrutor:
+                        if t.school_id and t.school_id not in escolas_dict:
+                            s = db.session.get(School, t.school_id)
+                            if s: escolas_dict[s.id] = {'id': s.id, 'nome': s.nome}
+            
+            lista_escolas = sorted(list(escolas_dict.values()), key=lambda x: x['nome'])
+            context['user_allowed_schools'] = lista_escolas
+                
+    return context
 
 # ---------------------------------------
 # Utils
