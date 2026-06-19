@@ -25,71 +25,16 @@ main_bp = Blueprint('main', __name__)
 # ---------------------------------------
 @main_bp.context_processor
 def inject_active_school():
-    from flask import g, session
-    context = {
-        'current_school_id': None, 
-        'current_school': None,
-        'active_school': None,
-        'user_allowed_schools': []
-    }
-    
+    from flask import g
     if current_user.is_authenticated:
         active = g.get('active_school')
-        context['current_school'] = active
-        context['active_school'] = active
-        context['current_school_id'] = active.id if active else None
-        
-        # --- NOVA LÓGICA: Lista de escolas para o Switcher no Topo ---
-        # Escondido de alunos
-        if current_user.role != 'aluno':
-            # Usa cache na sessão para não deixar o site lento a cada clique
-            if 'user_schools_cache' in session:
-                context['user_allowed_schools'] = session['user_schools_cache']
-            else:
-                escolas_dict = {}
-                
-                # Se for super admin, tem acesso a tudo
-                if getattr(current_user, 'is_super_admin', False) or current_user.role == 'super_admin':
-                    todas = db.session.scalars(select(School).order_by(School.nome)).all()
-                    for s in todas: escolas_dict[s.id] = {'id': s.id, 'nome': s.nome}
-                else:
-                    # Vinculos diretos (Admin, SENS)
-                    vinculos = db.session.scalars(select(UserSchool).where(UserSchool.user_id == current_user.id)).all()
-                    for v in vinculos:
-                        s = db.session.get(School, v.school_id)
-                        if s: escolas_dict[s.id] = {'id': s.id, 'nome': s.nome}
-                        
-                    # Vínculos indiretos (Instrutor vinculado a turmas)
-                    from ..models.instrutor import Instrutor
-                    from ..models.disciplina_turma import DisciplinaTurma
-                    from ..models.disciplina import Disciplina
-                    from ..models.turma import Turma
-                    
-                    instrutores = db.session.scalars(select(Instrutor).where(Instrutor.user_id == current_user.id)).all()
-                    if instrutores:
-                        instrutor_ids = [i.id for i in instrutores]
-                        if instrutor_ids:
-                            turmas_instrutor = db.session.scalars(
-                                select(Turma)
-                                .join(Disciplina, Disciplina.turma_id == Turma.id)
-                                .join(DisciplinaTurma, DisciplinaTurma.disciplina_id == Disciplina.id)
-                                .where(
-                                    or_(
-                                        DisciplinaTurma.instrutor_id_1.in_(instrutor_ids),
-                                        DisciplinaTurma.instrutor_id_2.in_(instrutor_ids)
-                                    )
-                                )
-                            ).all()
-                            for t in turmas_instrutor:
-                                if t.school_id and t.school_id not in escolas_dict:
-                                    s = db.session.get(School, t.school_id)
-                                    if s: escolas_dict[s.id] = {'id': s.id, 'nome': s.nome}
-                
-                lista_escolas = sorted(list(escolas_dict.values()), key=lambda x: x['nome'])
-                session['user_schools_cache'] = lista_escolas
-                context['user_allowed_schools'] = lista_escolas
-                
-    return context
+        school_id = active.id if active else None
+        return dict(
+            current_school_id=school_id, 
+            current_school=active,
+            active_school=active 
+        )
+    return dict(current_school_id=None, current_school=None, active_school=None)
 
 # ---------------------------------------
 # Utils
@@ -121,9 +66,11 @@ def selecionar_escola():
     """
     Rota obrigatória quando o usuário possui múltiplos vínculos e
     ainda não definiu em qual contexto quer trabalhar.
+    AGORA SUPORTA: Admins, Instrutores e Alunos!
     """
     escolas_dict = {}
 
+    # 1. Busca vínculos da tabela padrão (Admins, SENS, CAL)
     vinculos = db.session.execute(
         select(UserSchool).where(UserSchool.user_id == current_user.id).order_by(UserSchool.school_id)
     ).scalars().all()
@@ -134,9 +81,12 @@ def selecionar_escola():
             escolas_dict[s.id] = {
                 'id': s.id,
                 'nome': s.nome,
-                'role': v.role 
+                'role': v.role  # Útil mostrar qual papel ele tem na escola
             }
 
+    # ========================================================
+    # 2. BUSCA PROFUNDA DE INSTRUTOR (O Fim do Modal Vazio!)
+    # ========================================================
     from ..models.instrutor import Instrutor
     from ..models.disciplina_turma import DisciplinaTurma
     from ..models.disciplina import Disciplina
@@ -163,6 +113,9 @@ def selecionar_escola():
                 if s:
                     escolas_dict[s.id] = {'id': s.id, 'nome': s.nome, 'role': 'instrutor'}
 
+    # ========================================================
+    # 3. BUSCA PROFUNDA DE ALUNO
+    # ========================================================
     if current_user.role == 'aluno' and getattr(current_user, 'aluno_profile', None) and current_user.aluno_profile.turma:
         t = current_user.aluno_profile.turma
         if t.school_id and t.school_id not in escolas_dict:
@@ -170,9 +123,11 @@ def selecionar_escola():
             if s:
                 escolas_dict[s.id] = {'id': s.id, 'nome': s.nome, 'role': 'aluno'}
 
+    # Converte o dicionário blindado em lista e ordena por nome
     escolas_list = list(escolas_dict.values())
     escolas_list.sort(key=lambda x: x['nome'])
 
+    # Se por acaso só tem 1, já seleciona e vai pro dashboard
     if len(escolas_list) == 1:
         UserService.set_active_school(escolas_list[0]['id'])
         return redirect(url_for('main.dashboard'))
@@ -184,20 +139,21 @@ def selecionar_escola():
 def trocar_escola(school_id):
     """
     Rota para forçar a mudança de contexto (Isolamento).
-    Agora usa request.referrer para manter o usuário na tela atual!
     """
+    # --- A CARTEIRADA DO SUPER ADMIN ---
+    # Se você é Super Admin E está com o modo DEC ativado, o sistema injeta a escola direto na sua sessão, 
+    # ignorando as travas de vínculo formal do UserService.
     if current_user.role == 'super_admin' and session.get('is_dec_mode'):
         session['active_school_id'] = school_id
         session.permanent = True
         flash("Contexto escolar alterado com sucesso.", "success")
-        # Mantém na mesma página
-        return redirect(request.referrer or url_for('main.dashboard'))
+        return redirect(url_for('main.dashboard'))
         
+    # Para usuários mortais, o cão de guarda continua atuando
     success = UserService.set_active_school(school_id)
     if success:
         flash("Contexto escolar alterado com sucesso.", "success")
-        # Mantém na mesma página
-        return redirect(request.referrer or url_for('main.dashboard'))
+        return redirect(url_for('main.dashboard'))
     else:
         flash("Você não tem permissão para acessar esta escola.", "danger")
         return redirect(url_for('main.selecionar_escola'))
@@ -205,12 +161,17 @@ def trocar_escola(school_id):
 @main_bp.route('/dashboard')
 @login_required
 def dashboard():
+    # Valida se o Sudo Mode está ativamente ligado para um Super Admin real
     dec_mode_active = session.get('is_dec_mode', False) and current_user.role == 'super_admin'
     
     if current_user.role != 'super_admin':
         session.pop('is_dec_mode', None)
 
+    # -------------------------------------------------------------
+    # 1. Tratamento EXCLUSIVO do Modo DEC (Sudo Mode)
+    # -------------------------------------------------------------
     if dec_mode_active:
+        # AÇÃO 1: Lê o clique da URL PRIMEIRO
         view_as_school_id = request.args.get('view_as_school', type=int)
         
         if view_as_school_id:
@@ -219,23 +180,34 @@ def dashboard():
                 session['view_as_school_id'] = school.id
                 session['view_as_school_name'] = school.nome
                 session['active_school_id'] = school.id 
+                # Recarrega a página limpa, já com a escola na memória
                 return redirect(url_for('main.dashboard'))
             else:
                 flash("Escola selecionada não encontrada.", "danger")
                 return redirect(url_for('super_admin.dashboard'))
 
+        # AÇÃO 2: Se não clicou em nada e não tem escola na memória, segura no Painel Global
         elif not session.get('active_school_id'):
             return redirect(url_for('super_admin.dashboard'))
 
     else:
+        # Se o Sudo Mode está desligado, limpa os rastros do DEC
         session.pop('view_as_school_id', None)
         session.pop('view_as_school_name', None)
 
+    # -------------------------------------------------------------
+    # 2. Usuários comuns ou Super Admin "à paisana"
+    # -------------------------------------------------------------
+    # Se for um Super Admin com Modo DEC desligado, e estiver sem escola, manda escolher
     if current_user.role == 'super_admin' and not dec_mode_active and not session.get('active_school_id'):
         return redirect(url_for('main.selecionar_escola'))
 
+    # -------------------------------------------------------------
+    # 3. Carregamento do Painel da Escola
+    # -------------------------------------------------------------
     school_id_to_load = session.get('view_as_school_id') or session.get('active_school_id') or UserService.get_current_school_id()
 
+    # Se falhou em todas as tentativas de achar uma escola, devolve para a tela de seleção
     if not school_id_to_load:
         return redirect(url_for('main.selecionar_escola'))
 
@@ -268,11 +240,15 @@ def safebrowser():
 @login_required
 @admin_or_programmer_required
 def pre_cadastro():
+    # Captura o argumento da URL
     role_arg = request.args.get('role')
 
+    # === CORREÇÃO DE SEGURANÇA (BLINDAGEM DA ROTA GET) ===
+    # Previne Reflected XSS e Falsos Positivos de OS Command Injection do ZAP
     valid_roles = {'aluno', 'instrutor', 'admin_escola'}
     if role_arg and role_arg not in valid_roles:
-        role_arg = None 
+        role_arg = None  # Se for lixo ou código malicioso, nós anulamos.
+    # =====================================================
 
     if request.method == 'POST':
         school_id = UserService.get_current_school_id()

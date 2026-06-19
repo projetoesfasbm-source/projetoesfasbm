@@ -320,21 +320,6 @@
                     </ul>
                 </div>
                 {% endif %}
-
-                {% if current_user.role != 'aluno' and user_allowed_schools and user_allowed_schools|length > 1 %}
-                <div class="ms-2 d-none d-md-block">
-                    <select class="form-select form-select-sm border-0 shadow-sm text-primary fw-bold" 
-                            style="background-color: rgba(255, 255, 255, 0.85); cursor: pointer;" 
-                            onchange="window.location.href='/trocar-escola/' + this.value">
-                        {% for escola in user_allowed_schools %}
-                            <option value="{{ escola.id }}" {% if current_school_id == escola.id %}selected{% endif %}>
-                                🏫 {{ escola.nome }}
-                            </option>
-                        {% endfor %}
-                    </select>
-                </div>
-                {% endif %}
-
             </div>
 
             <div class="top-navbar-right-items">
