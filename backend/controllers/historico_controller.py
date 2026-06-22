@@ -34,8 +34,17 @@ def sancoes():
 @login_required
 @aluno_profile_required
 def elogios():
-    """Página para visualizar elogios (placeholder)."""
-    return render_template('elogios.html')
+    """Página para visualizar elogios do aluno logado."""
+    # Descobre quem é o aluno logado
+    aluno_id = current_user.aluno_profile.id
+    
+    # Busca os elogios dele no banco, do mais recente para o mais antigo
+    elogios_lista = db.session.scalars(
+        select(Elogio).where(Elogio.aluno_id == aluno_id).order_by(Elogio.data_elogio.desc())
+    ).all()
+    
+    # Envia a variável 'elogios' para o HTML
+    return render_template('elogios.html', elogios=elogios_lista)
 
 @historico_bp.route('/funcional/<int:aluno_id>')
 @login_required
