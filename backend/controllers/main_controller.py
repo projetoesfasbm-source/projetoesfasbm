@@ -25,16 +25,65 @@ main_bp = Blueprint('main', __name__)
 # ---------------------------------------
 @main_bp.context_processor
 def inject_active_school():
-    from flask import g
+    from flask import g, session
     if current_user.is_authenticated:
         active = g.get('active_school')
         school_id = active.id if active else None
+
+        # --- CACHE DE ESCOLAS DISPONÍVEIS NA SESSÃO ---
+        # Usamos a sessão para evitar que essa busca complexa rode em TODA página carregada
+        if 'user_available_schools' not in session:
+            escolas_dict = {}
+            from ..models.school import School
+            from ..models.user_school import UserSchool
+            
+            # 1. Vínculos padrões (Admins, SENS, CAL)
+            vinculos = db.session.execute(
+                select(UserSchool).where(UserSchool.user_id == current_user.id)
+            ).scalars().all()
+            for v in vinculos:
+                s = db.session.get(School, v.school_id)
+                if s: escolas_dict[s.id] = {'id': s.id, 'nome': s.nome}
+
+            # 2. Instrutores (Busca Profunda)
+            from ..models.instrutor import Instrutor
+            from ..models.disciplina_turma import DisciplinaTurma
+            from ..models.disciplina import Disciplina
+            from ..models.turma import Turma
+            
+            instrutores = db.session.scalars(select(Instrutor).where(Instrutor.user_id == current_user.id)).all()
+            if instrutores:
+                instrutor_ids = [i.id for i in instrutores]
+                turmas_instrutor = db.session.scalars(
+                    select(Turma).join(Disciplina).join(DisciplinaTurma).where(
+                        or_(DisciplinaTurma.instrutor_id_1.in_(instrutor_ids),
+                            DisciplinaTurma.instrutor_id_2.in_(instrutor_ids))
+                    )
+                ).all()
+                for t in turmas_instrutor:
+                    if t.school_id and t.school_id not in escolas_dict:
+                        s = db.session.get(School, t.school_id)
+                        if s: escolas_dict[s.id] = {'id': s.id, 'nome': s.nome}
+
+            # 3. Alunos
+            if current_user.role == 'aluno' and getattr(current_user, 'aluno_profile', None) and current_user.aluno_profile.turma:
+                t = current_user.aluno_profile.turma
+                if t.school_id and t.school_id not in escolas_dict:
+                    s = db.session.get(School, t.school_id)
+                    if s: escolas_dict[s.id] = {'id': s.id, 'nome': s.nome}
+
+            # Ordena alfabeticamente e salva na sessão
+            escolas_list = list(escolas_dict.values())
+            escolas_list.sort(key=lambda x: x['nome'])
+            session['user_available_schools'] = escolas_list
+
         return dict(
             current_school_id=school_id, 
             current_school=active,
-            active_school=active 
+            active_school=active,
+            available_schools=session.get('user_available_schools', [])
         )
-    return dict(current_school_id=None, current_school=None, active_school=None)
+    return dict(current_school_id=None, current_school=None, active_school=None, available_schools=[])
 
 # ---------------------------------------
 # Utils

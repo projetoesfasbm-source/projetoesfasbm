@@ -319,19 +319,39 @@
                         {% endif %}
                     {% endif %}
 
-                    {# 1. Desktop: Mostra tudo #}
-                    <span class="school-name-display d-none d-lg-block">
-                        {{ full_name }}
-                    </span>
-
-                    {# 2. Mobile: Mostra só a sigla (depois do " - ") #}
-                    <span class="school-name-display d-lg-none">
-                        {% if ' - ' in full_name %}
-                            {{ full_name.split(' - ', 1)[1] }}
-                        {% else %}
-                            {{ full_name }}
-                        {% endif %}
-                    </span>
+                    {% if dec_mode_active and not session.get('view_as_school_id') %}
+                        {# Mantém travado se for o Painel Global do DEC (Modo Intervenção) #}
+                        <span class="school-name-display d-none d-lg-block">{{ full_name }}</span>
+                        <span class="school-name-display d-lg-none">
+                            {% if ' - ' in full_name %}{{ full_name.split(' - ', 1)[1] }}{% else %}{{ full_name }}{% endif %}
+                        </span>
+                    {% else %}
+                        {# DROPDOWN DE TROCA RÁPIDA DE ESCOLAS #}
+                        <div class="dropdown d-inline-block">
+                            <a class="text-decoration-none dropdown-toggle d-flex align-items-center" href="#" role="button" id="dropdownEscola" data-bs-toggle="dropdown" aria-expanded="false" style="color: inherit !important; cursor: pointer;">
+                                {# Desktop #}
+                                <span class="school-name-display d-none d-lg-block me-1">{{ full_name }}</span>
+                                {# Mobile #}
+                                <span class="school-name-display d-lg-none me-1">
+                                    {% if ' - ' in full_name %}{{ full_name.split(' - ', 1)[1] }}{% else %}{{ full_name }}{% endif %}
+                                </span>
+                            </a>
+                            <ul class="dropdown-menu shadow" aria-labelledby="dropdownEscola">
+                                <li class="dropdown-header" style="font-weight: 600;">Alternar Contexto</li>
+                                {% if available_schools and available_schools|length > 0 %}
+                                    {% for esc in available_schools %}
+                                        <li>
+                                            <a class="dropdown-item {% if active_school and active_school.id == esc.id %}active fw-bold{% endif %}" href="{{ url_for('main.trocar_escola', school_id=esc.id) }}">
+                                                <i class="fas fa-school me-2 {% if active_school and active_school.id == esc.id %}text-primary{% else %}text-muted{% endif %}"></i> {{ esc.nome }}
+                                            </a>
+                                        </li>
+                                    {% endfor %}
+                                {% else %}
+                                    <li><span class="dropdown-item text-muted small">Nenhuma outra escola</span></li>
+                                {% endif %}
+                            </ul>
+                        </div>
+                    {% endif %}
                 </div>
 
                 {# --- SELECTOR DE EDIÇÃO ATIVA --- #}
