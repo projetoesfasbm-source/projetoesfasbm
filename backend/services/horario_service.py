@@ -491,7 +491,6 @@ class HorarioService:
                 vinculo = db.session.scalar(
                     select(DisciplinaTurma).where(
                         DisciplinaTurma.disciplina_id == disciplina_id,
-                        DisciplinaTurma.pelotao == pelotao,
                         or_(
                             DisciplinaTurma.instrutor_id_1.in_(my_instrutor_ids),
                             DisciplinaTurma.instrutor_id_2.in_(my_instrutor_ids)
@@ -515,8 +514,7 @@ class HorarioService:
             if not instrutor_id_2:
                 vinculo_dt = db.session.scalar(
                     select(DisciplinaTurma).where(
-                        DisciplinaTurma.disciplina_id == disciplina_id,
-                        DisciplinaTurma.pelotao == pelotao
+                        DisciplinaTurma.disciplina_id == disciplina_id
                     )
                 )
 
