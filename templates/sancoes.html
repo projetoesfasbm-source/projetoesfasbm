@@ -5,14 +5,49 @@
 {% block content %}
 <div class="content-header">
     <h1>Sanções Disciplinares</h1>
-    <p>Registros de sanções disciplinares.</p>
+    <p>Registros de processos e sanções aplicadas durante o curso.</p>
 </div>
 
 <div class="table-container">
-    <div class="empty-state">
-        <div class="empty-icon">📜</div>
-        <h2>Nenhuma Sanção Registrada</h2>
-        <p>Até o momento, não há sanções disciplinares registradas em seu histórico.</p>
-    </div>
+    {% if sancoes and sancoes|length > 0 %}
+        <div class="table-responsive p-3">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th scope="col">Data da Ocorrência</th>
+                        <th scope="col">Fato Constatado / Descrição</th>
+                        <th scope="col">Situação / Data Decisão</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for sancao in sancoes %}
+                    <tr>
+                        <td style="white-space: nowrap;">
+                            {% if sancao.data_ocorrencia %}
+                                {{ sancao.data_ocorrencia.strftime('%d/%m/%Y') }}
+                            {% else %}
+                                --
+                            {% endif %}
+                        </td>
+                        <td>{{ sancao.fato_constatado }}</td>
+                        <td>
+                            {% if sancao.data_decisao %}
+                                <span class="badge bg-danger">Aplicada em {{ sancao.data_decisao.strftime('%d/%m/%Y') }}</span>
+                            {% else %}
+                                <span class="badge bg-warning text-dark">Em Andamento</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="empty-state">
+            <div class="empty-icon">⚖️</div>
+            <h2>Nenhuma Sanção Registrada</h2>
+            <p>Você não possui registros de sanções disciplinares em seu histórico.</p>
+        </div>
+    {% endif %}
 </div>
 {% endblock %}
