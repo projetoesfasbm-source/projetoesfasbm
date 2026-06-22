@@ -10,6 +10,7 @@ from ..models.historico_disciplina import HistoricoDisciplina
 from ..models.disciplina import Disciplina
 from ..models.turma import Turma
 from ..models.elogio import Elogio  # <--- IMPORTAÇÃO ADICIONADA
+from ..models.processo_disciplina import ProcessoDisciplina
 from ..services.historico_service import HistoricoService
 from ..services.aluno_service import AlunoService
 from utils.decorators import admin_or_programmer_required, aluno_profile_required, can_view_management_pages_required
@@ -27,15 +28,35 @@ def index():
 @login_required
 @aluno_profile_required
 def sancoes():
-    """Página para visualizar sanções (placeholder)."""
-    return render_template('sancoes.html')
+    """Página para visualizar sanções disciplinares do aluno logado."""
+    # Descobre quem é o aluno logado
+    aluno_id = current_user.aluno_profile.id
+    
+    # Busca os processos disciplinares do aluno no banco, do mais recente para o mais antigo
+    processos_lista = db.session.scalars(
+        select(ProcessoDisciplina)
+        .where(ProcessoDisciplina.aluno_id == aluno_id)
+        .order_by(ProcessoDisciplina.data_ocorrencia.desc())
+    ).all()
+    
+    # Envia a variável 'sancoes' para o HTML
+    return render_template('sancoes.html', sancoes=processos_lista)
 
 @historico_bp.route('/elogios')
 @login_required
 @aluno_profile_required
 def elogios():
-    """Página para visualizar elogios (placeholder)."""
-    return render_template('elogios.html')
+    """Página para visualizar elogios do aluno logado."""
+    # Descobre quem é o aluno logado
+    aluno_id = current_user.aluno_profile.id
+    
+    # Busca os elogios dele no banco, do mais recente para o mais antigo
+    elogios_lista = db.session.scalars(
+        select(Elogio).where(Elogio.aluno_id == aluno_id).order_by(Elogio.data_elogio.desc())
+    ).all()
+    
+    # Envia a variável 'elogios' para o HTML
+    return render_template('elogios.html', elogios=elogios_lista)
 
 @historico_bp.route('/funcional/<int:aluno_id>')
 @login_required
