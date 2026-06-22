@@ -43,11 +43,11 @@ class DashboardService:
         # --- AULAS PENDENTES (Para SENS) ---
         aulas_pendentes_query = select(func.count(Horario.id)).where(Horario.status == 'pendente')
         if school_id or edicao_id:
-            aulas_pendentes_query = aulas_pendentes_query.join(Turma, Horario.pelotao == Turma.nome)
+            aulas_pendentes_query = aulas_pendentes_query.join(Semana).join(Ciclo)
             if school_id:
-                aulas_pendentes_query = aulas_pendentes_query.where(Turma.school_id == school_id)
+                aulas_pendentes_query = aulas_pendentes_query.where(Ciclo.school_id == school_id)
             if edicao_id: # <--- FILTRO DE EDIÇÃO ADICIONADO
-                aulas_pendentes_query = aulas_pendentes_query.where(Turma.edicao_id == edicao_id)
+                aulas_pendentes_query = aulas_pendentes_query.where(Ciclo.edicao_id == edicao_id)
 
         total_aulas_pendentes = db.session.scalar(aulas_pendentes_query) or 0
         lista_aulas_pendentes = [] # Array vazio para não quebrar referências passadas

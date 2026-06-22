@@ -18,6 +18,7 @@ from ..models.disciplina_turma import DisciplinaTurma
 from ..models.semana import Semana
 from ..models.turma import Turma
 from ..models.user import User
+from ..models.ciclo import Ciclo
 from .notification_service import NotificationService
 from .instrutor_service import InstrutorService
 from .site_config_service import SiteConfigService
@@ -685,8 +686,8 @@ class HorarioService:
         ).where(Horario.status == 'pendente')
 
         if school_id:
-            query = query.join(Turma, Horario.pelotao == Turma.nome).where(
-                Turma.school_id == school_id
+            query = query.join(Semana).join(Ciclo).where(
+                Ciclo.school_id == school_id
             )
 
         return db.session.scalars(
