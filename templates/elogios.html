@@ -9,10 +9,39 @@
 </div>
 
 <div class="table-container">
-    <div class="empty-state">
-        <div class="empty-icon">⭐</div>
-        <h2>Nenhum Elogio Registrado</h2>
-        <p>Até o momento, não há elogios registrados em seu histórico.</p>
-    </div>
+    {% if elogios and elogios|length > 0 %}
+        <div class="table-responsive p-3">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th scope="col">Data do Elogio</th>
+                        <th scope="col">Motivo / Descrição</th>
+                        <th scope="col">Pontos</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for elogio in elogios %}
+                    <tr>
+                        <td style="white-space: nowrap;">
+                            {% if elogio.data_elogio %}
+                                {{ elogio.data_elogio.strftime('%d/%m/%Y') }}
+                            {% else %}
+                                --
+                            {% endif %}
+                        </td>
+                        <td>{{ elogio.descricao }}</td>
+                        <td><span class="badge bg-success">+{{ elogio.pontos }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="empty-state">
+            <div class="empty-icon">⭐</div>
+            <h2>Nenhum Elogio Registrado</h2>
+            <p>Até o momento, não há elogios registrados em seu histórico.</p>
+        </div>
+    {% endif %}
 </div>
 {% endblock %}
