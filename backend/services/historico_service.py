@@ -1,6 +1,6 @@
 # backend/services/historico_service.py
 
-from datetime import datetime
+from datetime import datetime, timezone
 from ..models.database import db
 from ..models.aluno import Aluno
 from ..models.disciplina import Disciplina
@@ -37,10 +37,24 @@ class HistoricoService:
                 'data_fim': p.data_decisao
             })
 
-        # 4. Unifica e ordena todos os eventos pela data de início
+        # Função auxiliar para padronizar datas (transformar naive em aware) para ordenação segura
+        def padronizar_data(item):
+            dt = getattr(item, 'data_inicio', None) if not isinstance(item, dict) else item.get('data_inicio')
+            
+            # Se a data for nula ou inválida, joga para o final da lista
+            if not isinstance(dt, datetime):
+                return datetime.min.replace(tzinfo=timezone.utc)
+            
+            # Se a data for "naive" (sem fuso), injetamos UTC para permitir a comparação
+            if dt.tzinfo is None or dt.tzinfo.utcoffset(dt) is None:
+                return dt.replace(tzinfo=timezone.utc)
+            
+            return dt
+
+        # 4. Unifica e ordena todos os eventos pela data de início usando a função padronizadora
         todos_eventos = sorted(
             chain(atividades, eventos_processos),
-            key=lambda x: getattr(x, 'data_inicio', None) or (x.get('data_inicio') if isinstance(x, dict) else None),
+            key=padronizar_data,
             reverse=True
         )
         
