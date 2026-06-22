@@ -207,6 +207,48 @@
         .btn-install-premium i {
             font-size: 1.1rem;
         }
+
+        /* --- CORREÇÃO DE RESPONSIVIDADE MOBILE (CABEÇALHO) --- */
+        @media (max-width: 768px) {
+            .top-navbar-content {
+                display: flex !important;
+                flex-wrap: wrap !important;
+                justify-content: space-between;
+                align-items: center;
+                gap: 8px;
+                padding: 10px 5px !important;
+            }
+
+            .top-navbar-left-items, .top-navbar-right-items {
+                display: flex;
+                align-items: center;
+                flex-wrap: wrap; 
+                gap: 8px;
+            }
+
+            .school-name-display {
+                white-space: normal !important;
+                font-size: 0.85rem !important;
+                max-width: 140px; 
+                overflow: hidden;
+                text-overflow: ellipsis;
+                line-height: 1.1;
+            }
+
+            .top-navbar-right-items .user-info {
+                display: none !important;
+            }
+
+            .top-navbar-left-items .dropdown .dropdown-toggle {
+                font-size: 0.75rem !important;
+                padding: 4px 8px !important;
+            }
+
+            .top-navbar-right-items .btn-outline-danger {
+                font-size: 0.75rem !important;
+                padding: 4px 8px !important;
+            }
+        }
     </style>
 </head>
 
