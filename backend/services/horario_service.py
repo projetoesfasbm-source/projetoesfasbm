@@ -310,8 +310,12 @@ class HorarioService:
 
         instrutor_logado_id = None
         if not is_admin:
+            school_id = UserService.get_current_school_id()
             my_instrutor_ids = db.session.scalars(
-                select(Instrutor.id).where(Instrutor.user_id == user.id)
+                select(Instrutor.id).where(
+                    Instrutor.user_id == user.id,
+                    Instrutor.school_id == school_id
+                )
             ).all()
             if my_instrutor_ids:
                 instrutor_logado_id = my_instrutor_ids[0]
@@ -481,8 +485,12 @@ class HorarioService:
                     instrutor_id_1 = int(instrutor_id_from_form)
 
             else:
+                school_id = UserService.get_current_school_id()
                 my_instrutor_ids = db.session.scalars(
-                    select(Instrutor.id).where(Instrutor.user_id == user.id)
+                    select(Instrutor.id).where(
+                        Instrutor.user_id == user.id,
+                        Instrutor.school_id == school_id
+                    )
                 ).all()
 
                 if not my_instrutor_ids:
