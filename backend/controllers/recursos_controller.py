@@ -246,33 +246,32 @@ def novo_recurso():
             db.session.rollback()
             flash(f"Erro: {str(e)}", "danger")
 
-    active_school_id = getattr(current_user, 'temp_active_school_id', None)
-    active_edicao_id = session.get('active_edicao_id')
+    active_school_id = current_user._get_active_school_id()
     
     if current_user.role == 'aluno':
-        # Alunos podem não ter essas variáveis na sessão
         aluno_prof = current_user.aluno_profile
-        if aluno_prof:
-            if not active_school_id and aluno_prof.turma:
+        if aluno_prof and getattr(aluno_prof, 'turma', None):
+            if not active_school_id:
                 active_school_id = aluno_prof.turma.school_id
-            if not active_edicao_id:
-                active_edicao_id = aluno_prof.edicao_id
 
-    query = Disciplina.query.join(DisciplinaHabilitada).join(ProvaRecurso).join(Turma).filter(
-        Turma.school_id == active_school_id
-    )
+    # Forma mais segura e tolerante a falhas estruturais nos dados de teste:
+    # 1. Busca todas as provas ativas
+    query = ProvaRecurso.query.filter_by(is_active=True).join(Disciplina).join(Turma)
     
-    if active_edicao_id:
-        query = query.filter(Turma.edicao_id == active_edicao_id)
+    # 2. Filtra pela escola
+    if active_school_id:
+        query = query.filter(Turma.school_id == active_school_id)
         
-    disciplinas_raw = query.all()
+    provas_ativas = query.all()
     
-    # Agrupa em Python para evitar psycopg2.errors.GroupingError no Postgres
+    # 3. Agrupa por nome da matéria e verifica se está habilitada
     disciplinas_unicas = {}
-    for d in disciplinas_raw:
-        if d.materia not in disciplinas_unicas:
-            disciplinas_unicas[d.materia] = d
-            
+    for p in provas_ativas:
+        d = p.disciplina
+        if d.habilitacao_recurso: # Verifica se a admin marcou como habilitada
+            if d.materia not in disciplinas_unicas:
+                disciplinas_unicas[d.materia] = d
+                
     disciplinas_com_prova = list(disciplinas_unicas.values())
     
     return render_template('recursos/aluno_form.html', disciplinas=disciplinas_com_prova)
@@ -282,10 +281,22 @@ def novo_recurso():
 def api_get_provas(disciplina_id):
     # Lógica importante: busca provas pelo nome da matéria da disciplina selecionada
     d_aluno = Disciplina.query.get_or_404(disciplina_id)
+    active_school_id = current_user._get_active_school_id()
     
-    provas = ProvaRecurso.query.join(Disciplina).filter(
+    if current_user.role == 'aluno':
+        aluno_prof = current_user.aluno_profile
+        if aluno_prof and getattr(aluno_prof, 'turma', None):
+            if not active_school_id:
+                active_school_id = aluno_prof.turma.school_id
+    
+    query = ProvaRecurso.query.join(Disciplina).join(Turma).filter(
         Disciplina.materia == d_aluno.materia,
         ProvaRecurso.is_active == True
-    ).all()
+    )
+    
+    if active_school_id:
+        query = query.filter(Turma.school_id == active_school_id)
+        
+    provas = query.all()
     
     return jsonify([{'id': p.id, 'nome': p.nome} for p in provas])
