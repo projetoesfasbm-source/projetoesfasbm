@@ -248,10 +248,18 @@ def novo_recurso():
 
     active_school_id = getattr(current_user, 'temp_active_school_id', None)
     # Lista matérias que tenham pelo menos uma prova cadastrada em algum dos seus IDs
-    disciplinas_com_prova = Disciplina.query.join(DisciplinaHabilitada).join(ProvaRecurso).join(Turma).filter(
+    disciplinas_raw = Disciplina.query.join(DisciplinaHabilitada).join(ProvaRecurso).join(Turma).filter(
         Turma.school_id == active_school_id,
         Turma.edicao_id == session.get('active_edicao_id')
-    ).group_by(Disciplina.materia).all()
+    ).all()
+    
+    # Agrupa em Python para evitar psycopg2.errors.GroupingError no Postgres
+    disciplinas_unicas = {}
+    for d in disciplinas_raw:
+        if d.materia not in disciplinas_unicas:
+            disciplinas_unicas[d.materia] = d
+            
+    disciplinas_com_prova = list(disciplinas_unicas.values())
     
     return render_template('recursos/aluno_form.html', disciplinas=disciplinas_com_prova)
 
