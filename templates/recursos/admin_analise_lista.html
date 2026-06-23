@@ -24,51 +24,113 @@
     <div class="card shadow-sm border-0" style="border-radius: 12px;">
         <div class="card-body p-4">
             {% if recursos %}
-            <div class="table-responsive">
-                <table class="table table-hover align-middle" id="tabelaRecursos">
-                    <thead class="table-light">
-                        <tr>
-                            <th class="border-0">ID</th>
-                            <th class="border-0">Aluno</th>
-                            <th class="border-0">Matéria / Prova</th>
-                            <th class="border-0 text-center">Estado</th>
-                            <th class="border-0 text-end">Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for r in recursos %}
-                        <tr>
-                            <td class="text-muted fw-bold">#{{ r.id }}</td>
-                            <td>
-                                <div class="fw-bold text-dark">{{ r.aluno.nome_de_guerra or r.aluno.nome_completo }}</div>
-                                <div class="small text-muted">{{ r.aluno.matricula }}</div>
-                            </td>
-                            <td>
-                                <div class="fw-bold">{{ r.prova.disciplina.materia }}</div>
-                                <div class="small text-muted">{{ r.prova.nome }}</div>
-                            </td>
-                            <td class="text-center">
-                                <span class="badge {% if r.status == 'Pendente' %}bg-warning text-dark{% elif r.status == 'Deferido' %}bg-success{% elif r.status == 'Indeferido' %}bg-danger{% else %}bg-info text-dark{% endif %} px-3 rounded-pill py-2">
-                                    {{ r.status }}
-                                </span>
-                            </td>
-                            <td class="text-end">
-                                <div class="d-flex gap-2 justify-content-end">
-                                    {% if current_user.role != 'instrutor' %}
-                                    <button type="button" class="btn btn-outline-primary btn-sm rounded-pill px-3 fw-bold" 
-                                            onclick="abrirEncaminhamento('{{ r.id }}')">
-                                        <i class="fas fa-share me-1"></i> Encaminhar
-                                    </button>
-                                    {% endif %}
-                                    <a href="{{ url_for('recursos.detalhes_recurso', recurso_id=r.id) }}" class="btn btn-primary btn-sm rounded-pill px-3 fw-bold">
-                                        <i class="fas fa-search me-1"></i> Analisar
-                                    </a>
-                                </div>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+            <ul class="nav nav-tabs mb-4" id="recursosTab" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active fw-bold" id="andamento-tab" data-bs-toggle="tab" data-bs-target="#andamento" type="button" role="tab" aria-controls="andamento" aria-selected="true">
+                        Em Andamento
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link fw-bold" id="finalizados-tab" data-bs-toggle="tab" data-bs-target="#finalizados" type="button" role="tab" aria-controls="finalizados" aria-selected="false">
+                        Finalizados
+                    </button>
+                </li>
+            </ul>
+
+            <div class="tab-content" id="recursosTabContent">
+                <!-- ABA EM ANDAMENTO -->
+                <div class="tab-pane fade show active" id="andamento" role="tabpanel" aria-labelledby="andamento-tab">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle tabela-recursos" style="width:100%">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="border-0">ID</th>
+                                    <th class="border-0">Aluno</th>
+                                    <th class="border-0">Matéria / Prova</th>
+                                    <th class="border-0 text-center">Estado</th>
+                                    <th class="border-0 text-end">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for r in recursos if r.status not in ['Deferido', 'Indeferido'] %}
+                                <tr>
+                                    <td class="text-muted fw-bold">#{{ r.id }}</td>
+                                    <td>
+                                        <div class="fw-bold text-dark">{{ r.aluno.nome_de_guerra or r.aluno.nome_completo }}</div>
+                                        <div class="small text-muted">{{ r.aluno.matricula }}</div>
+                                    </td>
+                                    <td>
+                                        <div class="fw-bold">{{ r.prova.disciplina.materia }}</div>
+                                        <div class="small text-muted">{{ r.prova.nome }}</div>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge {% if r.status == 'Pendente' %}bg-warning text-dark{% elif r.status == 'Deferido' %}bg-success{% elif r.status == 'Indeferido' %}bg-danger{% else %}bg-info text-dark{% endif %} px-3 rounded-pill py-2">
+                                            {{ r.status }}
+                                        </span>
+                                    </td>
+                                    <td class="text-end">
+                                        <div class="d-flex gap-2 justify-content-end">
+                                            {% if current_user.role != 'instrutor' %}
+                                            <button type="button" class="btn btn-outline-primary btn-sm rounded-pill px-3 fw-bold" 
+                                                    onclick="abrirEncaminhamento('{{ r.id }}')">
+                                                <i class="fas fa-share me-1"></i> Encaminhar
+                                            </button>
+                                            {% endif %}
+                                            <a href="{{ url_for('recursos.detalhes_recurso', recurso_id=r.id) }}" class="btn btn-primary btn-sm rounded-pill px-3 fw-bold">
+                                                <i class="fas fa-search me-1"></i> Analisar
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- ABA FINALIZADOS -->
+                <div class="tab-pane fade" id="finalizados" role="tabpanel" aria-labelledby="finalizados-tab">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle tabela-recursos" style="width:100%">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="border-0">ID</th>
+                                    <th class="border-0">Aluno</th>
+                                    <th class="border-0">Matéria / Prova</th>
+                                    <th class="border-0 text-center">Estado</th>
+                                    <th class="border-0 text-end">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for r in recursos if r.status in ['Deferido', 'Indeferido'] %}
+                                <tr>
+                                    <td class="text-muted fw-bold">#{{ r.id }}</td>
+                                    <td>
+                                        <div class="fw-bold text-dark">{{ r.aluno.nome_de_guerra or r.aluno.nome_completo }}</div>
+                                        <div class="small text-muted">{{ r.aluno.matricula }}</div>
+                                    </td>
+                                    <td>
+                                        <div class="fw-bold">{{ r.prova.disciplina.materia }}</div>
+                                        <div class="small text-muted">{{ r.prova.nome }}</div>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge {% if r.status == 'Pendente' %}bg-warning text-dark{% elif r.status == 'Deferido' %}bg-success{% elif r.status == 'Indeferido' %}bg-danger{% else %}bg-info text-dark{% endif %} px-3 rounded-pill py-2">
+                                            {{ r.status }}
+                                        </span>
+                                    </td>
+                                    <td class="text-end">
+                                        <div class="d-flex gap-2 justify-content-end">
+                                            <a href="{{ url_for('recursos.detalhes_recurso', recurso_id=r.id) }}" class="btn btn-primary btn-sm rounded-pill px-3 fw-bold">
+                                                <i class="fas fa-search me-1"></i> Ver Resultado
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
             {% else %}
             <div class="text-center py-5">
@@ -150,12 +212,14 @@
 
 <script>
     function abrirEncaminhamento(recursoId) {
-        const modal = new bootstrap.Modal(document.getElementById('modalEncaminhamentoGeral'));
+        const modalElement = document.getElementById('modalEncaminhamentoGeral');
+        const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
+        
         document.getElementById('displayIdRecurso').innerText = '#' + recursoId;
         document.getElementById('formEncaminhar').action = "/recursos/admin/encaminhar/" + recursoId;
         
-        // Limpa e reinicializa o Select2 para garantir que ele recalcule a largura ao abrir
-        if ($('#selectDestinatario').data('select2')) {
+        // Limpa o Select2 se já estiver instanciado
+        if ($('#selectDestinatario').hasClass("select2-hidden-accessible")) {
             $('#selectDestinatario').select2('destroy');
         }
         
@@ -163,7 +227,7 @@
     }
 
     $(document).ready(function() {
-        $('#tabelaRecursos').DataTable({
+        $('.tabela-recursos').DataTable({
             "language": { "url": "//cdn.datatables.net/plug-ins/1.13.6/i18n/pt-BR.json" },
             "order": [[ 0, "desc" ]]
         });
