@@ -61,8 +61,8 @@
                             <div class="col-md-7">
                                 <label class="form-label fw-bold small">TIPO DE DOCUMENTO A GERAR</label>
                                 <select name="tipo_acao" class="form-select border-primary fw-bold" id="selectTipoDoc" required>
-                                    <option value="parecer_instrutor" {% if current_user.role == 'instrutor' or r.status == 'Com Instrutor' %}selected{% endif %}>PARECER DO INSTRUTOR (CONTEUDISTA)</option>
-                                    <option value="decisao_cmt" {% if r.status == 'Com Comandante' %}selected{% endif %}>DECISÃO DO COMANDANTE DA ESCOLA</option>
+                                    <option value="parecer_instrutor" {% if current_user.role == 'instrutor' or r.status in ['Com Instrutor', 'Pendente'] %}selected{% endif %}>PARECER DO INSTRUTOR (CONTEUDISTA)</option>
+                                    <option value="decisao_cmt" {% if current_user.role != 'instrutor' and r.status in ['Com Comandante', 'Retornado ao Admin (Parecer)'] %}selected{% endif %}>DECISÃO DO COMANDANTE DA ESCOLA</option>
                                 </select>
                             </div>
                             <div class="col-md-5" id="colStatusFinal" style="{% if current_user.role == 'instrutor' or r.status == 'Com Instrutor' %}display: none;{% endif %}">
@@ -161,6 +161,9 @@ Dê-se ciência ao interessado e realizem-se as retificações necessárias.`;
             if(editor.value === modeloDecisao) editor.value = modeloParecer;
         }
     });
+    
+    // Dispara o evento no carregamento inicial para exibir a caixa de Status Final caso "Decisão" seja o selecionado
+    selectTipo.dispatchEvent(new Event('change'));
 });
 </script>
 

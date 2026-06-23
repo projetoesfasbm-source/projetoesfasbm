@@ -71,7 +71,7 @@
                                     <td class="text-end">
                                         <div class="d-flex gap-2 justify-content-end">
                                             {% if current_user.role != 'instrutor' %}
-                                            <button type="button" class="btn btn-outline-primary btn-sm rounded-pill px-3 fw-bold" 
+                                            <button type="button" class="btn btn-secondary text-white btn-sm rounded-pill px-3 fw-bold" 
                                                     onclick="abrirEncaminhamento('{{ r.id }}')">
                                                 <i class="fas fa-share me-1"></i> Encaminhar
                                             </button>
@@ -213,6 +213,12 @@
 <script>
     function abrirEncaminhamento(recursoId) {
         const modalElement = document.getElementById('modalEncaminhamentoGeral');
+        
+        // Remove do container atual e anexa diretamente no body para resolver problema do backdrop (tela escura bloqueando)
+        if (modalElement.parentNode !== document.body) {
+            document.body.appendChild(modalElement);
+        }
+
         const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
         
         document.getElementById('displayIdRecurso').innerText = '#' + recursoId;
