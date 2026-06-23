@@ -247,11 +247,25 @@ def novo_recurso():
             flash(f"Erro: {str(e)}", "danger")
 
     active_school_id = getattr(current_user, 'temp_active_school_id', None)
-    # Lista matérias que tenham pelo menos uma prova cadastrada em algum dos seus IDs
-    disciplinas_raw = Disciplina.query.join(DisciplinaHabilitada).join(ProvaRecurso).join(Turma).filter(
-        Turma.school_id == active_school_id,
-        Turma.edicao_id == session.get('active_edicao_id')
-    ).all()
+    active_edicao_id = session.get('active_edicao_id')
+    
+    if current_user.role == 'aluno':
+        # Alunos podem não ter essas variáveis na sessão
+        aluno_prof = current_user.aluno_profile
+        if aluno_prof:
+            if not active_school_id and aluno_prof.turma:
+                active_school_id = aluno_prof.turma.school_id
+            if not active_edicao_id:
+                active_edicao_id = aluno_prof.edicao_id
+
+    query = Disciplina.query.join(DisciplinaHabilitada).join(ProvaRecurso).join(Turma).filter(
+        Turma.school_id == active_school_id
+    )
+    
+    if active_edicao_id:
+        query = query.filter(Turma.edicao_id == active_edicao_id)
+        
+    disciplinas_raw = query.all()
     
     # Agrupa em Python para evitar psycopg2.errors.GroupingError no Postgres
     disciplinas_unicas = {}
