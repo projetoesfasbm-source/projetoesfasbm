@@ -143,14 +143,36 @@ def listar_recursos_pendentes():
     else:
         recursos = query.all()
 
-    # CORREÇÃO DA CONSULTA: Filtrando apenas por role para evitar erro de atributo school_id inexistente
-    instrutores = User.query.filter_by(role='instrutor').all()
-    comandantes = User.query.filter(User.role.in_(['admin_escola', 'super_admin'])).all()
+    import json
+    from backend.models.user_school import UserSchool
+
+    # Filtra Comandantes apenas da escola atual
+    comandantes = User.query.join(UserSchool).filter(
+        UserSchool.school_id == active_school_id,
+        User.role.in_(['admin_escola', 'super_admin'])
+    ).all()
+    
+    # Mapeia Instrutores vinculados à disciplina do recurso
+    recurso_instrutores_map = {}
+    for r in recursos:
+        validos = set()
+        if r.prova and r.prova.disciplina:
+            for assoc in r.prova.disciplina.associacoes_turmas:
+                if assoc.instrutor_1 and assoc.instrutor_1.user:
+                    u = assoc.instrutor_1.user
+                    validos.add((u.id, u.nome_completo, u.posto_graduacao))
+                if assoc.instrutor_2 and assoc.instrutor_2.user:
+                    u = assoc.instrutor_2.user
+                    validos.add((u.id, u.nome_completo, u.posto_graduacao))
+        
+        recurso_instrutores_map[r.id] = [
+            {'id': v[0], 'nome': f"{v[2] or ''} {v[1]}".strip()} for v in validos
+        ]
 
     return render_template('recursos/admin_analise_lista.html', 
                            recursos=recursos, 
-                           instrutores=instrutores, 
-                           comandantes=comandantes)
+                           comandantes=comandantes,
+                           instrutores_map=json.dumps(recurso_instrutores_map))
 
 @recursos_bp.route('/admin/encaminhar/<int:recurso_id>', methods=['POST'])
 @login_required

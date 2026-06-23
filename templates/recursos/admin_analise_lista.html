@@ -164,14 +164,12 @@
                         <label class="form-label fw-bold small">DESTINATÁRIO ESPECÍFICO</label>
                         <select name="usuario_destino_id" id="selectDestinatario" class="form-select" required style="width: 100%;">
                             <option value=""></option>
-                            <optgroup label="Instrutores">
-                                {% for i in instrutores %}
-                                <option value="{{ i.id }}">{{ i.rank }} {{ i.nome_completo }}</option>
-                                {% endfor %}
+                            <optgroup label="Instrutores" id="optgroupInstrutores">
+                                <!-- Preenchido dinamicamente via JS -->
                             </optgroup>
                             <optgroup label="Comandantes/Admins">
                                 {% for c in comandantes %}
-                                <option value="{{ c.id }}">{{ c.rank }} {{ c.nome_completo }}</option>
+                                <option value="{{ c.id }}">{{ c.posto_graduacao or '' }} {{ c.nome_completo }}</option>
                                 {% endfor %}
                             </optgroup>
                         </select>
@@ -211,6 +209,8 @@
 </style>
 
 <script>
+    const instrutoresMap = {{ instrutores_map | safe }};
+
     function abrirEncaminhamento(recursoId) {
         const modalElement = document.getElementById('modalEncaminhamentoGeral');
         
@@ -224,6 +224,25 @@
         document.getElementById('displayIdRecurso').innerText = '#' + recursoId;
         document.getElementById('formEncaminhar').action = "/recursos/admin/encaminhar/" + recursoId;
         
+        // Popula dinamicamente os instrutores válidos
+        const instrutores = instrutoresMap[recursoId] || [];
+        const optg = document.getElementById('optgroupInstrutores');
+        optg.innerHTML = '';
+        if (instrutores.length > 0) {
+            instrutores.forEach(i => {
+                const opt = document.createElement('option');
+                opt.value = i.id;
+                opt.textContent = i.nome;
+                optg.appendChild(opt);
+            });
+        } else {
+            const opt = document.createElement('option');
+            opt.value = "";
+            opt.textContent = "Nenhum instrutor vinculado na matéria";
+            opt.disabled = true;
+            optg.appendChild(opt);
+        }
+
         // Limpa o Select2 se já estiver instanciado
         if ($('#selectDestinatario').hasClass("select2-hidden-accessible")) {
             $('#selectDestinatario').select2('destroy');
