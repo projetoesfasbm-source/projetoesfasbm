@@ -26,12 +26,12 @@
             {% if recursos %}
             <ul class="nav nav-tabs mb-4" id="recursosTab" role="tablist">
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link active fw-bold" id="andamento-tab" data-bs-toggle="tab" data-bs-target="#andamento" type="button" role="tab" aria-controls="andamento" aria-selected="true">
+                    <button class="nav-link active fw-bold text-dark" id="andamento-tab" data-bs-toggle="tab" data-bs-target="#andamento" type="button" role="tab" aria-controls="andamento" aria-selected="true">
                         Em Andamento
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link fw-bold" id="finalizados-tab" data-bs-toggle="tab" data-bs-target="#finalizados" type="button" role="tab" aria-controls="finalizados" aria-selected="false">
+                    <button class="nav-link fw-bold text-secondary" id="finalizados-tab" data-bs-toggle="tab" data-bs-target="#finalizados" type="button" role="tab" aria-controls="finalizados" aria-selected="false">
                         Finalizados
                     </button>
                 </li>
@@ -71,7 +71,7 @@
                                     <td class="text-end">
                                         <div class="d-flex gap-2 justify-content-end">
                                             {% if current_user.role != 'instrutor' %}
-                                            <button type="button" class="btn btn-secondary text-white btn-sm rounded-pill px-3 fw-bold" 
+                                            <button type="button" class="btn btn-dark text-white btn-sm rounded-pill px-3 fw-bold" 
                                                     onclick="abrirEncaminhamento('{{ r.id }}')">
                                                 <i class="fas fa-share me-1"></i> Encaminhar
                                             </button>
