@@ -259,6 +259,10 @@ def api_disciplinas_por_turma(turma_id):
     turma = db.session.get(Turma, turma_id)
     if not turma: return jsonify({'error': 'Turma não encontrada'}), 404
     
+    school_id = UserService.get_current_school_id()
+    if turma.school_id != school_id:
+        return jsonify({'error': 'Acesso negado: Turma de outra escola'}), 403
+    
     # REMOVIDA A LIMITAÇÃO DO CICLO: Consulta direta para trazer TODAS as disciplinas da turma
     disciplinas = db.session.scalars(
         select(Disciplina).where(Disciplina.turma_id == turma_id).order_by(Disciplina.materia)
@@ -280,7 +284,12 @@ def detalhes_disciplina(disciplina_id):
     if not disciplina:
         flash('Disciplina não encontrada.', 'danger')
         return redirect(url_for('disciplina.listar_disciplinas'))
-    
+        
+    school_id = UserService.get_current_school_id()
+    if disciplina.turma and disciplina.turma.school_id != school_id:
+        flash('Acesso negado: Disciplina de outra escola.', 'danger')
+        return redirect(url_for('main.dashboard'))
+
     raw_agendamentos = db.session.scalars(
         select(Horario)
         .join(Semana, Horario.semana_id == Semana.id)
