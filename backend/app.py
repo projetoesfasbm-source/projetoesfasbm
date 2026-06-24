@@ -195,6 +195,7 @@ def register_blueprints(app):
     from backend.controllers.user_controller import user_bp
     from backend.controllers.vinculo_controller import vinculo_bp
     from backend.controllers.chefe_turma_controller import chefe_bp
+    from backend.controllers.suporte_controller import suporte_bp
 
     # ### NOVOS CONTROLLERS ###
     from backend.controllers.elogio_controller import elogio_bp
@@ -228,6 +229,7 @@ def register_blueprints(app):
     app.register_blueprint(user_bp)
     app.register_blueprint(vinculo_bp)
     app.register_blueprint(chefe_bp)
+    app.register_blueprint(suporte_bp)
 
     # ### REGISTRO DE NOVOS BLUEPRINTS ###
     app.register_blueprint(elogio_bp)
