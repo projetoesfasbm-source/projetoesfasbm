@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}Criar Chamado de Suporte{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow-sm border-0 rounded-4">
+                <div class="card-body p-5">
+                    <h2 class="mb-4 text-center">Formulário de Suporte</h2>
+                    <p class="text-muted text-center mb-5">Preencha os dados abaixo para relatar um problema e gerar um chamado. Entraremos em contato assim que possível.</p>
+
+                    <form method="POST" action="{{ url_for('suporte.novo_chamado') }}" enctype="multipart/form-data">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        
+                        <!-- 1. Escola solicitante -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">1. Escola solicitante</label>
+                            <input type="text" class="form-control" value="{{ escola_nome or 'Nenhuma escola vinculada' }}" readonly>
+                            <div class="form-text">Preenchido automaticamente.</div>
+                        </div>
+
+                        <!-- 2. Nome solicitante -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">2. Nome solicitante</label>
+                            <input type="text" class="form-control" value="{{ current_user.nome_completo or current_user.username or current_user.matricula }}" readonly>
+                            <div class="form-text">Preenchido automaticamente com seus dados de login.</div>
+                        </div>
+
+                        <!-- 3. QSO contato solicitante -->
+                        <div class="mb-4">
+                            <label for="qso_contato" class="form-label fw-bold">3. QSO contato solicitante <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="qso_contato" name="qso_contato" placeholder="Insira sua resposta (Ex: Telefone, WhatsApp, etc)" required>
+                        </div>
+
+                        <!-- 4. Problema se dando no login de: -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">4. Seu problema está se dando no login de: <span class="text-danger">*</span></label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="tipo_login" id="login_aluno" value="Aluno" required>
+                                <label class="form-check-label" for="login_aluno">Aluno</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="tipo_login" id="login_instrutor" value="Instrutor">
+                                <label class="form-check-label" for="login_instrutor">Instrutor</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="tipo_login" id="login_secao" value="Seção de ensino">
+                                <label class="form-check-label" for="login_secao">Seção de ensino</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="tipo_login" id="login_outros" value="Outros">
+                                <label class="form-check-label" for="login_outros">Outros</label>
+                            </div>
+                        </div>
+
+                        <!-- 5. Qual a matricula do Usuário que esta tendo problema -->
+                        <div class="mb-4">
+                            <label for="matricula_problema" class="form-label fw-bold">5. Qual a matrícula do Usuário que está tendo problema?</label>
+                            <input type="text" class="form-control" id="matricula_problema" name="matricula_problema" placeholder="Insira sua resposta">
+                        </div>
+
+                        <hr class="my-5">
+
+                        <!-- 6. Selecione o problema -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">6. Selecione o problema <span class="text-danger">*</span></label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="tipo_problema" id="prob_senha" value="Problema de acesso (Senha bloqueada, usuário sem permissão)" required>
+                                <label class="form-check-label" for="prob_senha">Problema de acesso (Senha bloqueada, usuário sem permissão)</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="tipo_problema" id="prob_autenticador" value="Problema de acesso (Autenticador não funciona)">
+                                <label class="form-check-label" for="prob_autenticador">Problema de acesso (Autenticador não funciona)</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="tipo_problema" id="prob_marcar" value="Instrutor não consegue marcar aula">
+                                <label class="form-check-label" for="prob_marcar">Instrutor não consegue marcar aula</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="tipo_problema" id="prob_relatorios" value="Relatórios não exportam">
+                                <label class="form-check-label" for="prob_relatorios">Relatórios não exportam</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="tipo_problema" id="prob_outra" value="Outra">
+                                <label class="form-check-label" for="prob_outra">Outra</label>
+                            </div>
+                        </div>
+
+                        <!-- 7. Descreva com mais detalhes o problema -->
+                        <div class="mb-4">
+                            <label for="descricao" class="form-label fw-bold">7. Descreva com mais detalhes o problema. "obrigatório" <span class="text-danger">*</span></label>
+                            <textarea class="form-control" id="descricao" name="descricao" rows="4" placeholder="Insira sua resposta" required></textarea>
+                        </div>
+
+                        <!-- 8. Foto ou print da mensagem que aparece -->
+                        <div class="mb-5">
+                            <label for="anexo" class="form-label fw-bold">8. Foto ou print da mensagem que aparece quando dá o problema "opcional"</label>
+                            <input class="form-control" type="file" id="anexo" name="anexo" accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx">
+                            <div class="form-text">Tipos de arquivo permitidos: Word, PDF, Imagem.</div>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary btn-lg rounded-pill fw-bold">Enviar Chamado</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -36,6 +36,9 @@ from .banco_questoes import QuestaoBanco, DelegacaoProva, RascunhoProva, Configu
 # --- NOVO MÓDULO: RECURSOS ---
 from .recurso import ProvaRecurso, Recurso, DisciplinaHabilitada
 
+# --- SUPORTE ---
+from .chamado_suporte import ChamadoSuporte
+
 __all__ = [
     "db", "User", "School", "UserSchool", "Turma", "Aluno", "Disciplina",
     "HistoricoAluno", "HistoricoDisciplina", "TurmaCargo", "Semana", "Horario",
@@ -47,5 +50,6 @@ __all__ = [
     # CORREÇÃO AQUI: Adicionado ConfiguracaoEnvio
     "QuestaoBanco", "DelegacaoProva", "RascunhoProva", "ConfiguracaoEnvio",
     # MÓDULO DE RECURSOS
-    "ProvaRecurso", "Recurso", "DisciplinaHabilitada"
+    "ProvaRecurso", "Recurso", "DisciplinaHabilitada",
+    "ChamadoSuporte"
 ]

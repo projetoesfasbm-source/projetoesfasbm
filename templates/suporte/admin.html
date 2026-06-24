@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Administração de Suporte{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4 align-items-center">
+        <div class="col">
+            <h1 class="h3 mb-0 text-gray-800">
+                <i class="fas fa-headset text-primary me-2"></i> Chamados de Suporte
+            </h1>
+        </div>
+    </div>
+
+    {% if chamados %}
+        <div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-4">
+            {% for chamado in chamados %}
+                <div class="col" id="chamado-card-{{ chamado.id }}">
+                    <!-- Contorno condicional: danger para Aberto, success para Concluido -->
+                    <div class="card h-100 shadow-sm border-2 {% if chamado.status == 'Aberto' %}border-danger{% else %}border-success{% endif %}">
+                        <div class="card-header bg-transparent {% if chamado.status == 'Aberto' %}border-danger text-danger{% else %}border-success text-success{% endif %} d-flex justify-content-between align-items-center">
+                            <span class="fw-bold">Ticket #{{ chamado.id }}</span>
+                            <span class="badge {% if chamado.status == 'Aberto' %}bg-danger{% else %}bg-success{% endif %}" id="status-badge-{{ chamado.id }}">
+                                {{ chamado.status }}
+                            </span>
+                        </div>
+                        <div class="card-body">
+                            <h5 class="card-title text-truncate" title="{{ chamado.tipo_problema }}">{{ chamado.tipo_problema }}</h5>
+                            
+                            <div class="small mb-3 text-muted">
+                                <i class="fas fa-clock me-1"></i> Criado em: {{ chamado.data_criacao|br_time }}<br>
+                                <i class="fas fa-user me-1"></i> Solicitante: {{ chamado.solicitante.nome_completo or chamado.solicitante.username }}<br>
+                                <i class="fas fa-school me-1"></i> Escola: {{ chamado.escola.nome if chamado.escola else 'Não vinculada' }}<br>
+                                <i class="fas fa-phone me-1"></i> Contato: {{ chamado.qso_contato }}<br>
+                                <i class="fas fa-id-badge me-1"></i> Matrícula do Problema: {{ chamado.matricula_problema or 'N/A' }}<br>
+                                <i class="fas fa-desktop me-1"></i> Tipo Login: {{ chamado.tipo_login }}
+                            </div>
+                            
+                            <p class="card-text border-start border-3 border-secondary ps-2 text-dark bg-light p-2 rounded small" style="max-height: 100px; overflow-y: auto;">
+                                {{ chamado.descricao }}
+                            </p>
+
+                            {% if chamado.anexo_filename %}
+                                <a href="{{ url_for('static', filename='uploads/' ~ chamado.anexo_filename) }}" target="_blank" class="btn btn-sm btn-outline-secondary mb-3">
+                                    <i class="fas fa-paperclip"></i> Ver Anexo
+                                </a>
+                            {% endif %}
+                        </div>
+                        <div class="card-footer bg-transparent border-top-0 pt-0 text-end">
+                            {% if chamado.status == 'Aberto' %}
+                                <button type="button" class="btn btn-success btn-sm rounded-pill fw-bold" onclick="concluirChamado({{ chamado.id }})">
+                                    <i class="fas fa-check-circle me-1"></i> Marcar como Concluído
+                                </button>
+                            {% else %}
+                                <small class="text-muted"><i class="fas fa-check-double me-1"></i> Concluído em {{ chamado.data_conclusao|br_time }}</small>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="alert alert-info text-center py-5">
+            <i class="fas fa-inbox fa-3x mb-3 text-muted"></i>
+            <h4>Nenhum chamado registrado</h4>
+            <p class="mb-0">Ainda não há solicitações de suporte no sistema.</p>
+        </div>
+    {% endif %}
+</div>
+
+<script>
+function concluirChamado(chamadoId) {
+    if(confirm('Tem certeza que deseja marcar este chamado como concluído?')) {
+        fetch(`{{ url_for('suporte.concluir_chamado', chamado_id=0) }}`.replace('0', chamadoId), {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token() }}',
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if(data.success) {
+                // Atualizar UI dinamicamente
+                const card = document.querySelector(`#chamado-card-${chamadoId} .card`);
+                const header = card.querySelector('.card-header');
+                const badge = document.querySelector(`#status-badge-${chamadoId}`);
+                const footer = card.querySelector('.card-footer');
+
+                // Mudar bordas
+                card.classList.remove('border-danger');
+                card.classList.add('border-success');
+                header.classList.remove('border-danger', 'text-danger');
+                header.classList.add('border-success', 'text-success');
+
+                // Mudar badge
+                badge.classList.remove('bg-danger');
+                badge.classList.add('bg-success');
+                badge.textContent = 'Concluido';
+
+                // Atualizar footer
+                footer.innerHTML = `<small class="text-muted"><i class="fas fa-check-double me-1"></i> Concluído agora</small>`;
+                
+                // Mostrar alerta do sistema (se houver toast)
+                // Ou apenas recarregar a página que é mais simples
+                window.location.reload();
+            } else {
+                alert('Erro: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Ocorreu um erro ao processar a solicitação.');
+        });
+    }
+}
+</script>
+{% endblock %}
