@@ -57,7 +57,7 @@ def listar_turmas():
         
     active_edicao_id = session.get('active_edicao_id')
     turmas = TurmaService.get_turmas_by_school(school_id, edicao_id=active_edicao_id)
-    if current_user.role == 'aluno' and current_user.aluno_profile and current_user.aluno_profile.turma_id:
+    if current_user.role.lower() == 'aluno' and current_user.aluno_profile and current_user.aluno_profile.turma_id:
         user_turma_id = current_user.aluno_profile.turma_id
         turmas = sorted(turmas, key=lambda t: t.id != user_turma_id)
 
