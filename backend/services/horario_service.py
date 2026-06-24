@@ -35,8 +35,12 @@ class HorarioService:
         if user.is_sens or user.is_admin_escola:
             return True
 
+        school_id = UserService.get_current_school_id()
         my_instrutor_ids = db.session.scalars(
-            select(Instrutor.id).where(Instrutor.user_id == user.id)
+            select(Instrutor.id).where(
+                Instrutor.user_id == user.id,
+                Instrutor.school_id == school_id
+            )
         ).all()
 
         if my_instrutor_ids:
@@ -272,8 +276,12 @@ class HorarioService:
                     {"id": d.id, "nome": d.materia, "restantes": horas_restantes}
                 )
         else:
+            school_id = UserService.get_current_school_id()
             my_instrutor_ids = db.session.scalars(
-                select(Instrutor.id).where(Instrutor.user_id == user.id)
+                select(Instrutor.id).where(
+                    Instrutor.user_id == user.id,
+                    Instrutor.school_id == school_id
+                )
             ).all()
 
             if my_instrutor_ids:
