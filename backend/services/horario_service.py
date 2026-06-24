@@ -32,18 +32,11 @@ class HorarioService:
         if not horario or not user:
             return False
 
-        school_id = UserService.get_current_school_id()
-
         if user.is_sens or user.is_admin_escola:
-            if horario.semana and horario.semana.ciclo and horario.semana.ciclo.school_id == school_id:
-                return True
-            return False
+            return True
 
         my_instrutor_ids = db.session.scalars(
-            select(Instrutor.id).where(
-                Instrutor.user_id == user.id,
-                Instrutor.school_id == school_id
-            )
+            select(Instrutor.id).where(Instrutor.user_id == user.id)
         ).all()
 
         if my_instrutor_ids:
@@ -59,14 +52,8 @@ class HorarioService:
         if not aula:
             return None
 
-        school_id = UserService.get_current_school_id()
-        if aula.semana and aula.semana.ciclo and aula.semana.ciclo.school_id != school_id:
-            return None
-
-        can_edit = HorarioService.can_edit_horario(aula, user)
-        # Se não pode editar e a aula está pendente, não retorna detalhes (ou retorna mínimo)
-        if not can_edit and aula.status == 'pendente':
-            return None
+        if not HorarioService.can_edit_horario(aula, user):
+            pass
 
         instrutor_val = str(aula.instrutor_id)
         if aula.instrutor_id_2:
@@ -272,10 +259,6 @@ class HorarioService:
         if not turma_obj:
             return {'success': False, 'message': 'Turma não encontrada.'}
 
-        school_id = UserService.get_current_school_id()
-        if turma_obj.school_id != school_id:
-            return {'success': False, 'message': 'Acesso negado: A turma pertence a outra escola.'}
-
         disciplinas_disponiveis = []
         if is_admin:
             disciplinas_da_turma = db.session.scalars(
@@ -370,10 +353,6 @@ class HorarioService:
             semana = db.session.get(Semana, semana_id)
             if not semana:
                 return False, "Semana não encontrada.", 404
-
-            school_id = UserService.get_current_school_id()
-            if semana.ciclo.school_id != school_id:
-                return False, "Acesso negado: A semana informada pertence a outra escola.", 403
 
             # ==============================================================================
             # TRAVA ANTI-COLISÃO E CLONAGEM DIRETAMENTE NA SEMANA ATUAL
