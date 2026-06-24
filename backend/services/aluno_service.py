@@ -92,7 +92,8 @@ class AlunoService:
             stmt = stmt.where(
                 or_(
                     User.nome_completo.ilike(like_term),
-                    User.matricula.ilike(like_term)
+                    User.matricula.ilike(like_term),
+                    User.nome_de_guerra.ilike(like_term)
                 )
             )
 

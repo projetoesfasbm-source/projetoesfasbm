@@ -98,9 +98,9 @@ def listar_alunos():
         term = f"%{search_term}%"
         query = query.filter(
             or_(
-                User.nome_completo.like(term),
-                User.matricula.like(term),
-                User.nome_de_guerra.like(term)
+                User.nome_completo.ilike(term),
+                User.matricula.ilike(term),
+                User.nome_de_guerra.ilike(term)
             )
         )
 
