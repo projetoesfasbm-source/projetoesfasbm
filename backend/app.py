@@ -280,11 +280,21 @@ def register_handlers_and_processors(app):
             if school_id_to_load is None and hasattr(current_user, 'user_schools') and current_user.user_schools:
                 school_id_to_load = current_user.user_schools[0].school_id
 
+            if school_id_to_load is None and str(current_user.role).lower() == 'aluno':
+                if current_user.aluno_profile and current_user.aluno_profile.turma:
+                    school_id_to_load = current_user.aluno_profile.turma.school_id
+
             if school_id_to_load:
                 g.active_school = db.session.get(School, int(school_id_to_load))
 
             # Carregar Edição Ativa da sessão
             edicao_id = session.get('active_edicao_id')
+            
+            if not edicao_id and str(current_user.role).lower() == 'aluno' and current_user.aluno_profile:
+                edicao_id = current_user.aluno_profile.edicao_id
+                if edicao_id:
+                    session['active_edicao_id'] = edicao_id
+                    
             if edicao_id:
                 from backend.models.edicao import Edicao
                 edicao = db.session.get(Edicao, int(edicao_id))
