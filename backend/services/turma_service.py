@@ -134,11 +134,7 @@ class TurmaService:
     @staticmethod
     def get_turmas_by_school(school_id, edicao_id=None):
         if not school_id: return []
-        from sqlalchemy.orm import selectinload
-        query = select(Turma).options(
-            selectinload(Turma.alunos),
-            selectinload(Turma.disciplinas)
-        ).where(Turma.school_id == school_id)
+        query = select(Turma).where(Turma.school_id == school_id)
         if edicao_id:
             query = query.where(Turma.edicao_id == edicao_id)
         return db.session.scalars(query.order_by(Turma.nome)).unique().all()

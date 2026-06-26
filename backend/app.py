@@ -139,12 +139,7 @@ def create_app(config_class=Config):
 
     @login_manager.user_loader
     def load_user(user_id):
-        from sqlalchemy.orm import selectinload
-        return db.session.query(User).options(
-            selectinload(User.user_schools),
-            selectinload(User.alunos_profiles),
-            selectinload(User.instrutor_profile)
-        ).get(int(user_id))
+        return db.session.get(User, int(user_id))
 
     # =========================================================
     # CORREÇÃO CRÍTICA DE PERMISSÕES POR ESCOLA (Context Inject)
