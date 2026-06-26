@@ -128,10 +128,15 @@ def listar_recursos_pendentes():
     """Administrador vê tudo e gerencia encaminhamentos. Instrutor vê o que lhe cabe."""
     active_school_id = getattr(current_user, 'temp_active_school_id', None)
     
+    from backend.models.disciplina import DisciplinaTurma
+    from backend.models.instrutor import Instrutor
+
     query = Recurso.query.join(ProvaRecurso).join(Disciplina).join(Turma).options(
         db.joinedload(Recurso.prova),
         db.joinedload(Recurso.aluno),
-        db.joinedload(Recurso.instrutor)
+        db.joinedload(Recurso.instrutor),
+        db.selectinload(Recurso.prova).selectinload(ProvaRecurso.disciplina).selectinload(Disciplina.associacoes_turmas).selectinload(DisciplinaTurma.instrutor_1).selectinload(Instrutor.user),
+        db.selectinload(Recurso.prova).selectinload(ProvaRecurso.disciplina).selectinload(Disciplina.associacoes_turmas).selectinload(DisciplinaTurma.instrutor_2).selectinload(Instrutor.user)
     ).filter(
         Turma.school_id == active_school_id,
         Turma.edicao_id == session.get('active_edicao_id')
@@ -278,7 +283,9 @@ def novo_recurso():
 
     # Forma mais segura e tolerante a falhas estruturais nos dados de teste:
     # 1. Busca todas as provas ativas
-    query = ProvaRecurso.query.filter_by(is_active=True).join(Disciplina).join(Turma)
+    query = ProvaRecurso.query.filter_by(is_active=True).join(Disciplina).join(Turma).options(
+        db.contains_eager(ProvaRecurso.disciplina)
+    )
     
     # 2. Filtra pela escola
     if active_school_id:

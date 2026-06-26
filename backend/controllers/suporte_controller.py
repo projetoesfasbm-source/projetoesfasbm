@@ -89,7 +89,10 @@ def admin_chamados():
         flash('Você não tem permissão para acessar esta página.', 'error')
         return redirect(url_for('main.index'))
         
-    chamados = db.session.query(ChamadoSuporte).order_by(
+    chamados = db.session.query(ChamadoSuporte).options(
+        db.joinedload(ChamadoSuporte.solicitante),
+        db.joinedload(ChamadoSuporte.escola)
+    ).order_by(
         ChamadoSuporte.status.asc(), # 'Aberto' vem antes de 'Concluido'
         ChamadoSuporte.data_criacao.desc()
     ).all()
