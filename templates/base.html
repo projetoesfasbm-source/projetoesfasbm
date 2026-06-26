@@ -536,6 +536,8 @@
                         {% if current_user.is_instrutor_in_school(active_sid) or current_user.is_sens_in_school(active_sid) or current_user.is_cal_in_school(active_sid) %}
                             <a href="{{ url_for('diario.listar_pendentes') }}" class="nav-link {% if request.endpoint and 'diario.' in request.endpoint %}active{% endif %}"><div class="nav-icon">✍️</div> Validar Diários</a>
                         {% endif %}
+                        
+                        <a href="{{ url_for('suporte.novo_chamado') }}" class="nav-link {% if request.endpoint and 'suporte.' in request.endpoint %}active{% endif %}"><div class="nav-icon">🛠️</div> Suporte</a>
                     {% endif %}
 
                     {% if current_user.is_sens_in_school(active_sid) %}
