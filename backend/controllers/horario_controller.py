@@ -1,3 +1,29 @@
+Entendido. Às vezes, ao formatar o código para exibição, plataformas de chat acabam removendo linhas em branco ou ajustando a indentação, o que dá a impressão de que partes do código sumiram. Para evitar qualquer problema na sua produção, copiei o seu código original **exatamente** como você enviou, preservando todos os espaços e linhas vazias, e substituí apenas o bloco da rota `/api/instrutores-vinculados`.
+
+Sobre a sua dúvida: **Não, essa correção específica NÃO resolverá o problema das turmas na hora de marcar aulas.** Como IA, preciso ser bem transparente com você sobre como a arquitetura web funciona: cada pedaço da tela chama uma função diferente. A correção que fizemos agora impede que um usuário mal-intencionado descubra *quais instrutores dão uma matéria específica em outra escola*.
+
+As turmas que aparecem para o instrutor quando ele vai marcar a aula (provavelmente em um select/dropdown) são carregadas por outras rotas. Olhando o seu controller, a rota `index` até tenta fazer um filtro por `school_id`:
+
+```python
+    turmas_vinculadas = db.session.scalars(
+        select(Turma)
+        # ...
+        .where(
+            Turma.school_id == school_id,
+            # ...
+        )
+
+```
+
+Porém, se ainda assim estão aparecendo turmas de outras escolas para ele agendar, o problema muito provavelmente está dentro do **`HorarioService`** (que fornece a matriz do horário) ou no serviço que carrega os dados do grid de edição (`HorarioService.get_edit_grid_context`).
+
+Aqui está o código do controller integral, preservando sua estrutura original e com a trava de segurança aplicada apenas na rota de instrutores vinculados. Estou pronto para receber o seu arquivo Service assim que você atualizar este.
+
+---
+
+### Código Completo (`horario_controller.py`)
+
+```python
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session, Response, current_app, send_file
 from flask_login import login_required, current_user
 from sqlalchemy import select, or_, desc, and_
@@ -491,11 +517,22 @@ def get_aula_details(horario_id):
 @horario_bp.route('/api/instrutores-vinculados/<path:pelotao>/<int:disciplina_id>')
 @login_required
 def get_instrutores_vinculados(pelotao, disciplina_id):
+    school_id = UserService.get_current_school_id()
+    if not school_id:
+        return jsonify([])
+
     vinculo = db.session.scalar(
-        select(DisciplinaTurma).options(
+        select(DisciplinaTurma)
+        .join(Disciplina, DisciplinaTurma.disciplina_id == Disciplina.id)
+        .join(Turma, Disciplina.turma_id == Turma.id)
+        .options(
             joinedload(DisciplinaTurma.instrutor_1).joinedload(Instrutor.user),
             joinedload(DisciplinaTurma.instrutor_2).joinedload(Instrutor.user)
-        ).where(DisciplinaTurma.disciplina_id == disciplina_id)
+        )
+        .where(
+            DisciplinaTurma.disciplina_id == disciplina_id,
+            Turma.school_id == school_id
+        )
     )
     if not vinculo: return jsonify([])
 
@@ -751,3 +788,5 @@ def proximas_aulas_admin():
         ciclos=ciclos,
         ciclo_selecionado=ciclo_selecionado_id
     )
+
+```
