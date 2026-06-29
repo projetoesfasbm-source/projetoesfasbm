@@ -1,29 +1,3 @@
-Entendido. Às vezes, ao formatar o código para exibição, plataformas de chat acabam removendo linhas em branco ou ajustando a indentação, o que dá a impressão de que partes do código sumiram. Para evitar qualquer problema na sua produção, copiei o seu código original **exatamente** como você enviou, preservando todos os espaços e linhas vazias, e substituí apenas o bloco da rota `/api/instrutores-vinculados`.
-
-Sobre a sua dúvida: **Não, essa correção específica NÃO resolverá o problema das turmas na hora de marcar aulas.** Como IA, preciso ser bem transparente com você sobre como a arquitetura web funciona: cada pedaço da tela chama uma função diferente. A correção que fizemos agora impede que um usuário mal-intencionado descubra *quais instrutores dão uma matéria específica em outra escola*.
-
-As turmas que aparecem para o instrutor quando ele vai marcar a aula (provavelmente em um select/dropdown) são carregadas por outras rotas. Olhando o seu controller, a rota `index` até tenta fazer um filtro por `school_id`:
-
-```python
-    turmas_vinculadas = db.session.scalars(
-        select(Turma)
-        # ...
-        .where(
-            Turma.school_id == school_id,
-            # ...
-        )
-
-```
-
-Porém, se ainda assim estão aparecendo turmas de outras escolas para ele agendar, o problema muito provavelmente está dentro do **`HorarioService`** (que fornece a matriz do horário) ou no serviço que carrega os dados do grid de edição (`HorarioService.get_edit_grid_context`).
-
-Aqui está o código do controller integral, preservando sua estrutura original e com a trava de segurança aplicada apenas na rota de instrutores vinculados. Estou pronto para receber o seu arquivo Service assim que você atualizar este.
-
----
-
-### Código Completo (`horario_controller.py`)
-
-```python
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session, Response, current_app, send_file
 from flask_login import login_required, current_user
 from sqlalchemy import select, or_, desc, and_
@@ -521,6 +495,7 @@ def get_instrutores_vinculados(pelotao, disciplina_id):
     if not school_id:
         return jsonify([])
 
+    # Busca o vínculo validando a escola e a turma exata
     vinculo = db.session.scalar(
         select(DisciplinaTurma)
         .join(Disciplina, DisciplinaTurma.disciplina_id == Disciplina.id)
@@ -531,26 +506,38 @@ def get_instrutores_vinculados(pelotao, disciplina_id):
         )
         .where(
             DisciplinaTurma.disciplina_id == disciplina_id,
-            Turma.school_id == school_id
+            Turma.school_id == school_id,
+            Turma.nome == pelotao  # Validação extra com o parâmetro da URL
         )
     )
+    
     if not vinculo: return jsonify([])
 
     opcoes = []
-    if vinculo.instrutor_1:
-        posto = vinculo.instrutor_1.user.posto_graduacao or ''
-        nome_guerra = vinculo.instrutor_1.user.nome_de_guerra or vinculo.instrutor_1.user.username
-        opcoes.append({'id': vinculo.instrutor_1.id, 'nome': f"{posto} {nome_guerra}"})
-    if vinculo.instrutor_2:
-        posto = vinculo.instrutor_2.user.posto_graduacao or ''
-        nome_guerra = vinculo.instrutor_2.user.nome_de_guerra or vinculo.instrutor_2.user.username
-        opcoes.append({'id': vinculo.instrutor_2.id, 'nome': f"{posto} {nome_guerra}"})
+    
+    # LÓGICA CORRIGIDA: Se tiver os 2, manda SÓ a opção combinada. 
+    # Caso contrário, manda só quem estiver preenchido.
     if vinculo.instrutor_1 and vinculo.instrutor_2:
         id_combinado = f"{vinculo.instrutor_1.id}-{vinculo.instrutor_2.id}"
-        posto1, nome1 = (vinculo.instrutor_1.user.posto_graduacao or ''), (vinculo.instrutor_1.user.nome_de_guerra or vinculo.instrutor_1.user.username)
-        posto2, nome2 = (vinculo.instrutor_2.user.posto_graduacao or ''), (vinculo.instrutor_2.user.nome_de_guerra or vinculo.instrutor_2.user.username)
-        nome_combinado = f"{posto1} {nome1} e {posto2} {nome2}"
+        
+        posto1 = vinculo.instrutor_1.user.posto_graduacao or ''
+        nome1 = vinculo.instrutor_1.user.nome_de_guerra or vinculo.instrutor_1.user.username
+        
+        posto2 = vinculo.instrutor_2.user.posto_graduacao or ''
+        nome2 = vinculo.instrutor_2.user.nome_de_guerra or vinculo.instrutor_2.user.username
+        
+        nome_combinado = f"{posto1} {nome1} e {posto2} {nome2}".strip()
         opcoes.append({'id': id_combinado, 'nome': nome_combinado})
+        
+    elif vinculo.instrutor_1:
+        posto = vinculo.instrutor_1.user.posto_graduacao or ''
+        nome_guerra = vinculo.instrutor_1.user.nome_de_guerra or vinculo.instrutor_1.user.username
+        opcoes.append({'id': vinculo.instrutor_1.id, 'nome': f"{posto} {nome_guerra}".strip()})
+        
+    elif vinculo.instrutor_2:
+        posto = vinculo.instrutor_2.user.posto_graduacao or ''
+        nome_guerra = vinculo.instrutor_2.user.nome_de_guerra or vinculo.instrutor_2.user.username
+        opcoes.append({'id': vinculo.instrutor_2.id, 'nome': f"{posto} {nome_guerra}".strip()})
 
     return jsonify(opcoes)
 
@@ -788,5 +775,3 @@ def proximas_aulas_admin():
         ciclos=ciclos,
         ciclo_selecionado=ciclo_selecionado_id
     )
-
-```
