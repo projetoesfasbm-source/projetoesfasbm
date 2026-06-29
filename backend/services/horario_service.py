@@ -1,5 +1,3 @@
-# backend/services/horario_service.py
-
 import os
 from flask import current_app, url_for
 from flask_login import current_user
@@ -35,8 +33,13 @@ class HorarioService:
         if user.is_sens or user.is_admin_escola:
             return True
 
+        # CORREÇÃO: Pegar apenas o ID de instrutor vinculado à escola atual
+        school_id = UserService.get_current_school_id()
         my_instrutor_ids = db.session.scalars(
-            select(Instrutor.id).where(Instrutor.user_id == user.id)
+            select(Instrutor.id).where(
+                Instrutor.user_id == user.id,
+                Instrutor.school_id == school_id
+            )
         ).all()
 
         if my_instrutor_ids:
@@ -243,6 +246,7 @@ class HorarioService:
         semana = db.session.get(Semana, semana_id)
 
         is_admin = user.is_sens or user.is_admin_escola
+        school_id = UserService.get_current_school_id() # CORREÇÃO
 
         def get_horas_agendadas(disciplina_id, pelotao_nome):
             return (
@@ -255,7 +259,8 @@ class HorarioService:
                 or 0
             )
 
-        turma_obj = db.session.scalar(select(Turma).where(Turma.nome == pelotao))
+        # CORREÇÃO: Buscar turma cruzando pelo school_id
+        turma_obj = db.session.scalar(select(Turma).where(Turma.nome == pelotao, Turma.school_id == school_id))
         if not turma_obj:
             return {'success': False, 'message': 'Turma não encontrada.'}
 
@@ -272,8 +277,12 @@ class HorarioService:
                     {"id": d.id, "nome": d.materia, "restantes": horas_restantes}
                 )
         else:
+            # CORREÇÃO: Limitar os vínculos de instrutor do usuário apenas para a escola atual
             my_instrutor_ids = db.session.scalars(
-                select(Instrutor.id).where(Instrutor.user_id == user.id)
+                select(Instrutor.id).where(
+                    Instrutor.user_id == user.id,
+                    Instrutor.school_id == school_id 
+                )
             ).all()
 
             if my_instrutor_ids:
@@ -311,7 +320,7 @@ class HorarioService:
 
         instrutor_logado_id = None
         if not is_admin:
-            school_id = UserService.get_current_school_id()
+            # Já contendo trava por school_id
             my_instrutor_ids = db.session.scalars(
                 select(Instrutor.id).where(
                     Instrutor.user_id == user.id,
@@ -631,7 +640,8 @@ class HorarioService:
                 idx += 1 
 
             if not is_admin:
-                turma = db.session.scalar(select(Turma).where(Turma.nome == pelotao))
+                # CORREÇÃO: Pegar turma apenas se pertencer a esta escola
+                turma = db.session.scalar(select(Turma).where(Turma.nome == pelotao, Turma.school_id == school_id))
 
                 if turma and turma.school_id:
                     message = (
@@ -774,8 +784,11 @@ class HorarioService:
                 aula.status = 'confirmado'
 
             message = f'Agendamento de {disciplina_materia} aprovado.'
+            
+            # CORREÇÃO: Limitar pesquisa de turma à escola atual no ato de notificar
+            school_id = UserService.get_current_school_id()
             turma = db.session.scalar(
-                select(Turma).where(Turma.nome == turma_nome)
+                select(Turma).where(Turma.nome == turma_nome, Turma.school_id == school_id)
             )
 
             if turma:

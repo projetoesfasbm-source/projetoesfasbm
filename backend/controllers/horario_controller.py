@@ -491,29 +491,53 @@ def get_aula_details(horario_id):
 @horario_bp.route('/api/instrutores-vinculados/<path:pelotao>/<int:disciplina_id>')
 @login_required
 def get_instrutores_vinculados(pelotao, disciplina_id):
+    school_id = UserService.get_current_school_id()
+    if not school_id:
+        return jsonify([])
+
+    # Busca o vínculo validando a escola e a turma exata
     vinculo = db.session.scalar(
-        select(DisciplinaTurma).options(
+        select(DisciplinaTurma)
+        .join(Disciplina, DisciplinaTurma.disciplina_id == Disciplina.id)
+        .join(Turma, Disciplina.turma_id == Turma.id)
+        .options(
             joinedload(DisciplinaTurma.instrutor_1).joinedload(Instrutor.user),
             joinedload(DisciplinaTurma.instrutor_2).joinedload(Instrutor.user)
-        ).where(DisciplinaTurma.disciplina_id == disciplina_id)
+        )
+        .where(
+            DisciplinaTurma.disciplina_id == disciplina_id,
+            Turma.school_id == school_id,
+            Turma.nome == pelotao  # Validação extra com o parâmetro da URL
+        )
     )
+    
     if not vinculo: return jsonify([])
 
     opcoes = []
-    if vinculo.instrutor_1:
-        posto = vinculo.instrutor_1.user.posto_graduacao or ''
-        nome_guerra = vinculo.instrutor_1.user.nome_de_guerra or vinculo.instrutor_1.user.username
-        opcoes.append({'id': vinculo.instrutor_1.id, 'nome': f"{posto} {nome_guerra}"})
-    if vinculo.instrutor_2:
-        posto = vinculo.instrutor_2.user.posto_graduacao or ''
-        nome_guerra = vinculo.instrutor_2.user.nome_de_guerra or vinculo.instrutor_2.user.username
-        opcoes.append({'id': vinculo.instrutor_2.id, 'nome': f"{posto} {nome_guerra}"})
+    
+    # LÓGICA CORRIGIDA: Se tiver os 2, manda SÓ a opção combinada. 
+    # Caso contrário, manda só quem estiver preenchido.
     if vinculo.instrutor_1 and vinculo.instrutor_2:
         id_combinado = f"{vinculo.instrutor_1.id}-{vinculo.instrutor_2.id}"
-        posto1, nome1 = (vinculo.instrutor_1.user.posto_graduacao or ''), (vinculo.instrutor_1.user.nome_de_guerra or vinculo.instrutor_1.user.username)
-        posto2, nome2 = (vinculo.instrutor_2.user.posto_graduacao or ''), (vinculo.instrutor_2.user.nome_de_guerra or vinculo.instrutor_2.user.username)
-        nome_combinado = f"{posto1} {nome1} e {posto2} {nome2}"
+        
+        posto1 = vinculo.instrutor_1.user.posto_graduacao or ''
+        nome1 = vinculo.instrutor_1.user.nome_de_guerra or vinculo.instrutor_1.user.username
+        
+        posto2 = vinculo.instrutor_2.user.posto_graduacao or ''
+        nome2 = vinculo.instrutor_2.user.nome_de_guerra or vinculo.instrutor_2.user.username
+        
+        nome_combinado = f"{posto1} {nome1} e {posto2} {nome2}".strip()
         opcoes.append({'id': id_combinado, 'nome': nome_combinado})
+        
+    elif vinculo.instrutor_1:
+        posto = vinculo.instrutor_1.user.posto_graduacao or ''
+        nome_guerra = vinculo.instrutor_1.user.nome_de_guerra or vinculo.instrutor_1.user.username
+        opcoes.append({'id': vinculo.instrutor_1.id, 'nome': f"{posto} {nome_guerra}".strip()})
+        
+    elif vinculo.instrutor_2:
+        posto = vinculo.instrutor_2.user.posto_graduacao or ''
+        nome_guerra = vinculo.instrutor_2.user.nome_de_guerra or vinculo.instrutor_2.user.username
+        opcoes.append({'id': vinculo.instrutor_2.id, 'nome': f"{posto} {nome_guerra}".strip()})
 
     return jsonify(opcoes)
 
