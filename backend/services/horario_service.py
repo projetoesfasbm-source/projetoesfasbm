@@ -255,9 +255,7 @@ class HorarioService:
                 or 0
             )
 
-        semana_obj = db.session.get(Semana, semana_id)
-        school_id = semana_obj.ciclo.school_id if semana_obj and semana_obj.ciclo else 1
-        turma_obj = db.session.scalar(select(Turma).where(Turma.nome == pelotao, Turma.school_id == school_id))
+        turma_obj = db.session.scalar(select(Turma).where(Turma.nome == pelotao))
         if not turma_obj:
             return {'success': False, 'message': 'Turma não encontrada.'}
 
@@ -633,8 +631,7 @@ class HorarioService:
                 idx += 1 
 
             if not is_admin:
-                school_id = semana.ciclo.school_id if semana and semana.ciclo else 1
-                turma = db.session.scalar(select(Turma).where(Turma.nome == pelotao, Turma.school_id == school_id))
+                turma = db.session.scalar(select(Turma).where(Turma.nome == pelotao))
 
                 if turma and turma.school_id:
                     message = (
@@ -777,9 +774,8 @@ class HorarioService:
                 aula.status = 'confirmado'
 
             message = f'Agendamento de {disciplina_materia} aprovado.'
-            school_id = aulas_para_alterar[0].semana.ciclo.school_id if aulas_para_alterar[0].semana and aulas_para_alterar[0].semana.ciclo else 1
             turma = db.session.scalar(
-                select(Turma).where(Turma.nome == turma_nome, Turma.school_id == school_id)
+                select(Turma).where(Turma.nome == turma_nome)
             )
 
             if turma:
@@ -829,7 +825,7 @@ class HorarioService:
         query = (
             select(Horario)
             .join(Semana)
-            .join(Turma, and_(Turma.nome == Horario.pelotao, Turma.school_id == school_id))
+            .join(Turma, Turma.nome == Horario.pelotao)
             .options(
                 joinedload(Horario.disciplina),
                 joinedload(Horario.instrutor).joinedload(Instrutor.user).joinedload(User.instrutor_profile),
