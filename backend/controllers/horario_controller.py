@@ -276,10 +276,11 @@ def dashboard_instrutor():
             select(Horario)
             .join(Disciplina)
             .join(Semana)
-            .join(Turma, Turma.nome == Horario.pelotao)
+            .join(Ciclo, Ciclo.id == Semana.ciclo_id)
+            .join(Turma, and_(Turma.nome == Horario.pelotao, Turma.school_id == Ciclo.school_id))
             .options(joinedload(Horario.semana), joinedload(Horario.disciplina))
             .where(
-                Turma.school_id == school_id,
+                Ciclo.school_id == school_id,
                 Turma.edicao_id == session.get('active_edicao_id'),
                 or_(Horario.instrutor_id == instrutor.id, Horario.instrutor_id_2 == instrutor.id)
             )
