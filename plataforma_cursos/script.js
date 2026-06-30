@@ -250,8 +250,7 @@ function playVideo(videoId) {
     } else {
         // Direct MP4
         playerHtml = `
-            <video controls autoplay>
-                <source src="${video.url}" type="video/mp4">
+            <video src="${video.url}" controls autoplay playsinline preload="auto">
                 Seu navegador não suporta a tag de vídeo.
             </video>
         `;
