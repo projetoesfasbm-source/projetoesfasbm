@@ -128,7 +128,6 @@ def create_app(config_class=Config):
     # ### FIM PWA ###
 
     # ### PLATAFORMA DE CURSOS (LOCAL/DEPLOY) ###
-    @app.route('/cursos')
     @app.route('/cursos/')
     def serve_cursos_index():
         cursos_dir = os.path.join(app.root_path, '..', 'plataforma_cursos')
