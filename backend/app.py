@@ -377,9 +377,7 @@ def register_handlers_and_processors(app):
             "object-src 'none'",
             "frame-ancestors 'none'",
             "manifest-src 'self'",
-            "worker-src 'self'",
-            "frame-src 'self' https://www.youtube.com https://youtube.com https://*.onedrive.live.com https://*.sharepoint.com",
-            "media-src 'self' https:"
+            "worker-src 'self'"
         ]
         response.headers["Content-Security-Policy"] = "; ".join(csp)
 
