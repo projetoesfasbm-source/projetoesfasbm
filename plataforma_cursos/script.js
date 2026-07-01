@@ -62,7 +62,6 @@ function runIntroSequence() {
     const introLogo = document.getElementById("intro-logo");
     const introSub = document.querySelector(".intro-subtext");
     const introScreen = document.getElementById("intro-screen");
-    const mainContent = document.getElementById("main-content");
     
     introLogo.innerHTML = introSettings.logoText;
     introSub.textContent = introSettings.subtext;
@@ -565,4 +564,24 @@ function showToast(message) {
     setTimeout(() => {
         toast.classList.add("hidden");
     }, 3000);
+}
+
+// ==========================================
+// 8. PROTEÇÃO DE ACESSO AO PAINEL
+// ==========================================
+function checkAdminPassword(event) {
+    event.preventDefault(); // Impede o navegador de abrir a página direto
+    
+    // Altere a senha padrão aqui, se desejar
+    const SENHA_PADRAO = "sisgem2026"; 
+    
+    // Abre a janela pedindo a senha
+    const senhaDigitada = prompt("⚠️ Acesso Restrito\n\nPor favor, digite a senha de administrador para acessar o Painel de Controle:");
+    
+    // Verifica a senha
+    if (senhaDigitada === SENHA_PADRAO) {
+        window.location.href = "admin.html"; // Redireciona se acertou
+    } else if (senhaDigitada !== null) {
+        showToast("Senha incorreta! Acesso negado."); // Errou a senha
+    }
 }
