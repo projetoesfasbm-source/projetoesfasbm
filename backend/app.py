@@ -378,7 +378,10 @@ def register_handlers_and_processors(app):
             "frame-ancestors 'none'",
             "manifest-src 'self'",
             "worker-src 'self'"
+            "frame-src 'self' https://www.youtube.com https://youtube.com https://*.onedrive.live.com https://*.sharepoint.com",
+            "media-src 'self' https:"
         ]
+        
         response.headers["Content-Security-Policy"] = "; ".join(csp)
 
         # Remove informações que revelam a versão do servidor
