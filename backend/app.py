@@ -29,7 +29,6 @@ from backend.services.asset_service import AssetService
 
 # --- Importações de TODOS os modelos para o Flask-Migrate ---
 from backend.models.aluno import Aluno
-# from backend.models.avaliacao import AvaliacaoAtitudinal, AvaliacaoItem
 from backend.models.disciplina import Disciplina
 from backend.models.disciplina_turma import DisciplinaTurma
 from backend.models.discipline_rule import DisciplineRule
@@ -74,6 +73,7 @@ try:
 except ImportError:
     from backports.zoneinfo import ZoneInfo
 
+
 def create_app(config_class=Config):
     """
     Fábrica de aplicação: cria e configura a instância do Flask.
@@ -84,6 +84,16 @@ def create_app(config_class=Config):
 
     app = Flask(__name__, template_folder=template_dir, static_folder=static_dir)
     app.config.from_object(config_class)
+
+    # --- CONFIGURAÇÕES DE PERFORMANCE DO BANCO (Anti-Travamento) ---
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://sisgem_user:7HmEGEXbmfG3UNV1GKbhSIXftyvJbAdB@dpg-d8f16u58nd3s73ferp60-a/sisgem'
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+        'pool_size': 10,
+        'max_overflow': 20,
+        'pool_recycle': 1800,  # Corrigido para o padrão SQLAlchemy
+        'pool_pre_ping': True
+    }
+    # ---------------------------------------------------------------
 
     config_class.init_app(app)
 
@@ -96,7 +106,7 @@ def create_app(config_class=Config):
                 firebase_admin.initialize_app(cred)
                 app.logger.info("Firebase Admin SDK inicializado com sucesso.")
         else:
-                 app.logger.warning(f"Arquivo 'credentials.json' não encontrado em {cred_path}. Funcionalidades do Firebase não estarão disponíveis.")
+            app.logger.warning(f"Arquivo 'credentials.json' não encontrado em {cred_path}. Funcionalidades do Firebase não estarão disponíveis.")
     except ValueError:
        pass # App já inicializado
     except Exception as e:
@@ -191,6 +201,7 @@ def create_app(config_class=Config):
     register_cli_commands(app)
     return app
 
+
 def register_blueprints(app):
     """Importa e registra os blueprints na aplicação."""
     from backend.controllers.admin_controller import admin_escola_bp
@@ -198,7 +209,6 @@ def register_blueprints(app):
     from backend.controllers.aluno_controller import aluno_bp
     from backend.controllers.assets_controller import assets_bp
     from backend.controllers.auth_controller import auth_bp
-    #from backend.controllers.avaliacao_controller import avaliacao_bp
     from backend.controllers.customizer_controller import customizer_bp
     from backend.controllers.disciplina_controller import disciplina_bp
     from backend.controllers.historico_controller import historico_bp
@@ -267,6 +277,7 @@ def register_blueprints(app):
 
     # === ALTERAÇÃO: REGISTRO DO NOVO BLUEPRINT ===
     app.register_blueprint(cursos_api_bp)
+
 
 def register_handlers_and_processors(app):
 
@@ -358,7 +369,7 @@ def register_handlers_and_processors(app):
         response.headers["X-Content-Type-Options"] = "nosniff"
 
         # Prevenção contra Clickjacking
-        response.headers["X-Frame-Options"] = "DENY"
+        # response.headers["X-Frame-Options"] = "DENY"
 
         # Controle de vazamento de URLs no Referer
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
