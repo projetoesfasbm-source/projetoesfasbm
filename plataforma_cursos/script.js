@@ -18,14 +18,24 @@ const defaultIntroSettings = {
 };
 
 // ==========================================
-// FUNÇÕES DE COMUNICAÇÃO COM O SERVIDOR
+// FUNÇÕES DE COMUNICAÇÃO COM O SERVIDOR (COM CACHE)
 // ==========================================
-async function fetchVideosFromServer() {
+
+// Variável global para guardar a lista na memória e poupar a CPU do servidor
+let cachedVideos = null;
+
+async function fetchVideosFromServer(forceRefresh = false) {
+    // Se a lista já está na memória e não pedimos para forçar a atualização, usa a memória!
+    if (cachedVideos !== null && !forceRefresh) {
+        return cachedVideos;
+    }
+
     try {
         const response = await fetch('/api/cursos/videos');
         if (!response.ok) throw new Error('Erro ao buscar vídeos');
-        const videos = await response.json();
-        return videos;
+        
+        cachedVideos = await response.json(); // Guarda a resposta no cofre de memória
+        return cachedVideos;
     } catch (error) {
         console.error("Erro na API:", error);
         return []; // Retorna array vazio em caso de erro para não quebrar a tela
@@ -92,7 +102,7 @@ async function showMainContent() {
     introScreen.classList.add("hidden");
     mainContent.classList.remove("hidden");
     
-    // Evento de clique para o primeiro vídeo em destaque (Buscando do Servidor)
+    // Evento de clique para o primeiro vídeo em destaque (Buscando do Servidor/Cache)
     const videos = await fetchVideosFromServer();
     const heroBtn = document.getElementById("hero-play-btn");
     const heroTitle = document.getElementById("hero-title");
@@ -109,7 +119,7 @@ async function showMainContent() {
 
 // 4. RENDERS DE CONTEÚDO (index.html)
 async function renderAllShelves() {
-    // Busca os vídeos do banco de dados em vez do localStorage
+    // Busca os vídeos do cache em memória, zero consumo de CPU no servidor
     const videos = await fetchVideosFromServer();
     const watchedList = JSON.parse(localStorage.getItem("sisgem_watched")) || [];
 
@@ -239,7 +249,7 @@ function closePlayer() {
     modal.classList.add("hidden");
     document.body.style.overflow = ""; // Reabilita scroll do body
     
-    // Atualiza a interface
+    // Atualiza a interface da tela instantaneamente via Cache
     renderAllShelves();
 }
 
@@ -292,7 +302,8 @@ function scrollRow(btn, direction) {
 // 6. ADMIN PAGE LOGIC (admin.html)
 function initAdminPage() {
     loadBrandingData();
-    loadVideosTable();
+    // Força o carregamento da tabela com dados novos toda vez que abrir o painel
+    loadVideosTable(true);
     toggleLogoInputs();
     toggleBgInputs();
 }
@@ -441,9 +452,9 @@ function saveIntroSettings() {
     showToast("Configurações da intro salvas!");
 }
 
-// Tabela do Admin - AGORA BUSCANDO DO SERVIDOR
-async function loadVideosTable() {
-    const videos = await fetchVideosFromServer();
+// Tabela do Admin
+async function loadVideosTable(force = false) {
+    const videos = await fetchVideosFromServer(force);
     const tbody = document.getElementById("admin-video-list");
     
     if(!tbody) return;
@@ -473,7 +484,7 @@ async function loadVideosTable() {
     });
 }
 
-// Adicionar Vídeo - AGORA SALVANDO NO SERVIDOR
+// Adicionar Vídeo - AGORA ATUALIZA O CACHE AUTOMATICAMENTE
 async function handleAddVideo(event) {
     event.preventDefault();
     
@@ -502,7 +513,8 @@ async function handleAddVideo(event) {
 
         if (response.ok) {
             document.getElementById("add-video-form").reset();
-            loadVideosTable();
+            // FORÇA a atualização do cofre (cache) com os novos dados
+            await loadVideosTable(true); 
             showToast("Vídeo adicionado com sucesso ao servidor!");
         } else {
             showToast("Erro ao salvar vídeo no servidor.");
@@ -516,7 +528,7 @@ async function handleAddVideo(event) {
     }
 }
 
-// Deletar Vídeo - AGORA EXCLUINDO DO SERVIDOR
+// Deletar Vídeo - AGORA ATUALIZA O CACHE AUTOMATICAMENTE
 async function deleteVideo(videoId) {
     if (confirm("Tem certeza que deseja excluir esta vídeo aula do servidor?")) {
         try {
@@ -530,7 +542,8 @@ async function deleteVideo(videoId) {
                 watched = watched.filter(id => id !== videoId.toString());
                 localStorage.setItem("sisgem_watched", JSON.stringify(watched));
 
-                loadVideosTable();
+                // FORÇA a atualização do cofre (cache) para sumir com o vídeo deletado
+                await loadVideosTable(true);
                 showToast("Vídeo removido com sucesso!");
             } else {
                 showToast("Erro ao tentar remover o vídeo.");
@@ -546,7 +559,7 @@ async function deleteVideo(videoId) {
 function resetWatchedStatus() {
     localStorage.setItem("sisgem_watched", JSON.stringify([]));
     showToast("Histórico redefinido! Todos os contornos ficaram vermelhos.");
-    renderAllShelves(); // Atualiza a interface instantaneamente
+    renderAllShelves(); // Atualiza a interface instantaneamente usando o Cache
 }
 
 function restoreDefaultVideos() {
