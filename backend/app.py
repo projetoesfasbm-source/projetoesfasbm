@@ -366,7 +366,7 @@ def register_handlers_and_processors(app):
         # Bloqueio de APIs sensíveis do navegador (Permissão)
         response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
 
-        # Content-Security-Policy Rigoroso (7 Bandeiras Laranjas do ZAP corrigidas de uma vez)
+        # Content-Security-Policy Rigoroso (Ajustado para os Vídeos)
         csp = [
             "default-src 'self'",
             "script-src 'self' 'unsafe-inline' https://code.jquery.com https://cdn.jsdelivr.net",
@@ -375,14 +375,17 @@ def register_handlers_and_processors(app):
             "img-src 'self' data: *",
             "connect-src 'self' https://cdn.jsdelivr.net",
             "object-src 'none'",
-            "frame-ancestors 'none'",
             "manifest-src 'self'",
-            "worker-src 'self'"
-            "frame-src 'self' https://www.youtube.com https://youtube.com https://*.onedrive.live.com https://*.sharepoint.com",
+            "worker-src 'self'",
+            "frame-src 'self' https://www.youtube.com https://youtube.com https://*.youtube.com https://*.onedrive.live.com https://*.sharepoint.com",
             "media-src 'self' https:"
         ]
         
         response.headers["Content-Security-Policy"] = "; ".join(csp)
+
+        # Garante a remoção da trava X-Frame-Options caso ela exista
+        if "X-Frame-Options" in response.headers:
+            del response.headers["X-Frame-Options"]
 
         # Remove informações que revelam a versão do servidor
         response.headers.pop("Server", None)
