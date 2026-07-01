@@ -145,7 +145,13 @@ def create_app(config_class=Config):
 
     db.init_app(app)
     Migrate(app, db)
-    CSRFProtect(app)
+    
+    # --- Nova regra de segurança ---
+    csrf = CSRFProtect(app)
+    from backend.controllers.cursos_controller import cursos_api_bp
+    csrf.exempt(cursos_api_bp) # Libera a API de vídeos da exigência do token
+    # -------------------------------
+    
     limiter.init_app(app) 
     Babel(app)
 
