@@ -58,6 +58,10 @@ from backend.models.frequencia import FrequenciaAluno
 # ### NOVO MODELO ###
 from backend.models.elogio import Elogio
 from backend.models.edicao import Edicao
+
+# === ALTERAÇÃO: NOVO MODELO DE VÍDEOS ===
+from backend.models.curso_video import CursoVideo
+
 # --- NOVO MÓDULO: BANCO DE QUESTÕES E PROVAS ---
 from backend.models.banco_questoes import QuestaoBanco, DelegacaoProva, RascunhoProva, ConfiguracaoEnvio
 # --- NOVO MÓDULO: RECURSOS ---
@@ -142,7 +146,7 @@ def create_app(config_class=Config):
     db.init_app(app)
     Migrate(app, db)
     CSRFProtect(app)
-    limiter.init_app(app) # <-- CORRIGIDO AQUI (era limter)
+    limiter.init_app(app) 
     Babel(app)
 
     login_manager = LoginManager()
@@ -218,6 +222,9 @@ def register_blueprints(app):
     from backend.controllers.edicao_controller import edicao_bp
     from backend.controllers.log_controller import log_bp
 
+    # === ALTERAÇÃO: NOVO BLUEPRINT DE VÍDEOS ===
+    from backend.controllers.cursos_controller import cursos_api_bp
+
     app.register_blueprint(admin_escola_bp)
     app.register_blueprint(tools_bp)
     app.register_blueprint(aluno_bp)
@@ -251,6 +258,9 @@ def register_blueprints(app):
     app.register_blueprint(recursos_bp)
     app.register_blueprint(edicao_bp)
     app.register_blueprint(log_bp)
+
+    # === ALTERAÇÃO: REGISTRO DO NOVO BLUEPRINT ===
+    app.register_blueprint(cursos_api_bp)
 
 def register_handlers_and_processors(app):
 
@@ -341,7 +351,7 @@ def register_handlers_and_processors(app):
         # Prevenção contra ataques MIME Sniffing
         response.headers["X-Content-Type-Options"] = "nosniff"
 
-        # Prevenção contra Clickjacking (Bandeira Laranja do ZAP corrigida)
+        # Prevenção contra Clickjacking
         response.headers["X-Frame-Options"] = "DENY"
 
         # Controle de vazamento de URLs no Referer
@@ -350,7 +360,7 @@ def register_handlers_and_processors(app):
         # Bloqueio de APIs sensíveis do navegador (Permissão)
         response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
 
-        # Content-Security-Policy Rigoroso (7 Bandeiras Laranjas do ZAP corrigidas de uma vez)
+        # Content-Security-Policy Rigoroso
         csp = [
             "default-src 'self'",
             "script-src 'self' 'unsafe-inline' https://code.jquery.com https://cdn.jsdelivr.net",
@@ -405,7 +415,7 @@ def register_cli_commands(app):
                 user.set_password(super_admin_password)
                 db.session.add(user)
             db.session.commit()
-            print("Comando executado com sucesso!")
+            print("Comando executed com sucesso!")
 
     @app.cli.command("clear-data")
     @click.option('--app', is_flag=True, help='Limpa apenas os dados da aplicação (alunos, turmas, etc).')

@@ -1,53 +1,8 @@
 // -------------------------------------------------------------
-// Plataforma de Cursos SISgem - Lógica e Banco de Dados Local
+// Plataforma de Cursos SISgem - Lógica e Banco de Dados (API)
 // -------------------------------------------------------------
 
-// 1. DADOS PADRÃO (Populado se o localStorage estiver vazio)
-const defaultVideos = [
-    {
-        id: "v1",
-        name: "Manual de Sobrevivência do Aluno - Primeiros Passos",
-        category: "Alunos",
-        url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-        thumbnail: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=500&auto=format&fit=crop"
-    },
-    {
-        id: "v2",
-        name: "Guia de Acesso e Direitos de Trânsito Interno",
-        category: "Alunos",
-        url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-        thumbnail: "https://images.unsplash.com/photo-1506784983877-45594efa4cbe?w=500&auto=format&fit=crop"
-    },
-    {
-        id: "v3",
-        name: "Diretrizes Acadêmicas e Metodologia de Instrução",
-        category: "Instrutores",
-        url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
-        thumbnail: "https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=500&auto=format&fit=crop"
-    },
-    {
-        id: "v4",
-        name: "Tutorial: Lançamento de Diários de Classe e Presenças",
-        category: "Instrutores",
-        url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
-        thumbnail: "https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=500&auto=format&fit=crop"
-    },
-    {
-        id: "v5",
-        name: "Painel Administrativo: Auditoria de Logs do Sistema",
-        category: "Adm",
-        url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
-        thumbnail: "https://images.unsplash.com/photo-1551836022-d5d88e9218df?w=500&auto=format&fit=crop"
-    },
-    {
-        id: "v6",
-        name: "Procedimento Operacional: Backup e Migração de Dados",
-        category: "Adm",
-        url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutback.mp4",
-        thumbnail: "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=500&auto=format&fit=crop"
-    }
-];
-
+// 1. DADOS PADRÃO (Para Configurações Locais de Layout)
 const defaultLogoSettings = {
     type: "text",
     text: "SISG<span>EM</span> CURSOS",
@@ -62,15 +17,28 @@ const defaultIntroSettings = {
     duration: 3
 };
 
+// ==========================================
+// FUNÇÕES DE COMUNICAÇÃO COM O SERVIDOR
+// ==========================================
+async function fetchVideosFromServer() {
+    try {
+        const response = await fetch('/api/cursos/videos');
+        if (!response.ok) throw new Error('Erro ao buscar vídeos');
+        const videos = await response.json();
+        return videos;
+    } catch (error) {
+        console.error("Erro na API:", error);
+        return []; // Retorna array vazio em caso de erro para não quebrar a tela
+    }
+}
+
 // 2. INICIALIZAÇÃO E CARREGAMENTO
 document.addEventListener("DOMContentLoaded", () => {
-    // Inicializa o banco de dados no localStorage caso não exista
-    if (!localStorage.getItem("sisgem_videos")) {
-        localStorage.setItem("sisgem_videos", JSON.stringify(defaultVideos));
-    }
+    // Histórico de assistidos continua local (para cada aluno ter o seu)
     if (!localStorage.getItem("sisgem_watched")) {
         localStorage.setItem("sisgem_watched", JSON.stringify([]));
     }
+    // Configurações visuais continuam locais
     if (!localStorage.getItem("sisgem_logo")) {
         localStorage.setItem("sisgem_logo", JSON.stringify(defaultLogoSettings));
     }
@@ -94,7 +62,6 @@ function runIntroSequence() {
     const introLogo = document.getElementById("intro-logo");
     const introSub = document.querySelector(".intro-subtext");
     const introScreen = document.getElementById("intro-screen");
-    const mainContent = document.getElementById("main-content");
     
     introLogo.innerHTML = introSettings.logoText;
     introSub.textContent = introSettings.subtext;
@@ -118,20 +85,20 @@ function runIntroSequence() {
     });
 }
 
-function showMainContent() {
+async function showMainContent() {
     const introScreen = document.getElementById("intro-screen");
     const mainContent = document.getElementById("main-content");
     
     introScreen.classList.add("hidden");
     mainContent.classList.remove("hidden");
     
-    // Evento de clique para o primeiro vídeo em destaque
-    const videos = JSON.parse(localStorage.getItem("sisgem_videos")) || [];
+    // Evento de clique para o primeiro vídeo em destaque (Buscando do Servidor)
+    const videos = await fetchVideosFromServer();
     const heroBtn = document.getElementById("hero-play-btn");
     const heroTitle = document.getElementById("hero-title");
     
     if (videos.length > 0) {
-        // Encontra o último vídeo adicionado ou o primeiro
+        // Encontra o vídeo mais recente para o destaque
         const featuredVideo = videos[0];
         heroTitle.textContent = featuredVideo.name;
         heroBtn.onclick = () => playVideo(featuredVideo.id);
@@ -141,13 +108,16 @@ function showMainContent() {
 }
 
 // 4. RENDERS DE CONTEÚDO (index.html)
-function renderAllShelves() {
-    const videos = JSON.parse(localStorage.getItem("sisgem_videos")) || [];
+async function renderAllShelves() {
+    // Busca os vídeos do banco de dados em vez do localStorage
+    const videos = await fetchVideosFromServer();
     const watchedList = JSON.parse(localStorage.getItem("sisgem_watched")) || [];
 
     const rowAlunos = document.getElementById("row-alunos");
     const rowInstrutores = document.getElementById("row-instrutores");
     const rowAdm = document.getElementById("row-adm");
+
+    if (!rowAlunos || !rowInstrutores || !rowAdm) return; // Proteção para não dar erro na página admin
 
     // Limpa carrosséis
     rowAlunos.innerHTML = "";
@@ -161,7 +131,7 @@ function renderAllShelves() {
     };
 
     videos.forEach(video => {
-        const isWatched = watchedList.includes(video.id);
+        const isWatched = watchedList.includes(video.id.toString());
         const cardClass = isWatched ? "watched" : "unwatched";
         const badgeText = isWatched ? "Visto" : "Não Visto";
         
@@ -223,14 +193,14 @@ function applyCustomLogo() {
 }
 
 // 5. PLAYER DE VÍDEO (Netflix Modal Style)
-function playVideo(videoId) {
-    const videos = JSON.parse(localStorage.getItem("sisgem_videos")) || [];
-    const video = videos.find(v => v.id === videoId);
+async function playVideo(videoId) {
+    const videos = await fetchVideosFromServer();
+    const video = videos.find(v => v.id.toString() === videoId.toString());
     
     if (!video) return;
 
     // Atualiza status de visualização para visto (watched)
-    markAsWatched(videoId);
+    markAsWatched(videoId.toString());
 
     // Seleciona elementos do modal
     const modal = document.getElementById("player-modal");
@@ -248,7 +218,7 @@ function playVideo(videoId) {
     if (parsedUrl.type === "youtube" || parsedUrl.type === "iframe") {
         playerHtml = `<iframe src="${parsedUrl.url}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>`;
     } else {
-        // Direct MP4
+        // Direct MP4 - Modificado para tocar com as tags solicitadas
         playerHtml = `
             <video src="${video.url}" controls autoplay playsinline preload="auto">
                 Seu navegador não suporta a tag de vídeo.
@@ -283,12 +253,9 @@ function parseVideoUrl(url) {
     } else if (url.includes('youtube.com/embed/')) {
         return { type: "youtube", url: url };
     } else if (url.includes('1drv.ms')) {
-        // Link encurtado do OneDrive Personal
-        // Substitui /v/ ou /u/ ou /w/ por /embed/ para obter a visualização incorporável do player
         let embedUrl = url.replace(/\/v\//g, '/embed/').replace(/\/u\//g, '/embed/').replace(/\/w\//g, '/embed/');
         return { type: "iframe", url: embedUrl };
     } else if (url.includes('onedrive.live.com')) {
-        // Link longo do OneDrive Personal
         let embedUrl = url;
         if (url.includes('redir?')) {
             embedUrl = url.replace('redir?', 'embed?');
@@ -297,7 +264,6 @@ function parseVideoUrl(url) {
         }
         return { type: "iframe", url: embedUrl };
     } else if (url.includes('sharepoint.com')) {
-        // OneDrive for Business ou SharePoint
         let embedUrl = url;
         if (!url.includes('action=embedview')) {
             embedUrl = url + (url.includes('?') ? '&' : '?') + 'action=embedview';
@@ -335,34 +301,45 @@ function loadBrandingData() {
     const logoSettings = JSON.parse(localStorage.getItem("sisgem_logo")) || defaultLogoSettings;
     const introSettings = JSON.parse(localStorage.getItem("sisgem_intro")) || defaultIntroSettings;
 
-    // Logo settings elements
-    document.getElementById("logo-type").value = logoSettings.type;
-    document.getElementById("logo-text-input").value = logoSettings.text;
+    const typeInput = document.getElementById("logo-type");
+    if(typeInput) typeInput.value = logoSettings.type;
+    
+    const textInput = document.getElementById("logo-text-input");
+    if(textInput) textInput.value = logoSettings.text;
     
     const preview = document.getElementById("logo-preview");
-    if (logoSettings.imageUrl) {
+    if (preview && logoSettings.imageUrl) {
         preview.src = logoSettings.imageUrl;
         preview.classList.remove("hidden");
     }
 
-    // Banner background settings elements
-    document.getElementById("bg-type").value = logoSettings.bannerBgType || "url";
-    document.getElementById("bg-url-input").value = logoSettings.bannerBgUrl || "";
+    const bgType = document.getElementById("bg-type");
+    if(bgType) bgType.value = logoSettings.bannerBgType || "url";
+    
+    const bgUrlInput = document.getElementById("bg-url-input");
+    if(bgUrlInput) bgUrlInput.value = logoSettings.bannerBgUrl || "";
     
     const bgPreview = document.getElementById("bg-preview");
-    if (logoSettings.bannerBgType === "upload" && logoSettings.bannerBgUrl) {
+    if (bgPreview && logoSettings.bannerBgType === "upload" && logoSettings.bannerBgUrl) {
         bgPreview.src = logoSettings.bannerBgUrl;
         bgPreview.classList.remove("hidden");
     }
 
-    // Intro settings elements
-    document.getElementById("intro-logo-text").value = introSettings.logoText;
-    document.getElementById("intro-subtext-input").value = introSettings.subtext;
-    document.getElementById("intro-duration").value = introSettings.duration;
+    const introLogoText = document.getElementById("intro-logo-text");
+    if(introLogoText) introLogoText.value = introSettings.logoText;
+    
+    const introSub = document.getElementById("intro-subtext-input");
+    if(introSub) introSub.value = introSettings.subtext;
+    
+    const introDur = document.getElementById("intro-duration");
+    if(introDur) introDur.value = introSettings.duration;
 }
 
 function toggleLogoInputs() {
-    const type = document.getElementById("logo-type").value;
+    const typeElement = document.getElementById("logo-type");
+    if(!typeElement) return;
+    
+    const type = typeElement.value;
     const textGroup = document.getElementById("logo-text-group");
     const imgGroup = document.getElementById("logo-image-group");
 
@@ -392,7 +369,10 @@ function handleLogoUpload(input) {
 }
 
 function toggleBgInputs() {
-    const type = document.getElementById("bg-type").value;
+    const typeElement = document.getElementById("bg-type");
+    if(!typeElement) return;
+    
+    const type = typeElement.value;
     const urlGroup = document.getElementById("bg-url-group");
     const uploadGroup = document.getElementById("bg-upload-group");
 
@@ -461,15 +441,17 @@ function saveIntroSettings() {
     showToast("Configurações da intro salvas!");
 }
 
-// Tabela do Admin
-function loadVideosTable() {
-    const videos = JSON.parse(localStorage.getItem("sisgem_videos")) || [];
+// Tabela do Admin - AGORA BUSCANDO DO SERVIDOR
+async function loadVideosTable() {
+    const videos = await fetchVideosFromServer();
     const tbody = document.getElementById("admin-video-list");
     
+    if(!tbody) return;
+
     tbody.innerHTML = "";
 
     if (videos.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">Nenhum vídeo cadastrado.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">Nenhum vídeo cadastrado no servidor.</td></tr>`;
         return;
     }
 
@@ -491,8 +473,13 @@ function loadVideosTable() {
     });
 }
 
-function handleAddVideo(event) {
+// Adicionar Vídeo - AGORA SALVANDO NO SERVIDOR
+async function handleAddVideo(event) {
     event.preventDefault();
+    
+    const submitBtn = document.querySelector("#add-video-form button[type='submit']");
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+    submitBtn.disabled = true;
     
     const name = document.getElementById("video-name").value;
     const category = document.getElementById("video-category").value;
@@ -500,37 +487,58 @@ function handleAddVideo(event) {
     const thumbnail = document.getElementById("video-thumbnail").value;
 
     const newVideo = {
-        id: "v_" + Date.now(),
         name: name,
         category: category,
         url: url,
         thumbnail: thumbnail || null
     };
 
-    let videos = JSON.parse(localStorage.getItem("sisgem_videos")) || [];
-    videos.push(newVideo);
-    localStorage.setItem("sisgem_videos", JSON.stringify(videos));
+    try {
+        const response = await fetch('/api/cursos/videos', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newVideo)
+        });
 
-    // Reseta form
-    document.getElementById("add-video-form").reset();
-    
-    loadVideosTable();
-    showToast("Vídeo adicionado com sucesso!");
+        if (response.ok) {
+            document.getElementById("add-video-form").reset();
+            loadVideosTable();
+            showToast("Vídeo adicionado com sucesso ao servidor!");
+        } else {
+            showToast("Erro ao salvar vídeo no servidor.");
+        }
+    } catch (error) {
+        console.error(error);
+        showToast("Erro de conexão com o servidor.");
+    } finally {
+        submitBtn.innerHTML = '<i class="fas fa-plus"></i> Adicionar Vídeo';
+        submitBtn.disabled = false;
+    }
 }
 
-function deleteVideo(videoId) {
-    if (confirm("Tem certeza que deseja excluir esta vídeo aula?")) {
-        let videos = JSON.parse(localStorage.getItem("sisgem_videos")) || [];
-        videos = videos.filter(v => v.id !== videoId);
-        localStorage.setItem("sisgem_videos", JSON.stringify(videos));
+// Deletar Vídeo - AGORA EXCLUINDO DO SERVIDOR
+async function deleteVideo(videoId) {
+    if (confirm("Tem certeza que deseja excluir esta vídeo aula do servidor?")) {
+        try {
+            const response = await fetch(`/api/cursos/videos/${videoId}`, {
+                method: 'DELETE'
+            });
 
-        // Também remove da lista de visualizados se estiver lá
-        let watched = JSON.parse(localStorage.getItem("sisgem_watched")) || [];
-        watched = watched.filter(id => id !== videoId);
-        localStorage.setItem("sisgem_watched", JSON.stringify(watched));
+            if (response.ok) {
+                // Também remove da lista local de visualizados
+                let watched = JSON.parse(localStorage.getItem("sisgem_watched")) || [];
+                watched = watched.filter(id => id !== videoId.toString());
+                localStorage.setItem("sisgem_watched", JSON.stringify(watched));
 
-        loadVideosTable();
-        showToast("Vídeo removido.");
+                loadVideosTable();
+                showToast("Vídeo removido com sucesso!");
+            } else {
+                showToast("Erro ao tentar remover o vídeo.");
+            }
+        } catch (error) {
+            console.error(error);
+            showToast("Erro de conexão com o servidor.");
+        }
     }
 }
 
@@ -538,24 +546,42 @@ function deleteVideo(videoId) {
 function resetWatchedStatus() {
     localStorage.setItem("sisgem_watched", JSON.stringify([]));
     showToast("Histórico redefinido! Todos os contornos ficaram vermelhos.");
+    renderAllShelves(); // Atualiza a interface instantaneamente
 }
 
 function restoreDefaultVideos() {
-    if (confirm("Deseja restaurar a lista inicial de vídeos padrão? Isso limpará seus vídeos adicionados.")) {
-        localStorage.setItem("sisgem_videos", JSON.stringify(defaultVideos));
-        localStorage.setItem("sisgem_watched", JSON.stringify([]));
-        loadVideosTable();
-        showToast("Lista padrão restaurada.");
-    }
+    showToast("Os vídeos agora são gerenciados pelo servidor. Para adicionar novos, preencha o formulário acima.");
 }
 
 // 7. TOAST NOTIFICATIONS
 function showToast(message) {
     const toast = document.getElementById("toast");
+    if(!toast) return;
+
     toast.textContent = message;
     toast.classList.remove("hidden");
     
     setTimeout(() => {
         toast.classList.add("hidden");
     }, 3000);
+}
+
+// ==========================================
+// 8. PROTEÇÃO DE ACESSO AO PAINEL
+// ==========================================
+function checkAdminPassword(event) {
+    event.preventDefault(); // Impede o navegador de abrir a página direto
+    
+    // Altere a senha padrão aqui, se desejar
+    const SENHA_PADRAO = "sisgem2026"; 
+    
+    // Abre a janela pedindo a senha
+    const senhaDigitada = prompt("⚠️ Acesso Restrito\n\nPor favor, digite a senha de administrador para acessar o Painel de Controle:");
+    
+    // Verifica a senha
+    if (senhaDigitada === SENHA_PADRAO) {
+        window.location.href = "admin.html"; // Redireciona se acertou
+    } else if (senhaDigitada !== null) {
+        showToast("Senha incorreta! Acesso negado."); // Errou a senha
+    }
 }
