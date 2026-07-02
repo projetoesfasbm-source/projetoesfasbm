@@ -58,6 +58,8 @@ from backend.models.frequencia import FrequenciaAluno
 # ### NOVO MODELO ###
 from backend.models.elogio import Elogio
 from backend.models.edicao import Edicao
+# --- NOVO MÓDULO: DESLIGAMENTOS ---
+from backend.models.desligamento import RegistroDesligamento
 # --- NOVO MÓDULO: BANCO DE QUESTÕES E PROVAS ---
 from backend.models.banco_questoes import QuestaoBanco, DelegacaoProva, RascunhoProva, ConfiguracaoEnvio
 # --- NOVO MÓDULO: RECURSOS ---
