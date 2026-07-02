@@ -357,7 +357,7 @@
                 {# --- SELECTOR DE EDIÇÃO ATIVA --- #}
                 {% if active_school and edicoes_disponiveis and not is_global_dec_view and current_user.role != 'aluno' %}
                 <div class="dropdown ms-2 d-inline-block">
-                    <button class="btn btn-sm btn-outline-danger dropdown-toggle align-baseline py-1 px-2" type="button" id="dropdownEdicao" data-bs-toggle="dropdown" aria-expanded="false" style="font-size: 0.85rem; border-radius: 20px; font-weight: 600; background-color: #ffffff !important; color: #dc3545 !important; border-color: #dc3545 !important;">
+                    <button class="btn btn-sm btn-outline-primary dropdown-toggle align-baseline py-1 px-2" type="button" id="dropdownEdicao" data-bs-toggle="dropdown" aria-expanded="false" style="font-size: 0.85rem; border-radius: 20px; font-weight: 600;">
                         <i class="fas fa-bookmark me-1 text-warning"></i>
                         {% if active_edicao %}
                             {{ active_edicao.nome }}
