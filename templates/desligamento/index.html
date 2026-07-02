@@ -121,4 +121,93 @@
         </div>
     </div>
 </div>
+<div class="modal fade" id="modalReverter" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-success shadow-lg">
+            <form id="formReverter" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title fw-bold"><i class="fas fa-user-plus me-2"></i>Reativar Aluno</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                
+                <div class="modal-body bg-white text-dark">
+                    <p class="mb-3">Você está reativando o acesso do aluno <strong><span id="nomeAlunoReverter"></span></strong>.</p>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Destinar para qual Edição?</label>
+                        <select name="nova_edicao_id" id="selectEdicaoReverter" class="form-select" required>
+                            {% for ed in todas_edicoes %}
+                                <option value="{{ ed.id }}">{{ ed.nome or 'Edição ' ~ ed.id }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Destinar para qual Turma?</label>
+                        <select name="nova_turma_id" class="form-select border-dark" required>
+                            <option value="">-- Selecione a Turma de Destino --</option>
+                            {% for tu in todas_turmas %}
+                                <option value="{{ tu.id }}" data-edicao="{{ tu.edicao_id }}">{{ tu.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success fw-bold">
+                        <i class="fas fa-check me-1"></i> Confirmar Reativação
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const modalReverter = document.getElementById('modalReverter');
+    if (modalReverter) {
+        modalReverter.addEventListener('show.bs.modal', function(event) {
+            const button = event.relatedTarget;
+            const registroId = button.getAttribute('data-registro-id');
+            const alunoNome = button.getAttribute('data-aluno-nome');
+            const edicaoId = button.getAttribute('data-edicao-id');
+
+            // Configura o destino do formulário dinamicamente
+            document.getElementById('formReverter').action = `/desligamentos/reverter/${registroId}`;
+            document.getElementById('nomeAlunoReverter').innerText = alunoNome;
+            
+            // Seleciona automaticamente a edição de onde ele veio
+            const selectEdicao = document.getElementById('selectEdicaoReverter');
+            selectEdicao.value = edicaoId;
+
+            // Filtro inteligente para mostrar apenas as turmas da edição selecionada
+            const selectTurma = modalReverter.querySelector('select[name="nova_turma_id"]');
+            
+            function filtrarTurmas() {
+                const edicaoSelecionada = selectEdicao.value;
+                let primeiraOpcaoVisivel = null;
+                
+                Array.from(selectTurma.options).forEach(opt => {
+                    if (!opt.value) return; // ignora o placeholder
+                    const edicaoOpt = opt.getAttribute('data-edicao');
+                    if (edicaoOpt === edicaoSelecionada) {
+                        opt.style.display = 'block';
+                        if (!primeiraOpcaoVisivel) primeiraOpcaoVisivel = opt.value;
+                    } else {
+                        opt.style.display = 'none';
+                    }
+                });
+                selectTurma.value = primeiraOpcaoVisivel || "";
+            }
+
+            selectEdicao.addEventListener('change', filtrarTurmas);
+            filtrarTurmas(); // Executa ao abrir
+        });
+    }
+});
+</script>
 {% endblock %}
