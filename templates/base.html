@@ -538,7 +538,13 @@
                         {% endif %}
                         
                         <a href="{{ url_for('suporte.novo_chamado') }}" class="nav-link {% if request.endpoint and 'suporte.' in request.endpoint %}active{% endif %}"><div class="nav-icon">🛠️</div> Suporte</a>
-                    {% endif %}
+                        
+                        {# --- NOVO MÓDULO: DESLIGAMENTOS (SENS, ADMIN ESCOLA E DEC) --- #}
+                        {% if current_user.is_sens_in_school(active_sid) or current_user.is_admin_escola_in_school(active_sid) or current_user.role == 'super_admin' or dec_mode_active %}
+                            <a href="{{ url_for('desligamento.index') }}" class="nav-link {% if request.endpoint and 'desligamento' in request.endpoint %}active{% endif %}">
+                                <div class="nav-icon text-danger">🛑</div> Desligamentos
+                            </a>
+                        {% endif %}
 
                     {% if current_user.is_sens_in_school(active_sid) %}
                         <a href="{{ url_for('admin_escola.espelho_diarios') }}" class="nav-link {% if request.endpoint == 'admin_escola.espelho_diarios' %}active{% endif %}"><div class="nav-icon">📖</div> Diários de Classe (Adm)</a>
