@@ -157,6 +157,8 @@ def espelho_diarios():
     turma_id = request.args.get('turma_id', type=int)
     disciplina_id = request.args.get('disciplina_id', type=int)
     data_str = request.args.get('data')
+    status_diario = request.args.get('status_diario') # <-- NOVO FILTRO CAPTURADO AQUI
+
     per_page = 20
 
     resultado_service = DiarioService.get_diarios_pendentes(
@@ -164,7 +166,7 @@ def espelho_diarios():
         user_id=None, 
         turma_id=turma_id,
         disciplina_id=disciplina_id,
-        status=None,
+        status=status_diario, # <-- AGORA O BANCO RECEBE O FILTRO
         page=1,         
         per_page=10000  
     )
@@ -240,7 +242,8 @@ def espelho_diarios():
         disciplinas=disciplinas,
         turma_id=turma_id,
         disciplina_id=disciplina_id,
-        data_selecionada=data_str
+        data_selecionada=data_str,
+        status_diario=status_diario # <-- ENVIANDO PARA O HTML DEIXAR A OPÇÃO MARCADA
     )
 
 @admin_escola_bp.route('/detalhe-faltas/<int:aluno_id>')

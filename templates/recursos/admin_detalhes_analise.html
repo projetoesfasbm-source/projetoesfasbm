@@ -54,20 +54,24 @@
         <div class="col-lg-8">
             <div class="card shadow border-0" style="border-radius: 15px;">
                 <div class="card-body p-4">
+                    
+                    {# VARIAVEL DE CONTROLE: Verifica se o recurso já foi finalizado #}
+                    {% set is_finalizado = r.status in ['Deferido', 'Indeferido'] %}
+
                     <form action="{{ url_for('recursos.salvar_parecer', recurso_id=r.id) }}" method="POST">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         
                         <div class="row g-3 mb-4 no-print">
                             <div class="col-md-7">
                                 <label class="form-label fw-bold small">TIPO DE DOCUMENTO A GERAR</label>
-                                <select name="tipo_acao" class="form-select border-primary fw-bold" id="selectTipoDoc" required>
+                                <select name="tipo_acao" class="form-select border-primary fw-bold" id="selectTipoDoc" {% if is_finalizado %}disabled{% else %}required{% endif %}>
                                     <option value="parecer_instrutor" {% if current_user.role == 'instrutor' or r.status in ['Com Instrutor', 'Pendente'] %}selected{% endif %}>PARECER DO INSTRUTOR (CONTEUDISTA)</option>
-                                    <option value="decisao_cmt" {% if current_user.role != 'instrutor' and r.status in ['Com Comandante', 'Retornado ao Admin (Parecer)'] %}selected{% endif %}>DECISÃO DO COMANDANTE DA ESCOLA</option>
+                                    <option value="decisao_cmt" {% if current_user.role != 'instrutor' and r.status in ['Com Comandante', 'Retornado ao Admin (Parecer)', 'Deferido', 'Indeferido'] %}selected{% endif %}>DECISÃO DO COMANDANTE DA ESCOLA</option>
                                 </select>
                             </div>
                             <div class="col-md-5" id="colStatusFinal" style="{% if current_user.role == 'instrutor' or r.status == 'Com Instrutor' %}display: none;{% endif %}">
                                 <label class="form-label fw-bold small text-danger">ESTADO FINAL DO RECURSO</label>
-                                <select name="status_final" class="form-select border-danger fw-bold">
+                                <select name="status_final" class="form-select border-danger fw-bold" {% if is_finalizado %}disabled{% endif %}>
                                     <option value="Deferido" {% if r.status == 'Deferido' %}selected{% endif %}>DEFERIDO (Aceito)</option>
                                     <option value="Indeferido" {% if r.status == 'Indeferido' %}selected{% endif %}>INDEFERIDO (Recusado)</option>
                                 </select>
@@ -75,8 +79,8 @@
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label fw-bold small">TEXTO DO DOCUMENTO (EDITE ABAIXO)</label>
-                            <textarea name="conteudo_texto" id="editorBM" class="form-control" rows="18" style="font-family: 'Courier New', Courier, monospace; font-size: 0.9rem;">{% if r.decisao_comandante %}{{ r.decisao_comandante }}{% elif r.parecer_instrutor and r.status != 'Com Instrutor' %}{{ r.parecer_instrutor }}{% else %}ESTADO DO RIO GRANDE DO SUL
+                            <label class="form-label fw-bold small">TEXTO DO DOCUMENTO {% if not is_finalizado %}(EDITE ABAIXO){% endif %}</label>
+                            <textarea name="conteudo_texto" id="editorBM" class="form-control" rows="18" style="font-family: 'Courier New', Courier, monospace; font-size: 0.9rem; {% if is_finalizado %}background-color: #f8f9fa;{% endif %}" {% if is_finalizado %}readonly{% endif %}>{% if r.decisao_comandante %}{{ r.decisao_comandante }}{% elif r.parecer_instrutor and r.status != 'Com Instrutor' %}{{ r.parecer_instrutor }}{% else %}ESTADO DO RIO GRANDE DO SUL
 SECRETARIA DA SEGURANÇA PÚBLICA
 BRIGADA MILITAR
 DEPARTAMENTO DE EDUCAÇÃO E CULTURA
@@ -103,9 +107,15 @@ Diante do exposto, este instrutor julga pelo [DEFERIMENTO/INDEFERIMENTO] do recu
                         </div>
 
                         <div class="mt-4 no-print text-end">
-                            <button type="submit" class="btn btn-success btn-lg px-5 fw-bold rounded-pill shadow">
-                                <i class="fas fa-check-double me-2"></i> FINALIZAR E ASSINAR DOCUMENTO
-                            </button>
+                            {% if is_finalizado %}
+                                <button type="button" class="btn btn-secondary btn-lg px-5 fw-bold rounded-pill shadow" disabled>
+                                    <i class="fas fa-lock me-2"></i> RECURSO FINALIZADO
+                                </button>
+                            {% else %}
+                                <button type="submit" class="btn btn-success btn-lg px-5 fw-bold rounded-pill shadow">
+                                    <i class="fas fa-check-double me-2"></i> FINALIZAR E ASSINAR DOCUMENTO
+                                </button>
+                            {% endif %}
                         </div>
                     </form>
                 </div>
@@ -119,6 +129,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const selectTipo = document.getElementById('selectTipoDoc');
     const colStatus = document.getElementById('colStatusFinal');
     const editor = document.getElementById('editorBM');
+    const isFinalizado = {{ 'true' if r.status in ['Deferido', 'Indeferido'] else 'false' }};
 
     const modeloParecer = `ESTADO DO RIO GRANDE DO SUL
 SECRETARIA DA SEGURANÇA PÚBLICA
@@ -152,15 +163,17 @@ Considerando o fundamento no princípio da vinculação ao conteúdo oficialment
 
 Dê-se ciência ao interessado e realizem-se as retificações necessárias.`;
 
-    selectTipo.addEventListener('change', function() {
-        if (this.value === 'decisao_cmt') {
-            colStatus.style.display = 'block';
-            if(editor.value === modeloParecer) editor.value = modeloDecisao;
-        } else {
-            colStatus.style.display = 'none';
-            if(editor.value === modeloDecisao) editor.value = modeloParecer;
-        }
-    });
+    if (!isFinalizado) {
+        selectTipo.addEventListener('change', function() {
+            if (this.value === 'decisao_cmt') {
+                colStatus.style.display = 'block';
+                if(editor.value === modeloParecer) editor.value = modeloDecisao;
+            } else {
+                colStatus.style.display = 'none';
+                if(editor.value === modeloDecisao) editor.value = modeloParecer;
+            }
+        });
+    }
     
     // Dispara o evento no carregamento inicial para exibir a caixa de Status Final caso "Decisão" seja o selecionado
     selectTipo.dispatchEvent(new Event('change'));
