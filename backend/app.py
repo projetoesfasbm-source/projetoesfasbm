@@ -207,6 +207,7 @@ def register_blueprints(app):
     from backend.controllers.recursos_controller import recursos_bp
     from backend.controllers.edicao_controller import edicao_bp
     from backend.controllers.log_controller import log_bp
+    from backend.controllers.desligamento_controller import desligamento_bp # <-- IMPORTAÇÃO AQUI
 
     app.register_blueprint(admin_escola_bp)
     app.register_blueprint(tools_bp)
@@ -232,6 +233,7 @@ def register_blueprints(app):
     app.register_blueprint(vinculo_bp)
     app.register_blueprint(chefe_bp)
     app.register_blueprint(suporte_bp)
+    app.register_blueprint(desligamento_bp) # <-- REGISTRO AQUI
 
     # ### REGISTRO DE NOVOS BLUEPRINTS ###
     app.register_blueprint(elogio_bp)
