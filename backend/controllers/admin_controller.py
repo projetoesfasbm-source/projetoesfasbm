@@ -74,29 +74,34 @@ def espelho_diarios():
 
     # Query principal unindo Alunos com a contagem exata da subquery
     stats_query = db.session.query(
-        Aluno,
+        Aluno.id.label('aluno_id'),
+        User.nome_completo,
+        User.nome_de_guerra,
+        User.matricula,
         Turma.nome.label('turma_nome'),
         Disciplina.materia,
         Disciplina.carga_horaria_prevista,
         subquery_faltas.c.contagem
     ).join(Turma, Aluno.turma_id == Turma.id)\
+     .join(User, Aluno.user_id == User.id)\
      .join(subquery_faltas, Aluno.id == subquery_faltas.c.aluno_id)\
      .join(Disciplina, subquery_faltas.c.disciplina_id == Disciplina.id)\
-     .options(joinedload(Aluno.user))\
      .filter(
          Turma.school_id == school_id,
          Turma.edicao_id == active_edicao
      ).all()
 
     alunos_map = defaultdict(lambda: {
-        'obj': None, 
+        'nome_completo': '', 
+        'nome_de_guerra': '',
+        'matricula': '',
         'turma': '', 
         'total_global_faltas': 0, 
         'disciplinas_risco': [],
         'max_gravidade': 0
     })
 
-    for aluno, turma_nome, materia, carga_total, faltas in stats_query:
+    for aluno_id, nome_completo, nome_de_guerra, matricula, turma_nome, materia, carga_total, faltas in stats_query:
         carga_total = carga_total or 1
         porcentagem = (faltas / carga_total) * 100
         
@@ -109,9 +114,11 @@ def espelho_diarios():
             status_materia = 'alerta'
             nivel_gravidade = 1
         
-        data = alunos_map[aluno.id]
-        if not data['obj']:
-            data['obj'] = aluno
+        data = alunos_map[aluno_id]
+        if not data['nome_completo']:
+            data['nome_completo'] = nome_completo
+            data['nome_de_guerra'] = nome_de_guerra
+            data['matricula'] = matricula
             data['turma'] = turma_nome
         
         data['total_global_faltas'] += faltas
@@ -134,12 +141,11 @@ def espelho_diarios():
             if data['max_gravidade'] == 2: gravidade_str = 'critico'
             elif data['max_gravidade'] == 1: gravidade_str = 'atencao'
             
-            aluno_obj = data['obj']
-            nome_display = aluno_obj.user.nome_completo if aluno_obj.user else "Sem Nome"
-            matricula_display = aluno_obj.user.matricula if aluno_obj.user else "N/D"
+            nome_display = data['nome_completo'] or data['nome_de_guerra'] or "Sem Nome"
+            matricula_display = data['matricula'] or "N/D"
 
             alunos_alertas.append({
-                'id': aluno_obj.id,
+                'id': uid,
                 'nome': nome_display,
                 'matricula': matricula_display,
                 'turma': data['turma'],
@@ -180,21 +186,13 @@ def espelho_diarios():
         turma_id=turma_id,
         disciplina_id=disciplina_id,
         status=status_diario,
+        data_aula=data_filtro,
         page=page,         
-        per_page=per_page  # <-- MUDADO DE 10000 PARA 20 (Traz apenas o necessário para a tela)
+        per_page=per_page
     )
 
-    if hasattr(resultado_service, 'items'):
-        diarios_paginados = resultado_service.items
-        total_items = resultado_service.total
-    else:
-        # Fallback caso o service não retorne um objeto de paginação nativo
-        diarios_todos_lista = resultado_service
-        if data_filtro:
-            diarios_todos_lista = [d for d in diarios_todos_lista if d.data_aula == data_filtro]
-        total_items = len(diarios_todos_lista)
-        start = (page - 1) * per_page
-        diarios_paginados = diaries_todos_lista[start:start + per_page]
+    diarios_paginados = resultado_service.items
+    total_items = resultado_service.total
         
     class FakePagination:
         def __init__(self, items, page, per_page, total):

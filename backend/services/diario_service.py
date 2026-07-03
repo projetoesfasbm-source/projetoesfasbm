@@ -92,7 +92,7 @@ class DiarioService:
         return db.session.scalars(query).first()
 
     @staticmethod
-    def get_diarios_pendentes(school_id, user_id=None, turma_id=None, disciplina_id=None, status=None, page=1, per_page=30):
+    def get_diarios_pendentes(school_id, user_id=None, turma_id=None, disciplina_id=None, status=None, data_aula=None, page=1, per_page=30):
         # --- ALTERAÇÃO REALIZADA AQUI: Captura da edição ---
         active_edicao = session.get('active_edicao_id')
         
@@ -113,6 +113,9 @@ class DiarioService:
 
         if status:
             stmt = stmt.where(DiarioClasse.status == status)
+
+        if data_aula:
+            stmt = stmt.where(DiarioClasse.data_aula == data_aula)
 
         if user_id:
             instrutor = DiarioService.get_current_instrutor(user_id)
