@@ -1,5 +1,3 @@
-# backend/services/horario_service.py
-
 import os
 from flask import current_app, url_for
 from flask_login import current_user
@@ -35,6 +33,7 @@ class HorarioService:
         if user.is_sens or user.is_admin_escola:
             return True
 
+        # CORREÇÃO: Pegar apenas o ID de instrutor vinculado à escola atual
         school_id = UserService.get_current_school_id()
         my_instrutor_ids = db.session.scalars(
             select(Instrutor.id).where(
@@ -104,6 +103,7 @@ class HorarioService:
     @staticmethod
     def construir_matriz_horario(pelotao, semana_id, user):
         semana = db.session.get(Semana, semana_id)
+        school_id = UserService.get_current_school_id()
 
         a_disposicao = {
             'materia': 'A disposição do C Al /S Ens',
@@ -142,10 +142,11 @@ class HorarioService:
                 row.append(cell)
             horario_matrix.append(row)
 
-        # Encontra as semanas que compartilham o mesmo período de data
-        semanas_sobrepostas = select(Semana.id).where(
+        # CORREÇÃO: Encontra as semanas que compartilham o mesmo período de data SOMENTE nesta escola
+        semanas_sobrepostas = select(Semana.id).join(Ciclo).where(
             Semana.data_inicio == semana.data_inicio,
-            Semana.data_fim == semana.data_fim
+            Semana.data_fim == semana.data_fim,
+            Ciclo.school_id == school_id
         )
 
         aulas_query = (
@@ -247,6 +248,7 @@ class HorarioService:
         semana = db.session.get(Semana, semana_id)
 
         is_admin = user.is_sens or user.is_admin_escola
+        school_id = UserService.get_current_school_id() # CORREÇÃO
 
         def get_horas_agendadas(disciplina_id, pelotao_nome):
             return (
@@ -259,7 +261,8 @@ class HorarioService:
                 or 0
             )
 
-        turma_obj = db.session.scalar(select(Turma).where(Turma.nome == pelotao))
+        # CORREÇÃO: Buscar turma cruzando pelo school_id
+        turma_obj = db.session.scalar(select(Turma).where(Turma.nome == pelotao, Turma.school_id == school_id))
         if not turma_obj:
             return {'success': False, 'message': 'Turma não encontrada.'}
 
@@ -277,6 +280,7 @@ class HorarioService:
                 )
         else:
             school_id = UserService.get_current_school_id()
+            # CORREÇÃO: Limitar os vínculos de instrutor do usuário apenas para a escola atual
             my_instrutor_ids = db.session.scalars(
                 select(Instrutor.id).where(
                     Instrutor.user_id == user.id,
@@ -319,7 +323,7 @@ class HorarioService:
 
         instrutor_logado_id = None
         if not is_admin:
-            school_id = UserService.get_current_school_id()
+            # Já contendo trava por school_id
             my_instrutor_ids = db.session.scalars(
                 select(Instrutor.id).where(
                     Instrutor.user_id == user.id,
@@ -362,6 +366,15 @@ class HorarioService:
             if not semana:
                 return False, "Semana não encontrada.", 404
 
+            # CORREÇÃO DE SEGURANÇA: Bloqueia injeção de ID de semanas de outras escolas
+            school_id = UserService.get_current_school_id()
+            if semana.ciclo.school_id != school_id:
+                return False, "Acesso negado à semana desta escola.", 403
+                
+            disciplina = db.session.get(Disciplina, disciplina_id)
+            if disciplina and disciplina.turma.school_id != school_id:
+                return False, "Acesso negado à disciplina de outra escola.", 403
+
             # ==============================================================================
             # TRAVA ANTI-COLISÃO E CLONAGEM DIRETAMENTE NA SEMANA ATUAL
             # Isso resolve o bug onde o "duplo-clique" ou arrasto gerava aulas duplicadas.
@@ -390,9 +403,11 @@ class HorarioService:
                 return False, f"⚠️ ERRO DE MARCAÇÃO: O {colisao_direta.periodo}º período na {dia.capitalize()} já está ocupado por '{nome_mat}'. Não é possível agendar por cima.", 409
             # ==============================================================================
 
-            semanas_sobrepostas = select(Semana.id).where(
+            # CORREÇÃO: Limita sobreposição de semanas apenas à escola ativa
+            semanas_sobrepostas = select(Semana.id).join(Ciclo).where(
                 Semana.data_inicio == semana.data_inicio,
-                Semana.data_fim == semana.data_fim
+                Semana.data_fim == semana.data_fim,
+                Ciclo.school_id == school_id
             )
 
             # Trava de Segurança lendo em MAIÚSCULO para evitar as falhas que ocorreram
@@ -432,8 +447,6 @@ class HorarioService:
 
                 if dia == 'domingo' and semana.periodos_domingo > 0 and p > semana.periodos_domingo:
                     return False, f"⚠️ AGENDAMENTO BLOQUEADO: Domingo vai apenas até o {semana.periodos_domingo}º tempo.", 403
-
-            disciplina = db.session.get(Disciplina, disciplina_id)
 
             if disciplina:
                 total_agendado = db.session.scalar(
@@ -494,7 +507,6 @@ class HorarioService:
                     instrutor_id_1 = int(instrutor_id_from_form)
 
             else:
-                school_id = UserService.get_current_school_id()
                 my_instrutor_ids = db.session.scalars(
                     select(Instrutor.id).where(
                         Instrutor.user_id == user.id,
@@ -598,7 +610,6 @@ class HorarioService:
                 db.session.flush() 
 
             # Busca intervalos para quebra de grupos
-            school_id = UserService.get_current_school_id()
             try:
                 pos_int_1 = int(float(SiteConfigService.get_config('posicao_intervalo_manha', '3', school_id=school_id)))
                 pos_almoco = int(float(SiteConfigService.get_config('posicao_intervalo_almoco', '6', school_id=school_id)))
@@ -639,7 +650,8 @@ class HorarioService:
                 idx += 1 
 
             if not is_admin:
-                turma = db.session.scalar(select(Turma).where(Turma.nome == pelotao))
+                # CORREÇÃO: Pegar turma apenas se pertencer a esta escola
+                turma = db.session.scalar(select(Turma).where(Turma.nome == pelotao, Turma.school_id == school_id))
 
                 if turma and turma.school_id:
                     message = (
@@ -782,8 +794,11 @@ class HorarioService:
                 aula.status = 'confirmado'
 
             message = f'Agendamento de {disciplina_materia} aprovado.'
+            
+            # CORREÇÃO: Limitar pesquisa de turma à escola atual no ato de notificar
+            school_id = UserService.get_current_school_id()
             turma = db.session.scalar(
-                select(Turma).where(Turma.nome == turma_nome)
+                select(Turma).where(Turma.nome == turma_nome, Turma.school_id == school_id)
             )
 
             if turma:

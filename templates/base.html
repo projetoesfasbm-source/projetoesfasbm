@@ -357,7 +357,7 @@
                 {# --- SELECTOR DE EDIÇÃO ATIVA --- #}
                 {% if active_school and edicoes_disponiveis and not is_global_dec_view %}
                 <div class="dropdown ms-2 d-inline-block">
-                    <button class="btn btn-sm btn-outline-primary dropdown-toggle align-baseline py-1 px-2" type="button" id="dropdownEdicao" data-bs-toggle="dropdown" aria-expanded="false" style="font-size: 0.85rem; border-radius: 20px; font-weight: 600;">
+                    <button class="btn btn-sm btn-outline-danger dropdown-toggle align-baseline py-1 px-2" type="button" id="dropdownEdicao" data-bs-toggle="dropdown" aria-expanded="false" style="font-size: 0.85rem; border-radius: 20px; font-weight: 600; background-color: #ffffff !important; color: #dc3545 !important; border-color: #dc3545 !important;">
                         <i class="fas fa-bookmark me-1 text-warning"></i>
                         {% if active_edicao %}
                             {{ active_edicao.nome }}
@@ -526,7 +526,7 @@
                         <div class="nav-separator">ACADÊMICO</div>
                         <a href="{{ url_for('horario.index') }}" class="nav-link {% if request.endpoint and ('horario.' in request.endpoint or 'semana.' in request.endpoint) and request.endpoint != 'horario.proximas_aulas_admin' %}active{% endif %}"><div class="nav-icon">📅</div> Quadro Horário</a>
                         
-                        {% if current_user.is_instrutor_in_school(active_sid) %}
+                        {% if current_user.role == 'super_admin' %}
                             <a href="{{ url_for('questoes.tela_envio') }}" class="nav-link {% if request.endpoint == 'questoes.tela_envio' %}active{% endif %}"><div class="nav-icon">📤</div> Enviar Questões</a>
                             <a href="{{ url_for('questoes.minhas_provas') }}" class="nav-link {% if request.endpoint == 'questoes.minhas_provas' %}active{% endif %}"><div class="nav-icon">📝</div> Montar Provas</a>
                         {% endif %}
@@ -536,6 +536,8 @@
                         {% if current_user.is_instrutor_in_school(active_sid) or current_user.is_sens_in_school(active_sid) or current_user.is_cal_in_school(active_sid) %}
                             <a href="{{ url_for('diario.listar_pendentes') }}" class="nav-link {% if request.endpoint and 'diario.' in request.endpoint %}active{% endif %}"><div class="nav-icon">✍️</div> Validar Diários</a>
                         {% endif %}
+                        
+                        <a href="{{ url_for('suporte.novo_chamado') }}" class="nav-link {% if request.endpoint and 'suporte.' in request.endpoint %}active{% endif %}"><div class="nav-icon">🛠️</div> Suporte</a>
                     {% endif %}
 
                     {% if current_user.is_sens_in_school(active_sid) %}

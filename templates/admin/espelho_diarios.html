@@ -119,13 +119,11 @@
         </div>
     </div>
 
-    <div class="card shadow-sm border-0 mb-4 bg-light">
-        <div class="card-body">
-            <form method="GET" action="{{ url_for('admin_escola.espelho_diarios') }}" class="row g-3 align-items-end">
-                <div class="col-md-3">
+    <form method="GET" action="{{ url_for('admin_escola.espelho_diarios') }}" class="row g-2 align-items-end">
+                <div class="col-md-2">
                     <label class="form-label fw-bold small text-uppercase">Turma</label>
                     <select class="form-select" name="turma_id" onchange="this.form.submit()">
-                        <option value="">-- Todas as Turmas --</option>
+                        <option value="">-- Todas --</option>
                         {% for t in turmas %}
                         <option value="{{ t.id }}" {% if turma_id == t.id %}selected{% endif %}>{{ t.nome }}</option>
                         {% endfor %}
@@ -135,7 +133,7 @@
                 <div class="col-md-3">
                     <label class="form-label fw-bold small text-uppercase">Disciplina</label>
                     <select class="form-select" name="disciplina_id" onchange="this.form.submit()">
-                        <option value="">-- Todas as Disciplinas --</option>
+                        <option value="">-- Todas --</option>
                         {% for d in disciplinas %}
                         <option value="{{ d.id }}" {% if disciplina_id == d.id %}selected{% endif %}>{{ d.materia }}</option>
                         {% endfor %}
@@ -148,21 +146,27 @@
                 </div>
 
                 <div class="col-md-2">
+                    <label class="form-label fw-bold small text-uppercase text-primary">Status</label>
+                    <select class="form-select border-primary fw-bold text-primary" name="status_diario" onchange="this.form.submit()">
+                        <option value="">-- Todos --</option>
+                        <option value="assinado" {% if status_diario == 'assinado' %}selected{% endif %}>Somente Validados</option>
+                        <option value="pendente" {% if status_diario == 'pendente' %}selected{% endif %}>Somente Pendentes</option>
+                    </select>
+                </div>
+
+                <div class="col-md-3 d-flex gap-2">
                     {% if turma_id and disciplina_id %}
                         <a href="{{ url_for('admin_escola.imprimir_relatorio', turma_id=turma_id, disciplina_id=disciplina_id) }}" 
-                           target="_blank" class="btn btn-dark w-100 shadow-sm" title="Gerar Relatório Oficial (PDF)">
+                           target="_blank" class="btn btn-dark flex-grow-1 shadow-sm" title="Gerar Relatório Oficial (PDF)">
                             <i class="fas fa-print me-1"></i> Imprimir
                         </a>
                     {% else %}
-                        <button type="button" class="btn btn-secondary w-100 disabled" disabled title="Selecione Turma e Disciplina para Imprimir">
+                        <button type="button" class="btn btn-secondary flex-grow-1 disabled" disabled title="Selecione Turma e Disciplina">
                             <i class="fas fa-print me-1"></i> Imprimir
                         </button>
                     {% endif %}
-                </div>
-
-                <div class="col-md-2">
-                    <a href="{{ url_for('admin_escola.espelho_diarios') }}" class="btn btn-outline-secondary w-100">
-                        <i class="fas fa-eraser me-1"></i> Limpar
+                    <a href="{{ url_for('admin_escola.espelho_diarios') }}" class="btn btn-outline-secondary flex-grow-1">
+                        <i class="fas fa-eraser"></i> Limpar
                     </a>
                 </div>
             </form>
@@ -279,17 +283,25 @@
             <div class="card-footer bg-white py-3">
                 <nav aria-label="Navegação de página">
                     <ul class="pagination justify-content-center mb-0">
+                        
                         {% if pagination.has_prev %}
-                        <li class="page-item"><a class="page-link" href="{{ url_for('admin_escola.espelho_diarios', page=pagination.prev_num, turma_id=turma_id, disciplina_id=disciplina_id, data=data_selecionada) }}">Anterior</a></li>
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('admin_escola.espelho_diarios', page=pagination.prev_num, turma_id=turma_id, disciplina_id=disciplina_id, data=data_selecionada, status_diario=status_diario) }}">Anterior</a>
+                        </li>
                         {% endif %}
+                        
                         <li class="page-item disabled"><span class="page-link">Página {{ pagination.page }} de {{ pagination.pages }}</span></li>
+                        
                         {% if pagination.has_next %}
-                        <li class="page-item"><a class="page-link" href="{{ url_for('admin_escola.espelho_diarios', page=pagination.next_num, turma_id=turma_id, disciplina_id=disciplina_id, data=data_selecionada) }}">Próxima</a></li>
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('admin_escola.espelho_diarios', page=pagination.next_num, turma_id=turma_id, disciplina_id=disciplina_id, data=data_selecionada, status_diario=status_diario) }}">Próxima</a>
+                        </li>
                         {% endif %}
+                        
                     </ul>
                 </nav>
             </div>
-            {% endif %}
+{% endif %}
         </div>
     </div>
 </div>

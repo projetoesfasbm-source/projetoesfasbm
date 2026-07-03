@@ -151,41 +151,51 @@ def espelho_diarios():
     alunos_alertas.sort(key=lambda x: ({'critico': 0, 'atencao': 1, 'moderado': 2}[x['gravidade']], -x['total_faltas']))
 
     # =========================================================================
-    # PARTE 2: LÓGICA DA LISTA DE DIÁRIOS
+    # PARTE 2: LÓGICA DA LISTA DE DIÁRIOS OPTIMIZADA
     # =========================================================================
     page = request.args.get('page', 1, type=int)
     turma_id = request.args.get('turma_id', type=int)
     disciplina_id = request.args.get('disciplina_id', type=int)
     data_str = request.args.get('data')
+    status_diario = request.args.get('status_diario')
+
     per_page = 20
 
+    # Convertemos a data antes para enviar o filtro direto se o Service aceitar,
+    # ou filtramos minimamente se necessário.
+    data_filtro = None
+    if data_str:
+        try:
+            data_filtro = datetime.strptime(data_str, '%Y-%m-%d').date()
+        except ValueError:
+            pass
+
+    # Ajustamos para trazer apenas os itens da PÁGINA ATUAL direto do banco,
+    # em vez de trazer 10.000 registros para a RAM.
+    # NOTA: Se o seu DiarioService permitir passar 'data' ou já fizer paginação real por lá,
+    # use os parâmetros reais. Se não permitir, usamos uma busca menor (ex: 100 ou 200 itens max por vez)
     resultado_service = DiarioService.get_diarios_pendentes(
         school_id=school_id,
         user_id=None, 
         turma_id=turma_id,
         disciplina_id=disciplina_id,
-        status=None,
-        page=1,         
-        per_page=10000  
+        status=status_diario,
+        page=page,         
+        per_page=per_page  # <-- MUDADO DE 10000 PARA 20 (Traz apenas o necessário para a tela)
     )
 
     if hasattr(resultado_service, 'items'):
-        diarios_todos_lista = resultado_service.items
+        diarios_paginados = resultado_service.items
+        total_items = resultado_service.total
     else:
+        # Fallback caso o service não retorne um objeto de paginação nativo
         diarios_todos_lista = resultado_service
-
-    if data_str:
-        try:
-            data_filtro = datetime.strptime(data_str, '%Y-%m-%d').date()
+        if data_filtro:
             diarios_todos_lista = [d for d in diarios_todos_lista if d.data_aula == data_filtro]
-        except ValueError:
-            pass
-
-    total_items = len(diarios_todos_lista)
-    start = (page - 1) * per_page
-    end = start + per_page
-    diarios_paginados = diarios_todos_lista[start:end]
-    
+        total_items = len(diarios_todos_lista)
+        start = (page - 1) * per_page
+        diarios_paginados = diaries_todos_lista[start:start + per_page]
+        
     class FakePagination:
         def __init__(self, items, page, per_page, total):
             self.items = items
@@ -202,8 +212,10 @@ def espelho_diarios():
     
     turmas, disciplinas = DiarioService.get_filtros_disponiveis(school_id, user_id=None, turma_selected_id=turma_id)
 
+    # OTIMIZAÇÃO DOS ALUNOS: Trazemos apenas as colunas textuais exatas que vamos usar
+    # Isso impede o SQLAlchemy de instanciar objetos "vivos" pesados de Aluno/User na RAM
     todos_alunos_query = db.session.execute(
-        select(Aluno, Turma.nome)
+        select(Aluno.id, Turma.nome, User.nome_completo, User.nome_de_guerra, User.matricula)
         .join(Turma)
         .join(User, Aluno.user_id == User.id)
         .where(
@@ -215,19 +227,16 @@ def espelho_diarios():
 
     todos_alunos_json = []
     for row in todos_alunos_query:
-        a, t_nome = row
-        nome_display = "Sem Nome"
-        matricula_display = "N/D"
-        if a.user:
-             nome_display = a.user.nome_completo or a.user.nome_de_guerra or "Sem Nome"
-             matricula_display = a.user.matricula or "N/D"
+        aluno_id, t_nome, u_nome, u_guerra, u_matricula = row
+        nome_display = u_nome or u_guerra or "Sem Nome"
+        matricula_display = u_matricula or "N/D"
 
         todos_alunos_json.append({
-            'id': a.id,
+            'id': aluno_id,
             'nome': nome_display,
             'matricula': matricula_display,
             'turma': t_nome,
-            'faltas': alunos_map[a.id]['total_global_faltas'] if a.id in alunos_map else 0
+            'faltas': alunos_map[aluno_id]['total_global_faltas'] if aluno_id in alunos_map else 0
         })
 
     return render_template(
@@ -240,7 +249,8 @@ def espelho_diarios():
         disciplinas=disciplinas,
         turma_id=turma_id,
         disciplina_id=disciplina_id,
-        data_selecionada=data_str
+        data_selecionada=data_str,
+        status_diario=status_diario
     )
 
 @admin_escola_bp.route('/detalhe-faltas/<int:aluno_id>')
