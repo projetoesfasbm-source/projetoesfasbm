@@ -152,7 +152,7 @@ class DiarioService:
 
     @staticmethod
     def get_diarios_agrupados(school_id, user_id=None, turma_id=None, disciplina_id=None, status=None, page=1, per_page=30):
-        pagination = DiarioService.get_diarios_pendentes(school_id, user_id, turma_id, disciplina_id, status, page, per_page)
+        pagination = DiarioService.get_diarios_pendentes(school_id, user_id, turma_id, disciplina_id, status, data_aula=None, page=page, per_page=per_page)
         raw_diarios = pagination.items
         
         if not raw_diarios: return [], pagination
