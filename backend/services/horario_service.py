@@ -74,8 +74,6 @@ class HorarioService:
     # ... seus outros métodos da classe HorarioService continuam aqui embaixo ...
 
 
-class HorarioService:
-
     @staticmethod
     def can_edit_horario(horario, user):
         if not horario or not user:
