@@ -23,8 +23,6 @@ from .site_config_service import SiteConfigService
 from .user_service import UserService
 
 
-class HorarioService:
-
     @staticmethod
     def can_edit_horario(horario, user):
         if not horario or not user:
