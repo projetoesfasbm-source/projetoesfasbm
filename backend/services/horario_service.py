@@ -12,7 +12,6 @@ from ..models.database import db
 from ..models.horario import Horario
 from ..models.disciplina import Disciplina
 from ..models.instrutor import Instrutor
-from ..models.school import School  # Adicionado para buscar o nome da escola no conflito global
 from ..models.disciplina_turma import DisciplinaTurma
 from ..models.semana import Semana
 from ..models.turma import Turma
@@ -25,52 +24,6 @@ from .user_service import UserService
 
 
 class HorarioService:
-
-    @staticmethod
-    def verificar_conflito_global_instrutor(semana_id, dia_semana, periodo, instrutor_id_1, instrutor_id_2=None, horario_id_atual=None):
-        """
-        Verifica se os instrutores informados já possuem aula agendada 
-        no mesmo dia, período e semana em QUALQUER escola do sistema.
-        """
-        instrutores_alvos = [i for i in [instrutor_id_1, instrutor_id_2] if i is not None]
-        if not instrutores_alvos:
-            return None
-
-        # Query cruzando Horario -> Disciplina -> Turma -> School
-        stmt = (
-            select(
-                Horario.id,
-                Turma.nome.label("turma_nome"),
-                School.nome.label("escola_nome"),
-                Disciplina.materia.label("materia_nome")
-            )
-            .join(Disciplina, Horario.disciplina_id == Disciplina.id)
-            .join(Turma, Disciplina.turma_id == Turma.id)
-            .join(School, Turma.school_id == School.id)
-            .where(
-                Horario.semana_id == semana_id,
-                Horario.dia_semana == dia_semana,
-                Horario.periodo == periodo,
-                Horario.status != 'cancelado',
-                or_(
-                    Horario.instrutor_id.in_(instrutores_alvos),
-                    Horario.instrutor_id_2.in_(instrutores_alvos)
-                )
-            )
-        )
-
-        if horario_id_atual:
-            stmt = stmt.where(Horario.id != horario_id_atual)
-
-        conflito = db.session.execute(stmt).first()
-
-        if conflito:
-            return {
-                "escola": conflito.escola_nome,
-                "turma": conflito.turma_nome,
-                "materia": conflito.materia_nome
-            }
-        return None
 
     @staticmethod
     def can_edit_horario(horario, user):
