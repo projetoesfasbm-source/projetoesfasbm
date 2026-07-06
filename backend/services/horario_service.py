@@ -12,7 +12,6 @@ from ..models.database import db
 from ..models.horario import Horario
 from ..models.disciplina import Disciplina
 from ..models.instrutor import Instrutor
-from ..models.school import School  # Adicionado para buscar o nome da escola no conflito global
 from ..models.disciplina_turma import DisciplinaTurma
 from ..models.semana import Semana
 from ..models.turma import Turma
