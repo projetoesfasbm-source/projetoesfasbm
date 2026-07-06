@@ -545,6 +545,25 @@ def get_instrutores_vinculados(pelotao, disciplina_id):
 @login_required
 def salvar_aula():
     data = request.json
+    
+    # 🚨 PASSO 2: VALIDAÇÃO DE CONFLITO GLOBAL DE INSTRUTOR (INTEGRADO COM OS SINAIS DO PAYLOAD)
+    conflito = HorarioService.verificar_conflito_global_instrutor(
+        semana_id=data.get('semana_id'),
+        dia_semana=data.get('dia'),       # Ajustado de 'dia_semana' para 'dia' para bater com o seu payload
+        periodo=data.get('periodo'),
+        instrutor_id_1=data.get('instrutor_id'),
+        instrutor_id_2=data.get('instrutor_id_2'),
+        horario_id_atual=data.get('horario_id') # Ajustado para 'horario_id' para ignorar auto-bloqueio na edição
+    )
+    
+    if conflito:
+        return jsonify({
+            "status": "error",
+            "message": f"Conflito de aulas: o instrutor já possui aula marcada na escola '{conflito['escola']}' (Turma: {conflito['turma']} - {conflito['materia']}) neste mesmo período."
+        }), 400
+    # ----------------------------------------------------
+
+    # Se passou, segue para o seu método analisado acima
     success, message, status_code = HorarioService.save_aula(data, current_user)
     
     # --- ESPIÃO: SALVAR/EDITAR AULA ---
@@ -555,9 +574,8 @@ def salvar_aula():
             details=f"O usuário modificou ou inseriu uma aula no quadro horário. Sistema: {message}",
             school_id=school_id
         )
-    # ----------------------------------
-    
-    return jsonify({'success': success, 'message': message}), status_code
+        
+    return jsonify({"status": "success" if success else "error", "message": message}), status_code
 
 @horario_bp.route('/remover-aula', methods=['POST'])
 @login_required
