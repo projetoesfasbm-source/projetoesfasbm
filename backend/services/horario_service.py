@@ -70,7 +70,7 @@ class HorarioService:
                 "materia": conflito.materia_nome
             }
         return None
-    
+
     @staticmethod
     def can_edit_horario(horario, user):
         if not horario or not user:
