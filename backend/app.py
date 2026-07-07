@@ -171,29 +171,6 @@ def create_app(config_class=Config):
         register_blueprints(app)
         register_handlers_and_processors(app)
 
-    # =============================================================
-    # NOVO: PROCESSEDOR DE CONTEXTO DO SUPORTE
-    # =============================================================
-    @app.context_processor
-    def inject_suporte_status():
-        is_super_admin = False
-        has_new_requests = False
-
-        if current_user.is_authenticated and getattr(current_user, 'role', '') == 'super_admin':
-            is_super_admin = True
-            
-            # Conta se há chamados pendentes
-            novos_chamados = SolicitacaoSuporte.query.filter_by(status='Pendente').count()
-            if novos_chamados > 0:
-                has_new_requests = True
-
-        return dict(
-            is_super_admin=is_super_admin,
-            has_new_requests=has_new_requests
-        )
-
-    # =============================================================
-
     register_cli_commands(app)
     return app
 
@@ -224,7 +201,6 @@ def register_blueprints(app):
     from backend.controllers.vinculo_controller import vinculo_bp
     from backend.controllers.chefe_turma_controller import chefe_bp
     from backend.controllers.suporte_controller import suporte_bp
-    from backend.controllers.suporte_controller import SolicitacaoSuporte
 
     # ### NOVOS CONTROLLERS ###
     from backend.controllers.elogio_controller import elogio_bp
