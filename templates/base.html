@@ -445,10 +445,29 @@
                 {% endif %}
             </div>
         </a>
+        
+        <ul class="dropdown-menu dropdown-menu-end">
+            <li><a class="dropdown-item" href="{{ url_for('user.meu_perfil') }}">Meu Perfil</a></li>
+
+            {# Botões administrativos no dropdown só aparecem se o MODO DEC estiver ativo #}
+            {% if dec_mode_active %}
+                {% if session.get('view_as_school_id') %}
+                    <li><a class="dropdown-item text-danger fw-bold" href="{{ url_for('super_admin.clear_school_selection') }}"><i class="fas fa-sign-out-alt"></i> Sair da Escola (Ir p/ DEC)</a></li>
+                {% else %}
+                    <li><a class="dropdown-item" href="{{ url_for('super_admin.select_school') }}"><i class="fas fa-school"></i> Acessar uma Escola</a></li>
+                {% endif %}
+            {% endif %}
+
+            <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#changePasswordModal">Alterar Senha</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('auth.configurar_2fa') }}"><i class="fas fa-shield-alt"></i> Configurar 2FA</a></li>
+        </ul>
     </div>
+
+    {# Botão Sair #}
+    <a href="{{ url_for('auth.logout') }}" class="btn btn-outline-danger btn-sm ms-2" title="Sair do Sistema">Sair</a>
 </div>
 
-{# Estilização da Engrenagem #}
+{# Estilização da Engrenagem Isolada no Final #}
 <style>
     .support-gear-btn {
         color: #6c757d;
@@ -474,29 +493,6 @@
         100% { transform: scale(1); }
     }
 </style>
-                        </div>
-                    </a>
-                    <ul class="dropdown-menu dropdown-menu-end">
-                        <li><a class="dropdown-item" href="{{ url_for('user.meu_perfil') }}">Meu Perfil</a></li>
-
-                        {# Botões administrativos no dropdown só aparecem se o MODO DEC #}
-                        {% if dec_mode_active %}
-                            {% if session.get('view_as_school_id') %}
-                                <li><a class="dropdown-item text-danger fw-bold" href="{{ url_for('super_admin.clear_school_selection') }}"><i class="fas fa-sign-out-alt"></i> Sair da Escola (Ir p/ DEC)</a></li>
-                            {% else %}
-                                <li><a class="dropdown-item" href="{{ url_for('super_admin.select_school') }}"><i class="fas fa-school"></i> Acessar uma Escola</a></li>
-                            {% endif %}
-                        {% endif %}
-
-                        <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#changePasswordModal">Alterar Senha</a></li>
-                        <li><a class="dropdown-item" href="{{ url_for('auth.configurar_2fa') }}"><i class="fas fa-shield-alt"></i> Configurar 2FA</a></li>
-                    </ul>
-                </div>
-                <a href="{{ url_for('auth.logout') }}" class="btn btn-outline-danger btn-sm" title="Sair do Sistema">Sair</a>
-            </div>
-        </div>
-    </header>
-    {% endif %}
 
     <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
