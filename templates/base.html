@@ -402,57 +402,97 @@
                 {% endif %}
             </div>
 
-            <div class="top-navbar-right-items">
-                <div class="dropdown">
-                    <a href="#" class="notification-bell" data-bs-toggle="dropdown" aria-expanded="false" title="Notificações">
-                        🔔
-                        <span class="notification-badge" id="notification-badge">0</span>
-                    </a>
-                    <ul class="dropdown-menu dropdown-menu-end notification-dropdown" id="notification-list">
-                        <li class="p-2 text-center text-muted">Carregando...</li>
-                    </ul>
-                </div>
-                <div class="dropdown">
-                    <a href="#" class="d-flex align-items-center text-decoration-none dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
-                        <div class="user-info">
-                            <strong>{{ current_user.nome_de_guerra or current_user.nome_completo }}</strong>
-                            <small>{{ current_user.matricula }}</small>
-                        </div>
-                        <div class="user-avatar">
-                            {# VERIFICAÇÃO INTELIGENTE DO AVATAR #}
-                            {% set tem_perfil_aluno = current_user.aluno_profile is defined and current_user.aluno_profile %}
-                            {% set tem_perfil_instrutor = current_user.instrutor_profile is defined and current_user.instrutor_profile %}
-
-                            {% if tem_perfil_aluno and current_user.aluno_profile.foto_perfil and current_user.aluno_profile.foto_perfil != 'default.png' %}
-                                <img src="{{ url_for('static', filename='uploads/profile_pics/' + current_user.aluno_profile.foto_perfil) }}" alt="Foto de Perfil" onerror="this.src=''; this.parentElement.innerHTML='<span>{{ (current_user.nome_de_guerra or current_user.username)[0] }}</span>';">
-                            {% elif tem_perfil_instrutor and current_user.instrutor_profile.foto_perfil and current_user.instrutor_profile.foto_perfil != 'default.png' %}
-                                <img src="{{ url_for('static', filename='uploads/profile_pics/' + current_user.instrutor_profile.foto_perfil) }}" alt="Foto de Perfil" onerror="this.src=''; this.parentElement.innerHTML='<span>{{ (current_user.nome_de_guerra or current_user.username)[0] }}</span>';">
-                            {% else %}
-                                <span>{{ (current_user.nome_de_guerra or current_user.username)[0] }}</span>
-                            {% endif %}
-                        </div>
-                    </a>
-                    <ul class="dropdown-menu dropdown-menu-end">
-                        <li><a class="dropdown-item" href="{{ url_for('user.meu_perfil') }}">Meu Perfil</a></li>
-
-                        {# Botões administrativos no dropdown só aparecem se o MODO DEC #}
-                        {% if dec_mode_active %}
-                            {% if session.get('view_as_school_id') %}
-                                <li><a class="dropdown-item text-danger fw-bold" href="{{ url_for('super_admin.clear_school_selection') }}"><i class="fas fa-sign-out-alt"></i> Sair da Escola (Ir p/ DEC)</a></li>
-                            {% else %}
-                                <li><a class="dropdown-item" href="{{ url_for('super_admin.select_school') }}"><i class="fas fa-school"></i> Acessar uma Escola</a></li>
-                            {% endif %}
-                        {% endif %}
-
-                        <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#changePasswordModal">Alterar Senha</a></li>
-                        <li><a class="dropdown-item" href="{{ url_for('auth.configurar_2fa') }}"><i class="fas fa-shield-alt"></i> Configurar 2FA</a></li>
-                    </ul>
-                </div>
-                <a href="{{ url_for('auth.logout') }}" class="btn btn-outline-danger btn-sm" title="Sair do Sistema">Sair</a>
-            </div>
-        </div>
-    </header>
+            <div class="top-navbar-right-items d-flex align-items-center">
+    
+    {# NOVO: Botão de Suporte (Engrenagem) - Visível apenas para Super Admins #}
+    {% if is_super_admin %}
+    <a href="https://sisgen-bm.onrender.com/suporte/admin" 
+       class="support-gear-btn me-3" 
+       title="Painel de Suporte">
+        <i class="fas fa-cog {% if has_new_requests %}gear-alert{% endif %}"></i>
+    </a>
     {% endif %}
+
+    {# Dropdown do Sino de Notificações #}
+    <div class="dropdown">
+        <a href="#" class="notification-bell" data-bs-toggle="dropdown" aria-expanded="false" title="Notificações">
+            🔔
+            <span class="notification-badge" id="notification-badge">0</span>
+        </a>
+        <ul class="dropdown-menu dropdown-menu-end notification-dropdown" id="notification-list">
+            <li class="p-2 text-center text-muted">Carregando...</li>
+        </ul>
+    </div>
+
+    {# Dropdown do Usuário #}
+    <div class="dropdown">
+        <a href="#" class="d-flex align-items-center text-decoration-none dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+            <div class="user-info">
+                <strong>{{ current_user.nome_de_guerra or current_user.nome_completo }}</strong>
+                <small>{{ current_user.matricula }}</small>
+            </div>
+            <div class="user-avatar">
+                {# VERIFICAÇÃO INTELIGENTE DO AVATAR #}
+                {% set tem_perfil_aluno = current_user.aluno_profile is defined and current_user.aluno_profile %}
+                {% set tem_perfil_instrutor = current_user.instrutor_profile is defined and current_user.instrutor_profile %}
+
+                {% if tem_perfil_aluno and current_user.aluno_profile.foto_perfil and current_user.aluno_profile.foto_perfil != 'default.png' %}
+                    <img src="{{ url_for('static', filename='uploads/profile_pics/' + current_user.aluno_profile.foto_perfil) }}" alt="Foto de Perfil" onerror="this.src=''; this.parentElement.innerHTML='<span>{{ (current_user.nome_de_guerra or current_user.username)[0] }}</span>';">
+                {% elif tem_perfil_instrutor and current_user.instrutor_profile.foto_perfil and current_user.instrutor_profile.foto_perfil != 'default.png' %}
+                    <img src="{{ url_for('static', filename='uploads/profile_pics/' + current_user.instrutor_profile.foto_perfil) }}" alt="Foto de Perfil" onerror="this.src=''; this.parentElement.innerHTML='<span>{{ (current_user.nome_de_guerra or current_user.username)[0] }}</span>';">
+                {% else %}
+                    <span>{{ (current_user.nome_de_guerra or current_user.username)[0] }}</span>
+                {% endif %}
+            </div>
+        </a>
+        
+        <ul class="dropdown-menu dropdown-menu-end">
+            <li><a class="dropdown-item" href="{{ url_for('user.meu_perfil') }}">Meu Perfil</a></li>
+
+            {# Botões administrativos no dropdown só aparecem se o MODO DEC estiver ativo #}
+            {% if dec_mode_active %}
+                {% if session.get('view_as_school_id') %}
+                    <li><a class="dropdown-item text-danger fw-bold" href="{{ url_for('super_admin.clear_school_selection') }}"><i class="fas fa-sign-out-alt"></i> Sair da Escola (Ir p/ DEC)</a></li>
+                {% else %}
+                    <li><a class="dropdown-item" href="{{ url_for('super_admin.select_school') }}"><i class="fas fa-school"></i> Acessar uma Escola</a></li>
+                {% endif %}
+            {% endif %}
+
+            <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#changePasswordModal">Alterar Senha</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('auth.configurar_2fa') }}"><i class="fas fa-shield-alt"></i> Configurar 2FA</a></li>
+        </ul>
+    </div>
+
+    {# Botão Sair #}
+    <a href="{{ url_for('auth.logout') }}" class="btn btn-outline-danger btn-sm ms-2" title="Sair do Sistema">Sair</a>
+</div>
+
+{# Estilização da Engrenagem Isolada no Final #}
+<style>
+    .support-gear-btn {
+        color: #6c757d;
+        font-size: 1.4rem;
+        text-decoration: none;
+        transition: color 0.3s ease, transform 0.3s ease;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .support-gear-btn:hover {
+        color: #495057;
+        transform: rotate(20deg);
+    }
+    /* Quando houver novas solicitações, fica vermelho e pulsa */
+    .support-gear-btn .gear-alert {
+        color: #dc3545 !important;
+        animation: pulse-gear 2s infinite;
+    }
+    @keyframes pulse-gear {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.15); }
+        100% { transform: scale(1); }
+    }
+</style>
 
     <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
