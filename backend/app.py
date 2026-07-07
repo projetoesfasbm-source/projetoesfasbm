@@ -172,8 +172,6 @@ def create_app(config_class=Config):
         register_handlers_and_processors(app)
 
     register_cli_commands(app)
-    register_context_processors(app)
-    
     return app
 
 def register_blueprints(app):
@@ -440,26 +438,3 @@ def register_cli_commands(app):
 if __name__ == '__main__':
     app = create_app()
     app.run(debug=True)
-
-def register_context_processors(app):
-    @app.context_processor
-    def inject_suporte_status():
-        from flask_login import current_user
-        from backend.models.chamado_suporte import ChamadoSuporte
-        
-        is_super_admin = False
-        has_new_requests = False
-        
-        # 1. Verifica se o usuário está logado e se é super_admin
-        if current_user.is_authenticated and getattr(current_user, 'role', None) == 'super_admin':
-            is_super_admin = True
-            
-            # 2. Busca no banco se existe algum chamado com status 'Aberto'
-            chamado_pendente = db.session.execute(
-                db.select(ChamadoSuporte).filter_by(status='Aberto') 
-            ).scalars().first()
-            
-            has_new_requests = chamado_pendente is not None
-            
-        # 3. Disponibiliza as variáveis globalmente para o HTML
-        return dict(is_super_admin=is_super_admin, has_new_requests=has_new_requests)
