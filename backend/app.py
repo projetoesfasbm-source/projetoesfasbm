@@ -58,6 +58,7 @@ from backend.models.frequencia import FrequenciaAluno
 # ### NOVO MODELO ###
 from backend.models.elogio import Elogio
 from backend.models.edicao import Edicao
+from backend.models.chamado_suporte import ChamadoSuporte
 # --- NOVO MÓDULO: BANCO DE QUESTÕES E PROVAS ---
 from backend.models.banco_questoes import QuestaoBanco, DelegacaoProva, RascunhoProva, ConfiguracaoEnvio
 # --- NOVO MÓDULO: RECURSOS ---
@@ -322,12 +323,24 @@ def register_handlers_and_processors(app):
 
         dec_mode_active = session.get('is_dec_mode', False) and current_user.is_authenticated and current_user.role == 'super_admin'
 
+        # --- VERIFICAÇÃO DE PENDÊNCIAS DE SUPORTE ---
+        tem_pendencia_suporte = False
+        if current_user.is_authenticated and (current_user.role == 'super_admin' or getattr(current_user, 'is_dec_manager', False)):
+            try:
+                from backend.models.chamado_suporte import ChamadoSuporte
+                # Verifica status que indicam pendência (Aberto, Pendente, Novo)
+                tem_pendencia_suporte = ChamadoSuporte.query.filter(ChamadoSuporte.status.in_(['Aberto', 'Pendente', 'Novo'])).count() > 0
+            except Exception as e:
+                app.logger.error(f"Erro ao consultar chamados de suporte: {e}")
+        # ---------------------------------------------
+
         return {
             'site_config': g.get('site_config'),
             'active_school': g.get('active_school'),
             'active_edicao': g.get('active_edicao'),
             'edicoes_disponiveis': edicoes_disponiveis,
-            'dec_mode_active': dec_mode_active
+            'dec_mode_active': dec_mode_active,
+            'tem_pendencia_suporte': tem_pendencia_suporte
         }
 
     @app.after_request
