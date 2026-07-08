@@ -217,10 +217,15 @@
             height: 38px;
             border-radius: 50%;
             text-decoration: none;
-            transition: background-color 0.2s ease;
+            transition: all 0.2s ease;
+            color: #4a5568 !important; /* Cinza escuro forçado para garantir visibilidade */
         }
         .support-gear-btn:hover {
-            background-color: rgba(0,0,0,0.05);
+            background-color: rgba(0,0,0,0.08);
+            color: #1a202c !important; /* Fica mais escuro ao passar o mouse */
+        }
+        .support-gear-btn.is-pending {
+            color: #dc3545 !important; /* Vermelho forte forçado quando houver pendência */
         }
 
         /* --- CORREÇÃO DE RESPONSIVIDADE MOBILE (CABEÇALHO) --- */
@@ -421,8 +426,8 @@
                 {# --- NOVO BOTÃO DE SUPORTE (DEC / ADMIN) --- #}
                 {% if current_user.role == 'super_admin' or current_user.is_dec_manager %}
                 <div class="me-2 d-flex align-items-center">
-                    <a href="https://sisgen-bm.onrender.com/suporte/admin" class="support-gear-btn" title="Painel de Suporte">
-                        <i class="fas fa-cog {% if tem_pendencia_suporte %}text-danger fa-spin{% else %}text-dark{% endif %}" style="font-size: 1.3rem;"></i>
+                    <a href="https://sisgen-bm.onrender.com/suporte/admin" class="support-gear-btn {% if tem_pendencia_suporte %}is-pending{% endif %}" title="Painel de Suporte">
+                        <i class="fas fa-cog {% if tem_pendencia_suporte %}fa-spin{% endif %}" style="font-size: 1.3rem;"></i>
                     </a>
                 </div>
                 {% endif %}
