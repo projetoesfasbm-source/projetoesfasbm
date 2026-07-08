@@ -208,6 +208,21 @@
             font-size: 1.1rem;
         }
 
+        /* --- ESTILOS DO NOVO BOTÃO DE SUPORTE --- */
+        .support-gear-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            text-decoration: none;
+            transition: background-color 0.2s ease;
+        }
+        .support-gear-btn:hover {
+            background-color: rgba(0,0,0,0.05);
+        }
+
         /* --- CORREÇÃO DE RESPONSIVIDADE MOBILE (CABEÇALHO) --- */
         @media (max-width: 768px) {
             .top-navbar-content {
@@ -403,6 +418,15 @@
             </div>
 
             <div class="top-navbar-right-items">
+                {# --- NOVO BOTÃO DE SUPORTE (DEC / ADMIN) --- #}
+                {% if current_user.role == 'super_admin' or current_user.is_dec_manager %}
+                <div class="me-2 d-flex align-items-center">
+                    <a href="https://sisgen-bm.onrender.com/suporte/admin" class="support-gear-btn" title="Painel de Suporte">
+                        <i class="fas fa-cog {% if tem_pendencia_suporte %}text-danger fa-spin{% else %}text-secondary{% endif %}" style="font-size: 1.3rem;"></i>
+                    </a>
+                </div>
+                {% endif %}
+
                 <div class="dropdown">
                     <a href="#" class="notification-bell" data-bs-toggle="dropdown" aria-expanded="false" title="Notificações">
                         🔔
