@@ -427,7 +427,7 @@
                 {% if current_user.role == 'super_admin' or current_user.is_dec_manager %}
                 <div class="me-2 d-flex align-items-center">
                     <a href="https://sisgen-bm.onrender.com/suporte/admin" class="support-gear-btn {% if tem_pendencia_suporte %}is-pending{% endif %}" title="Painel de Suporte">
-                        <i class="fas fa-cog {% if tem_pendencia_suporte %}fa-spin{% endif %}" style="font-size: 1.3rem;"></i>
+                        <i class="fa-solid fa-gear {% if tem_pendencia_suporte %}fa-spin{% endif %}" style="font-size: 1.3rem;"></i>
                     </a>
                 </div>
                 {% endif %}
