@@ -132,7 +132,6 @@ def listar_recursos_pendentes():
     from backend.models.instrutor import Instrutor
 
     query = Recurso.query.join(ProvaRecurso).join(Disciplina).join(Turma).options(
-        db.joinedload(Recurso.prova),
         db.joinedload(Recurso.aluno),
         db.joinedload(Recurso.instrutor),
         db.selectinload(Recurso.prova).selectinload(ProvaRecurso.disciplina).selectinload(Disciplina.associacoes_turmas).selectinload(DisciplinaTurma.instrutor_1).selectinload(Instrutor.user),
