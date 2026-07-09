@@ -145,6 +145,34 @@ text-transform: uppercase; color: rgba(255,255,255,0.4); margin-top: 1rem; }
 .top-navbar-left-items { display: flex; align-items: center; gap: 1rem; flex-grow: 1;
 min-width: 0; }
 .top-navbar-right-items { display: flex; align-items: center; gap: 1rem; flex-shrink: 0; }
+
+/* --- ESTILOS DO BOTÃO DE SUPORTE E ANIMAÇÃO --- */
+.support-gear-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    color: #4a5568 !important; 
+}
+.support-gear-btn:hover {
+    background-color: rgba(0,0,0,0.08);
+    color: #1a202c !important; 
+}
+.support-gear-btn.is-pending {
+    color: #dc3545 !important; 
+}
+@keyframes spin-native {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+.support-gear-btn.is-pending svg {
+    animation: spin-native 2s linear infinite;
+}
+
 .top-navbar-title {
     font-family: var(--font-family-title);
     font-size: 1.6rem;
