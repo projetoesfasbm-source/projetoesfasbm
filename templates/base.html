@@ -425,13 +425,16 @@
             <div class="top-navbar-right-items">
                 {# --- NOVO BOTÃO DE SUPORTE (DEC / ADMIN) --- #}
                 {% if current_user.role == 'super_admin' or current_user.is_dec_manager %}
-                <div class="me-2 d-flex align-items-center">
-                    <a href="https://sisgen-bm.onrender.com/suporte/admin" class="support-gear-btn {% if tem_pendencia_suporte %}is-pending{% endif %}" title="Painel de Suporte">
-                        <i class="fa-solid fa-gear {% if tem_pendencia_suporte %}fa-spin{% endif %}" style="font-size: 1.3rem;"></i>
-                    </a>
-                </div>
+                    <div class="me-2 d-flex align-items-center">
+                        <a href="https://sisgen-bm.onrender.com/suporte/admin" class="support-gear-btn {% if tem_pendencia_suporte %}is-pending{% endif %}" title="Painel de Suporte">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="currentColor" class="{% if tem_pendencia_suporte %}fa-spin{% endif %}" viewBox="0 0 16 16">
+                                <path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492zM5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0z"/>
+                                <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.328-.16c-1.738-.849-3.38.793-2.531 2.531l.16.328a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.328c-.849 1.738.793 3.38 2.531 2.531l.328-.16a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.328.16c1.738.849 3.38-.793 2.531-2.531l-.16-.328a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.328c.849-1.738-.793-3.38-2.531-2.531l-.328.16a.873.873 0 0 1-1.255-.52l-.094-.319zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.328-.16c.79-.385 1.61.436 1.225 1.226l-.16.328a1.873 1.873 0 0 0 1.115 2.693l.319.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.328c.385.79-.436 1.61-1.226 1.225l-.328-.16a1.873 1.873 0 0 0-2.693 1.115l-.094.319c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.693-1.115l-.328.16c-.79.385-1.61-.436-1.226-1.225l.16-.328a1.873 1.873 0 0 0-1.115-2.693l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094a1.873 1.873 0 0 0 1.115-2.693l-.16-.328c-.385-.79.436-1.61 1.225-1.226l.328.16a1.873 1.873 0 0 0 2.693-1.115l.094-.319z"/>
+                            </svg>
+                        </a>
+                    </div>
                 {% endif %}
-
+            </div>
                 <div class="dropdown">
                     <a href="#" class="notification-bell" data-bs-toggle="dropdown" aria-expanded="false" title="Notificações">
                         🔔
