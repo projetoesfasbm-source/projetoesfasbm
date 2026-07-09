@@ -128,7 +128,7 @@ def listar_recursos_pendentes():
     """Administrador vê tudo e gerencia encaminhamentos. Instrutor vê o que lhe cabe."""
     active_school_id = getattr(current_user, 'temp_active_school_id', None)
     
-    from backend.models.disciplina import DisciplinaTurma
+    from backend.models.disciplina_turma import DisciplinaTurma
     from backend.models.instrutor import Instrutor
 
     query = Recurso.query.join(ProvaRecurso).join(Disciplina).join(Turma).options(
