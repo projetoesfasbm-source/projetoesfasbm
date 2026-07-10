@@ -273,6 +273,7 @@ def dashboard_instrutor():
         ).all()
         if not instrutor_ids:
             return "Perfil de instrutor não encontrado.", 404
+        instrutor = db.session.scalar(select(Instrutor).where(Instrutor.id.in_(instrutor_ids)))
 
         todas_aulas = db.session.scalars(
             select(Horario)
