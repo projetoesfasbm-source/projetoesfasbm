@@ -597,7 +597,7 @@ class HorarioService:
                                 if ciclo_conflito.school_id != school_id:
                                     escola_obj = db.session.get(School, ciclo_conflito.school_id)
                                     if escola_obj:
-                                        conflito_school_name = escola_obj.name
+                                        conflito_school_name = getattr(escola_obj, 'nome', getattr(escola_obj, 'name', "Outra Escola"))
                     except Exception as e_school:
                         current_app.logger.warning(f"Erro ao buscar escola do conflito: {e_school}")
 
