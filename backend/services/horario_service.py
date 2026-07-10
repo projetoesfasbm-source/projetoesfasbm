@@ -17,6 +17,7 @@ from ..models.semana import Semana
 from ..models.turma import Turma
 from ..models.user import User
 from ..models.ciclo import Ciclo
+from ..models.school import School
 from .notification_service import NotificationService
 from .instrutor_service import InstrutorService
 from .site_config_service import SiteConfigService
@@ -585,11 +586,20 @@ class HorarioService:
 
                 conflict_aula = db.session.scalar(conflict_query)
                 if conflict_aula:
-                    if conflict_aula.semana and conflict_aula.semana.ciclo and conflict_aula.semana.ciclo.school_id != school_id:
-                        escola_nome = conflict_aula.semana.ciclo.school.name if conflict_aula.semana.ciclo.school else "Outra Escola"
+                    conflito_school_info = db.session.execute(
+                        select(School.id, School.name)
+                        .join(Ciclo, Ciclo.school_id == School.id)
+                        .join(Semana, Semana.ciclo_id == Ciclo.id)
+                        .where(Semana.id == conflict_aula.semana_id)
+                    ).first()
+
+                    conflito_school_id = conflito_school_info[0] if conflito_school_info else school_id
+                    conflito_school_name = conflito_school_info[1] if conflito_school_info else "Outra Escola"
+
+                    if conflito_school_id != school_id:
                         return False, (
                             f"⚠️ CONFLITO DE AGENDA: O instrutor já possui aula marcada na escola "
-                            f"'{escola_nome}' neste dia e horário (Período {conflict_aula.periodo})."
+                            f"'{conflito_school_name}' neste dia e horário (Período {conflict_aula.periodo})."
                         ), 409
                     else:
                         return False, (
