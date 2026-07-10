@@ -586,15 +586,20 @@ class HorarioService:
 
                 conflict_aula = db.session.scalar(conflict_query)
                 if conflict_aula:
-                    conflito_school_info = db.session.execute(
-                        select(School.id, School.name)
-                        .join(Ciclo, Ciclo.school_id == School.id)
-                        .join(Semana, Semana.ciclo_id == Ciclo.id)
-                        .where(Semana.id == conflict_aula.semana_id)
-                    ).first()
-
-                    conflito_school_id = conflito_school_info[0] if conflito_school_info else school_id
-                    conflito_school_name = conflito_school_info[1] if conflito_school_info else "Outra Escola"
+                    conflito_school_id = school_id
+                    conflito_school_name = "Outra Escola"
+                    try:
+                        semana_conflito = db.session.get(Semana, conflict_aula.semana_id)
+                        if semana_conflito and semana_conflito.ciclo_id:
+                            ciclo_conflito = db.session.get(Ciclo, semana_conflito.ciclo_id)
+                            if ciclo_conflito:
+                                conflito_school_id = ciclo_conflito.school_id
+                                if ciclo_conflito.school_id != school_id:
+                                    escola_obj = db.session.get(School, ciclo_conflito.school_id)
+                                    if escola_obj:
+                                        conflito_school_name = escola_obj.name
+                    except Exception as e_school:
+                        current_app.logger.warning(f"Erro ao buscar escola do conflito: {e_school}")
 
                     if conflito_school_id != school_id:
                         return False, (
