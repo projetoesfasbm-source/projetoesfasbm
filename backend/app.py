@@ -366,14 +366,14 @@ def register_handlers_and_processors(app):
         # Bloqueio de APIs sensíveis do navegador (Permissão)
         response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
 
-        # Content-Security-Policy Rigoroso (7 Bandeiras Laranjas do ZAP corrigidas de uma vez)
+                # Content-Security-Policy Rigoroso (7 Bandeiras Laranjas do ZAP corrigidas de uma vez)
         csp = [
             "default-src 'self'",
-            "script-src 'self' 'unsafe-inline' https://code.jquery.com https://cdn.jsdelivr.net",
-            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com",
-            "font-src 'self' https://fonts.gstatic.com",
+            "script-src 'self' 'unsafe-inline' https://code.jquery.com https://cdn.jsdelivr.net https://www.googletagmanager.com",
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com https://cdnjs.cloudflare.com",
+            "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com",
             "img-src 'self' data: *",
-            "connect-src 'self' https://cdn.jsdelivr.net",
+            "connect-src 'self' https://cdn.jsdelivr.net https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com https://stats.g.doubleclick.net",
             "object-src 'none'",
             "frame-ancestors 'none'",
             "manifest-src 'self'",
