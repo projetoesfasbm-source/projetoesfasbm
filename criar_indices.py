@@ -59,32 +59,6 @@ try:
                     print(f"    Erro ao indexar {table_name}.{column_name}: {e2}")
                 
     cursor.close()
-
-    print("\n[Fase 2] Criando índices críticos de alta performance em colunas de busca frequente...")
-    performance_indexes = [
-        ("horarios", "pelotao", "idx_horarios_pelotao"),
-        ("horarios", "status", "idx_horarios_status"),
-        ("horarios", "semana_id", "idx_horarios_semana_id"),
-        ("diarios_classe", "data_aula", "idx_diarios_data_aula"),
-        ("diarios_classe", "status", "idx_diarios_status"),
-        ("diarios_classe", "turma_id", "idx_diarios_turma_id"),
-        ("user_schools", "school_id", "idx_user_schools_school_id"),
-        ("user_schools", "role", "idx_user_schools_role"),
-    ]
-    cursor = conn.cursor()
-    for table_name, column_name, idx_name in performance_indexes:
-        sql = f'CREATE INDEX CONCURRENTLY IF NOT EXISTS "{idx_name}" ON {table_name} ("{column_name}");'
-        print(f" -> Criando índice {idx_name} em {table_name}.{column_name}...")
-        try:
-            cursor.execute(sql)
-        except Exception as e:
-            sql_fallback = f'CREATE INDEX IF NOT EXISTS "{idx_name}" ON {table_name} ("{column_name}");'
-            try:
-                cursor.execute(sql_fallback)
-            except Exception as e2:
-                print(f"    Aviso ao criar {idx_name}: {e2}")
-    cursor.close()
-
     conn.close()
     print("\nProcesso finalizado com sucesso! O banco de dados esta operando em alta velocidade.")
 except Exception as e:
