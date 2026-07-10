@@ -553,49 +553,33 @@ class HorarioService:
                     elif vinculo_dt.instrutor_id_2 == instrutor_id_1 and vinculo_dt.instrutor_id_1:
                         instrutor_id_2 = vinculo_dt.instrutor_id_1
 
-            aula_original = db.session.get(Horario, horario_id) if horario_id else None
-            group_id_original = aula_original.group_id if aula_original else None
-
             instructors_to_check = [i for i in [instrutor_id_1, instrutor_id_2] if i is not None]
 
             if instructors_to_check:
-                user_ids_subq = select(Instrutor.user_id).where(Instrutor.id.in_(instructors_to_check))
-                all_instrutor_ids_subq = select(Instrutor.id).where(Instrutor.user_id.in_(user_ids_subq))
-
-                semanas_globais_subq = select(Semana.id).where(
-                    Semana.data_inicio == semana.data_inicio,
-                    Semana.data_fim == semana.data_fim
-                )
-
                 conflict_query = select(Horario).where(
-                    Horario.semana_id.in_(semanas_globais_subq),
+                    Horario.semana_id.in_(semanas_sobrepostas),
                     Horario.dia_semana == dia,
+                    Horario.pelotao != pelotao,
                     Horario.periodo <= periodo_fim,
                     (Horario.periodo + Horario.duracao - 1) >= periodo_inicio,
                     or_(
-                        Horario.instrutor_id.in_(all_instrutor_ids_subq),
-                        Horario.instrutor_id_2.in_(all_instrutor_ids_subq)
+                        Horario.instrutor_id.in_(instructors_to_check),
+                        Horario.instrutor_id_2.in_(instructors_to_check)
                     )
                 )
 
-                if group_id_original:
-                    conflict_query = conflict_query.where(Horario.group_id != group_id_original)
-                elif horario_id:
-                    conflict_query = conflict_query.where(Horario.id != int(horario_id))
-
                 conflict_aula = db.session.scalar(conflict_query)
                 if conflict_aula:
-                    if conflict_aula.semana and conflict_aula.semana.ciclo and conflict_aula.semana.ciclo.school_id != school_id:
-                        escola_nome = conflict_aula.semana.ciclo.school.name if conflict_aula.semana.ciclo.school else "Outra Escola"
-                        return False, (
-                            f"⚠️ CONFLITO DE AGENDA: O instrutor já possui aula marcada na escola "
-                            f"'{escola_nome}' neste dia e horário (Período {conflict_aula.periodo})."
-                        ), 409
-                    else:
-                        return False, (
-                            f"⚠️ CONFLITO DE AGENDA: O instrutor já está alocado na turma "
-                            f"'{conflict_aula.pelotao}' neste horário (Período {conflict_aula.periodo})."
-                        ), 409
+                    return False, (
+                        f"⚠️ CONFLITO DE AGENDA: O instrutor já está alocado na turma "
+                        f"'{conflict_aula.pelotao}' neste horário "
+                        f"(Período {conflict_aula.periodo})."
+                    ), 409
+
+            periodos_solicitados = list(range(periodo_inicio, periodo_fim + 1))
+            
+            aula_original = db.session.get(Horario, horario_id) if horario_id else None
+            group_id_original = aula_original.group_id if aula_original else None
 
             conflito_query_interno = select(Horario).where(
                 Horario.pelotao == pelotao,
