@@ -26,12 +26,18 @@ from .user_service import UserService
 class HorarioService:
 
     @staticmethod
-    def can_edit_horario(horario, user):
+    def can_edit_horario(horario, user, preloaded_instrutor_ids=None):
         if not horario or not user:
             return False
 
-        if user.is_sens or user.is_admin_escola:
+        if user.is_sens or user.is_admin_escola or user.is_programador:
             return True
+
+        if preloaded_instrutor_ids is not None:
+            return (
+                horario.instrutor_id in preloaded_instrutor_ids or
+                horario.instrutor_id_2 in preloaded_instrutor_ids
+            )
 
         # CORREÇÃO: Pegar apenas o ID de instrutor vinculado à escola atual
         school_id = UserService.get_current_school_id()
@@ -160,12 +166,21 @@ class HorarioService:
         )
         all_aulas = db.session.scalars(aulas_query).all()
 
+        user_instrutor_ids = set()
+        if user and not (user.is_sens or user.is_admin_escola or user.is_programador):
+            user_instrutor_ids = set(db.session.scalars(
+                select(Instrutor.id).where(
+                    Instrutor.user_id == user.id,
+                    Instrutor.school_id == school_id
+                )
+            ).all())
+
         for aula in all_aulas:
             try:
                 dia_idx = dias.index(aula.dia_semana)
                 periodo_idx = aula.periodo - 1
 
-                can_see_pending_details = HorarioService.can_edit_horario(aula, user)
+                can_see_pending_details = HorarioService.can_edit_horario(aula, user, preloaded_instrutor_ids=user_instrutor_ids)
                 show_details = aula.status != 'pendente' or can_see_pending_details
 
                 instrutores_display_list = []
@@ -193,7 +208,7 @@ class HorarioService:
                     'duracao': aula.duracao,
                     'status': aula.status,
                     'is_disposicao': False,
-                    'can_edit': HorarioService.can_edit_horario(aula, user),
+                    'can_edit': can_see_pending_details,
                     'is_continuation': False,
                     'group_id': aula.group_id,
                     'blocked': aula_is_blocked,

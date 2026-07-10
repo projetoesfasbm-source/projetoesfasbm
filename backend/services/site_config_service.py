@@ -84,32 +84,47 @@ class SiteConfigService:
     _CONFIG_KEYS = {d[0]: {'type': d[2], 'category': d[4]} for d in _DEFAULT_CONFIGS}
     _DEFAULTS_MAP = {d[0]: d[1] for d in _DEFAULT_CONFIGS}
 
+    _configs_map_cache = None
+    _configs_map_time = 0
+
+    @classmethod
+    def _get_configs_map(cls):
+        import time
+        now = time.time()
+        if cls._configs_map_cache is not None and (now - cls._configs_map_time) < 300:
+            return cls._configs_map_cache
+        db_configs = db.session.execute(select(SiteConfig)).scalars().all()
+        cls._configs_map_cache = {c.config_key: c.config_value for c in db_configs}
+        cls._configs_map_time = now
+        return cls._configs_map_cache
+
+    @classmethod
+    def invalidate_cache(cls):
+        cls._configs_map_cache = None
+        cls._cache = None
+        cls._configs_map_time = 0
+        cls._cache_time = 0
+
     @staticmethod
     def get_config(key: str, default_value: str = None, school_id=None):
         """
-        Busca uma configuração.
+        Busca uma configuração com cache em memória (TTL 5 min).
         Se school_id for fornecido, tenta buscar 'school_{id}_{key}'.
         Se não encontrar (ou não houver school_id), busca a 'key' global.
         """
+        configs_map = SiteConfigService._get_configs_map()
+
         if school_id:
             school_key = f"school_{school_id}_{key}"
-            config = db.session.execute(
-                select(SiteConfig).where(SiteConfig.config_key == school_key)
-            ).scalar_one_or_none()
-            
-            if config is not None:
-                return config.config_value
+            if school_key in configs_map:
+                return configs_map[school_key]
 
-        config = db.session.execute(
-            select(SiteConfig).where(SiteConfig.config_key == key)
-        ).scalar_one_or_none()
-        
-        if config is not None:
-            return config.config_value
-            
+        if key in configs_map:
+            return configs_map[key]
+
         if key in SiteConfigService._DEFAULTS_MAP:
             return SiteConfigService._DEFAULTS_MAP[key]
-            
+
         return default_value
 
     _cache = None
@@ -164,7 +179,7 @@ class SiteConfigService:
                 )
                 db.session.add(config)
         db.session.commit()
-        SiteConfigService._cache = None
+        SiteConfigService.invalidate_cache()
     
     @staticmethod
     def _parse_number_ptbr(value: str):
@@ -217,7 +232,7 @@ class SiteConfigService:
             db.session.add(config)
         
         db.session.commit()
-        SiteConfigService._cache = None
+        SiteConfigService.invalidate_cache()
         return config
 
     @staticmethod
@@ -228,13 +243,13 @@ class SiteConfigService:
             
         db.session.query(SiteConfig).filter(SiteConfig.config_key == target_key).delete()
         db.session.commit()
-        SiteConfigService._cache = None
+        SiteConfigService.invalidate_cache()
 
     @staticmethod
     def delete_all_configs():
         db.session.query(SiteConfig).delete()
         db.session.commit()
-        SiteConfigService._cache = None
+        SiteConfigService.invalidate_cache()
 
     @staticmethod
     def get_valor_hora_aula(default: float = 55.19) -> float:
