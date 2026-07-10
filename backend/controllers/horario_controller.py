@@ -268,20 +268,21 @@ def dashboard_instrutor():
         if not current_user.is_instrutor_in_school(school_id) and not current_user.is_admin_escola:
             return "Acesso negado: Você não é instrutor nesta escola.", 403
 
-        instrutor = current_user.instrutor_profile
-        if not instrutor:
+        instrutor_ids = db.session.scalars(
+            select(Instrutor.id).where(Instrutor.user_id == current_user.id)
+        ).all()
+        if not instrutor_ids:
             return "Perfil de instrutor não encontrado.", 404
 
         todas_aulas = db.session.scalars(
             select(Horario)
-            .join(Disciplina)
-            .join(Semana)
-            .join(Turma, Turma.nome == Horario.pelotao)
+            .join(Disciplina, Horario.disciplina_id == Disciplina.id)
+            .join(Semana, Horario.semana_id == Semana.id)
+            .join(Ciclo, Semana.ciclo_id == Ciclo.id)
             .options(joinedload(Horario.semana), joinedload(Horario.disciplina))
             .where(
-                Turma.school_id == school_id,
-                Turma.edicao_id == session.get('active_edicao_id'),
-                or_(Horario.instrutor_id == instrutor.id, Horario.instrutor_id_2 == instrutor.id)
+                Ciclo.school_id == school_id,
+                or_(Horario.instrutor_id.in_(instrutor_ids), Horario.instrutor_id_2.in_(instrutor_ids))
             )
             .order_by(desc(Semana.data_inicio), Horario.dia_semana, Horario.periodo)
         ).unique().all()
@@ -326,7 +327,7 @@ def dashboard_instrutor():
                 'turma': aula.pelotao,
                 'sala': 'Sala de Aula',
                 'qtd': qtd,
-                'is_auxiliar': (aula.instrutor_id_2 == instrutor.id)
+                'is_auxiliar': (aula.instrutor_id_2 in instrutor_ids)
             }
 
             if nome_materia not in stats_disciplinas:
