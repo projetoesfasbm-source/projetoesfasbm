@@ -1,9 +1,11 @@
 # backend/services/site_config_service.py
 
 from sqlalchemy import select
+from cachetools import TTLCache
 from backend.models.database import db
 from backend.models.site_config import SiteConfig
 import re
+
 
 class SiteConfigService:
     """
@@ -84,13 +86,21 @@ class SiteConfigService:
     _CONFIG_KEYS = {d[0]: {'type': d[2], 'category': d[4]} for d in _DEFAULT_CONFIGS}
     _DEFAULTS_MAP = {d[0]: d[1] for d in _DEFAULT_CONFIGS}
 
+    _config_cache = TTLCache(maxsize=200, ttl=300)
+
     @staticmethod
     def get_config(key: str, default_value: str = None, school_id=None):
         """
         Busca uma configuração.
         Se school_id for fornecido, tenta buscar 'school_{id}_{key}'.
         Se não encontrar (ou não houver school_id), busca a 'key' global.
+        Utiliza micro-cache em memória com teto de RAM (< 20 KB) isolado por escola.
         """
+        cache_key = (school_id, key)
+        if cache_key in SiteConfigService._config_cache:
+            return SiteConfigService._config_cache[cache_key]
+
+        result = None
         if school_id:
             school_key = f"school_{school_id}_{key}"
             config = db.session.execute(
@@ -98,19 +108,24 @@ class SiteConfigService:
             ).scalar_one_or_none()
             
             if config is not None:
-                return config.config_value
+                result = config.config_value
 
-        config = db.session.execute(
-            select(SiteConfig).where(SiteConfig.config_key == key)
-        ).scalar_one_or_none()
-        
-        if config is not None:
-            return config.config_value
+        if result is None:
+            config = db.session.execute(
+                select(SiteConfig).where(SiteConfig.config_key == key)
+            ).scalar_one_or_none()
             
-        if key in SiteConfigService._DEFAULTS_MAP:
-            return SiteConfigService._DEFAULTS_MAP[key]
+            if config is not None:
+                result = config.config_value
+                
+        if result is None and key in SiteConfigService._DEFAULTS_MAP:
+            result = SiteConfigService._DEFAULTS_MAP[key]
             
-        return default_value
+        if result is None:
+            result = default_value
+
+        SiteConfigService._config_cache[cache_key] = result
+        return result
 
     _cache = None
     _cache_time = 0
@@ -165,6 +180,7 @@ class SiteConfigService:
                 db.session.add(config)
         db.session.commit()
         SiteConfigService._cache = None
+        SiteConfigService._config_cache.clear()
     
     @staticmethod
     def _parse_number_ptbr(value: str):
@@ -218,6 +234,7 @@ class SiteConfigService:
         
         db.session.commit()
         SiteConfigService._cache = None
+        SiteConfigService._config_cache.clear()
         return config
 
     @staticmethod
@@ -229,12 +246,14 @@ class SiteConfigService:
         db.session.query(SiteConfig).filter(SiteConfig.config_key == target_key).delete()
         db.session.commit()
         SiteConfigService._cache = None
+        SiteConfigService._config_cache.clear()
 
     @staticmethod
     def delete_all_configs():
         db.session.query(SiteConfig).delete()
         db.session.commit()
         SiteConfigService._cache = None
+        SiteConfigService._config_cache.clear()
 
     @staticmethod
     def get_valor_hora_aula(default: float = 55.19) -> float:
