@@ -1,3 +1,4 @@
+from datetime import date, timedelta
 from flask import current_app
 from sqlalchemy import select, or_
 from sqlalchemy.orm import joinedload
@@ -9,6 +10,8 @@ from ..models.instrutor import Instrutor
 from ..models.disciplina import Disciplina
 # Adicionado para podermos alterar os agendamentos futuros
 from ..models.horario import Horario
+from ..models.semana import Semana
+from ..models.diario_classe import DiarioClasse
 
 
 class VinculoService:
@@ -129,30 +132,52 @@ class VinculoService:
             vinculo.instrutor_id_1 = instrutor_1 if instrutor_1 > 0 else None
             vinculo.instrutor_id_2 = instrutor_2 if instrutor_2 > 0 else None
 
-            # 2. NOVA REGRA: Altera apenas os horários pendentes para entrarem pro novo instrutor
-            horarios_pendentes = db.session.scalars(
-                select(Horario).filter_by(
-                    disciplina_id=old_disciplina_id,
-                    pelotao=old_pelotao,
-                    status='pendente'  # Garante que aulas concluídas fiquem com o instrutor antigo!
+            # 2. REGRA AJUSTADA: Altera os horários pendentes e confirmados futuros para o novo instrutor.
+            # Garante que aulas passadas ou com diário de classe assinado permaneçam com o instrutor antigo!
+            dias_map = {'segunda': 0, 'terca': 1, 'quarta': 2, 'quinta': 3, 'sexta': 4, 'sabado': 5, 'domingo': 6}
+            horarios_alvo = db.session.scalars(
+                select(Horario)
+                .join(Semana, Horario.semana_id == Semana.id)
+                .where(
+                    Horario.disciplina_id == old_disciplina_id,
+                    Horario.pelotao == old_pelotao,
+                    Horario.status.in_(['pendente', 'confirmado'])
                 )
             ).all()
 
-            for horario in horarios_pendentes:
-                # Mantém a disciplina igual, a não ser que tenha sido corrigida no formulário
-                horario.disciplina_id = disciplina_id
-                horario.pelotao = pelotao_nome
+            hoje = date.today()
+            for horario in horarios_alvo:
+                deve_atualizar = False
+                if horario.status == 'pendente':
+                    deve_atualizar = True
+                else:
+                    semana_obj = db.session.get(Semana, horario.semana_id)
+                    if semana_obj:
+                        offset = dias_map.get(horario.dia_semana, 0)
+                        data_aula = semana_obj.data_inicio + timedelta(days=offset)
+                        if data_aula >= hoje:
+                            diario_assinado = db.session.scalar(
+                                select(DiarioClasse).where(
+                                    DiarioClasse.data_aula == data_aula,
+                                    DiarioClasse.periodo == horario.periodo,
+                                    DiarioClasse.disciplina_id == old_disciplina_id,
+                                    DiarioClasse.status.in_(['assinado', 'concluido'])
+                                ).limit(1)
+                            )
+                            if not diario_assinado:
+                                deve_atualizar = True
 
-                # Atualiza os instrutores no horário futuro
-                if instrutor_1 > 0:
-                    horario.instrutor_id = instrutor_1
-                elif instrutor_2 > 0:
-                    horario.instrutor_id = instrutor_2
-
-                horario.instrutor_id_2 = instrutor_2 if instrutor_2 > 0 else None
+                if deve_atualizar:
+                    horario.disciplina_id = disciplina_id
+                    horario.pelotao = pelotao_nome
+                    if instrutor_1 > 0:
+                        horario.instrutor_id = instrutor_1
+                    elif instrutor_2 > 0:
+                        horario.instrutor_id = instrutor_2
+                    horario.instrutor_id_2 = instrutor_2 if instrutor_2 > 0 else None
 
             db.session.commit()
-            return True, 'Vínculo atualizado! Os próximos agendamentos pendentes já estão com o novo instrutor.'
+            return True, 'Vínculo atualizado! Os próximos agendamentos da disciplina já estão com o novo instrutor.'
         except Exception as e:
             db.session.rollback()
             current_app.logger.error(f"Erro ao editar vínculo: {e}")

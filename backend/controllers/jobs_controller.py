@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify, send_file, abort
 from flask_login import login_required, current_user
 import os
+import json
 
 from backend.models.database import db
 from backend.models.background_job import BackgroundJob
@@ -36,9 +37,18 @@ def download_job_result(job_id):
     if not os.path.exists(job.result_path):
         return abort(404, description="File not found on disk")
 
+    download_filename = os.path.basename(job.result_path)
+    if job.meta_data:
+        try:
+            meta = json.loads(job.meta_data)
+            if isinstance(meta, dict) and meta.get('filename'):
+                download_filename = meta['filename']
+        except Exception:
+            pass
+
     return send_file(
         job.result_path,
         as_attachment=True,
-        download_name=os.path.basename(job.result_path),
+        download_name=download_filename,
         mimetype='application/pdf'
     )

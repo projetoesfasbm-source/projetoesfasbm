@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 import uuid
 import hashlib
 import logging
+import json
 
 from ..models.database import db
 from ..models.processo_disciplina import ProcessoDisciplina, StatusProcesso
@@ -1125,11 +1126,13 @@ def exportar_fada_pdf(fada_id):
     )
     
     # Em vez de write_pdf() diretamente, mandamos pra fila
+    pdf_name = f"fada_{fada_id}.pdf"
     job_id = str(uuid.uuid4())
     job = BackgroundJob(
         id=job_id,
         task_type='generate_pdf',
         payload=html,
+        meta_data=json.dumps({"filename": pdf_name}),
         user_id=current_user.id
     )
     db.session.add(job)

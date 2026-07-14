@@ -79,40 +79,12 @@ class RelatorioService:
 
         # 1. PRÉ-CARREGAMENTO (BULK FETCH) para evitar N+1
         
-        # 1.a Carga Horária Anterior (todas as disciplinas da escola antes da data_inicio)
-        query_ant = (
-            select(Horario.disciplina_id, Horario.id, Horario.duracao, Semana.data_inicio, Horario.dia_semana, Horario.periodo)
-            .join(Semana, Horario.semana_id == Semana.id)
-            .join(Ciclo, Semana.ciclo_id == Ciclo.id)
-            .filter(
-                or_(Horario.status == 'confirmado', Horario.status == 'concluido'),
-                Ciclo.school_id == school_id
-            )
-        )
-        if active_edicao:
-            query_ant = query_ant.filter(Ciclo.edicao_id == active_edicao)
-            
-        rows_ant = db.session.execute(query_ant).all()
-        
-        # Mapear ch_anterior por disciplina_id: {disciplina_id: ch_total_anterior}
-        ch_anterior_map = {}
-        slots_ant = set()
-        for disc_id, h_id, duracao_ant_val, sem_data_inicio, dia_semana, periodo in rows_ant:
-            offset_dias = RelatorioService._get_dia_offset(dia_semana)
-            data_aula_ant = sem_data_inicio + timedelta(days=offset_dias)
-            if data_aula_ant < data_inicio:
-                chave = (data_aula_ant, periodo, h_id)
-                if chave not in slots_ant:
-                    slots_ant.add(chave)
-                    ch_anterior_map[disc_id] = ch_anterior_map.get(disc_id, 0) + (duracao_ant_val or 1)
-        
-        # 1.b Diários de Classe validados no período (assinado)
+        # 1.a Diários de Classe validados no período e anteriores (assinado)
         diarios_query = (
             select(DiarioClasse)
             .join(Turma, DiarioClasse.turma_id == Turma.id)
             .options(joinedload(DiarioClasse.instrutor_assinante))
             .filter(
-                DiarioClasse.data_aula >= data_inicio,
                 DiarioClasse.data_aula <= data_fim,
                 DiarioClasse.status == 'assinado',
                 Turma.school_id == school_id
@@ -126,6 +98,49 @@ class RelatorioService:
         for d in diarios_validos:
             diario_assinante_map[(d.data_aula, d.periodo, d.disciplina_id)] = d.instrutor_assinante
 
+        # 1.b Carga Horária Anterior (todas as disciplinas da escola antes da data_inicio)
+        Instrutor1_ant = aliased(Instrutor)
+        Instrutor2_ant = aliased(Instrutor)
+        query_ant = (
+            select(
+                Horario.disciplina_id, Horario.id, Horario.duracao, Semana.data_inicio, Horario.dia_semana, Horario.periodo,
+                Instrutor1_ant.user_id, Instrutor2_ant.user_id
+            )
+            .join(Semana, Horario.semana_id == Semana.id)
+            .join(Ciclo, Semana.ciclo_id == Ciclo.id)
+            .outerjoin(Instrutor1_ant, Horario.instrutor_id == Instrutor1_ant.id)
+            .outerjoin(Instrutor2_ant, Horario.instrutor_id_2 == Instrutor2_ant.id)
+            .filter(
+                or_(Horario.status == 'confirmado', Horario.status == 'concluido'),
+                Ciclo.school_id == school_id
+            )
+        )
+        if active_edicao:
+            query_ant = query_ant.filter(Ciclo.edicao_id == active_edicao)
+            
+        rows_ant = db.session.execute(query_ant).all()
+        
+        # Mapear ch_anterior por (user_id, disciplina_id): {(user_id, disciplina_id): ch_total_anterior}
+        ch_anterior_map = {}
+        slots_ant = set()
+        for disc_id, h_id, duracao_ant_val, sem_data_inicio, dia_semana, periodo, user1_ant_id, user2_ant_id in rows_ant:
+            offset_dias = RelatorioService._get_dia_offset(dia_semana)
+            data_aula_ant = sem_data_inicio + timedelta(days=offset_dias)
+            if data_aula_ant < data_inicio:
+                chave = (data_aula_ant, periodo, h_id)
+                if chave not in slots_ant:
+                    slots_ant.add(chave)
+                    dur = duracao_ant_val or 1
+                    user_assinante_ant = diario_assinante_map.get((data_aula_ant, periodo, disc_id))
+                    if user_assinante_ant:
+                        u_id = user_assinante_ant.id
+                        ch_anterior_map[(u_id, disc_id)] = ch_anterior_map.get((u_id, disc_id), 0) + dur
+                    else:
+                        if user1_ant_id:
+                            ch_anterior_map[(user1_ant_id, disc_id)] = ch_anterior_map.get((user1_ant_id, disc_id), 0) + dur
+                        if user2_ant_id and user2_ant_id != user1_ant_id:
+                            ch_anterior_map[(user2_ant_id, disc_id)] = ch_anterior_map.get((user2_ant_id, disc_id), 0) + dur
+        
         # 1.c Perfis de Instrutor da escola atual
         instrutores_escola = db.session.scalars(select(Instrutor).where(Instrutor.school_id == school_id)).all()
         instrutor_perfil_map = {inst.user_id: inst for inst in instrutores_escola}
@@ -196,8 +211,8 @@ class RelatorioService:
 
             nome_disc = disciplina_obj.materia
             if nome_disc not in dados_agrupados[chave_agrupamento]["disciplinas_map"]:
-                # Pega a carga horária anterior do mapa pré-carregado
-                ch_paga_historico = float(ch_anterior_map.get(disciplina_obj.id, 0))
+                # Pega a carga horária anterior do mapa pré-carregado estritamente por instrutor e disciplina
+                ch_paga_historico = float(ch_anterior_map.get((user_obj.id, disciplina_obj.id), 0))
                 
                 dados_agrupados[chave_agrupamento]["disciplinas_map"][nome_disc] = {
                     "nome_disciplina": nome_disc,

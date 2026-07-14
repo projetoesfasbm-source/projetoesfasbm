@@ -200,11 +200,13 @@ def processar_exportacao_final(form_data):
         rendered_html = render_template('relatorios/pdf_template.html', **contexto)
         
         # Cria o Job na fila
+        pdf_name = _build_filename('relatorio_horas_aula', contexto.get("nome_mes_ano"), 'pdf')
         job_id = str(uuid.uuid4())
         job = BackgroundJob(
             id=job_id,
             task_type='generate_pdf',
             payload=rendered_html,
+            meta_data=json.dumps({"filename": pdf_name}),
             user_id=current_user.id
         )
         db.session.add(job)
