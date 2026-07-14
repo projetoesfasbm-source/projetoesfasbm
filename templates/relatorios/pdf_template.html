@@ -81,17 +81,18 @@
             {% set total_geral_ch_a_pagar = namespace(valor=0) %}
             {% set total_geral_valor_a_pagar = namespace(valor=0) %}
 
-            {% for instrutor_data in dados|sort(attribute='matricula') %}
+            {% for instrutor_data in dados %}
                 {% for disciplina in instrutor_data.disciplinas %}
-                    {% set valor_a_pagar = (disciplina.ch_mes|float or 0) * (valor_hora_aula|float or 0) %}
+                    {% set ch_mes_num = disciplina.ch_mes|float or 0 %}
+                    {% set valor_a_pagar = ch_mes_num * (valor_hora_aula|float or 0) %}
                     <tr>
                         <td>{{ instrutor_data.posto or 'N/D' }}</td>
-                        <td>{{ instrutor_data.matricula }}</td>
-                        <td class="text-left">{{ instrutor_data.nome }}</td>
-                        <td class="text-left">{{ disciplina.nome_disciplina }}</td>
-                        <td>{{ disciplina.ch_total_disciplina }}</td>
-                        <td>{{ disciplina.ch_anterior }}</td>
-                        <td>{{ "%.1f"|format(disciplina.ch_mes) }}</td>
+                        <td>{{ instrutor_data.matricula or 'S/M' }}</td>
+                        <td class="text-left">{{ instrutor_data.nome or 'SEM NOME' }}</td>
+                        <td class="text-left">{{ disciplina.nome_disciplina or '-' }}</td>
+                        <td>{{ disciplina.ch_total_disciplina or 0 }}</td>
+                        <td>{{ disciplina.ch_anterior or 0 }}</td>
+                        <td>{{ "%.1f"|format(ch_mes_num) }}</td>
                         <td style="text-align: right;">R$ {{ "%.2f"|format(valor_a_pagar)|replace('.', ',') }}</td>
                     </tr>
                     {% set total_geral_ch_a_pagar.valor = total_geral_ch_a_pagar.valor + (disciplina.ch_mes|float or 0) %}

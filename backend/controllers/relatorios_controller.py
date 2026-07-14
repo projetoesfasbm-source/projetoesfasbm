@@ -142,103 +142,115 @@ def gerar_relatorio_horas_aula():
 
 def processar_exportacao_final(form_data):
     """Lógica para receber os dados editados e gerar os arquivos finais"""
-    
-    # Função de segurança para impedir que strings vazias ou com vírgula quebrem a exportação
-    def safe_float(val):
-        if not val:
-            return 0.0
-        try:
-            return float(str(val).replace(',', '.'))
-        except ValueError:
-            return 0.0
+    try:
+        # Função de segurança para impedir que strings vazias ou com vírgula quebrem a exportação
+        def safe_float(val):
+            if not val:
+                return 0.0
+            try:
+                return float(str(val).replace(',', '.'))
+            except ValueError:
+                return 0.0
 
-    action = form_data.get('action')
-    dados_editados = []
-    instrutor_indices = form_data.getlist('instrutor_index')
-    
-    for idx in instrutor_indices:
-        instrutor_item = {
-            "nome": form_data.get(f"instrutor_nome_{idx}"),
-            "posto": form_data.get(f"instrutor_posto_{idx}"),
-            "matricula": form_data.get(f"instrutor_matricula_{idx}"),
-            "identidade": form_data.get(f"instrutor_identidade_{idx}"),
-            "cpf": form_data.get(f"instrutor_cpf_{idx}"),
-            "disciplinas": []
+        action = form_data.get('action')
+        dados_editados = []
+        instrutor_indices = form_data.getlist('instrutor_index')
+        
+        for idx in instrutor_indices:
+            instrutor_item = {
+                "nome": str(form_data.get(f"instrutor_nome_{idx}") or "").strip() or "SEM NOME",
+                "posto": str(form_data.get(f"instrutor_posto_{idx}") or "").strip(),
+                "matricula": str(form_data.get(f"instrutor_matricula_{idx}") or "").strip() or "S/M",
+                "identidade": str(form_data.get(f"instrutor_identidade_{idx}") or "").strip(),
+                "cpf": str(form_data.get(f"instrutor_cpf_{idx}") or "").strip(),
+                "disciplinas": []
+            }
+            
+            disc_indices = form_data.getlist(f"disciplina_index_{idx}")
+            for d_idx in disc_indices:
+                instrutor_item["disciplinas"].append({
+                    "nome_disciplina": str(form_data.get(f"disc_nome_{idx}_{d_idx}") or "").strip(),
+                    "ch_anterior": safe_float(form_data.get(f"ch_anterior_{idx}_{d_idx}")),
+                    "ch_mes": safe_float(form_data.get(f"ch_mes_{idx}_{d_idx}")),
+                    "ch_total_disciplina": safe_float(form_data.get(f"ch_total_{idx}_{d_idx}"))
+                })
+            dados_editados.append(instrutor_item)
+
+        # Ordena em Python de forma segura e garantida por matrícula
+        dados_editados.sort(key=lambda x: str(x.get("matricula") or ""))
+
+        data_fim_str = form_data.get('data_fim')
+        try:
+            data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date() if data_fim_str else datetime.now().date()
+        except (ValueError, TypeError):
+            data_fim = datetime.now().date()
+
+        valor_hora_aula = safe_float(SiteConfigService.get_valor_hora_aula())
+
+        contexto = {
+            "dados": dados_editados,
+            "titulo_curso": str(form_data.get('titulo_curso') or ""),
+            "nome_mes_ano": str(form_data.get('nome_mes_ano') or ""),
+            "data_assinatura": f"{data_fim.day} de {form_data.get('nome_mes_ano') or ''}",
+            "comandante_nome": str(form_data.get('comandante_nome') or ""),
+            "comandante_funcao": str(form_data.get('comandante_funcao') or ""),
+            "auxiliar_nome": str(form_data.get('auxiliar_nome') or ""),
+            "auxiliar_funcao": str(form_data.get('auxiliar_funcao') or ""),
+            "valor_hora_aula": valor_hora_aula,
+            "opm": str(form_data.get('opm') or ""),
+            "telefone": str(form_data.get('telefone') or ""),
+            "cidade": str(form_data.get('cidade') or ""),
+            "escola_nome": str(form_data.get('escola_nome') or ""),
         }
-        
-        disc_indices = form_data.getlist(f"disciplina_index_{idx}")
-        for d_idx in disc_indices:
-            instrutor_item["disciplinas"].append({
-                "nome_disciplina": form_data.get(f"disc_nome_{idx}_{d_idx}"),
-                "ch_anterior": safe_float(form_data.get(f"ch_anterior_{idx}_{d_idx}")),
-                "ch_mes": safe_float(form_data.get(f"ch_mes_{idx}_{d_idx}")),
-                "ch_total_disciplina": safe_float(form_data.get(f"ch_total_{idx}_{d_idx}"))
-            })
-        dados_editados.append(instrutor_item)
 
-    data_fim_str = form_data.get('data_fim')
-    data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date() if data_fim_str else datetime.now().date()
-    valor_hora_aula = SiteConfigService.get_valor_hora_aula()
-
-    contexto = {
-        "dados": dados_editados,
-        "titulo_curso": form_data.get('titulo_curso'),
-        "nome_mes_ano": form_data.get('nome_mes_ano'),
-        "data_assinatura": f"{data_fim.day} de {form_data.get('nome_mes_ano')}",
-        "comandante_nome": form_data.get('comandante_nome'),
-        "comandante_funcao": form_data.get('comandante_funcao'),
-        "auxiliar_nome": form_data.get('auxiliar_nome'),
-        "auxiliar_funcao": form_data.get('auxiliar_funcao'),
-        "valor_hora_aula": valor_hora_aula,
-        "opm": form_data.get('opm'),
-        "telefone": form_data.get('telefone'),
-        "cidade": form_data.get('cidade'),
-        "escola_nome": form_data.get('escola_nome'),
-    }
-
-    if action == 'download':
-        rendered_html = render_template('relatorios/pdf_template.html', **contexto)
-        
-        # Cria o Job na fila
-        pdf_name = _build_filename('relatorio_horas_aula', contexto.get("nome_mes_ano"), 'pdf')
-        job_id = str(uuid.uuid4())
-        job = BackgroundJob(
-            id=job_id,
-            task_type='generate_pdf',
-            payload=rendered_html,
-            meta_data=json.dumps({"filename": pdf_name}),
-            user_id=current_user.id
-        )
-        db.session.add(job)
-        db.session.commit()
-        
-        # Retorna JSON para a tela indicando sucesso e o ID do job
-        return jsonify({'success': True, 'job_id': job_id})
-
-    elif action == 'download_xlsx':
-        try:
-            xlsx_bytes = gerar_mapa_gratificacao_xlsx(
-                dados=dados_editados, 
-                valor_hora_aula=valor_hora_aula, 
-                nome_mes_ano=contexto["nome_mes_ano"] or '',
-                titulo_curso=contexto["titulo_curso"] or '',
-                opm_nome=contexto["opm"] or '',
-                escola_nome=contexto["escola_nome"] or '',
-                data_emissao=data_fim,
-                telefone=contexto["telefone"] or '',
-                auxiliar_nome=contexto["auxiliar_nome"] or '',
-                comandante_nome=contexto["comandante_nome"] or '',
-                digitador_nome=(getattr(current_user, 'nome_completo', None) or current_user.username),
-                auxiliar_funcao=contexto["auxiliar_funcao"] or '',
-                comandante_funcao=contexto["comandante_funcao"] or '',
-                data_fim=data_fim,
-                cidade_assinatura=contexto["cidade"] or 'Santa Maria'
+        if action == 'download':
+            rendered_html = render_template('relatorios/pdf_template.html', **contexto)
+            
+            # Cria o Job na fila
+            pdf_name = _build_filename('relatorio_horas_aula', contexto.get("nome_mes_ano"), 'pdf')
+            job_id = str(uuid.uuid4())
+            job = BackgroundJob(
+                id=job_id,
+                task_type='generate_pdf',
+                payload=rendered_html,
+                meta_data=json.dumps({"filename": pdf_name}),
+                user_id=current_user.id
             )
-        except Exception as e:
-            flash(f'Erro ao gerar XLSX: {str(e)}', 'danger')
-            return redirect(url_for('relatorios.index'))
+            db.session.add(job)
+            db.session.commit()
+            
+            # Retorna JSON para a tela indicando sucesso e o ID do job
+            return jsonify({'success': True, 'job_id': job_id})
 
-        xlsx_name = _build_filename('relatorio_horas_aula', contexto.get("nome_mes_ano"), 'xlsx')
-        return send_file(io.BytesIO(xlsx_bytes), as_attachment=True, download_name=xlsx_name, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        elif action == 'download_xlsx':
+            try:
+                xlsx_bytes = gerar_mapa_gratificacao_xlsx(
+                    dados=dados_editados, 
+                    valor_hora_aula=valor_hora_aula, 
+                    nome_mes_ano=contexto["nome_mes_ano"] or '',
+                    titulo_curso=contexto["titulo_curso"] or '',
+                    opm_nome=contexto["opm"] or '',
+                    escola_nome=contexto["escola_nome"] or '',
+                    data_emissao=data_fim,
+                    telefone=contexto["telefone"] or '',
+                    auxiliar_nome=contexto["auxiliar_nome"] or '',
+                    comandante_nome=contexto["comandante_nome"] or '',
+                    digitador_nome=(getattr(current_user, 'nome_completo', None) or current_user.username),
+                    auxiliar_funcao=contexto["auxiliar_funcao"] or '',
+                    comandante_funcao=contexto["comandante_funcao"] or '',
+                    data_fim=data_fim,
+                    cidade_assinatura=contexto["cidade"] or 'Santa Maria'
+                )
+            except Exception as e:
+                flash(f'Erro ao gerar XLSX: {str(e)}', 'danger')
+                return redirect(url_for('relatorios.index'))
+
+            xlsx_name = _build_filename('relatorio_horas_aula', contexto.get("nome_mes_ano"), 'xlsx')
+            return send_file(io.BytesIO(xlsx_bytes), as_attachment=True, download_name=xlsx_name, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+        return render_template('relatorios/editar_mapa_horas.html', **contexto)
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)})
 
     return redirect(url_for('relatorios.index'))

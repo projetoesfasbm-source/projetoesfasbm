@@ -142,33 +142,43 @@ document.getElementById('relatorioForm').addEventListener('submit', function(e) 
         e.preventDefault(); // Evita que a página recarregue
         
         const form = e.target;
+        const actionUrl = form.getAttribute('action');
         const formData = new FormData(form);
-        formData.append('action', 'download'); // Adiciona o valor do botão
+        formData.set('action', 'download'); // Usa .set para garantir o valor único do botão
 
         // Mostra o spinner, esconde os botões
         document.getElementById('actionButtons').style.display = 'none';
         document.getElementById('loadingContainer').style.display = 'flex';
         
-        fetch(form.action, {
+        fetch(actionUrl, {
             method: 'POST',
             body: formData,
             headers: {
-                'X-Requested-With': 'XMLHttpRequest'
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
             }
         })
-        .then(response => response.json())
+        .then(async response => {
+            const contentType = response.headers.get("content-type");
+            if (contentType && contentType.includes("application/json")) {
+                return response.json();
+            } else {
+                const text = await response.text();
+                throw new Error("Resposta do servidor não foi em formato JSON (Status " + response.status + "). Verifique os logs de erro.");
+            }
+        })
         .then(data => {
             if (data.success && data.job_id) {
                 // Inicia o polling do Job
                 pollJobStatus(data.job_id);
             } else {
-                alert("Erro ao iniciar geração do PDF.");
+                alert("Erro ao iniciar geração do PDF: " + (data.error || "Ação não concluída."));
                 resetUI();
             }
         })
         .catch(err => {
-            console.error(err);
-            alert("Erro de conexão ao solicitar PDF.");
+            console.error("Erro na requisição PDF:", err);
+            alert("Erro na solicitação de exportação para PDF:\n" + err.message);
             resetUI();
         });
     }
@@ -177,15 +187,22 @@ document.getElementById('relatorioForm').addEventListener('submit', function(e) 
 function pollJobStatus(jobId) {
     const statusUrl = `/api/jobs/${jobId}/status`;
     const interval = setInterval(() => {
-        fetch(statusUrl)
-            .then(res => {
-                if(!res.ok) { throw new Error('Network error or server error'); }
-                return res.json();
+        fetch(statusUrl, { headers: { 'Accept': 'application/json' } })
+            .then(async res => {
+                const contentType = res.headers.get("content-type");
+                if (!res.ok) {
+                    throw new Error('Erro do servidor na consulta da fila (HTTP ' + res.status + ')');
+                }
+                if (contentType && contentType.includes("application/json")) {
+                    return res.json();
+                } else {
+                    throw new Error('Resposta inválida ao verificar status.');
+                }
             })
             .then(data => {
                 if (data.error) {
                     clearInterval(interval);
-                    alert("Erro do servidor: " + data.error);
+                    alert("Erro reportado pelo servidor na fila: " + data.error);
                     resetUI();
                 } else if (data.status === 'completed') {
                     clearInterval(interval);
@@ -193,14 +210,14 @@ function pollJobStatus(jobId) {
                     window.location.href = `/api/jobs/${jobId}/download`;
                 } else if (data.status === 'failed') {
                     clearInterval(interval);
-                    alert("A geração do PDF falhou no servidor.");
+                    alert("A geração do PDF falhou na fila do servidor:\n" + (data.error_message || "Verifique se o serviço worker.py está rodando."));
                     resetUI();
                 }
             })
             .catch(err => {
-                console.error(err);
+                console.error("Erro no polling da fila:", err);
                 clearInterval(interval);
-                alert("Erro ao verificar o status na fila.");
+                alert("Não foi possível verificar o progresso do PDF:\n" + err.message);
                 resetUI();
             });
     }, 2000);
