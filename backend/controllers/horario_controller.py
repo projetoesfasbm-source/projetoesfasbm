@@ -396,8 +396,10 @@ def exportar_pdf():
                                     tempos=tempos,
                                     intervalos=intervalos)
     try:
-        data_str = semana.data_inicio.strftime('%Y-%m-%d') if semana.data_inicio else 'semana'
-        pdf_filename = f"quadro_horario_{pelotao.replace(' ', '_')}_{data_str}.pdf"
+        semana_nome = semana.nome.replace(' ', '_').replace('/', '-').replace('\\', '-') if (semana and semana.nome) else 'semana'
+        for char in [':', '*', '?', '"', '<', '>', '|']:
+            semana_nome = semana_nome.replace(char, '')
+        pdf_filename = f"quadro_horario_{pelotao.replace(' ', '_')}_{semana_nome}.pdf"
         job_id = str(uuid.uuid4())
         job = BackgroundJob(
             id=job_id,
@@ -451,8 +453,10 @@ def exportar_excel():
             intervalos=intervalos
         )
         
-        data_str = semana.data_inicio.strftime('%Y-%m-%d') if semana.data_inicio else 'semana'
-        filename = f"quadro_horario_{pelotao.replace(' ', '_')}_{data_str}.xlsx"
+        semana_nome = semana.nome.replace(' ', '_').replace('/', '-').replace('\\', '-') if (semana and semana.nome) else 'semana'
+        for char in [':', '*', '?', '"', '<', '>', '|']:
+            semana_nome = semana_nome.replace(char, '')
+        filename = f"quadro_horario_{pelotao.replace(' ', '_')}_{semana_nome}.xlsx"
         
         return send_file(
             io.BytesIO(xlsx_bytes),
