@@ -1,13 +1,13 @@
 /* -------------------------------------------------------------
-   Plataforma de Cursos SISgem - Sistema de Estilo Premium
+   Plataforma de Cursos SisGEn - Sistema de Estilo Premium
    ------------------------------------------------------------- */
 
-/* 1. Global Custom Variables (Based on SISgem Identity) */
+/* 1. Global Custom Variables (Based on SisGEn Identity) */
 :root {
     --bg-dark: #090c10;
     --bg-card: #121820;
-    --primary-blue: #1e3a8a; /* SISgem Core Blue */
-    --primary-light: #3b82f6; /* SISgem Accent Blue */
+    --primary-blue: #1e3a8a; /* SisGEn Core Blue */
+    --primary-light: #3b82f6; /* SisGEn Accent Blue */
     --text-white: #ffffff;
     --text-gray: #9ca3af;
     --text-muted: #6b7280;

@@ -1,62 +1,38 @@
 // -------------------------------------------------------------
-// Plataforma de Cursos SISgem - Lógica e Banco de Dados (API)
+// Plataforma de Cursos SisGEn - Lógica com Backend API (PHP)
 // -------------------------------------------------------------
 
-// 1. DADOS PADRÃO (Para Configurações Locais de Layout)
+// Variáveis Globais
+let globalVideos = [];
+let globalLogo = {};
+let globalIntro = {};
+
+// 1. DADOS PADRÃO LOCAIS DE FALLBACK
 const defaultLogoSettings = {
     type: "text",
-    text: "SISG<span>EM</span> CURSOS",
+    text: "SisG<span>En</span> CURSOS",
     imageUrl: "",
     bannerBgType: "url",
     bannerBgUrl: ""
 };
 
 const defaultIntroSettings = {
-    logoText: "SISG<span>EM</span>",
+    logoText: "SisG<span>En</span>",
     subtext: "PLATAFORMA DE CURSOS",
     duration: 3
 };
 
-// ==========================================
-// FUNÇÕES DE COMUNICAÇÃO COM O SERVIDOR (COM CACHE)
-// ==========================================
-
-// Variável global para guardar a lista na memória e poupar a CPU do servidor
-let cachedVideos = null;
-
-async function fetchVideosFromServer(forceRefresh = false) {
-    // Se a lista já está na memória e não pedimos para forçar a atualização, usa a memória!
-    if (cachedVideos !== null && !forceRefresh) {
-        return cachedVideos;
-    }
-
-    try {
-        const response = await fetch('/api/cursos/videos');
-        if (!response.ok) throw new Error('Erro ao buscar vídeos');
-        
-        cachedVideos = await response.json(); // Guarda a resposta no cofre de memória
-        return cachedVideos;
-    } catch (error) {
-        console.error("Erro na API:", error);
-        return []; // Retorna array vazio em caso de erro para não quebrar a tela
-    }
-}
-
 // 2. INICIALIZAÇÃO E CARREGAMENTO
-document.addEventListener("DOMContentLoaded", () => {
-    // Histórico de assistidos continua local (para cada aluno ter o seu)
-    if (!localStorage.getItem("sisgem_watched")) {
-        localStorage.setItem("sisgem_watched", JSON.stringify([]));
-    }
-    // Configurações visuais continuam locais
-    if (!localStorage.getItem("sisgem_logo")) {
-        localStorage.setItem("sisgem_logo", JSON.stringify(defaultLogoSettings));
-    }
-    if (!localStorage.getItem("sisgem_intro")) {
-        localStorage.setItem("sisgem_intro", JSON.stringify(defaultIntroSettings));
+document.addEventListener("DOMContentLoaded", async () => {
+    // Inicializa controle de assistidos local (NÃO compartilhado globalmente)
+    if (!localStorage.getItem("sisgen_watched")) {
+        localStorage.setItem("sisgen_watched", JSON.stringify([]));
     }
 
-    // Se estivermos na página principal, roda a intro e renderiza
+    // Carrega os dados globais da API
+    await loadDataFromServer();
+
+    // Se estivermos na página principal (alunos)
     if (document.getElementById("intro-screen")) {
         runIntroSequence();
         applyCustomLogo();
@@ -64,11 +40,49 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 });
 
+// Busca dados da API
+async function loadDataFromServer() {
+    try {
+        const response = await fetch('api.php');
+        const data = await response.json();
+        
+        globalVideos = data.videos || [];
+        globalLogo = data.logo || defaultLogoSettings;
+        globalIntro = data.intro || defaultIntroSettings;
+    } catch (error) {
+        console.error("Erro ao carregar dados do servidor:", error);
+        globalLogo = defaultLogoSettings;
+        globalIntro = defaultIntroSettings;
+    }
+}
+
+// Salva dados na API
+async function saveToServer(action, payload) {
+    payload.action = action;
+    try {
+        const response = await fetch('api.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        
+        if (!response.ok) {
+            console.error("Erro na resposta:", await response.text());
+            showToast("Erro ao salvar! Você está autenticado?");
+            return false;
+        }
+        return true;
+    } catch (e) {
+        console.error("Exception:", e);
+        showToast("Erro de conexão ao servidor!");
+        return false;
+    }
+}
+
 // 3. INTRO SEQUENCE (ESTILO NETFLIX)
 function runIntroSequence() {
-    const introSettings = JSON.parse(localStorage.getItem("sisgem_intro")) || defaultIntroSettings;
+    const introSettings = globalIntro;
     
-    // Atualiza elementos da intro baseado nos dados salvos
     const introLogo = document.getElementById("intro-logo");
     const introSub = document.querySelector(".intro-subtext");
     const introScreen = document.getElementById("intro-screen");
@@ -76,60 +90,48 @@ function runIntroSequence() {
     introLogo.innerHTML = introSettings.logoText;
     introSub.textContent = introSettings.subtext;
     
-    // Define a duração da animação no CSS através de variável ou timeout
     const durationMs = introSettings.duration * 1000;
     
-    // Ajusta animação para a duração customizada
     introLogo.style.animationDuration = `${introSettings.duration + 0.5}s`;
     introScreen.style.animation = `fadeOutIntro 0.5s ease ${introSettings.duration}s forwards`;
     
-    // Mostra o conteúdo principal após a intro
     const transitionTimeout = setTimeout(() => {
         showMainContent();
     }, durationMs);
 
-    // Evento de Pular Intro
     document.getElementById("skip-intro").addEventListener("click", () => {
         clearTimeout(transitionTimeout);
         showMainContent();
     });
 }
 
-async function showMainContent() {
+function showMainContent() {
     const introScreen = document.getElementById("intro-screen");
     const mainContent = document.getElementById("main-content");
     
     introScreen.classList.add("hidden");
     mainContent.classList.remove("hidden");
     
-    // Evento de clique para o primeiro vídeo em destaque (Buscando do Servidor/Cache)
-    const videos = await fetchVideosFromServer();
     const heroBtn = document.getElementById("hero-play-btn");
     const heroTitle = document.getElementById("hero-title");
     
-    if (videos.length > 0) {
-        // Encontra o vídeo mais recente para o destaque
-        const featuredVideo = videos[0];
+    if (globalVideos.length > 0) {
+        const featuredVideo = globalVideos[0];
         heroTitle.textContent = featuredVideo.name;
         heroBtn.onclick = () => playVideo(featuredVideo.id);
     } else {
-        heroBtn.onclick = () => showToast("Nenhum vídeo cadastrado no momento!");
+        heroBtn.onclick = () => showToast("Nenhum v\u00EDdeo cadastrado no momento!");
     }
 }
 
 // 4. RENDERS DE CONTEÚDO (index.html)
-async function renderAllShelves() {
-    // Busca os vídeos do cache em memória, zero consumo de CPU no servidor
-    const videos = await fetchVideosFromServer();
-    const watchedList = JSON.parse(localStorage.getItem("sisgem_watched")) || [];
+function renderAllShelves() {
+    const watchedList = JSON.parse(localStorage.getItem("sisgen_watched")) || [];
 
     const rowAlunos = document.getElementById("row-alunos");
     const rowInstrutores = document.getElementById("row-instrutores");
     const rowAdm = document.getElementById("row-adm");
 
-    if (!rowAlunos || !rowInstrutores || !rowAdm) return; // Proteção para não dar erro na página admin
-
-    // Limpa carrosséis
     rowAlunos.innerHTML = "";
     rowInstrutores.innerHTML = "";
     rowAdm.innerHTML = "";
@@ -140,12 +142,11 @@ async function renderAllShelves() {
         "Adm": { container: rowAdm, count: 0 }
     };
 
-    videos.forEach(video => {
-        const isWatched = watchedList.includes(video.id.toString());
+    globalVideos.forEach(video => {
+        const isWatched = watchedList.includes(video.id);
         const cardClass = isWatched ? "watched" : "unwatched";
-        const badgeText = isWatched ? "Visto" : "Não Visto";
+        const badgeText = isWatched ? "Visto" : "N&atilde;o Visto";
         
-        // Thumbnail logic: fallbacks to categories gradients if url empty
         const bgStyle = video.thumbnail 
             ? `style="background-image: url('${video.thumbnail}')"` 
             : `style="background-image: linear-gradient(135deg, var(--primary-blue) 0%, var(--bg-card) 100%)"`;
@@ -171,16 +172,15 @@ async function renderAllShelves() {
         }
     });
 
-    // Adiciona placeholders se a categoria estiver vazia
     Object.keys(categories).forEach(catName => {
         if (categories[catName].count === 0) {
-            categories[catName].container.innerHTML = `<div class="empty-row-text">Nenhuma vídeo aula cadastrada para a categoria ${catName}.</div>`;
+            categories[catName].container.innerHTML = `<div class="empty-row-text">Nenhuma v&iacute;deo aula cadastrada para a categoria ${catName}.</div>`;
         }
     });
 }
 
 function applyCustomLogo() {
-    const logoSettings = JSON.parse(localStorage.getItem("sisgem_logo")) || defaultLogoSettings;
+    const logoSettings = globalLogo;
     const navText = document.getElementById("nav-logo-text");
     const navImg = document.getElementById("nav-logo-img");
 
@@ -190,11 +190,10 @@ function applyCustomLogo() {
         navImg.classList.remove("hidden");
     } else {
         navImg.classList.add("hidden");
-        navText.innerHTML = logoSettings.text || "SISG<span>EM</span> CURSOS";
+        navText.innerHTML = logoSettings.text || "SisG<span>En</span> CURSOS";
         navText.classList.remove("hidden");
     }
 
-    // Aplica a imagem de fundo do banner (destaque)
     const heroBanner = document.getElementById("hero-banner");
     if (heroBanner) {
         const bgUrl = logoSettings.bannerBgUrl || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=1600&auto=format&fit=crop';
@@ -202,17 +201,13 @@ function applyCustomLogo() {
     }
 }
 
-// 5. PLAYER DE VÍDEO (Netflix Modal Style)
-async function playVideo(videoId) {
-    const videos = await fetchVideosFromServer();
-    const video = videos.find(v => v.id.toString() === videoId.toString());
-    
+// 5. PLAYER DE VÍDEO
+function playVideo(videoId) {
+    const video = globalVideos.find(v => v.id === videoId);
     if (!video) return;
 
-    // Atualiza status de visualização para visto (watched)
-    markAsWatched(videoId.toString());
+    markAsWatched(videoId);
 
-    // Seleciona elementos do modal
     const modal = document.getElementById("player-modal");
     const container = document.getElementById("video-container");
     const modalTitle = document.getElementById("modal-video-title");
@@ -221,35 +216,32 @@ async function playVideo(videoId) {
     modalTitle.textContent = video.name;
     modalCategory.textContent = video.category;
 
-    // Define player HTML (suporta MP4 direto, YouTube Link ou OneDrive/SharePoint Embed)
     let playerHtml = "";
     const parsedUrl = parseVideoUrl(video.url);
 
     if (parsedUrl.type === "youtube" || parsedUrl.type === "iframe") {
         playerHtml = `<iframe src="${parsedUrl.url}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>`;
     } else {
-        // Direct MP4 - Modificado para tocar com as tags solicitadas
         playerHtml = `
             <video src="${video.url}" controls autoplay playsinline preload="auto">
-                Seu navegador não suporta a tag de vídeo.
+                Seu navegador n&atilde;o suporta a tag de v&iacute;deo.
             </video>
         `;
     }
 
     container.innerHTML = playerHtml;
     modal.classList.remove("hidden");
-    document.body.style.overflow = "hidden"; // Desabilita scroll do body
+    document.body.style.overflow = "hidden";
 }
 
 function closePlayer() {
     const modal = document.getElementById("player-modal");
     const container = document.getElementById("video-container");
     
-    container.innerHTML = ""; // Para a reprodução do vídeo
+    container.innerHTML = "";
     modal.classList.add("hidden");
-    document.body.style.overflow = ""; // Reabilita scroll do body
+    document.body.style.overflow = "";
     
-    // Atualiza a interface da tela instantaneamente via Cache
     renderAllShelves();
 }
 
@@ -284,14 +276,13 @@ function parseVideoUrl(url) {
 }
 
 function markAsWatched(videoId) {
-    let watchedList = JSON.parse(localStorage.getItem("sisgem_watched")) || [];
+    let watchedList = JSON.parse(localStorage.getItem("sisgen_watched")) || [];
     if (!watchedList.includes(videoId)) {
         watchedList.push(videoId);
-        localStorage.setItem("sisgem_watched", JSON.stringify(watchedList));
+        localStorage.setItem("sisgen_watched", JSON.stringify(watchedList));
     }
 }
 
-// Lógica de Scroll Horizontal dos Carrosséis
 function scrollRow(btn, direction) {
     const outerWrapper = btn.closest(".row-outer-wrapper");
     const carousel = outerWrapper.querySelector(".row-inner-carousel");
@@ -299,58 +290,49 @@ function scrollRow(btn, direction) {
     carousel.scrollBy({ left: scrollAmount * direction, behavior: "smooth" });
 }
 
-// 6. ADMIN PAGE LOGIC (admin.html)
-function initAdminPage() {
+// 6. ADMIN PAGE LOGIC (admin.php)
+// O admin.php chama initAdminPage após o DOMContentLoaded.
+// Como o script carrega rápido, pode ser que globalVideos não tenha carregado se chamado do inline script,
+// por isso agora aguardamos a carga da API aqui dentro.
+async function initAdminPage() {
+    if (globalVideos.length === 0 && !globalLogo.type) {
+        await loadDataFromServer();
+    }
     loadBrandingData();
-    // Força o carregamento da tabela com dados novos toda vez que abrir o painel
-    loadVideosTable(true);
+    loadVideosTable();
     toggleLogoInputs();
     toggleBgInputs();
 }
 
 function loadBrandingData() {
-    const logoSettings = JSON.parse(localStorage.getItem("sisgem_logo")) || defaultLogoSettings;
-    const introSettings = JSON.parse(localStorage.getItem("sisgem_intro")) || defaultIntroSettings;
+    const logoSettings = globalLogo;
+    const introSettings = globalIntro;
 
-    const typeInput = document.getElementById("logo-type");
-    if(typeInput) typeInput.value = logoSettings.type;
-    
-    const textInput = document.getElementById("logo-text-input");
-    if(textInput) textInput.value = logoSettings.text;
+    document.getElementById("logo-type").value = logoSettings.type;
+    document.getElementById("logo-text-input").value = logoSettings.text;
     
     const preview = document.getElementById("logo-preview");
-    if (preview && logoSettings.imageUrl) {
+    if (logoSettings.imageUrl) {
         preview.src = logoSettings.imageUrl;
         preview.classList.remove("hidden");
     }
 
-    const bgType = document.getElementById("bg-type");
-    if(bgType) bgType.value = logoSettings.bannerBgType || "url";
-    
-    const bgUrlInput = document.getElementById("bg-url-input");
-    if(bgUrlInput) bgUrlInput.value = logoSettings.bannerBgUrl || "";
+    document.getElementById("bg-type").value = logoSettings.bannerBgType || "url";
+    document.getElementById("bg-url-input").value = logoSettings.bannerBgUrl || "";
     
     const bgPreview = document.getElementById("bg-preview");
-    if (bgPreview && logoSettings.bannerBgType === "upload" && logoSettings.bannerBgUrl) {
+    if (logoSettings.bannerBgType === "upload" && logoSettings.bannerBgUrl) {
         bgPreview.src = logoSettings.bannerBgUrl;
         bgPreview.classList.remove("hidden");
     }
 
-    const introLogoText = document.getElementById("intro-logo-text");
-    if(introLogoText) introLogoText.value = introSettings.logoText;
-    
-    const introSub = document.getElementById("intro-subtext-input");
-    if(introSub) introSub.value = introSettings.subtext;
-    
-    const introDur = document.getElementById("intro-duration");
-    if(introDur) introDur.value = introSettings.duration;
+    document.getElementById("intro-logo-text").value = introSettings.logoText;
+    document.getElementById("intro-subtext-input").value = introSettings.subtext;
+    document.getElementById("intro-duration").value = introSettings.duration;
 }
 
 function toggleLogoInputs() {
-    const typeElement = document.getElementById("logo-type");
-    if(!typeElement) return;
-    
-    const type = typeElement.value;
+    const type = document.getElementById("logo-type").value;
     const textGroup = document.getElementById("logo-text-group");
     const imgGroup = document.getElementById("logo-image-group");
 
@@ -380,10 +362,7 @@ function handleLogoUpload(input) {
 }
 
 function toggleBgInputs() {
-    const typeElement = document.getElementById("bg-type");
-    if(!typeElement) return;
-    
-    const type = typeElement.value;
+    const type = document.getElementById("bg-type").value;
     const urlGroup = document.getElementById("bg-url-group");
     const uploadGroup = document.getElementById("bg-upload-group");
 
@@ -412,70 +391,129 @@ function handleBgUpload(input) {
     reader.readAsDataURL(file);
 }
 
-function saveLogoSettings() {
+async function saveLogoSettings() {
     const type = document.getElementById("logo-type").value;
     const textVal = document.getElementById("logo-text-input").value;
     const bgType = document.getElementById("bg-type").value;
     const bgUrlVal = document.getElementById("bg-url-input").value;
     
-    let logoSettings = JSON.parse(localStorage.getItem("sisgem_logo")) || defaultLogoSettings;
-    logoSettings.type = type;
-    logoSettings.text = textVal;
-    logoSettings.bannerBgType = bgType;
+    globalLogo.type = type;
+    globalLogo.text = textVal;
+    globalLogo.bannerBgType = bgType;
 
     if (type === "image" && uploadedLogoBase64) {
-        logoSettings.imageUrl = uploadedLogoBase64;
+        globalLogo.imageUrl = uploadedLogoBase64;
     }
 
     if (bgType === "upload" && uploadedBgBase64) {
-        logoSettings.bannerBgUrl = uploadedBgBase64;
+        globalLogo.bannerBgUrl = uploadedBgBase64;
     } else if (bgType === "url") {
-        logoSettings.bannerBgUrl = bgUrlVal;
+        globalLogo.bannerBgUrl = bgUrlVal;
     }
 
-    localStorage.setItem("sisgem_logo", JSON.stringify(logoSettings));
-    showToast("Identidade Visual salva com sucesso!");
+    const success = await saveToServer('save_logo', { logo: globalLogo });
+    if (success) showToast("Identidade Visual salva com sucesso no Servidor!");
 }
 
-function saveIntroSettings() {
+async function saveIntroSettings() {
     const introLogo = document.getElementById("intro-logo-text").value;
     const introSub = document.getElementById("intro-subtext-input").value;
     const introDur = parseFloat(document.getElementById("intro-duration").value) || 3;
 
-    const introSettings = {
+    globalIntro = {
         logoText: introLogo,
         subtext: introSub,
         duration: introDur
     };
 
-    localStorage.setItem("sisgem_intro", JSON.stringify(introSettings));
-    showToast("Configurações da intro salvas!");
+    const success = await saveToServer('save_intro', { intro: globalIntro });
+    if (success) showToast("Configura\u00E7\u00F5es da intro salvas no Servidor!");
 }
 
-// Tabela do Admin
-async function loadVideosTable(force = false) {
-    const videos = await fetchVideosFromServer(force);
-    const tbody = document.getElementById("admin-video-list");
-    
-    if(!tbody) return;
+let draggedVideoIndex = null;
 
+function loadVideosTable() {
+    const tbody = document.getElementById("admin-video-list");
     tbody.innerHTML = "";
 
-    if (videos.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">Nenhum vídeo cadastrado no servidor.</td></tr>`;
+    if (globalVideos.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">Nenhum v&iacute;deo cadastrado.</td></tr>`;
         return;
     }
 
-    videos.forEach(video => {
+    globalVideos.forEach((video, index) => {
         const tr = document.createElement("tr");
+        tr.draggable = true;
+        tr.dataset.index = index;
+        
+        tr.addEventListener("dragstart", function(e) {
+            draggedVideoIndex = index;
+            e.dataTransfer.effectAllowed = "move";
+            e.dataTransfer.setData("text/plain", index);
+            setTimeout(() => tr.style.opacity = '0.5', 0);
+        });
+
+        tr.addEventListener("dragover", function(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "move";
+            const draggingRow = tbody.querySelector("tr[style*='opacity: 0.5']");
+            if (!draggingRow) return;
+            
+            const currentOverIndex = index;
+            if (draggedVideoIndex !== currentOverIndex) {
+                const bounding = tr.getBoundingClientRect();
+                const offset = bounding.y + (bounding.height / 2);
+                if (e.clientY - offset > 0) {
+                    tr.after(draggingRow);
+                } else {
+                    tr.before(draggingRow);
+                }
+            }
+        });
+
+        tr.addEventListener("dragend", async function(e) {
+            tr.style.opacity = '1';
+            
+            // Recalcula o array baseado na nova ordem da DOM
+            const rows = Array.from(tbody.querySelectorAll("tr"));
+            const newVideosArray = [];
+            rows.forEach(row => {
+                const oldIndex = row.dataset.index;
+                if(oldIndex !== undefined) {
+                    newVideosArray.push(globalVideos[oldIndex]);
+                }
+            });
+            
+            // Verifica se a ordem realmente mudou
+            let orderChanged = false;
+            for(let i = 0; i < globalVideos.length; i++) {
+                if(globalVideos[i].id !== newVideosArray[i].id) {
+                    orderChanged = true;
+                    break;
+                }
+            }
+
+            if(orderChanged) {
+                globalVideos = newVideosArray;
+                const success = await saveToServer('save_videos', { videos: globalVideos });
+                if (success) {
+                    showToast("Ordem dos v\u00EDdeos atualizada no servidor!");
+                    loadVideosTable(); // Atualiza índices (dataset.index) na UI
+                }
+            }
+        });
+
         tr.innerHTML = `
-            <td><strong>${video.name}</strong></td>
+            <td style="cursor: grab;">
+                <i class="fas fa-grip-vertical" style="margin-right: 15px; color: var(--text-muted); cursor: grab;" title="Arraste para reordenar"></i>
+                <strong>${video.name}</strong>
+            </td>
             <td><span class="category-tag">${video.category}</span></td>
             <td style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                 <a href="${video.url}" target="_blank" style="color: var(--primary-light);">${video.url}</a>
             </td>
             <td>
-                <button onclick="deleteVideo('${video.id}')" class="btn-delete" title="Deletar Vídeo">
+                <button onclick="deleteVideo('${video.id}')" class="btn-delete" title="Deletar V&iacute;deo">
                     <i class="fas fa-trash-can"></i>
                 </button>
             </td>
@@ -484,13 +522,8 @@ async function loadVideosTable(force = false) {
     });
 }
 
-// Adicionar Vídeo - AGORA ATUALIZA O CACHE AUTOMATICAMENTE
 async function handleAddVideo(event) {
     event.preventDefault();
-    
-    const submitBtn = document.querySelector("#add-video-form button[type='submit']");
-    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
-    submitBtn.disabled = true;
     
     const name = document.getElementById("video-name").value;
     const category = document.getElementById("video-category").value;
@@ -498,103 +531,66 @@ async function handleAddVideo(event) {
     const thumbnail = document.getElementById("video-thumbnail").value;
 
     const newVideo = {
+        id: "v_" + Date.now(),
         name: name,
         category: category,
         url: url,
         thumbnail: thumbnail || null
     };
 
-    try {
-        const response = await fetch('/api/cursos/videos', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newVideo)
-        });
+    globalVideos.push(newVideo);
 
-        if (response.ok) {
-            document.getElementById("add-video-form").reset();
-            // FORÇA a atualização do cofre (cache) com os novos dados
-            await loadVideosTable(true); 
-            showToast("Vídeo adicionado com sucesso ao servidor!");
-        } else {
-            showToast("Erro ao salvar vídeo no servidor.");
-        }
-    } catch (error) {
-        console.error(error);
-        showToast("Erro de conexão com o servidor.");
-    } finally {
-        submitBtn.innerHTML = '<i class="fas fa-plus"></i> Adicionar Vídeo';
-        submitBtn.disabled = false;
+    const success = await saveToServer('save_videos', { videos: globalVideos });
+    if (success) {
+        document.getElementById("add-video-form").reset();
+        loadVideosTable();
+        showToast("V\u00EDdeo adicionado com sucesso no Servidor!");
     }
 }
 
-// Deletar Vídeo - AGORA ATUALIZA O CACHE AUTOMATICAMENTE
 async function deleteVideo(videoId) {
-    if (confirm("Tem certeza que deseja excluir esta vídeo aula do servidor?")) {
-        try {
-            const response = await fetch(`/api/cursos/videos/${videoId}`, {
-                method: 'DELETE'
-            });
+    if (confirm("Tem certeza que deseja excluir esta v\u00EDdeo aula para todos os alunos?")) {
+        globalVideos = globalVideos.filter(v => v.id !== videoId);
+        
+        const success = await saveToServer('save_videos', { videos: globalVideos });
+        
+        if (success) {
+            // Remove do local storage de visto do admin, se houver
+            let watched = JSON.parse(localStorage.getItem("sisgen_watched")) || [];
+            watched = watched.filter(id => id !== videoId);
+            localStorage.setItem("sisgen_watched", JSON.stringify(watched));
 
-            if (response.ok) {
-                // Também remove da lista local de visualizados
-                let watched = JSON.parse(localStorage.getItem("sisgem_watched")) || [];
-                watched = watched.filter(id => id !== videoId.toString());
-                localStorage.setItem("sisgem_watched", JSON.stringify(watched));
-
-                // FORÇA a atualização do cofre (cache) para sumir com o vídeo deletado
-                await loadVideosTable(true);
-                showToast("Vídeo removido com sucesso!");
-            } else {
-                showToast("Erro ao tentar remover o vídeo.");
-            }
-        } catch (error) {
-            console.error(error);
-            showToast("Erro de conexão com o servidor.");
+            loadVideosTable();
+            showToast("V\u00EDdeo removido.");
         }
     }
 }
 
 // Ações rápidas
 function resetWatchedStatus() {
-    localStorage.setItem("sisgem_watched", JSON.stringify([]));
-    showToast("Histórico redefinido! Todos os contornos ficaram vermelhos.");
-    renderAllShelves(); // Atualiza a interface instantaneamente usando o Cache
+    localStorage.setItem("sisgen_watched", JSON.stringify([]));
+    showToast("Hist\u00F3rico redefinido! Apenas para o seu navegador local.");
 }
 
-function restoreDefaultVideos() {
-    showToast("Os vídeos agora são gerenciados pelo servidor. Para adicionar novos, preencha o formulário acima.");
+async function restoreDefaultVideos() {
+    if (confirm("Deseja restaurar a lista inicial de v\u00EDdeos padr\u00E3o para todos os alunos? Isso limpar\u00E1 os v\u00EDdeos adicionados.")) {
+        const success = await saveToServer('restore_defaults', {});
+        if (success) {
+            await loadDataFromServer();
+            localStorage.setItem("sisgen_watched", JSON.stringify([]));
+            loadVideosTable();
+            showToast("Lista padr\u00E3o restaurada no Servidor.");
+        }
+    }
 }
 
 // 7. TOAST NOTIFICATIONS
 function showToast(message) {
     const toast = document.getElementById("toast");
-    if(!toast) return;
-
     toast.textContent = message;
     toast.classList.remove("hidden");
     
     setTimeout(() => {
         toast.classList.add("hidden");
     }, 3000);
-}
-
-// ==========================================
-// 8. PROTEÇÃO DE ACESSO AO PAINEL
-// ==========================================
-function checkAdminPassword(event) {
-    event.preventDefault(); // Impede o navegador de abrir a página direto
-    
-    // Altere a senha padrão aqui, se desejar
-    const SENHA_PADRAO = "sisgem2026"; 
-    
-    // Abre a janela pedindo a senha
-    const senhaDigitada = prompt("⚠️ Acesso Restrito\n\nPor favor, digite a senha de administrador para acessar o Painel de Controle:");
-    
-    // Verifica a senha
-    if (senhaDigitada === SENHA_PADRAO) {
-        window.location.href = "admin.html"; // Redireciona se acertou
-    } else if (senhaDigitada !== null) {
-        showToast("Senha incorreta! Acesso negado."); // Errou a senha
-    }
 }
