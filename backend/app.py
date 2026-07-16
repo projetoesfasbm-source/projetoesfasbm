@@ -211,6 +211,7 @@ def register_blueprints(app):
     from backend.controllers.recursos_controller import recursos_bp
     from backend.controllers.edicao_controller import edicao_bp
     from backend.controllers.log_controller import log_bp
+    from backend.controllers.cursos_controller import cursos_api_bp, cursos_bp
 
     app.register_blueprint(admin_escola_bp)
     app.register_blueprint(tools_bp)
@@ -245,6 +246,8 @@ def register_blueprints(app):
     app.register_blueprint(recursos_bp)
     app.register_blueprint(edicao_bp)
     app.register_blueprint(log_bp)
+    app.register_blueprint(cursos_api_bp)
+    app.register_blueprint(cursos_bp)
 
 def register_handlers_and_processors(app):
 
