@@ -17,12 +17,11 @@ import firebase_admin
 from flask import Flask, render_template, g, session, send_from_directory
 from flask_login import LoginManager, current_user
 from flask_migrate import Migrate
-from flask_wtf.csrf import CSRFProtect
 from flask_babel import Babel
 from firebase_admin import credentials
 
 from backend.config import Config
-from backend.extensions import limiter
+from backend.extensions import limiter, csrf
 from backend.models.database import db
 from backend.models.user import User
 from backend.services.asset_service import AssetService
@@ -130,7 +129,7 @@ def create_app(config_class=Config):
 
     db.init_app(app)
     Migrate(app, db)
-    CSRFProtect(app)
+    csrf.init_app(app)
     limiter.init_app(app) # <-- CORRIGIDO AQUI (era limter)
     Babel(app)
 

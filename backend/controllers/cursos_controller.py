@@ -4,6 +4,7 @@ import json
 from flask import Blueprint, send_from_directory, request, jsonify, session, redirect, render_template_string
 from backend.models.database import db
 from backend.models.curso_video import CursoVideo
+from backend.extensions import csrf
 
 # Mantém a API original do SQL caso seja utilizada externamente
 cursos_api_bp = Blueprint('cursos_api', __name__, url_prefix='/api/cursos')
@@ -132,6 +133,7 @@ def save_cursos_data(data):
         json.dump(data, f, indent=4, ensure_ascii=False)
 
 @cursos_bp.route('/cursos/api.php', methods=['GET', 'POST'])
+@csrf.exempt
 def api_php():
     current_data = get_cursos_data()
     if request.method == 'GET':
@@ -164,6 +166,7 @@ def api_php():
     return jsonify({'error': 'Nenhuma ação válida especificada.'}), 400
 
 @cursos_bp.route('/cursos/admin_painel.php', methods=['GET', 'POST'])
+@csrf.exempt
 def admin_painel_php():
     config_password = 'Sisgen@2026'
     error = ''
