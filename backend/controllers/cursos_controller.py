@@ -107,10 +107,10 @@ DEFAULT_DATA = {
 
 def get_cursos_data():
     data_file = os.path.join(PROJECT_ROOT, 'static', 'uploads', 'cursos_data.json')
+    fallback_file = os.path.join(CURSOS_DIR, 'cursos_data.json')
+    
     if not os.path.exists(data_file):
         os.makedirs(os.path.dirname(data_file), exist_ok=True)
-        # Tenta ler do diretório cursos caso tenha sido comitado lá primeiro
-        fallback_file = os.path.join(CURSOS_DIR, 'cursos_data.json')
         if os.path.exists(fallback_file):
             try:
                 import shutil
@@ -120,6 +120,25 @@ def get_cursos_data():
         if not os.path.exists(data_file):
             with open(data_file, 'w', encoding='utf-8') as f:
                 json.dump(DEFAULT_DATA, f, indent=4, ensure_ascii=False)
+    else:
+        # Recuperação automática: se o arquivo do disco persistente tiver os vídeos padrão (v1)
+        # e o arquivo vindo do Git (fallback) tiver os vídeos reais já cadastrados
+        try:
+            with open(data_file, 'r', encoding='utf-8') as f:
+                current = json.load(f)
+            if os.path.exists(fallback_file):
+                with open(fallback_file, 'r', encoding='utf-8') as f:
+                    fallback = json.load(f)
+                
+                has_defaults = any(v.get('id') == 'v1' for v in current.get('videos', []))
+                fallback_has_custom = not any(v.get('id') == 'v1' for v in fallback.get('videos', []))
+                
+                if has_defaults and fallback_has_custom:
+                    import shutil
+                    shutil.copy(fallback_file, data_file)
+        except Exception:
+            pass
+
     try:
         with open(data_file, 'r', encoding='utf-8') as f:
             return json.load(f)
