@@ -198,6 +198,7 @@ def admin_painel_php():
         
     # Substitui construções condicionais do PHP por Jinja2
     html_part = html_part.replace('<?php if (!$authenticated): ?>', '{% if not authenticated %}')
+    html_part = html_part.replace('<?php if ($error): ?>', '{% if error %}')
     html_part = html_part.replace('<?= htmlspecialchars($error) ?>', '{{ error }}')
     html_part = html_part.replace('<?php else: ?>', '{% else %}')
     html_part = html_part.replace('<?php endif; ?>', '{% endif %}')
