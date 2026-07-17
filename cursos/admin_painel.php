@@ -6,14 +6,14 @@ $error = '';
 
 if (isset($_GET['logout'])) {
     session_destroy();
-    header('Location: admin.php');
+    header('Location: admin_painel.php');
     exit;
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'login') {
     if (isset($_POST['password']) && $_POST['password'] === $config_password) {
         $_SESSION['cursos_authenticated'] = true;
-        header('Location: admin.php');
+        header('Location: admin_painel.php');
         exit;
     } else {
         $error = 'Senha incorreta!';

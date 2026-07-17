@@ -105,11 +105,20 @@ DEFAULT_DATA = {
 }
 
 def get_cursos_data():
-    data_file = os.path.join(CURSOS_DIR, 'cursos_data.json')
+    data_file = os.path.join(PROJECT_ROOT, 'static', 'uploads', 'cursos_data.json')
     if not os.path.exists(data_file):
-        os.makedirs(CURSOS_DIR, exist_ok=True)
-        with open(data_file, 'w', encoding='utf-8') as f:
-            json.dump(DEFAULT_DATA, f, indent=4, ensure_ascii=False)
+        os.makedirs(os.path.dirname(data_file), exist_ok=True)
+        # Tenta ler do diretório cursos caso tenha sido comitado lá primeiro
+        fallback_file = os.path.join(CURSOS_DIR, 'cursos_data.json')
+        if os.path.exists(fallback_file):
+            try:
+                import shutil
+                shutil.copy(fallback_file, data_file)
+            except Exception:
+                pass
+        if not os.path.exists(data_file):
+            with open(data_file, 'w', encoding='utf-8') as f:
+                json.dump(DEFAULT_DATA, f, indent=4, ensure_ascii=False)
     try:
         with open(data_file, 'r', encoding='utf-8') as f:
             return json.load(f)
@@ -117,8 +126,8 @@ def get_cursos_data():
         return DEFAULT_DATA
 
 def save_cursos_data(data):
-    data_file = os.path.join(CURSOS_DIR, 'cursos_data.json')
-    os.makedirs(CURSOS_DIR, exist_ok=True)
+    data_file = os.path.join(PROJECT_ROOT, 'static', 'uploads', 'cursos_data.json')
+    os.makedirs(os.path.dirname(data_file), exist_ok=True)
     with open(data_file, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=4, ensure_ascii=False)
 
@@ -154,28 +163,28 @@ def api_php():
         
     return jsonify({'error': 'Nenhuma ação válida especificada.'}), 400
 
-@cursos_bp.route('/cursos/admin.php', methods=['GET', 'POST'])
-def admin_php():
+@cursos_bp.route('/cursos/admin_painel.php', methods=['GET', 'POST'])
+def admin_painel_php():
     config_password = 'Sisgen@2026'
     error = ''
     
     if request.args.get('logout') == '1':
         session.pop('cursos_authenticated', None)
-        return redirect('/cursos/admin.php')
+        return redirect('/cursos/admin_painel.php')
         
     if request.method == 'POST' and request.form.get('action') == 'login':
         password = request.form.get('password')
         if password == config_password:
             session['cursos_authenticated'] = True
-            return redirect('/cursos/admin.php')
+            return redirect('/cursos/admin_painel.php')
         else:
             error = 'Senha incorreta!'
             
     authenticated = session.get('cursos_authenticated', False)
     
-    admin_file = os.path.join(CURSOS_DIR, 'admin.php')
+    admin_file = os.path.join(CURSOS_DIR, 'admin_painel.php')
     if not os.path.exists(admin_file):
-        return "admin.php não encontrado", 404
+        return "admin_painel.php não encontrado", 404
         
     with open(admin_file, 'r', encoding='utf-8') as f:
         content = f.read()
@@ -200,6 +209,9 @@ def admin_php():
 def serve_cursos_static(filename='index.html'):
     if filename == 'api.php':
         return api_php()
-    if filename == 'admin.php':
-        return admin_php()
+    if filename == 'admin_painel.php':
+        return admin_painel_php()
+    if filename == 'cursos_data.json':
+        uploads_dir = os.path.join(PROJECT_ROOT, 'static', 'uploads')
+        return send_from_directory(uploads_dir, 'cursos_data.json')
     return send_from_directory(CURSOS_DIR, filename)
