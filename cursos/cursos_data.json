@@ -1,17 +1,17 @@
-{
+﻿{
     "videos": [
         {
             "id": "v_1782957855083",
             "name": "1\u00ba acesso do aluno",
             "category": "Alunos",
-            "url": "http:\/\/cadtech.com.br\/esfhep\/v\u00eddeos Sisgen Prontos\/Aluno\/1\u00ba acesso do aluno.mp4",
+            "url": "https:\/\/cadtech.com.br\/esfhep\/v\u00eddeos Sisgen Prontos\/Aluno\/1\u00ba acesso do aluno.mp4",
             "thumbnail": "https:\/\/cadtech.com.br\/esfhep\/Sisgen tutorial logo.jpeg"
         },
         {
             "id": "v_1782957894663",
             "name": "2\u00ba fator de autentica\u00e7\u00e3o",
             "category": "Alunos",
-            "url": "http:\/\/cadtech.com.br\/esfhep\/v\u00eddeos Sisgen Prontos\/Aluno\/2\u00ba fator de autentica\u00e7\u00e3o.mp4",
+            "url": "https:\/\/cadtech.com.br\/esfhep\/v\u00eddeos Sisgen Prontos\/Aluno\/2\u00ba fator de autentica\u00e7\u00e3o.mp4",
             "thumbnail": "https:\/\/cadtech.com.br\/esfhep\/Sisgen tutorial logo.jpeg"
         },
         {
@@ -25,14 +25,14 @@
             "id": "v_1782957938787",
             "name": "Edi\u00e7\u00e3o de perfil e senha",
             "category": "Alunos",
-            "url": "http:\/\/\/cadtech.com.br\/esfhep\/v\u00eddeos Sisgen Prontos\/Aluno\/Edi\u00e7\u00e3o de perfil e senha.mp4",
+            "url": "https:\/\/cadtech.com.br\/esfhep\/v\u00eddeos Sisgen Prontos\/Aluno\/Edi\u00e7\u00e3o de perfil e senha.mp4",
             "thumbnail": "https:\/\/cadtech.com.br\/esfhep\/Sisgen tutorial logo.jpeg"
         },
         {
             "id": "v_1782957976839",
             "name": "Fun\u00e7\u00e3o chefe de turma",
             "category": "Alunos",
-            "url": "http:\/\/cadtech.com.br\/esfhep\/v\u00eddeos Sisgen Prontos\/Aluno\/fun\u00e7\u00e3o chefe de turma.mp4",
+            "url": "https:\/\/cadtech.com.br\/esfhep\/v\u00eddeos Sisgen Prontos\/Aluno\/fun\u00e7\u00e3o chefe de turma.mp4",
             "thumbnail": "https:\/\/cadtech.com.br\/esfhep\/Sisgen tutorial logo.jpeg"
         },
         {
@@ -46,7 +46,7 @@
             "id": "v_1782958080463",
             "name": "Quadro hor\u00e1rio",
             "category": "Alunos",
-            "url": "https:\/\/\/cadtech.com.br\/esfhep\/v\u00eddeos Sisgen Prontos\/Aluno\/Quadro hor\u00e1rio.mp4",
+            "url": "https:\/\/cadtech.com.br\/esfhep\/v\u00eddeos Sisgen Prontos\/Aluno\/Quadro hor\u00e1rio.mp4",
             "thumbnail": "https:\/\/cadtech.com.br\/esfhep\/Sisgen tutorial logo.jpeg"
         },
         {
@@ -74,7 +74,7 @@
             "id": "v_1783084185565",
             "name": "Valida\u00e7\u00e3o De Di\u00e1rios",
             "category": "Instrutores",
-            "url": "http:\/\/cadtech.com.br\/esfhep\/v\u00eddeos Sisgen Prontos\/Instrutor\/Valida\u00e7\u00e3o De Di\u00e1rios.mp4",
+            "url": "https:\/\/cadtech.com.br\/esfhep\/v\u00eddeos Sisgen Prontos\/Instrutor\/Valida\u00e7\u00e3o De Di\u00e1rios.mp4",
             "thumbnail": "https:\/\/cadtech.com.br\/esfhep\/Sisgen tutorial logo.jpeg"
         },
         {
@@ -95,7 +95,7 @@
             "id": "v_1782958462355",
             "name": "Cria\u00e7\u00e3o de vinculo",
             "category": "Adm",
-            "url": "http:\/\/cadtech.com.br\/esfhep\/v\u00eddeos Sisgen Prontos\/ADM\/cria\u00e7\u00e3o de vinculo.mp4",
+            "url": "https:\/\/cadtech.com.br\/esfhep\/v\u00eddeos Sisgen Prontos\/ADM\/cria\u00e7\u00e3o de vinculo.mp4",
             "thumbnail": "https:\/\/cadtech.com.br\/esfhep\/Sisgen tutorial logo.jpeg"
         },
         {
@@ -109,7 +109,7 @@
             "id": "v_1782958566067",
             "name": "Editar perfil aluno ou instrutor",
             "category": "Adm",
-            "url": "http:\/\/cadtech.com.br\/esfhep\/v\u00eddeos Sisgen Prontos\/ADM\/editar perfil aluno ou instrutor.mp4",
+            "url": "https:\/\/cadtech.com.br\/esfhep\/v\u00eddeos Sisgen Prontos\/ADM\/editar perfil aluno ou instrutor.mp4",
             "thumbnail": "https:\/\/cadtech.com.br\/esfhep\/Sisgen tutorial logo.jpeg"
         },
         {
@@ -123,56 +123,56 @@
             "id": "v_1783087034517",
             "name": "Valida\u00e7\u00e3o de Di\u00e1rios",
             "category": "Adm",
-            "url": "http:\/\/cadtech.com.br\/esfhep\/v\u00eddeos Sisgen Prontos\/ADM\/Valida\u00e7\u00e3o de Di\u00e1rios.mp4",
+            "url": "https:\/\/cadtech.com.br\/esfhep\/v\u00eddeos Sisgen Prontos\/ADM\/Valida\u00e7\u00e3o de Di\u00e1rios.mp4",
             "thumbnail": "https:\/\/cadtech.com.br\/esfhep\/Sisgen tutorial logo.jpeg"
         },
         {
             "id": "v_1783087079725",
             "name": "Cria\u00e7\u00e3o de ciclos e semana",
             "category": "Adm",
-            "url": "http:\/\/cadtech.com.br\/esfhep\/v\u00eddeos Sisgen Prontos\/ADM\/Cria\u00e7\u00e3o de ciclos e semana.mp4",
+            "url": "https:\/\/cadtech.com.br\/esfhep\/v\u00eddeos Sisgen Prontos\/ADM\/Cria\u00e7\u00e3o de ciclos e semana.mp4",
             "thumbnail": "https:\/\/cadtech.com.br\/esfhep\/Sisgen tutorial logo.jpeg"
         },
         {
             "id": "v_1783087134005",
             "name": "Cria\u00e7\u00e3o  ou remo\u00e7\u00e3o de aulas",
             "category": "Adm",
-            "url": "http:\/\/cadtech.com.br\/esfhep\/v\u00eddeos Sisgen Prontos\/ADM\/Cria\u00e7\u00e3o  ou remo\u00e7\u00e3o de aulas.mp4",
+            "url": "https:\/\/cadtech.com.br\/esfhep\/v\u00eddeos Sisgen Prontos\/ADM\/Cria\u00e7\u00e3o  ou remo\u00e7\u00e3o de aulas.mp4",
             "thumbnail": "https:\/\/cadtech.com.br\/esfhep\/Sisgen tutorial logo.jpeg"
         },
         {
             "id": "v_1783087183789",
             "name": "Restri\u00e7\u00e3o de aulas no qhs",
             "category": "Adm",
-            "url": "http:\/\/cadtech.com.br\/esfhep\/v\u00eddeos Sisgen Prontos\/ADM\/Restri\u00e7\u00e3o de aulas no qhs.mp4",
+            "url": "https:\/\/cadtech.com.br\/esfhep\/v\u00eddeos Sisgen Prontos\/ADM\/Restri\u00e7\u00e3o de aulas no qhs.mp4",
             "thumbnail": "https:\/\/cadtech.com.br\/esfhep\/Sisgen tutorial logo.jpeg"
         },
         {
             "id": "v_1783087346500",
             "name": "Exporta\u00e7\u00e3o de qhs",
             "category": "Adm",
-            "url": "http:\/\/cadtech.com.br\/esfhep\/v\u00eddeos Sisgen Prontos\/ADM\/Exporta\u00e7\u00e3o de qhs.mp4",
+            "url": "https:\/\/cadtech.com.br\/esfhep\/v\u00eddeos Sisgen Prontos\/ADM\/Exporta\u00e7\u00e3o de qhs.mp4",
             "thumbnail": "https:\/\/cadtech.com.br\/esfhep\/Sisgen tutorial logo.jpeg"
         },
         {
             "id": "v_1783087400380",
             "name": "Suporte",
             "category": "Alunos",
-            "url": "http:\/\/cadtech.com.br\/esfhep\/v\u00eddeos Sisgen Prontos\/ADM\/Suporte.mp4",
+            "url": "https:\/\/cadtech.com.br\/esfhep\/v\u00eddeos Sisgen Prontos\/ADM\/Suporte.mp4",
             "thumbnail": "https:\/\/cadtech.com.br\/esfhep\/Sisgen tutorial logo.jpeg"
         },
         {
             "id": "v_1783087450675",
             "name": "Suporte",
             "category": "Instrutores",
-            "url": "http:\/\/cadtech.com.br\/esfhep\/v\u00eddeos Sisgen Prontos\/ADM\/Suporte.mp4",
+            "url": "https:\/\/cadtech.com.br\/esfhep\/v\u00eddeos Sisgen Prontos\/ADM\/Suporte.mp4",
             "thumbnail": "https:\/\/cadtech.com.br\/esfhep\/Sisgen tutorial logo.jpeg"
         },
         {
             "id": "v_1783087485131",
             "name": "Suporte",
             "category": "Adm",
-            "url": "http:\/\/cadtech.com.br\/esfhep\/v\u00eddeos Sisgen Prontos\/ADM\/Suporte.mp4",
+            "url": "https:\/\/cadtech.com.br\/esfhep\/v\u00eddeos Sisgen Prontos\/ADM\/Suporte.mp4",
             "thumbnail": "https:\/\/cadtech.com.br\/esfhep\/Sisgen tutorial logo.jpeg"
         }
     ],

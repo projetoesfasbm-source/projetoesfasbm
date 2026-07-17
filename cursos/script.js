@@ -216,15 +216,33 @@ function playVideo(videoId) {
     modalTitle.textContent = video.name;
     modalCategory.textContent = video.category;
 
+    let videoUrl = video.url;
+    // Converte http:// para https:// para evitar bloqueio de Mixed Content (recurso inseguro em site HTTPS)
+    if (videoUrl.startsWith('http://')) {
+        videoUrl = 'https://' + videoUrl.substring(7);
+    }
+    // Remove possíveis barras triplas acidentais (ex: http:/// ou https:///)
+    videoUrl = videoUrl.replace(/^https:\/\/\/+/, 'https://');
+    videoUrl = videoUrl.replace(/^http:\/\/\/+/, 'https://');
+
     let playerHtml = "";
-    const parsedUrl = parseVideoUrl(video.url);
+    const parsedUrl = parseVideoUrl(videoUrl);
 
     if (parsedUrl.type === "youtube" || parsedUrl.type === "iframe") {
         playerHtml = `<iframe src="${parsedUrl.url}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>`;
     } else {
+        // Encodar a URL do vídeo para que espaços e acentuações no arquivo funcionem no player
+        let encodedUrl = parsedUrl.url;
+        try {
+            const urlObj = new URL(parsedUrl.url);
+            urlObj.pathname = encodeURI(decodeURI(urlObj.pathname));
+            encodedUrl = urlObj.toString();
+        } catch (e) {
+            encodedUrl = encodeURI(decodeURI(parsedUrl.url));
+        }
         playerHtml = `
-            <video src="${video.url}" controls autoplay playsinline preload="auto">
-                Seu navegador n&atilde;o suporta a tag de v&iacute;deo.
+            <video src="${encodedUrl}" controls autoplay playsinline preload="auto">
+                Seu navegador não suporta a tag de vídeo.
             </video>
         `;
     }
