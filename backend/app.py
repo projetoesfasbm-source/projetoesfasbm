@@ -368,7 +368,7 @@ def register_handlers_and_processors(app):
         # Bloqueio de APIs sensíveis do navegador (Permissão)
         response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
 
-                # Content-Security-Policy Rigoroso (7 Bandeiras Laranjas do ZAP corrigidas de uma vez)
+        # Content-Security-Policy Rigoroso (7 Bandeiras Laranjas do ZAP corrigidas de uma vez)
         csp = [
             "default-src 'self'",
             "script-src 'self' 'unsafe-inline' https://code.jquery.com https://cdn.jsdelivr.net https://www.googletagmanager.com",
@@ -376,6 +376,8 @@ def register_handlers_and_processors(app):
             "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com",
             "img-src 'self' data: *",
             "connect-src 'self' https://cdn.jsdelivr.net https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com https://stats.g.doubleclick.net",
+            "media-src 'self' https://cadtech.com.br https://*.cadtech.com.br https://commondatastorage.googleapis.com data: blob:",
+            "frame-src 'self' https://www.youtube.com https://*.youtube.com https://*.live.com https://*.live.net https://*.sharepoint.com",
             "object-src 'none'",
             "frame-ancestors 'none'",
             "manifest-src 'self'",
