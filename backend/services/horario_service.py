@@ -199,14 +199,17 @@ class HorarioService:
 
                 aula_is_blocked = str(aula.periodo) in [str(x) for x in blocked_for_pelotao.get(aula.dia_semana, [])]
 
+                # Condição especial para Matéria de Disposição
+                is_disposicao_materia = aula.disciplina and aula.disciplina.materia.strip().upper() == 'A DISPOSIÇÃO DO C AL /S ENS'
+
                 aula_info = {
                     'id': aula.id,
-                    'materia': aula.disciplina.materia if show_details else 'Aguardando Aprovação',
-                    'instrutor': instrutor_display if show_details else None,
+                    'materia': 'A disposição do C Al /S Ens' if is_disposicao_materia else (aula.disciplina.materia if show_details else 'Aguardando Aprovação'),
+                    'instrutor': None if is_disposicao_materia else (instrutor_display if show_details else None),
                     'observacao': aula.observacao,
                     'duracao': aula.duracao,
-                    'status': aula.status,
-                    'is_disposicao': False,
+                    'status': 'confirmado' if is_disposicao_materia else aula.status,
+                    'is_disposicao': True if is_disposicao_materia else False,
                     'can_edit': can_see_pending_details,
                     'is_continuation': False,
                     'group_id': aula.group_id,
