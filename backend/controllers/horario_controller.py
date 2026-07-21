@@ -22,6 +22,7 @@ from ..models.disciplina_turma import DisciplinaTurma
 from ..models.semana import Semana
 from ..models.turma import Turma
 from ..models.ciclo import Ciclo
+from ..models.user import User
 from ..services.site_config_service import SiteConfigService
 from utils.decorators import admin_or_programmer_required, can_schedule_classes_required
 from ..services.horario_service import HorarioService
@@ -74,6 +75,80 @@ def _get_horario_context_data():
         'pos_int_2': pos_int_2,
     }
     return tempos, intervalos
+
+
+def assegurar_materia_disposicao(school_id, active_edicao, ciclo_id, turma_obj):
+    # 1. Procura ou cria o usuário dummy para o C Al / S Ens
+    dummy_user = db.session.execute(
+        select(User).where(User.username == 'c_al_s_ens')
+    ).scalar_one_or_none()
+    
+    if not dummy_user:
+        dummy_user = User(
+            matricula='C_AL_S_ENS',
+            username='c_al_s_ens',
+            email='c_al_s_ens@escola.com.br',
+            role='instrutor',
+            is_active=False,
+            nome_de_guerra='C Al / S Ens'
+        )
+        db.session.add(dummy_user)
+        db.session.flush()
+        
+    # 2. Procura ou cria o instrutor dummy para a escola atual
+    dummy_instrutor = db.session.execute(
+        select(Instrutor).where(
+            Instrutor.user_id == dummy_user.id,
+            Instrutor.school_id == school_id
+        )
+    ).scalar_one_or_none()
+    
+    if not dummy_instrutor:
+        dummy_instrutor = Instrutor(
+            user_id=dummy_user.id,
+            school_id=school_id
+        )
+        db.session.add(dummy_instrutor)
+        db.session.flush()
+        
+    # 3. Procura ou cria a disciplina para a turma e ciclo atuais
+    disciplina = db.session.execute(
+        select(Disciplina).where(
+            Disciplina.materia == 'A disposição do C Al /S Ens',
+            Disciplina.turma_id == turma_obj.id,
+            Disciplina.ciclo_id == ciclo_id
+        )
+    ).scalar_one_or_none()
+    
+    if not disciplina:
+        disciplina = Disciplina(
+            materia='A disposição do C Al /S Ens',
+            carga_horaria_prevista=0,
+            carga_horaria_cumprida=0,
+            turma_id=turma_obj.id,
+            ciclo_id=ciclo_id
+        )
+        db.session.add(disciplina)
+        db.session.flush()
+        
+    # 4. Procura ou cria a associação de disciplina e instrutor (vínculo)
+    vinculo = db.session.execute(
+        select(DisciplinaTurma).where(
+            DisciplinaTurma.disciplina_id == disciplina.id,
+            DisciplinaTurma.pelotao == turma_obj.nome
+        )
+    ).scalar_one_or_none()
+    
+    if not vinculo:
+        vinculo = DisciplinaTurma(
+            disciplina_id=disciplina.id,
+            pelotao=turma_obj.nome,
+            instrutor_id_1=dummy_instrutor.id
+        )
+        db.session.add(vinculo)
+        db.session.flush()
+        
+    db.session.commit()
 
 
 @horario_bp.route('/')
@@ -136,6 +211,13 @@ def index():
     turma_atual_obj = None
     if turma_selecionada_nome:
         turma_atual_obj = db.session.scalar(select(Turma).where(Turma.nome == turma_selecionada_nome, Turma.school_id == school_id, Turma.edicao_id == active_edicao))
+
+    # Garante a existência da matéria e instrutor dummy para período livre
+    if school_id and active_edicao and ciclo_selecionado_id and turma_atual_obj:
+        try:
+            assegurar_materia_disposicao(school_id, active_edicao, ciclo_selecionado_id, turma_atual_obj)
+        except Exception as e:
+            current_app.logger.error(f"Erro ao assegurar materia disposicao: {e}")
 
     ciclo_selecionado_id = request.args.get('ciclo', session.get('ultimo_ciclo_horario'), type=int)
 
@@ -479,6 +561,16 @@ def editar_horario_grid(pelotao, semana_id, ciclo_id):
     if not semana or (active_school and semana.ciclo.school_id != active_school):
         flash("Semana não encontrada.", "danger")
         return redirect(url_for('horario.index'))
+
+    # Garante a existência da matéria e instrutor dummy para período livre no modo de edição
+    active_edicao = semana.ciclo.edicao_id if (semana and semana.ciclo) else None
+    if active_school and active_edicao:
+        turma_obj = db.session.scalar(select(Turma).where(Turma.nome == pelotao, Turma.school_id == active_school, Turma.edicao_id == active_edicao))
+        if turma_obj:
+            try:
+                assegurar_materia_disposicao(active_school, active_edicao, ciclo_id, turma_obj)
+            except Exception as e:
+                current_app.logger.error(f"Erro ao assegurar materia disposicao no edit: {e}")
 
     context_data = HorarioService.get_edit_grid_context(pelotao, semana_id, ciclo_id, current_user)
     if not context_data.get('success'):
