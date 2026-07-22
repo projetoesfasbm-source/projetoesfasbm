@@ -78,77 +78,84 @@ def _get_horario_context_data():
 
 
 def assegurar_materia_disposicao(school_id, active_edicao, ciclo_id, turma_obj):
-    # 1. Procura ou cria o usuário dummy para o C Al / S Ens
-    dummy_user = db.session.execute(
-        select(User).where(User.username == 'c_al_s_ens')
-    ).scalar_one_or_none()
-    
-    if not dummy_user:
-        dummy_user = User(
-            matricula='C_AL_S_ENS',
-            username='c_al_s_ens',
-            email='c_al_s_ens@escola.com.br',
-            role='instrutor',
-            is_active=False,
-            nome_de_guerra='C Al / S Ens'
-        )
-        db.session.add(dummy_user)
-        db.session.flush()
+    try:
+        # 1. Procura ou cria o usuário dummy para o C Al / S Ens
+        dummy_user = db.session.execute(
+            select(User).where(User.username == 'c_al_s_ens')
+        ).scalar_one_or_none()
         
-    # 2. Procura ou cria o instrutor dummy para a escola atual
-    dummy_instrutor = db.session.execute(
-        select(Instrutor).where(
-            Instrutor.user_id == dummy_user.id,
-            Instrutor.school_id == school_id
-        )
-    ).scalar_one_or_none()
-    
-    if not dummy_instrutor:
-        dummy_instrutor = Instrutor(
-            user_id=dummy_user.id,
-            school_id=school_id
-        )
-        db.session.add(dummy_instrutor)
-        db.session.flush()
+        if not dummy_user:
+            dummy_user = User(
+                matricula='C_AL_S_ENS',
+                username='c_al_s_ens',
+                email='c_al_s_ens@escola.com.br',
+                role='instrutor',
+                is_active=False,
+                nome_de_guerra='C Al / S Ens'
+            )
+            db.session.add(dummy_user)
+            db.session.flush()
+            
+        # 2. Procura ou cria o instrutor dummy para a escola atual
+        dummy_instrutor = db.session.execute(
+            select(Instrutor).where(
+                Instrutor.user_id == dummy_user.id,
+                Instrutor.school_id == school_id
+            )
+        ).scalar_one_or_none()
         
-    # 3. Procura ou cria a disciplina para a turma e ciclo atuais
-    disciplina = db.session.execute(
-        select(Disciplina).where(
-            Disciplina.materia == 'A disposição do C Al /S Ens',
-            Disciplina.turma_id == turma_obj.id,
-            Disciplina.ciclo_id == ciclo_id
-        )
-    ).scalar_one_or_none()
-    
-    if not disciplina:
-        disciplina = Disciplina(
-            materia='A disposição do C Al /S Ens',
-            carga_horaria_prevista=0,
-            carga_horaria_cumprida=0,
-            turma_id=turma_obj.id,
-            ciclo_id=ciclo_id
-        )
-        db.session.add(disciplina)
-        db.session.flush()
+        if not dummy_instrutor:
+            dummy_instrutor = Instrutor(
+                user_id=dummy_user.id,
+                school_id=school_id
+            )
+            db.session.add(dummy_instrutor)
+            db.session.flush()
+            
+        # 3. Procura ou cria a disciplina para a turma atual
+        # NOTA: Não filtramos pelo ciclo_id no WHERE porque a constraint _materia_turma_uc é única para (materia, turma_id)
+        disciplina = db.session.execute(
+            select(Disciplina).where(
+                Disciplina.materia == 'A disposição do C Al /S Ens',
+                Disciplina.turma_id == turma_obj.id
+            )
+        ).scalar_one_or_none()
         
-    # 4. Procura ou cria a associação de disciplina e instrutor (vínculo)
-    vinculo = db.session.execute(
-        select(DisciplinaTurma).where(
-            DisciplinaTurma.disciplina_id == disciplina.id,
-            DisciplinaTurma.pelotao == turma_obj.nome
-        )
-    ).scalar_one_or_none()
-    
-    if not vinculo:
-        vinculo = DisciplinaTurma(
-            disciplina_id=disciplina.id,
-            pelotao=turma_obj.nome,
-            instrutor_id_1=dummy_instrutor.id
-        )
-        db.session.add(vinculo)
-        db.session.flush()
+        if not disciplina:
+            disciplina = Disciplina(
+                materia='A disposição do C Al /S Ens',
+                carga_horaria_prevista=0,
+                carga_horaria_cumprida=0,
+                turma_id=turma_obj.id,
+                ciclo_id=ciclo_id
+            )
+            db.session.add(disciplina)
+            db.session.flush()
+            
+        # 4. Procura ou cria a associação de disciplina e instrutor (vínculo)
+        vinculo = db.session.execute(
+            select(DisciplinaTurma).where(
+                DisciplinaTurma.disciplina_id == disciplina.id,
+                DisciplinaTurma.pelotao == turma_obj.nome
+            )
+        ).scalar_one_or_none()
         
-    db.session.commit()
+        if not vinculo:
+            vinculo = DisciplinaTurma(
+                disciplina_id=disciplina.id,
+                pelotao=turma_obj.nome,
+                instrutor_id_1=dummy_instrutor.id
+            )
+            db.session.add(vinculo)
+            db.session.flush()
+        elif not vinculo.instrutor_id_1:
+            vinculo.instrutor_id_1 = dummy_instrutor.id
+            db.session.flush()
+            
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        raise e
 
 
 @horario_bp.route('/')
@@ -245,6 +252,7 @@ def index():
             try:
                 assegurar_materia_disposicao(school_id, active_edicao, ciclo_selecionado_id, turma_atual_obj)
             except Exception as e:
+                db.session.rollback()
                 current_app.logger.error(f"Erro ao assegurar materia disposicao: {e}")
 
         session['ultima_turma_visualizada'] = turma_selecionada_nome
@@ -570,6 +578,7 @@ def editar_horario_grid(pelotao, semana_id, ciclo_id):
             try:
                 assegurar_materia_disposicao(active_school, active_edicao, ciclo_id, turma_obj)
             except Exception as e:
+                db.session.rollback()
                 current_app.logger.error(f"Erro ao assegurar materia disposicao no edit: {e}")
 
     context_data = HorarioService.get_edit_grid_context(pelotao, semana_id, ciclo_id, current_user)
