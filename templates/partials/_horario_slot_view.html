@@ -18,7 +18,7 @@
         {% endif %}
     {% endif %}
 
-    <td class="schedule-slot {% if aula.blocked %}blocked-slot{% endif %}" rowspan="{{ aula.duracao if not aula.is_disposicao else 1 }}" style="vertical-align: middle; position: relative;">
+    <td class="schedule-slot {% if aula.blocked %}blocked-slot{% endif %}" rowspan="{{ aula.duracao }}" style="vertical-align: middle; position: relative;">
         <div class="slot-content 
                     {% if aula.is_disposicao and not aula.blocked %}disposicao{% endif %} 
                     {% if aula.status == 'pendente' %}pendente{% endif %}
