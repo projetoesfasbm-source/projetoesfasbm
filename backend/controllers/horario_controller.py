@@ -212,13 +212,6 @@ def index():
     if turma_selecionada_nome:
         turma_atual_obj = db.session.scalar(select(Turma).where(Turma.nome == turma_selecionada_nome, Turma.school_id == school_id, Turma.edicao_id == active_edicao))
 
-    # Garante a existência da matéria e instrutor dummy para período livre
-    if school_id and active_edicao and ciclo_selecionado_id and turma_atual_obj:
-        try:
-            assegurar_materia_disposicao(school_id, active_edicao, ciclo_selecionado_id, turma_atual_obj)
-        except Exception as e:
-            current_app.logger.error(f"Erro ao assegurar materia disposicao: {e}")
-
     ciclo_selecionado_id = request.args.get('ciclo', session.get('ultimo_ciclo_horario'), type=int)
 
     ciclos = db.session.scalars(
@@ -247,6 +240,13 @@ def index():
     horario_matrix = None
     datas_semana = {}
     if turma_selecionada_nome and semana_selecionada:
+        # Garante a existência da matéria e instrutor dummy para período livre
+        if school_id and active_edicao and ciclo_selecionado_id and turma_atual_obj:
+            try:
+                assegurar_materia_disposicao(school_id, active_edicao, ciclo_selecionado_id, turma_atual_obj)
+            except Exception as e:
+                current_app.logger.error(f"Erro ao assegurar materia disposicao: {e}")
+
         session['ultima_turma_visualizada'] = turma_selecionada_nome
         horario_matrix = HorarioService.construir_matriz_horario(turma_selecionada_nome, semana_selecionada.id, current_user)
         datas_semana = HorarioService.get_datas_da_semana(semana_selecionada)
