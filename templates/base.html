@@ -577,6 +577,7 @@
                             <a href="{{ url_for('diario.listar_pendentes') }}" class="nav-link {% if request.endpoint and 'diario.' in request.endpoint %}active{% endif %}"><div class="nav-icon">✍️</div> Validar Diários</a>
                         {% endif %}
                         
+                        <a href="/cursos/" class="nav-link {% if request.path and '/cursos/' in request.path %}active{% endif %}"><div class="nav-icon">🎓</div> Tutoriais</a>
                         <a href="{{ url_for('suporte.novo_chamado') }}" class="nav-link {% if request.endpoint and 'suporte.' in request.endpoint %}active{% endif %}"><div class="nav-icon">🛠️</div> Suporte</a>
                     {% endif %}
 
