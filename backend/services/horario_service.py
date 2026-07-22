@@ -483,7 +483,8 @@ class HorarioService:
                         else:
                             total_agendado -= aula_atual_editando.duracao
 
-                if (total_agendado + duracao) > disciplina.carga_horaria_prevista:
+                is_disposicao_materia = disciplina.materia.strip().upper() == 'A DISPOSIÇÃO DO C AL /S ENS'
+                if not is_disposicao_materia and (total_agendado + duracao) > disciplina.carga_horaria_prevista:
                     restante = disciplina.carga_horaria_prevista - total_agendado
                     if restante < 0:
                         restante = 0
