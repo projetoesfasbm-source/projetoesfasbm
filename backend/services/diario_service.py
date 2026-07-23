@@ -283,7 +283,7 @@ class DiarioService:
         if not diario_pai:
             return False, "Permissão negada."
 
-        base_path = os.path.join(current_app.root_path, 'static')
+        base_path = current_app.static_folder
         upload_folder = os.path.join(base_path, 'uploads', 'signatures')
         os.makedirs(upload_folder, exist_ok=True)
         
