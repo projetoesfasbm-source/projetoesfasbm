@@ -23,7 +23,7 @@ def index():
     """
     active_school_id = getattr(current_user, 'temp_active_school_id', None)
 
-    if current_user.role in ['super_admin', 'admin_escola']:
+    if current_user.is_super_admin or current_user.is_admin_escola:
         # Busca IDs de disciplinas habilitadas filtradas por escola e edição
         edicao_id = g.active_edicao.id if g.get('active_edicao') else None
         query = Disciplina.query.join(Turma).join(DisciplinaHabilitada).filter(
@@ -53,7 +53,7 @@ def index():
 @login_required
 def configurar_disciplinas():
     """Checklist baseado no NOME da matéria, mesclando todas as turmas."""
-    if current_user.role not in ['super_admin', 'admin_escola']:
+    if not (current_user.is_super_admin or current_user.is_admin_escola):
         flash("Acesso negado.", "danger")
         return redirect(url_for('main.dashboard'))
 
@@ -108,6 +108,10 @@ def configurar_disciplinas():
 @recursos_bp.route('/admin/provas/<int:disciplina_id>', methods=['GET', 'POST'])
 @login_required
 def gerenciar_provas(disciplina_id):
+    if not (current_user.is_super_admin or current_user.is_admin_escola):
+        flash("Acesso negado.", "danger")
+        return redirect(url_for('main.dashboard'))
+        
     disciplina = Disciplina.query.get_or_404(disciplina_id)
     
     if request.method == 'POST':
@@ -182,7 +186,7 @@ def listar_recursos_pendentes():
 @login_required
 def encaminhar_recurso(recurso_id):
     """Administrador encaminha o processo para o próximo nível."""
-    if current_user.role not in ['super_admin', 'admin_escola']:
+    if not (current_user.is_super_admin or current_user.is_admin_escola):
         flash("Acesso negado.", "danger")
         return redirect(url_for('main.dashboard'))
 
@@ -209,7 +213,7 @@ def encaminhar_recurso(recurso_id):
 @login_required
 def detalhes_recurso(recurso_id):
     """Página dedicada para visualização e redação técnica do parecer/decisão."""
-    if current_user.role not in ['super_admin', 'admin_escola', 'instrutor']:
+    if not (current_user.is_super_admin or current_user.is_admin_escola or current_user.role == 'instrutor'):
         flash("Acesso negado.", "danger")
         return redirect(url_for('main.dashboard'))
         
