@@ -72,10 +72,10 @@
                     </tbody>
                 </table>
             </div>
-        </div>
-    </div>
 </div>
+{% endblock %}
 
+{% block modals %}
 {% for r in recursos %}
 <div class="modal fade" id="modalRecurso{{ r.id }}" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
@@ -106,5 +106,4 @@
     </div>
 </div>
 {% endfor %}
-
 {% endblock %}
