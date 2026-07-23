@@ -576,7 +576,7 @@ class HorarioService:
 
             instructors_to_check = [i for i in [instrutor_id_1, instrutor_id_2] if i is not None]
 
-            if instructors_to_check:
+            if instructors_to_check and (not disciplina or disciplina.materia.strip().upper() != 'A DISPOSIÇÃO DO C AL /S ENS'):
                 user_ids_subq = select(Instrutor.user_id).where(Instrutor.id.in_(instructors_to_check))
                 all_instrutor_ids_subq = select(Instrutor.id).where(Instrutor.user_id.in_(user_ids_subq))
 
