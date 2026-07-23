@@ -60,35 +60,6 @@
                                 </button>
                             </td>
                         </tr>
-
-                        <div class="modal fade" id="modalRecurso{{ r.id }}" tabindex="-1" aria-hidden="true">
-                            <div class="modal-dialog modal-lg modal-dialog-centered">
-                                <div class="modal-content border-0 shadow" style="border-radius: 15px;">
-                                    <div class="modal-header border-bottom-0 p-4">
-                                        <h5 class="modal-title fw-bold">Detalhes do Recurso</h5>
-                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                    </div>
-                                    <div class="modal-body p-4 pt-0">
-                                        <div class="mb-4 p-3 bg-light rounded" style="border-left: 4px solid var(--primary-color);">
-                                            <label class="small fw-bold text-muted d-block mb-1">SUA ARGUMENTAÇÃO:</label>
-                                            <p class="mb-0 text-dark">{{ r.argumentacao_texto }}</p>
-                                        </div>
-
-                                        <div class="p-3 rounded border">
-                                            <label class="small fw-bold text-muted d-block mb-1">RESPOSTA DA ADMINISTRAÇÃO:</label>
-                                            {% if r.resposta_admin %}
-                                                <p class="mb-0 text-dark">{{ r.resposta_admin }}</p>
-                                            {% else %}
-                                                <p class="mb-0 text-muted fst-italic">Aguardando análise da comissão...</p>
-                                            {% endif %}
-                                        </div>
-                                    </div>
-                                    <div class="modal-footer border-top-0 p-4">
-                                        <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">Fechar</button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
                         {% else %}
                         <tr>
                             <td colspan="5" class="text-center py-5">
@@ -104,4 +75,36 @@
         </div>
     </div>
 </div>
+
+{% for r in recursos %}
+<div class="modal fade" id="modalRecurso{{ r.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow" style="border-radius: 15px;">
+            <div class="modal-header border-bottom-0 p-4">
+                <h5 class="modal-title fw-bold">Detalhes do Recurso</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4 pt-0">
+                <div class="mb-4 p-3 bg-light rounded" style="border-left: 4px solid var(--primary-color);">
+                    <label class="small fw-bold text-muted d-block mb-1">SUA ARGUMENTAÇÃO:</label>
+                    <p class="mb-0 text-dark">{{ r.argumentacao_texto }}</p>
+                </div>
+
+                <div class="p-3 rounded border">
+                    <label class="small fw-bold text-muted d-block mb-1">RESPOSTA DA ADMINISTRAÇÃO:</label>
+                    {% if r.resposta_admin %}
+                        <p class="mb-0 text-dark">{{ r.resposta_admin }}</p>
+                    {% else %}
+                        <p class="mb-0 text-muted fst-italic">Aguardando análise da comissão...</p>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="modal-footer border-top-0 p-4">
+                <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
 {% endblock %}
