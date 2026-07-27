@@ -64,10 +64,15 @@
                         <div class="row g-3 mb-4 no-print">
                             <div class="col-md-7">
                                 <label class="form-label fw-bold small">TIPO DE DOCUMENTO A GERAR</label>
-                                <select name="tipo_acao" class="form-select border-primary fw-bold" id="selectTipoDoc" {% if is_finalizado %}disabled{% else %}required{% endif %}>
+                                <select name="tipo_acao" class="form-select border-primary fw-bold" id="selectTipoDoc" {% if is_finalizado or current_user.role == 'instrutor' %}disabled{% else %}required{% endif %}>
                                     <option value="parecer_instrutor" {% if current_user.role == 'instrutor' or r.status in ['Com Instrutor', 'Pendente'] %}selected{% endif %}>PARECER DO INSTRUTOR (CONTEUDISTA)</option>
+                                    {% if current_user.role != 'instrutor' %}
                                     <option value="decisao_cmt" {% if current_user.role != 'instrutor' and r.status in ['Com Comandante', 'Retornado ao Admin (Parecer)', 'Deferido', 'Indeferido'] %}selected{% endif %}>DECISÃO DO COMANDANTE DA ESCOLA</option>
+                                    {% endif %}
                                 </select>
+                                {% if current_user.role == 'instrutor' %}
+                                <input type="hidden" name="tipo_acao" value="parecer_instrutor">
+                                {% endif %}
                             </div>
                             <div class="col-md-5" id="colStatusFinal" style="{% if current_user.role == 'instrutor' or r.status == 'Com Instrutor' %}display: none;{% endif %}">
                                 <label class="form-label fw-bold small text-danger">ESTADO FINAL DO RECURSO</label>
