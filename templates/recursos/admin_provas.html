@@ -101,7 +101,9 @@
         </div>
     </div>
 </div>
+{% endblock %}
 
+{% block modals %}
 {% if provas %}
 {% for prova in provas %}
 <!-- Modal de Edição -->
@@ -159,5 +161,4 @@
 </div>
 {% endfor %}
 {% endif %}
-
 {% endblock %}
