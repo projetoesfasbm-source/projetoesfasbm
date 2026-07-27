@@ -16,6 +16,27 @@ class AssetService:
         AssetService.UPLOAD_FOLDER = os.path.join(app.root_path, '..', 'static', 'uploads')
 
     @staticmethod
+    def save_file(file, folder=''):
+        """Salva um arquivo genérico (pdf, word, etc) em uma subpasta especificada."""
+        if not file or file.filename == '':
+            return None
+            
+        try:
+            target_folder = os.path.join(AssetService.UPLOAD_FOLDER, folder)
+            os.makedirs(target_folder, exist_ok=True)
+            
+            original_filename = secure_filename(file.filename)
+            unique_filename = generate_unique_filename(original_filename)
+            file_path = os.path.join(target_folder, unique_filename)
+            
+            file.save(file_path)
+            return unique_filename
+        except Exception as e:
+            if current_app:
+                current_app.logger.error(f"Erro ao salvar arquivo: {e}")
+            raise e
+
+    @staticmethod
     def get_all_assets():
         return db.session.scalars(select(ImageAsset).order_by(ImageAsset.created_at.desc()).limit(100)).all()
 
