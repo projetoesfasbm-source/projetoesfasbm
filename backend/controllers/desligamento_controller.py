@@ -67,8 +67,10 @@ def executar_desligamento():
         return redirect(url_for('desligamento.index'))
 
     try:
-        # 1. Congela o aluno
+        # 1. Congela o aluno e desativa o login do usuário
         aluno.status_matricula = 'Desligado'
+        if aluno.user:
+            aluno.user.is_active = False
         
         # 2. Guarda de qual turma ele era para histórico, antes de remover
         turma_antiga = aluno.turma.nome if aluno.turma else "Sem Turma"
@@ -139,11 +141,13 @@ def reverter_desligamento(registro_id):
         aluno.status_matricula = 'Ativo'
         aluno.edicao_id = nova_edicao_id
         aluno.turma_id = nova_turma_id
+        if aluno.user:
+            aluno.user.is_active = True
 
         # 2. Atualiza a observação do registro para deixar documentado que foi revertido
         turma_destino = db.session.get(Turma, nova_turma_id)
         nome_turma = turma_destino.nome if turma_destino else "N/D"
-        registro.observacoes = f"[REVERTIDO em {datetime.utcnow().strftime('%d/%m/%Y')} para Turma: {nome_turma}] -- " + (registro.observacoes or "")
+        registro.observacoes = f"[REVERTIDO em {datetime.now().strftime('%d/%m/%Y')} para Turma: {nome_turma}] -- " + (registro.observacoes or "")
 
         db.session.commit()
         flash(f"O aluno {aluno.user.nome_de_guerra} foi reativado com sucesso e o acesso foi desbloqueado!", "success")
