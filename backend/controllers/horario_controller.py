@@ -179,7 +179,8 @@ def index():
         active_edicao = session.get('active_edicao_id')
         todas_as_turmas = TurmaService.get_turmas_by_school(school_id, active_edicao)
 
-        if not current_user.is_sens and not current_user.is_admin_escola:
+        if not current_user.is_staff:
+            todas_as_turmas = []
             my_instrutor_ids = db.session.scalars(
                 select(Instrutor.id).where(Instrutor.user_id == current_user.id)
             ).all()
@@ -202,8 +203,7 @@ def index():
                         .order_by(Turma.nome)
                     ).all()
 
-                    if turmas_vinculadas:
-                        todas_as_turmas = turmas_vinculadas
+                    todas_as_turmas = list(turmas_vinculadas)
                 except Exception as e:
                     current_app.logger.error(f"Erro ao filtrar turmas do instrutor: {e}")
                     pass
