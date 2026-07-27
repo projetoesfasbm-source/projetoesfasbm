@@ -126,6 +126,44 @@ def gerenciar_provas(disciplina_id):
     provas = ProvaRecurso.query.filter_by(disciplina_id=disciplina_id).all()
     return render_template('recursos/admin_provas.html', disciplina=disciplina, provas=provas)
 
+@recursos_bp.route('/admin/provas/editar/<int:prova_id>', methods=['POST'])
+@login_required
+def editar_prova(prova_id):
+    if not (current_user.is_super_admin or current_user.is_admin_escola):
+        flash("Acesso negado.", "danger")
+        return redirect(url_for('main.dashboard'))
+        
+    prova = ProvaRecurso.query.get_or_404(prova_id)
+    nome_prova = request.form.get('nome_prova')
+    is_active = request.form.get('is_active') == 'true'
+    
+    if nome_prova:
+        prova.nome = nome_prova
+        prova.is_active = is_active
+        db.session.commit()
+        flash(f"Prova atualizada com sucesso!", "success")
+        
+    return redirect(url_for('recursos.gerenciar_provas', disciplina_id=prova.disciplina_id))
+
+@recursos_bp.route('/admin/provas/excluir/<int:prova_id>', methods=['POST'])
+@login_required
+def excluir_prova(prova_id):
+    if not (current_user.is_super_admin or current_user.is_admin_escola):
+        flash("Acesso negado.", "danger")
+        return redirect(url_for('main.dashboard'))
+        
+    prova = ProvaRecurso.query.get_or_404(prova_id)
+    disciplina_id = prova.disciplina_id
+    
+    if prova.recursos:
+        flash("Não é possível excluir esta prova pois já existem recursos associados a ela.", "warning")
+    else:
+        db.session.delete(prova)
+        db.session.commit()
+        flash("Prova excluída com sucesso!", "success")
+        
+    return redirect(url_for('recursos.gerenciar_provas', disciplina_id=disciplina_id))
+
 @recursos_bp.route('/admin/analisar')
 @login_required
 def listar_recursos_pendentes():

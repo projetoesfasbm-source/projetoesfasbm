@@ -78,8 +78,68 @@
                                         <a href="#" class="btn btn-light btn-sm text-primary rounded-circle" title="Ver recursos desta prova">
                                             <i class="fas fa-list-ul"></i>
                                         </a>
+                                        <a href="#" class="btn btn-light btn-sm text-primary rounded-circle ms-1" title="Editar Prova" data-bs-toggle="modal" data-bs-target="#editModal{{ prova.id }}">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        <a href="#" class="btn btn-light btn-sm text-danger rounded-circle ms-1" title="Excluir Prova" data-bs-toggle="modal" data-bs-target="#deleteModal{{ prova.id }}">
+                                            <i class="fas fa-trash-alt"></i>
+                                        </a>
                                     </td>
                                 </tr>
+
+                                <!-- Modal de Edição -->
+                                <div class="modal fade text-start" id="editModal{{ prova.id }}" tabindex="-1" aria-labelledby="editModalLabel{{ prova.id }}" aria-hidden="true">
+                                  <div class="modal-dialog">
+                                    <div class="modal-content">
+                                      <div class="modal-header">
+                                        <h5 class="modal-title" id="editModalLabel{{ prova.id }}">Editar Prova</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                      </div>
+                                      <form action="{{ url_for('recursos.editar_prova', prova_id=prova.id) }}" method="POST">
+                                          <div class="modal-body">
+                                              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                              <div class="mb-3">
+                                                  <label for="nome_prova_{{ prova.id }}" class="form-label">Nome da Prova</label>
+                                                  <input type="text" class="form-control" id="nome_prova_{{ prova.id }}" name="nome_prova" value="{{ prova.nome }}" required>
+                                              </div>
+                                              <div class="mb-3">
+                                                  <label class="form-label">Status</label>
+                                                  <select class="form-select" name="is_active">
+                                                      <option value="true" {% if prova.is_active %}selected{% endif %}>Ativa</option>
+                                                      <option value="false" {% if not prova.is_active %}selected{% endif %}>Inativa</option>
+                                                  </select>
+                                              </div>
+                                          </div>
+                                          <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                            <button type="submit" class="btn btn-primary">Salvar Alterações</button>
+                                          </div>
+                                      </form>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <!-- Modal de Exclusão -->
+                                <div class="modal fade text-start" id="deleteModal{{ prova.id }}" tabindex="-1" aria-labelledby="deleteModalLabel{{ prova.id }}" aria-hidden="true">
+                                  <div class="modal-dialog">
+                                    <div class="modal-content">
+                                      <div class="modal-header">
+                                        <h5 class="modal-title" id="deleteModalLabel{{ prova.id }}">Confirmar Exclusão</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                      </div>
+                                      <div class="modal-body">
+                                          Tem certeza que deseja excluir a prova <strong>{{ prova.nome }}</strong>? Esta ação não pode ser desfeita. Se já houverem recursos vinculados, a exclusão será bloqueada pelo sistema.
+                                      </div>
+                                      <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                        <form action="{{ url_for('recursos.excluir_prova', prova_id=prova.id) }}" method="POST" class="d-inline">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <button type="submit" class="btn btn-danger">Excluir</button>
+                                        </form>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
                                 {% endfor %}
                             </tbody>
                         </table>
