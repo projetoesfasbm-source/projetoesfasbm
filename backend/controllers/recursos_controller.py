@@ -183,8 +183,9 @@ def listar_recursos_pendentes():
         Turma.edicao_id == session.get('active_edicao_id')
     )
 
-    # Se for instrutor, filtra apenas o que foi destinado a ele
-    if current_user.role == 'instrutor':
+    # Se for instrutor E NÃO for comandante, filtra apenas o que foi destinado a ele
+    is_comandante = current_user.is_admin_escola_in_school(active_school_id)
+    if current_user.role == 'instrutor' and not is_comandante:
         recursos = query.filter(Recurso.instrutor_id == current_user.id).all()
     else:
         recursos = query.all()
