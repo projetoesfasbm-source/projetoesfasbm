@@ -248,36 +248,16 @@
         } else {
             const opt = document.createElement('option');
             opt.value = "";
-            opt.textContent = "Nenhum instrutor vinculado na matéria";
+            opt.textContent = "Nenhum instrutor disponível para esta matéria";
             opt.disabled = true;
             optg.appendChild(opt);
         }
 
-        // Limpa o Select2 se já estiver instanciado
-        if ($('#selectDestinatario').hasClass("select2-hidden-accessible")) {
-            $('#selectDestinatario').select2('destroy');
-        }
-        
         modal.show();
     }
 
-    $(document).ready(function() {
-        $('.tabela-recursos').DataTable({
-            "language": { "url": "//cdn.datatables.net/plug-ins/1.13.6/i18n/pt-BR.json" },
-            "order": [[ 0, "desc" ]]
-        });
-
-        // Inicializa o Select2 apenas quando o modal estiver visível
-        $('#modalEncaminhamentoGeral').on('shown.bs.modal', function () {
-            $('#selectDestinatario').select2({
-                dropdownParent: $('#modalEncaminhamentoGeral'),
-                placeholder: "Digite o nome para buscar...",
-                allowClear: true,
-                width: '100%'
-            }).select2('open'); // Abre automaticamente para economizar clique
-        });
-
-        // Logica para o PDF com Event Delegation para suportar DataTables
+    // Lógica para o PDF (Movido para fora do document.ready para evitar falhas se o DataTables for bloqueado pelo CSP)
+    document.addEventListener('DOMContentLoaded', function() {
         document.body.addEventListener('click', function(e) {
             const btn = e.target.closest('.btn-recurso-pdf');
             if (!btn) return;
@@ -305,36 +285,61 @@
                     btn.disabled = false;
                 });
         });
-        
-        function pollJobStatus(jobId, btn, originalIcon) {
-            let interval = setInterval(() => {
-                fetch(`/jobs/status/${jobId}`)
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.status === 'completed') {
-                            clearInterval(interval);
-                            btn.innerHTML = originalIcon;
-                            btn.disabled = false;
-                            if (data.result && data.result.file_url) {
-                                window.open(data.result.file_url, '_blank');
-                            } else {
-                                window.location.href = `/jobs/download/${jobId}`;
-                            }
-                        } else if (data.status === 'failed') {
-                            clearInterval(interval);
-                            btn.innerHTML = originalIcon;
-                            btn.disabled = false;
-                            alert('Erro ao gerar o PDF.');
-                        }
-                    })
-                    .catch(err => {
+    });
+
+    function pollJobStatus(jobId, btn, originalIcon) {
+        let interval = setInterval(() => {
+            fetch(`/jobs/status/${jobId}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'completed') {
                         clearInterval(interval);
                         btn.innerHTML = originalIcon;
                         btn.disabled = false;
-                        console.error('Polling error:', err);
-                    });
-            }, 3000);
+                        if (data.result && data.result.file_url) {
+                            window.open(data.result.file_url, '_blank');
+                        } else {
+                            window.location.href = `/jobs/download/${jobId}`;
+                        }
+                    } else if (data.status === 'failed') {
+                        clearInterval(interval);
+                        btn.innerHTML = originalIcon;
+                        btn.disabled = false;
+                        alert('Erro ao gerar o PDF.');
+                    }
+                })
+                .catch(err => {
+                    clearInterval(interval);
+                    btn.innerHTML = originalIcon;
+                    btn.disabled = false;
+                    console.error('Polling error:', err);
+                });
+        }, 3000);
+    }
+
+    $(document).ready(function() {
+        try {
+            $('.tabela-recursos').DataTable({
+                "language": { "url": "//cdn.datatables.net/plug-ins/1.13.6/i18n/pt-BR.json" },
+                "order": [[ 0, "desc" ]]
+            });
+        } catch(e) {
+            console.error("DataTables não pôde ser carregado (CSP/Rede):", e);
         }
+
+        // Inicializa o Select2 apenas quando o modal estiver visível
+        $('#modalEncaminhamentoGeral').on('shown.bs.modal', function () {
+            try {
+                $('#selectDestinatario').select2({
+                    dropdownParent: $('#modalEncaminhamentoGeral'),
+                    placeholder: "Digite o nome para buscar...",
+                    allowClear: true,
+                    width: '100%'
+                }).select2('open'); // Abre automaticamente para economizar clique
+            } catch(e) {
+                console.error("Select2 não carregado:", e);
+            }
+        });
     });
 </script>
 {% endblock %}

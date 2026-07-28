@@ -421,3 +421,25 @@ def exportar_recurso_pdf(recurso_id):
     
     return jsonify({'success': True, 'job_id': job_id})
 
+@recursos_bp.route('/aluno/excluir/<int:recurso_id>', methods=['POST'])
+@login_required
+def excluir_recurso_aluno(recurso_id):
+    recurso = Recurso.query.get_or_404(recurso_id)
+    
+    if str(current_user.role).lower().strip() == 'aluno' and recurso.aluno_id != current_user.id:
+        flash("Acesso negado.", "danger")
+        return redirect(url_for('recursos.index'))
+        
+    if recurso.status != "Em Análise" and recurso.status != "Pendente":
+        flash("Não é possível excluir um recurso que já foi processado ou está em andamento avançado.", "warning")
+        return redirect(url_for('recursos.index'))
+        
+    try:
+        db.session.delete(recurso)
+        db.session.commit()
+        flash("Recurso excluído com sucesso.", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Erro ao excluir recurso: {str(e)}", "danger")
+        
+    return redirect(url_for('recursos.index'))
