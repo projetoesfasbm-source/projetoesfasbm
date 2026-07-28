@@ -183,9 +183,9 @@ def listar_recursos_pendentes():
         Turma.edicao_id == session.get('active_edicao_id')
     )
 
-    # Se for instrutor E NÃO for comandante, filtra apenas o que foi destinado a ele
+    # Se for instrutor E NÃO for comandante nem SENS, filtra apenas o que foi destinado a ele
     is_comandante = current_user.is_admin_escola_in_school(active_school_id)
-    if current_user.role == 'instrutor' and not is_comandante:
+    if current_user.role == 'instrutor' and not (is_comandante or current_user.is_sens):
         recursos = query.filter(Recurso.instrutor_id == current_user.id).all()
     else:
         recursos = query.all()
@@ -216,10 +216,14 @@ def listar_recursos_pendentes():
             {'id': v[0], 'nome': f"{v[2] or ''} {v[1]}".strip()} for v in validos
         ]
 
+    is_instrutor = current_user.role == 'instrutor' or current_user.get_role_in_school(active_school_id) == 'instrutor'
+    force_instrutor = is_instrutor and not (is_comandante or current_user.is_sens or current_user.is_super_admin)
+    
     return render_template('recursos/admin_analise_lista.html', 
                            recursos=recursos, 
                            comandantes=comandantes,
-                           instrutores_map=json.dumps(recurso_instrutores_map))
+                           instrutores_map=json.dumps(recurso_instrutores_map),
+                           force_instrutor=force_instrutor)
 
 @recursos_bp.route('/admin/encaminhar/<int:recurso_id>', methods=['POST'])
 @login_required
