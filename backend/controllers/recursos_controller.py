@@ -251,12 +251,20 @@ def encaminhar_recurso(recurso_id):
 @login_required
 def detalhes_recurso(recurso_id):
     """Página dedicada para visualização e redação técnica do parecer/decisão."""
-    if not (current_user.is_super_admin or current_user.is_sens or current_user.role == 'instrutor'):
+    from flask import session
+    school_id = session.get('active_school_id')
+    is_comandante = current_user.is_admin_escola_in_school(school_id)
+    
+    if not (current_user.is_super_admin or current_user.is_sens or current_user.role == 'instrutor' or is_comandante):
         flash("Acesso negado.", "danger")
         return redirect(url_for('main.dashboard'))
         
     recurso = Recurso.query.get_or_404(recurso_id)
-    return render_template('recursos/admin_detalhes_analise.html', r=recurso)
+    
+    is_instrutor = current_user.role == 'instrutor' or current_user.get_role_in_school(school_id) == 'instrutor'
+    force_instrutor = is_instrutor and not (is_comandante or current_user.is_super_admin or current_user.is_sens)
+    
+    return render_template('recursos/admin_detalhes_analise.html', r=recurso, is_comandante=is_comandante, force_instrutor=force_instrutor)
 
 @recursos_bp.route('/admin/salvar_parecer/<int:recurso_id>', methods=['POST'])
 @login_required
