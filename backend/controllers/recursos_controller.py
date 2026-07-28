@@ -324,6 +324,9 @@ def novo_recurso():
                 active_school_id = aluno_prof.turma.school_id
             aluno_edicao_id = aluno_prof.turma.edicao_id
 
+    if not aluno_edicao_id:
+        aluno_edicao_id = session.get('active_edicao_id')
+
     # Forma mais segura e tolerante a falhas estruturais nos dados de teste:
     # 1. Busca todas as provas ativas
     query = ProvaRecurso.query.filter_by(is_active=True).join(Disciplina).join(Turma).options(
@@ -365,6 +368,9 @@ def api_get_provas(disciplina_id):
             if not active_school_id:
                 active_school_id = aluno_prof.turma.school_id
             aluno_edicao_id = aluno_prof.turma.edicao_id
+            
+    if not aluno_edicao_id:
+        aluno_edicao_id = session.get('active_edicao_id')
     
     query = ProvaRecurso.query.join(Disciplina).join(Turma).filter(
         Disciplina.materia == d_aluno.materia,
