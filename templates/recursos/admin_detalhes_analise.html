@@ -219,7 +219,7 @@ Dê-se ciência ao interessado e realizem-se as retificações necessárias.`;
     
     function pollJobStatus(jobId, btn, originalIcon) {
         let interval = setInterval(() => {
-            fetch(`/jobs/status/${jobId}`)
+            fetch(`/api/jobs/${jobId}/status`)
                 .then(res => res.json())
                 .then(data => {
                     if (data.status === 'completed') {
@@ -229,7 +229,7 @@ Dê-se ciência ao interessado e realizem-se as retificações necessárias.`;
                         if (data.result && data.result.file_url) {
                             window.open(data.result.file_url, '_blank');
                         } else {
-                            window.location.href = `/jobs/download/${jobId}`;
+                            window.location.href = `/api/jobs/${jobId}/download`;
                         }
                     } else if (data.status === 'failed') {
                         clearInterval(interval);
