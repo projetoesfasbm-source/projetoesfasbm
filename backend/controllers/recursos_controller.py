@@ -23,7 +23,7 @@ def index():
     """
     active_school_id = getattr(current_user, 'temp_active_school_id', None)
 
-    if current_user.is_super_admin or current_user.is_admin_escola:
+    if current_user.is_super_admin or current_user.is_sens:
         # Busca IDs de disciplinas habilitadas filtradas por escola e edição
         edicao_id = g.active_edicao.id if g.get('active_edicao') else None
         query = Disciplina.query.join(Turma).join(DisciplinaHabilitada).filter(
@@ -53,7 +53,7 @@ def index():
 @login_required
 def configurar_disciplinas():
     """Checklist baseado no NOME da matéria, mesclando todas as turmas."""
-    if not (current_user.is_super_admin or current_user.is_admin_escola):
+    if not (current_user.is_super_admin or current_user.is_sens):
         flash("Acesso negado.", "danger")
         return redirect(url_for('main.dashboard'))
 
@@ -108,7 +108,7 @@ def configurar_disciplinas():
 @recursos_bp.route('/admin/provas/<int:disciplina_id>', methods=['GET', 'POST'])
 @login_required
 def gerenciar_provas(disciplina_id):
-    if not (current_user.is_super_admin or current_user.is_admin_escola):
+    if not (current_user.is_super_admin or current_user.is_sens):
         flash("Acesso negado.", "danger")
         return redirect(url_for('main.dashboard'))
         
@@ -129,7 +129,7 @@ def gerenciar_provas(disciplina_id):
 @recursos_bp.route('/admin/provas/editar/<int:prova_id>', methods=['POST'])
 @login_required
 def editar_prova(prova_id):
-    if not (current_user.is_super_admin or current_user.is_admin_escola):
+    if not (current_user.is_super_admin or current_user.is_sens):
         flash("Acesso negado.", "danger")
         return redirect(url_for('main.dashboard'))
         
@@ -148,7 +148,7 @@ def editar_prova(prova_id):
 @recursos_bp.route('/admin/provas/excluir/<int:prova_id>', methods=['POST'])
 @login_required
 def excluir_prova(prova_id):
-    if not (current_user.is_super_admin or current_user.is_admin_escola):
+    if not (current_user.is_super_admin or current_user.is_sens):
         flash("Acesso negado.", "danger")
         return redirect(url_for('main.dashboard'))
         
@@ -224,7 +224,7 @@ def listar_recursos_pendentes():
 @login_required
 def encaminhar_recurso(recurso_id):
     """Administrador encaminha o processo para o próximo nível."""
-    if not (current_user.is_super_admin or current_user.is_admin_escola):
+    if not (current_user.is_super_admin or current_user.is_sens):
         flash("Acesso negado.", "danger")
         return redirect(url_for('main.dashboard'))
 
@@ -251,7 +251,7 @@ def encaminhar_recurso(recurso_id):
 @login_required
 def detalhes_recurso(recurso_id):
     """Página dedicada para visualização e redação técnica do parecer/decisão."""
-    if not (current_user.is_super_admin or current_user.is_admin_escola or current_user.role == 'instrutor'):
+    if not (current_user.is_super_admin or current_user.is_sens or current_user.role == 'instrutor'):
         flash("Acesso negado.", "danger")
         return redirect(url_for('main.dashboard'))
         
@@ -315,12 +315,14 @@ def novo_recurso():
             flash(f"Erro: {str(e)}", "danger")
 
     active_school_id = current_user._get_active_school_id()
+    aluno_edicao_id = None
     
     if current_user.role == 'aluno':
         aluno_prof = current_user.aluno_profile
         if aluno_prof and getattr(aluno_prof, 'turma', None):
             if not active_school_id:
                 active_school_id = aluno_prof.turma.school_id
+            aluno_edicao_id = aluno_prof.turma.edicao_id
 
     # Forma mais segura e tolerante a falhas estruturais nos dados de teste:
     # 1. Busca todas as provas ativas
@@ -331,6 +333,9 @@ def novo_recurso():
     # 2. Filtra pela escola
     if active_school_id:
         query = query.filter(Turma.school_id == active_school_id)
+        
+    if aluno_edicao_id:
+        query = query.filter(Turma.edicao_id == aluno_edicao_id)
         
     provas_ativas = query.all()
     
@@ -352,12 +357,14 @@ def api_get_provas(disciplina_id):
     # Lógica importante: busca provas pelo nome da matéria da disciplina selecionada
     d_aluno = Disciplina.query.get_or_404(disciplina_id)
     active_school_id = current_user._get_active_school_id()
+    aluno_edicao_id = None
     
     if current_user.role == 'aluno':
         aluno_prof = current_user.aluno_profile
         if aluno_prof and getattr(aluno_prof, 'turma', None):
             if not active_school_id:
                 active_school_id = aluno_prof.turma.school_id
+            aluno_edicao_id = aluno_prof.turma.edicao_id
     
     query = ProvaRecurso.query.join(Disciplina).join(Turma).filter(
         Disciplina.materia == d_aluno.materia,
@@ -367,6 +374,44 @@ def api_get_provas(disciplina_id):
     if active_school_id:
         query = query.filter(Turma.school_id == active_school_id)
         
+    if aluno_edicao_id:
+        query = query.filter(Turma.edicao_id == aluno_edicao_id)
+        
     provas = query.all()
     
     return jsonify([{'id': p.id, 'nome': p.nome} for p in provas])
+
+@recursos_bp.route('/admin/exportar-pdf/<int:recurso_id>')
+@login_required
+def exportar_recurso_pdf(recurso_id):
+    if not (current_user.is_super_admin or current_user.is_sens):
+        flash("Acesso negado.", "danger")
+        return redirect(url_for('main.dashboard'))
+        
+    recurso = Recurso.query.get_or_404(recurso_id)
+    
+    from datetime import datetime
+    import json
+    import uuid
+    from backend.models.job import BackgroundJob
+    
+    html = render_template(
+        'recursos/recurso_pdf.html',
+        r=recurso,
+        now=datetime.now().astimezone()
+    )
+    
+    pdf_name = f"recurso_{recurso_id}.pdf"
+    job_id = str(uuid.uuid4())
+    job = BackgroundJob(
+        id=job_id,
+        task_type='generate_pdf',
+        payload=html,
+        meta_data=json.dumps({"filename": pdf_name}),
+        user_id=current_user.id
+    )
+    db.session.add(job)
+    db.session.commit()
+    
+    return jsonify({'success': True, 'job_id': job_id})
+

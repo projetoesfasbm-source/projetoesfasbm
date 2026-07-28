@@ -76,6 +76,11 @@
                                                 <i class="fas fa-share me-1"></i> Encaminhar
                                             </button>
                                             {% endif %}
+                                            {% if current_user.is_super_admin or current_user.is_sens %}
+                                            <button type="button" class="btn btn-danger btn-sm rounded-pill px-3 fw-bold btn-recurso-pdf" data-url="{{ url_for('recursos.exportar_recurso_pdf', recurso_id=r.id) }}" title="Imprimir PDF">
+                                                <i class="fas fa-file-pdf me-1"></i> PDF
+                                            </button>
+                                            {% endif %}
                                             <a href="{{ url_for('recursos.detalhes_recurso', recurso_id=r.id) }}" class="btn btn-primary btn-sm rounded-pill px-3 fw-bold">
                                                 <i class="fas fa-search me-1"></i> Analisar
                                             </a>
@@ -120,6 +125,11 @@
                                     </td>
                                     <td class="text-end">
                                         <div class="d-flex gap-2 justify-content-end">
+                                            {% if current_user.is_super_admin or current_user.is_sens %}
+                                            <button type="button" class="btn btn-danger btn-sm rounded-pill px-3 fw-bold btn-recurso-pdf" data-url="{{ url_for('recursos.exportar_recurso_pdf', recurso_id=r.id) }}" title="Imprimir PDF">
+                                                <i class="fas fa-file-pdf me-1"></i> PDF
+                                            </button>
+                                            {% endif %}
                                             <a href="{{ url_for('recursos.detalhes_recurso', recurso_id=r.id) }}" class="btn btn-primary btn-sm rounded-pill px-3 fw-bold">
                                                 <i class="fas fa-search me-1"></i> Ver Resultado
                                             </a>
@@ -266,6 +276,63 @@
                 width: '100%'
             }).select2('open'); // Abre automaticamente para economizar clique
         });
+
+        // Logica para o PDF
+        document.querySelectorAll('.btn-recurso-pdf').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const originalIcon = this.innerHTML;
+                this.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Gerando...';
+                this.disabled = true;
+                
+                fetch(this.dataset.url)
+                    .then(res => res.json())
+                    .then(data => {
+                        if(data.success && data.job_id) {
+                            pollJobStatus(data.job_id, this, originalIcon);
+                        } else {
+                            alert("Erro ao enviar tarefa de PDF para a fila.");
+                            this.innerHTML = originalIcon;
+                            this.disabled = false;
+                        }
+                    })
+                    .catch(err => {
+                        console.error(err);
+                        alert("Erro ao conectar com o servidor.");
+                        this.innerHTML = originalIcon;
+                        this.disabled = false;
+                    });
+            });
+        });
+        
+        function pollJobStatus(jobId, btn, originalIcon) {
+            let interval = setInterval(() => {
+                fetch(`/jobs/status/${jobId}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.status === 'completed') {
+                            clearInterval(interval);
+                            btn.innerHTML = originalIcon;
+                            btn.disabled = false;
+                            if (data.result && data.result.file_url) {
+                                window.open(data.result.file_url, '_blank');
+                            } else {
+                                window.location.href = `/jobs/download/${jobId}`;
+                            }
+                        } else if (data.status === 'failed') {
+                            clearInterval(interval);
+                            btn.innerHTML = originalIcon;
+                            btn.disabled = false;
+                            alert('Erro ao gerar o PDF.');
+                        }
+                    })
+                    .catch(err => {
+                        clearInterval(interval);
+                        btn.innerHTML = originalIcon;
+                        btn.disabled = false;
+                        console.error('Polling error:', err);
+                    });
+            }, 3000);
+        }
     });
 </script>
 {% endblock %}
