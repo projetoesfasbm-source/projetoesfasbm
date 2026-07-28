@@ -61,6 +61,7 @@
                                     </button>
                                     {% if r.status == 'Em Análise' or r.status == 'Pendente' %}
                                     <form action="{{ url_for('recursos.excluir_recurso_aluno', recurso_id=r.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Tem certeza que deseja excluir este recurso? Esta ação não pode ser desfeita.');">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                         <button type="submit" class="btn btn-outline-danger btn-sm rounded-pill px-3">
                                             <i class="fas fa-trash me-1"></i> Excluir
                                         </button>

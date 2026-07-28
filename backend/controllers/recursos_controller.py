@@ -384,6 +384,7 @@ def api_get_provas(disciplina_id):
         query = query.filter(Turma.edicao_id == aluno_edicao_id)
         
     provas = query.all()
+    provas = query.all()
     
     return jsonify([{'id': p.id, 'nome': p.nome} for p in provas])
 
@@ -399,7 +400,7 @@ def exportar_recurso_pdf(recurso_id):
     from datetime import datetime
     import json
     import uuid
-    from backend.models.job import BackgroundJob
+    from backend.models.background_job import BackgroundJob
     
     html = render_template(
         'recursos/recurso_pdf.html',
