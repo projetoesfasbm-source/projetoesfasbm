@@ -174,14 +174,6 @@
                         <label class="form-label fw-bold small">DESTINATÁRIO ESPECÍFICO</label>
                         <select name="usuario_destino_id" id="selectDestinatario" class="form-select" required style="width: 100%;">
                             <option value=""></option>
-                            <optgroup label="Instrutores" id="optgroupInstrutores">
-                                <!-- Preenchido dinamicamente via JS -->
-                            </optgroup>
-                            <optgroup label="Comandantes/Admins">
-                                {% for c in comandantes %}
-                                <option value="{{ c.id }}">{{ c.posto_graduacao or '' }} {{ c.nome_completo }}</option>
-                                {% endfor %}
-                            </optgroup>
                         </select>
                     </div>
                 </div>
@@ -220,8 +212,46 @@
 
 <script>
     const instrutoresMap = {{ instrutores_map | safe }};
+    const comandantesList = [
+        {% for c in comandantes %}
+        { id: "{{ c.id }}", nome: "{{ c.posto_graduacao or '' }} {{ c.nome_completo }}" }{% if not loop.last %},{% endif %}
+        {% endfor %}
+    ];
+    let currentRecursoId = null;
+
+    function atualizarDestinatarios() {
+        const tipo = document.querySelector('select[name="tipo_tramite"]').value;
+        const select = $('#selectDestinatario');
+        select.empty();
+        select.append(new Option('', '', false, false));
+        
+        if (tipo === 'instrutor') {
+            const instrutores = instrutoresMap[currentRecursoId] || [];
+            if (instrutores.length > 0) {
+                instrutores.forEach(i => {
+                    select.append(new Option(i.nome, i.id, false, false));
+                });
+            } else {
+                const opt = new Option("Nenhum instrutor disponível para esta matéria", "");
+                opt.disabled = true;
+                select.append(opt);
+            }
+        } else if (tipo === 'comandante') {
+            if (comandantesList.length > 0) {
+                comandantesList.forEach(c => {
+                    select.append(new Option(c.nome, c.id, false, false));
+                });
+            } else {
+                const opt = new Option("Nenhum comandante disponível", "");
+                opt.disabled = true;
+                select.append(opt);
+            }
+        }
+        select.trigger('change');
+    }
 
     function abrirEncaminhamento(recursoId) {
+        currentRecursoId = recursoId;
         const modalElement = document.getElementById('modalEncaminhamentoGeral');
         
         // Remove do container atual e anexa diretamente no body para resolver problema do backdrop (tela escura bloqueando)
@@ -234,24 +264,8 @@
         document.getElementById('displayIdRecurso').innerText = '#' + recursoId;
         document.getElementById('formEncaminhar').action = "/recursos/admin/encaminhar/" + recursoId;
         
-        // Popula dinamicamente os instrutores válidos
-        const instrutores = instrutoresMap[recursoId] || [];
-        const optg = document.getElementById('optgroupInstrutores');
-        optg.innerHTML = '';
-        if (instrutores.length > 0) {
-            instrutores.forEach(i => {
-                const opt = document.createElement('option');
-                opt.value = i.id;
-                opt.textContent = i.nome;
-                optg.appendChild(opt);
-            });
-        } else {
-            const opt = document.createElement('option');
-            opt.value = "";
-            opt.textContent = "Nenhum instrutor disponível para esta matéria";
-            opt.disabled = true;
-            optg.appendChild(opt);
-        }
+        document.querySelector('select[name="tipo_tramite"]').value = 'instrutor';
+        atualizarDestinatarios();
 
         modal.show();
     }
@@ -318,6 +332,12 @@
     }
 
     $(document).ready(function() {
+        $('select[name="tipo_tramite"]').on('change', function() {
+            if(currentRecursoId) {
+                atualizarDestinatarios();
+            }
+        });
+
         try {
             $('.tabela-recursos').DataTable({
                 "language": { "url": "//cdn.datatables.net/plug-ins/1.13.6/i18n/pt-BR.json" },

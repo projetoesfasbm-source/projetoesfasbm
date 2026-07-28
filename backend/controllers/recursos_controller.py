@@ -195,7 +195,7 @@ def listar_recursos_pendentes():
     # Filtra Comandantes apenas da escola atual
     comandantes = User.query.join(UserSchool).filter(
         UserSchool.school_id == active_school_id,
-        User.role == 'admin_escola'
+        UserSchool.role == 'admin_escola'
     ).all()
     
     # Mapeia Instrutores vinculados à disciplina do recurso
