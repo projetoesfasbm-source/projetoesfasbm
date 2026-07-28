@@ -317,7 +317,7 @@ def novo_recurso():
     active_school_id = current_user._get_active_school_id()
     aluno_edicao_id = None
     
-    if current_user.role == 'aluno':
+    if str(current_user.role).lower().strip() == 'aluno':
         aluno_prof = current_user.aluno_profile
         if aluno_prof and getattr(aluno_prof, 'turma', None):
             if not active_school_id:
@@ -359,7 +359,7 @@ def api_get_provas(disciplina_id):
     active_school_id = current_user._get_active_school_id()
     aluno_edicao_id = None
     
-    if current_user.role == 'aluno':
+    if str(current_user.role).lower().strip() == 'aluno':
         aluno_prof = current_user.aluno_profile
         if aluno_prof and getattr(aluno_prof, 'turma', None):
             if not active_school_id:

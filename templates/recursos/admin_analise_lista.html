@@ -277,31 +277,33 @@
             }).select2('open'); // Abre automaticamente para economizar clique
         });
 
-        // Logica para o PDF
-        document.querySelectorAll('.btn-recurso-pdf').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const originalIcon = this.innerHTML;
-                this.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Gerando...';
-                this.disabled = true;
-                
-                fetch(this.dataset.url)
-                    .then(res => res.json())
-                    .then(data => {
-                        if(data.success && data.job_id) {
-                            pollJobStatus(data.job_id, this, originalIcon);
-                        } else {
-                            alert("Erro ao enviar tarefa de PDF para a fila.");
-                            this.innerHTML = originalIcon;
-                            this.disabled = false;
-                        }
-                    })
-                    .catch(err => {
-                        console.error(err);
-                        alert("Erro ao conectar com o servidor.");
-                        this.innerHTML = originalIcon;
-                        this.disabled = false;
-                    });
-            });
+        // Logica para o PDF com Event Delegation para suportar DataTables
+        document.body.addEventListener('click', function(e) {
+            const btn = e.target.closest('.btn-recurso-pdf');
+            if (!btn) return;
+            
+            e.preventDefault();
+            const originalIcon = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Gerando...';
+            btn.disabled = true;
+            
+            fetch(btn.dataset.url)
+                .then(res => res.json())
+                .then(data => {
+                    if(data.success && data.job_id) {
+                        pollJobStatus(data.job_id, btn, originalIcon);
+                    } else {
+                        alert("Erro ao enviar tarefa de PDF para a fila.");
+                        btn.innerHTML = originalIcon;
+                        btn.disabled = false;
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert("Erro ao conectar com o servidor.");
+                    btn.innerHTML = originalIcon;
+                    btn.disabled = false;
+                });
         });
         
         function pollJobStatus(jobId, btn, originalIcon) {
