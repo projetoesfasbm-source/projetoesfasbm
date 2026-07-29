@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+
+{% block title %}Dossiê de Desligamento - {{ aluno.user.nome_de_guerra if aluno.user else 'Aluno' }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4 pb-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-0 text-dark fw-bold"><i class="fas fa-folder-open text-danger me-2"></i>Dossiê de Arquivamento</h2>
+            <p class="text-muted mb-0">Visualização em modo somente leitura do histórico do aluno.</p>
+        </div>
+        <div>
+            <a href="{{ url_for('desligamento.index') }}" class="btn btn-outline-secondary fw-bold">
+                <i class="fas fa-arrow-left me-1"></i> Voltar à Lista
+            </a>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-4">
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-body text-center py-4">
+                    {% if aluno.user and aluno.foto_perfil and aluno.foto_perfil != 'default.png' %}
+                        <img src="{{ url_for('static', filename='uploads/profile_pics/' + aluno.foto_perfil) }}" class="rounded-circle shadow-sm mb-3" style="width: 120px; height: 120px; object-fit: cover; border: 3px solid #dc3545;">
+                    {% else %}
+                        <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center fw-bold shadow-sm mb-3 mx-auto" style="width: 120px; height: 120px; font-size: 2.5rem; border: 3px solid #dc3545;">
+                            {{ (aluno.user.nome_de_guerra or 'A')[0] if aluno.user else 'A' }}
+                        </div>
+                    {% endif %}
+                    
+                    <h4 class="fw-bold mb-0">{{ aluno.user.nome_completo if aluno.user else 'Sem Nome' }}</h4>
+                    <p class="text-muted mb-2">Matrícula: {{ aluno.user.matricula if aluno.user else 'N/D' }}</p>
+                    <span class="badge bg-danger w-100 py-2 fs-6 text-uppercase">Status: Desligado</span>
+                </div>
+            </div>
+
+            <div class="card shadow-sm border-danger mb-4" style="border-width: 2px;">
+                <div class="card-header bg-danger text-white fw-bold">
+                    <i class="fas fa-gavel me-1"></i> Termo de Desligamento
+                </div>
+                <div class="card-body bg-light">
+                    <p class="mb-2 small text-muted text-uppercase fw-bold">Motivo Principal</p>
+                    <h6 class="fw-bold text-dark mb-3">{{ registro.motivo }}</h6>
+                    
+                    <p class="mb-2 small text-muted text-uppercase fw-bold">Observações / Boletim</p>
+                    <p class="small text-dark mb-3" style="white-space: pre-wrap;">{{ registro.observacoes }}</p>
+                    
+                    <hr class="border-secondary">
+                    
+                    <div class="d-flex justify-content-between small">
+                        <span class="text-muted">Data:</span>
+                        <span class="fw-bold text-dark">{{ registro.data_desligamento.strftime('%d/%m/%Y às %H:%M') }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between small mt-1">
+                        <span class="text-muted">Executado por:</span>
+                        <span class="fw-bold text-dark">{{ registro.admin.nome_de_guerra if registro.admin else 'Sistema' }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-8">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-dark"><i class="fas fa-history me-2"></i>Histórico Preservado</h6>
+                    <span class="badge bg-secondary">Apenas Leitura</span>
+                </div>
+                <div class="card-body">
+                    
+                    <ul class="nav nav-tabs nav-fill mb-4" id="dossieTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active fw-bold text-dark" id="faltas-tab" data-bs-toggle="tab" data-bs-target="#faltas" type="button" role="tab"><i class="fas fa-user-times text-danger me-1"></i> Faltas</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link fw-bold text-dark" id="justica-tab" data-bs-toggle="tab" data-bs-target="#justica" type="button" role="tab"><i class="fas fa-balance-scale text-primary me-1"></i> Punições</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link fw-bold text-dark" id="elogios-tab" data-bs-toggle="tab" data-bs-target="#elogios" type="button" role="tab"><i class="fas fa-medal text-warning me-1"></i> Elogios</button>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content" id="dossieTabsContent">
+                        
+                        <div class="tab-pane fade show active" id="faltas" role="tabpanel">
+                            {% set faltas = aluno.frequencias|selectattr('presente', 'equalto', False)|list %}
+                            {% if faltas %}
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-striped">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Data</th>
+                                                <th>Disciplina</th>
+                                                <th>Período</th>
+                                                <th>Justificativa</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for f in faltas %}
+                                            <tr>
+                                                <td class="fw-bold">{{ f.diario.data_aula.strftime('%d/%m/%Y') if f.diario else 'N/D' }}</td>
+                                                <td>{{ f.diario.disciplina.materia if f.diario and f.diario.disciplina else 'N/D' }}</td>
+                                                <td>{{ f.diario.periodo if f.diario else 'N/D' }}º</td>
+                                                <td class="small fst-italic">{{ f.justificativa or '-' }}</td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {% else %}
+                                <p class="text-center text-muted my-4"><i class="fas fa-check-circle text-success me-1"></i> Nenhuma falta registrada no sistema.</p>
+                            {% endif %}
+                        </div>
+
+                        <div class="tab-pane fade" id="justica" role="tabpanel">
+                            {% if aluno.fada_avaliacoes.count() > 0 %}
+                                <ul class="list-group list-group-flush">
+                                    {% for fada in aluno.fada_avaliacoes %}
+                                        <li class="list-group-item px-0">
+                                            <div class="d-flex justify-content-between">
+                                                <span class="fw-bold text-danger">FADA Registrada</span>
+                                                <small class="text-muted">{{ fada.data_registro.strftime('%d/%m/%Y') if fada.data_registro else '' }}</small>
+                                            </div>
+                                            <p class="small mb-0 text-muted mt-1">{{ fada.observacao }}</p>
+                                        </li>
+                                    {% endfor %}
+                                </ul>
+                            {% else %}
+                                <p class="text-center text-muted my-4">Nenhum registro disciplinar (FADA) arquivado.</p>
+                            {% endif %}
+                        </div>
+
+                        <div class="tab-pane fade" id="elogios" role="tabpanel">
+                            {% if aluno.elogios %}
+                                <ul class="list-group list-group-flush">
+                                    {% for elogio in aluno.elogios %}
+                                        <li class="list-group-item px-0">
+                                            <div class="d-flex justify-content-between">
+                                                <span class="fw-bold text-warning"><i class="fas fa-star me-1"></i> Elogio</span>
+                                                <small class="text-muted">{{ elogio.data.strftime('%d/%m/%Y') }}</small>
+                                            </div>
+                                            <p class="small mb-0 mt-1">{{ elogio.descricao }}</p>
+                                        </li>
+                                    {% endfor %}
+                                </ul>
+                            {% else %}
+                                <p class="text-center text-muted my-4">Nenhum elogio arquivado.</p>
+                            {% endif %}
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

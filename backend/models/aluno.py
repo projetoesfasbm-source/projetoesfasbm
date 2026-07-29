@@ -15,6 +15,7 @@ if t.TYPE_CHECKING:
     from .fada_avaliacao import FadaAvaliacao 
     from .frequencia import FrequenciaAluno
     from .elogio import Elogio
+    from .edicao import Edicao # Adicionado para o type checking da edição
 
 class Aluno(db.Model):
     __tablename__ = 'alunos'
@@ -27,6 +28,9 @@ class Aluno(db.Model):
     foto_perfil: Mapped[str] = mapped_column(db.String(255), default='default.png')
     telefone: Mapped[t.Optional[str]] = mapped_column(db.String(20))
     data_nascimento: Mapped[t.Optional[date]] = mapped_column(db.Date)
+
+    # --- NOVO: Status do Aluno para o Soft Delete ---
+    status_matricula: Mapped[str] = mapped_column(db.String(20), default='Ativo')
 
     turma_id: Mapped[t.Optional[int]] = mapped_column(ForeignKey('turmas.id'))
     turma: Mapped[t.Optional["Turma"]] = relationship(back_populates="alunos")
@@ -53,13 +57,14 @@ class Aluno(db.Model):
                  id_aluno: t.Optional[str] = None, num_aluno: t.Optional[str] = None,
                  funcao_atual: t.Optional[str] = None, foto_perfil: str = 'default.png',
                  telefone: t.Optional[str] = None, data_nascimento: t.Optional[date] = None,
-                 turma_id: t.Optional[int] = None, edicao_id: t.Optional[int] = None, **kw: t.Any) -> None:
+                 turma_id: t.Optional[int] = None, edicao_id: t.Optional[int] = None, 
+                 status_matricula: str = 'Ativo', **kw: t.Any) -> None:
         super().__init__(user_id=user_id, opm=opm,
                          id_aluno=id_aluno, num_aluno=num_aluno,
                          funcao_atual=funcao_atual, foto_perfil=foto_perfil,
-                         telefone=telefone, data_nascimento=data_nascimento, turma_id=turma_id, edicao_id=edicao_id, **kw)
+                         telefone=telefone, data_nascimento=data_nascimento, turma_id=turma_id, 
+                         edicao_id=edicao_id, status_matricula=status_matricula, **kw)
 
     def __repr__(self):
         matricula_repr = self.user.matricula if self.user else 'N/A'
-        return f"<Aluno id={self.id} matricula='{matricula_repr}'>"'N/A'
-        return f"<Aluno id={self.id} matricula='{matricula_repr}'>"
+        return f"<Aluno id={self.id} matricula='{matricula_repr}' status='{self.status_matricula}'>"
