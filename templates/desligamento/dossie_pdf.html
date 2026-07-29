@@ -65,9 +65,9 @@
             <tbody>
                 {% for falta in faltas %}
                 <tr>
-                    <td>{{ falta.aula.data_aula.strftime('%d/%m/%Y') }}</td>
-                    <td>{{ falta.aula.disciplina.materia }}</td>
-                    <td>{{ falta.aula.instrutor.user.nome_de_guerra if falta.aula.instrutor else '-' }}</td>
+                    <td>{{ falta.diario.data_aula.strftime('%d/%m/%Y') if falta.diario else 'N/D' }}</td>
+                    <td>{{ falta.diario.disciplina.materia if falta.diario and falta.diario.disciplina else 'N/D' }}</td>
+                    <td>{{ falta.diario.instrutor.user.nome_de_guerra if falta.diario and falta.diario.instrutor else '-' }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
