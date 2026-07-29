@@ -156,3 +156,42 @@ def reverter_desligamento(registro_id):
         flash(f"Erro ao reverter o desligamento: {str(e)}", "danger")
 
     return redirect(url_for('desligamento.index'))
+
+@desligamento_bp.route('/exportar-dossie-pdf/<int:aluno_id>')
+@login_required
+def exportar_dossie_pdf(aluno_id):
+    if not (current_user.is_super_admin or current_user.is_sens):
+        flash("Acesso negado.", "danger")
+        return redirect(url_for('main.dashboard'))
+        
+    aluno = Aluno.query.get_or_404(aluno_id)
+    
+    # Busca o registro de desligamento
+    registro = RegistroDesligamento.query.filter_by(aluno_id=aluno.id, status_reversao=False).order_by(RegistroDesligamento.data_desligamento.desc()).first()
+    
+    from datetime import datetime
+    import json
+    import uuid
+    from backend.models.background_job import BackgroundJob
+    
+    html = render_template(
+        'desligamento/dossie_pdf.html',
+        aluno=aluno,
+        registro=registro,
+        now=datetime.now().astimezone()
+    )
+    
+    pdf_name = f"dossie_desligamento_{aluno.matricula or aluno.id}.pdf"
+    job_id = str(uuid.uuid4())
+    job = BackgroundJob(
+        id=job_id,
+        task_type='generate_pdf',
+        payload=html,
+        meta_data=json.dumps({"filename": pdf_name}),
+        user_id=current_user.id
+    )
+    db.session.add(job)
+    db.session.commit()
+    
+    return jsonify({'success': True, 'job_id': job_id})
+
