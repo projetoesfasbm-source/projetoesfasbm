@@ -79,7 +79,7 @@
 
     <div class="section-title">4. JUSTIÇA E DISCIPLINA</div>
     <div class="content-box">
-        {% if aluno.fada_avaliacoes|length > 0 or (aluno.processos_disciplinares and aluno.processos_disciplinares|length > 0) %}
+        {% if aluno.fada_avaliacoes.count() > 0 or (aluno.processos_disciplinares and aluno.processos_disciplinares|length > 0) %}
             
             {% if aluno.processos_disciplinares and aluno.processos_disciplinares|length > 0 %}
                 <div class="row label mt-4">Processos Disciplinares:</div>
@@ -103,7 +103,7 @@
                 </table>
             {% endif %}
 
-            {% if aluno.fada_avaliacoes|length > 0 %}
+            {% if aluno.fada_avaliacoes.count() > 0 %}
                 <div class="row label mt-4">Registros de FADA:</div>
                 <table>
                     <thead>
