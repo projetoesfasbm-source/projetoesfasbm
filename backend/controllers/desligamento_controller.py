@@ -38,7 +38,7 @@ def index():
     ).all()
 
     # --- NOVAS BUSCAS PARA O MODAL DE REVERSÃO ---
-    todas_edicoes = db.session.query(Edicao).order_by(Edicao.id.desc()).all()
+    todas_edicoes = db.session.query(Edicao).filter(Edicao.school_id == school_id).order_by(Edicao.id.desc()).all()
     todas_turmas = db.session.query(Turma).filter(Turma.school_id == school_id).order_by(Turma.nome).all()
 
     return render_template(

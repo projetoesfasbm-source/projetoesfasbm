@@ -112,12 +112,23 @@
                         </div>
 
                         <div class="tab-pane fade" id="justica" role="tabpanel">
-                            {% if aluno.fada_avaliacoes.count() > 0 %}
+                            {% if aluno.fada_avaliacoes.count() > 0 or aluno.processos_disciplinares %}
                                 <ul class="list-group list-group-flush">
+                                    {% for processo in aluno.processos_disciplinares %}
+                                        <li class="list-group-item px-0">
+                                            <div class="d-flex justify-content-between">
+                                                <span class="fw-bold text-danger"><i class="fas fa-gavel me-1"></i> Processo Disciplinar</span>
+                                                <small class="text-muted">{{ processo.data_ocorrencia.strftime('%d/%m/%Y') if processo.data_ocorrencia else '' }}</small>
+                                            </div>
+                                            <p class="small mb-0 text-muted mt-1 fw-bold">{{ processo.fato_constatado }}</p>
+                                            <p class="small mb-0 text-muted">Status: {{ processo.status.value }}</p>
+                                        </li>
+                                    {% endfor %}
+
                                     {% for fada in aluno.fada_avaliacoes %}
                                         <li class="list-group-item px-0">
                                             <div class="d-flex justify-content-between">
-                                                <span class="fw-bold text-danger">FADA Registrada</span>
+                                                <span class="fw-bold text-warning"><i class="fas fa-clipboard-list me-1"></i> FADA Registrada</span>
                                                 <small class="text-muted">{{ fada.data_registro.strftime('%d/%m/%Y') if fada.data_registro else '' }}</small>
                                             </div>
                                             <p class="small mb-0 text-muted mt-1">{{ fada.observacao }}</p>
@@ -125,7 +136,7 @@
                                     {% endfor %}
                                 </ul>
                             {% else %}
-                                <p class="text-center text-muted my-4">Nenhum registro disciplinar (FADA) arquivado.</p>
+                                <p class="text-center text-muted my-4">Nenhum registro disciplinar arquivado.</p>
                             {% endif %}
                         </div>
 
