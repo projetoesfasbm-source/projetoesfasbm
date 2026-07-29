@@ -181,7 +181,7 @@ def exportar_dossie_pdf(aluno_id):
         now=datetime.now().astimezone()
     )
     
-    pdf_name = f"dossie_desligamento_{aluno.matricula or aluno.id}.pdf"
+    pdf_name = f"dossie_desligamento_{aluno.id_aluno or aluno.id}.pdf"
     job_id = str(uuid.uuid4())
     job = BackgroundJob(
         id=job_id,

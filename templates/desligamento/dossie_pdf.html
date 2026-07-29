@@ -32,7 +32,7 @@
     <div class="content-box">
         <div class="row"><span class="label">Aluno:</span> {% if aluno %}{{ aluno.nome_completo }}{% endif %}</div>
         <div class="row"><span class="label">Nome de Guerra:</span> {% if aluno and aluno.user %}{{ aluno.user.nome_de_guerra }}{% endif %}</div>
-        <div class="row"><span class="label">Matrícula/RE:</span> {% if aluno %}{{ aluno.matricula or 'N/D' }}{% endif %}</div>
+        <div class="row"><span class="label">Matrícula/RE:</span> {% if aluno %}{{ aluno.id_aluno or 'N/D' }}{% endif %}</div>
         <div class="row"><span class="label">Turma (Última vinculada):</span> {% if aluno and aluno.turma %}{{ aluno.turma.nome }}{% else %}Sem turma{% endif %}</div>
     </div>
 
