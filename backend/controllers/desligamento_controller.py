@@ -167,7 +167,7 @@ def exportar_dossie_pdf(aluno_id):
     aluno = Aluno.query.get_or_404(aluno_id)
     
     # Busca o registro de desligamento
-    registro = RegistroDesligamento.query.filter_by(aluno_id=aluno.id, status_reversao=False).order_by(RegistroDesligamento.data_desligamento.desc()).first()
+    registro = RegistroDesligamento.query.filter_by(aluno_id=aluno.id).order_by(RegistroDesligamento.data_desligamento.desc()).first()
     
     from datetime import datetime
     import json
