@@ -43,7 +43,14 @@ def index():
     
     # Se for instrutor, mostra apenas recursos vinculados a ele para parecer
     if current_user.role == 'instrutor':
-        recursos_vinculados = Recurso.query.filter(db.or_(
+        edicao_id = g.active_edicao.id if g.get('active_edicao') else None
+        query = Recurso.query.join(ProvaRecurso).join(Disciplina).join(Turma).filter(
+            Turma.school_id == active_school_id
+        )
+        if edicao_id:
+            query = query.filter(Turma.edicao_id == edicao_id)
+            
+        recursos_vinculados = query.filter(db.or_(
             db.and_(Recurso.instrutor_id == current_user.id, Recurso.parecer_instrutor == None),
             db.and_(Recurso.instrutor2_id == current_user.id, Recurso.parecer_instrutor2 == None)
         )).all()
