@@ -117,7 +117,7 @@
                         </div>
 
                         <div class="tab-pane fade" id="justica" role="tabpanel">
-                            {% if aluno.fada_avaliacoes.count() > 0 or aluno.processos_disciplinares %}
+                            {% if aluno.fada_avaliacoes|length > 0 or aluno.processos_disciplinares %}
                                 <ul class="list-group list-group-flush">
                                     {% for processo in aluno.processos_disciplinares %}
                                         <li class="list-group-item px-0">
