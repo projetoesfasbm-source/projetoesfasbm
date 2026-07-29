@@ -172,7 +172,7 @@
 
                     <div class="mb-3">
                         <label class="form-label fw-bold small">DESTINATÁRIO ESPECÍFICO</label>
-                        <select name="usuario_destino_id" id="selectDestinatario" class="form-select" required style="width: 100%;">
+                        <select name="usuario_destino_id" id="selectDestinatario" class="form-select" required style="width: 100%;" multiple="multiple">
                             <option value=""></option>
                         </select>
                     </div>
@@ -194,8 +194,9 @@
 <style>
     /* Estilos para garantir que o Select2 não quebre o layout */
     .modal-backdrop { opacity: 0.5 !important; }
-    .select2-container--default .select2-selection--single {
-        height: 45px !important;
+    .select2-container--default .select2-selection--single,
+    .select2-container--default .select2-selection--multiple {
+        min-height: 45px !important;
         border: 2px solid #e9ecef !important;
         border-radius: 8px !important;
         display: flex;

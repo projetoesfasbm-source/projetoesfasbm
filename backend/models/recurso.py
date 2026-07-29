@@ -58,7 +58,9 @@ class Recurso(db.Model):
     
     # Workflow de aprovação
     instrutor_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    instrutor2_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     parecer_instrutor = db.Column(db.Text, nullable=True)
+    parecer_instrutor2 = db.Column(db.Text, nullable=True)
     decisao_comandante = db.Column(db.Text, nullable=True)
     
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
@@ -67,6 +69,7 @@ class Recurso(db.Model):
     # Relacionamentos (a relação 'prova' já vem do backref de ProvaRecurso)
     aluno = db.relationship('User', foreign_keys=[aluno_id], backref=db.backref('meus_recursos', lazy=True))
     instrutor = db.relationship('User', foreign_keys=[instrutor_id], backref=db.backref('recursos_encaminhados', lazy=True))
+    instrutor2 = db.relationship('User', foreign_keys=[instrutor2_id], backref=db.backref('recursos_encaminhados2', lazy=True))
 
     def __repr__(self):
         return f'<Recurso {self.id} - Prova ID {self.prova_id} - Aluno ID {self.aluno_id}>'

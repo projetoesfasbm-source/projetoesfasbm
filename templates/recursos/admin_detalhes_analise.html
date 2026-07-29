@@ -38,8 +38,17 @@
             {% if r.parecer_instrutor %}
             <div class="card shadow-sm border-0 mb-3" style="border-radius: 12px; border-left: 5px solid #28a745;">
                 <div class="card-body">
-                    <h6 class="fw-bold text-success small mb-2 uppercase">PARECER DO INSTRUTOR</h6>
+                    <h6 class="fw-bold text-success small mb-2 uppercase">PARECER DO INSTRUTOR 1</h6>
                     <div class="p-2 small bg-light rounded" style="white-space: pre-wrap;">{{ r.parecer_instrutor }}</div>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if r.parecer_instrutor2 %}
+            <div class="card shadow-sm border-0 mb-3" style="border-radius: 12px; border-left: 5px solid #20c997;">
+                <div class="card-body">
+                    <h6 class="fw-bold text-success small mb-2 uppercase">PARECER DO INSTRUTOR 2</h6>
+                    <div class="p-2 small bg-light rounded" style="white-space: pre-wrap;">{{ r.parecer_instrutor2 }}</div>
                 </div>
             </div>
             {% endif %}
@@ -92,7 +101,7 @@
 
                         <div class="mb-3">
                             <label class="form-label fw-bold small">TEXTO DO DOCUMENTO {% if not is_finalizado %}(EDITE ABAIXO){% endif %}</label>
-                            <textarea name="conteudo_texto" id="editorBM" class="form-control" rows="18" style="font-family: 'Courier New', Courier, monospace; font-size: 0.9rem; {% if is_finalizado %}background-color: #f8f9fa;{% endif %}" {% if is_finalizado %}readonly{% endif %}>{% if r.decisao_comandante %}{{ r.decisao_comandante }}{% elif r.parecer_instrutor and r.status != 'Com Instrutor' %}{{ r.parecer_instrutor }}{% else %}ESTADO DO RIO GRANDE DO SUL
+                            <textarea name="conteudo_texto" id="editorBM" class="form-control" rows="18" style="font-family: 'Courier New', Courier, monospace; font-size: 0.9rem; {% if is_finalizado %}background-color: #f8f9fa;{% endif %}" {% if is_finalizado %}readonly{% endif %}>{% if r.decisao_comandante %}{{ r.decisao_comandante }}{% elif r.parecer_instrutor and current_user.id == r.instrutor_id %}{{ r.parecer_instrutor }}{% elif r.parecer_instrutor2 and current_user.id == r.instrutor2_id %}{{ r.parecer_instrutor2 }}{% else %}ESTADO DO RIO GRANDE DO SUL
 SECRETARIA DA SEGURANÇA PÚBLICA
 BRIGADA MILITAR
 DEPARTAMENTO DE EDUCAÇÃO E CULTURA

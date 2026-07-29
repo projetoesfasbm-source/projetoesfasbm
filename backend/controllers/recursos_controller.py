@@ -43,7 +43,10 @@ def index():
     
     # Se for instrutor, mostra apenas recursos vinculados a ele para parecer
     if current_user.role == 'instrutor':
-        recursos_vinculados = Recurso.query.filter_by(instrutor_id=current_user.id).all()
+        recursos_vinculados = Recurso.query.filter(db.or_(
+            db.and_(Recurso.instrutor_id == current_user.id, Recurso.parecer_instrutor == None),
+            db.and_(Recurso.instrutor2_id == current_user.id, Recurso.parecer_instrutor2 == None)
+        )).all()
         return render_template('recursos/admin_analise_lista.html', recursos=recursos_vinculados)
     
     meus_recursos = Recurso.query.options(db.joinedload(Recurso.prova)).filter_by(aluno_id=current_user.id).order_by(Recurso.created_at.desc()).all()
@@ -186,7 +189,10 @@ def listar_recursos_pendentes():
     # Se for instrutor E NÃO for comandante nem SENS, filtra apenas o que foi destinado a ele
     is_comandante = current_user.is_admin_escola_in_school(active_school_id)
     if current_user.role == 'instrutor' and not (is_comandante or current_user.is_sens):
-        recursos = query.filter(Recurso.instrutor_id == current_user.id).all()
+        recursos = query.filter(db.or_(
+            db.and_(Recurso.instrutor_id == current_user.id, Recurso.parecer_instrutor == None),
+            db.and_(Recurso.instrutor2_id == current_user.id, Recurso.parecer_instrutor2 == None)
+        )).all()
     else:
         recursos = query.all()
 
@@ -234,11 +240,13 @@ def encaminhar_recurso(recurso_id):
         return redirect(url_for('main.dashboard'))
 
     recurso = Recurso.query.get_or_404(recurso_id)
-    destino_id = request.form.get('usuario_destino_id')
+    destinos = request.form.getlist('usuario_destino_id')
     tipo_tramite = request.form.get('tipo_tramite') # 'instrutor' ou 'comandante'
     
     try:
-        recurso.instrutor_id = destino_id # Armazena com quem está o processo
+        recurso.instrutor_id = destinos[0] if len(destinos) > 0 else None
+        recurso.instrutor2_id = destinos[1] if len(destinos) > 1 else None
+        
         if tipo_tramite == 'instrutor':
             recurso.status = "Com Instrutor"
         else:
@@ -280,15 +288,24 @@ def salvar_parecer(recurso_id):
     
     try:
         if tipo_acao == 'parecer_instrutor':
-            recurso.parecer_instrutor = request.form.get('conteudo_texto')
-            recurso.status = "Retornado ao Admin (Parecer)"
-            recurso.instrutor_id = None # Libera do painel do instrutor
+            if current_user.id == recurso.instrutor_id:
+                recurso.parecer_instrutor = request.form.get('conteudo_texto')
+            elif current_user.id == recurso.instrutor2_id:
+                recurso.parecer_instrutor2 = request.form.get('conteudo_texto')
+            
+            # Verifica se ainda falta algum instrutor dar o parecer
+            falta_1 = recurso.instrutor_id is not None and not recurso.parecer_instrutor
+            falta_2 = recurso.instrutor2_id is not None and not recurso.parecer_instrutor2
+            
+            if not falta_1 and not falta_2:
+                recurso.status = "Retornado ao Admin (Parecer)"
+            else:
+                recurso.status = "Com Instrutor"
         else:
             recurso.decisao_comandante = request.form.get('conteudo_texto')
             recurso.status = request.form.get('status_final')
             # A resposta final que o aluno vê na lista dele
             recurso.resposta_admin = recurso.decisao_comandante
-            recurso.instrutor_id = None
         
         db.session.commit()
         flash("Documento processado e retornado ao controle administrativo!", "success")
