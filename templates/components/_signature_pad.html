@@ -22,6 +22,33 @@
         border-color: #0d6efd !important;
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
+    
+    /* Correção de visibilidade das abas */
+    #signTab {
+        background-color: #f1f3f5;
+        border-radius: 0.5rem;
+        padding: 0.25rem;
+        border: 1px solid #dee2e6;
+    }
+    #signTab .nav-item {
+        margin: 0 2px;
+    }
+    #signTab .nav-link {
+        color: #495057 !important; 
+        font-weight: 600;
+        border-radius: 0.375rem;
+        padding: 0.5rem 1rem;
+        transition: all 0.2s;
+    }
+    #signTab .nav-link:hover {
+        background-color: #e9ecef;
+        color: #212529 !important;
+    }
+    #signTab .nav-link.active {
+        color: #fff !important;
+        background-color: #0d6efd !important;
+        box-shadow: 0 2px 4px rgba(13,110,253,0.3);
+    }
 </style>
 
 <input type="hidden" name="tipo_assinatura" id="tipo_assinatura" value="canvas">
