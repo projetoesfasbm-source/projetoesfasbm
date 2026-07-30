@@ -104,7 +104,7 @@ def index():
         recursos_vinculados = query.filter(db.or_(
             db.and_(Recurso.instrutor_id == current_user.id, Recurso.parecer_instrutor == None),
             db.and_(Recurso.instrutor2_id == current_user.id, Recurso.parecer_instrutor2 == None)
-        )).all()
+        )).order_by(Recurso.id.desc()).all()
         return render_template('recursos/admin_analise_lista.html', recursos=recursos_vinculados)
     
     meus_recursos = Recurso.query.options(db.joinedload(Recurso.prova)).filter_by(aluno_id=current_user.id).order_by(Recurso.created_at.desc()).all()
@@ -242,7 +242,7 @@ def listar_recursos_pendentes():
     ).filter(
         Turma.school_id == active_school_id,
         Turma.edicao_id == session.get('active_edicao_id')
-    )
+    ).order_by(Recurso.id.desc())
 
     # Se for instrutor E NÃO for comandante nem SENS, filtra apenas o que foi destinado a ele
     is_comandante = current_user.is_admin_escola_in_school(active_school_id)
