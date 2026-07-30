@@ -61,7 +61,7 @@
             <tr>
                 {% if r.assinatura_aluno %}
                 <td style="width: 33%; vertical-align: bottom;">
-                    <img src="{{ request.url_root }}static/{{ r.assinatura_aluno }}" style="max-height: 80px; margin-bottom: 10px;" /><br/>
+                    <img src="{{ request.url_root }}static/{{ r.assinatura_aluno }}" style="max-height: 80px; margin-bottom: 10px; background-color: white !important;" /><br/>
                     _______________________________________<br/>
                     <small><b>{{ r.aluno.nome_completo }}</b><br/>Aluno(a) Requerente</small>
                 </td>
@@ -74,7 +74,7 @@
                 
                 {% if r.assinatura_instrutor %}
                 <td style="width: 33%; vertical-align: bottom;">
-                    <img src="{{ request.url_root }}static/{{ r.assinatura_instrutor }}" style="max-height: 80px; margin-bottom: 10px;" /><br/>
+                    <img src="{{ request.url_root }}static/{{ r.assinatura_instrutor }}" style="max-height: 80px; margin-bottom: 10px; background-color: white !important;" /><br/>
                     _______________________________________<br/>
                     <small><b>Instrutor(a) Avaliador(a)</b></small>
                 </td>
@@ -87,7 +87,7 @@
                 
                 {% if r.assinatura_comandante %}
                 <td style="width: 33%; vertical-align: bottom;">
-                    <img src="{{ request.url_root }}static/{{ r.assinatura_comandante }}" style="max-height: 80px; margin-bottom: 10px;" /><br/>
+                    <img src="{{ request.url_root }}static/{{ r.assinatura_comandante }}" style="max-height: 80px; margin-bottom: 10px; background-color: white !important;" /><br/>
                     _______________________________________<br/>
                     <small><b>Comando/Administração</b></small>
                 </td>

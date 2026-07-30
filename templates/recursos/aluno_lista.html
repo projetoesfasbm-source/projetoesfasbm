@@ -59,6 +59,13 @@
                                             data-bs-toggle="modal" data-bs-target="#modalRecurso{{ r.id }}">
                                         Ver Resposta
                                     </button>
+                                    {% if r.status in ['Deferido', 'Indeferido'] %}
+                                        {% if not r.aluno_ciente %}
+                                        <button type="button" class="btn btn-primary btn-sm rounded-pill px-3" onclick="darCiente({{ r.id }})">Dar Ciente</button>
+                                        {% else %}
+                                        <span class="badge bg-success-subtle text-success border border-success rounded-pill px-3 py-1 d-flex align-items-center" title="Ciente registrado em {{ r.aluno_ciente_data|br_time('%d/%m/%Y %H:%M') if r.aluno_ciente_data else '' }}"><i class="fas fa-check-double me-1"></i> Ciente</span>
+                                        {% endif %}
+                                    {% endif %}
                                     {% if r.status == 'Em Análise' or r.status == 'Pendente' %}
                                     <form action="{{ url_for('recursos.excluir_recurso_aluno', recurso_id=r.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Tem certeza que deseja excluir este recurso? Esta ação não pode ser desfeita.');">
                                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -110,13 +117,6 @@
                 </div>
             </div>
             <div class="modal-footer border-top-0 p-4">
-                {% if r.status in ['Deferido', 'Indeferido'] %}
-                    {% if not r.aluno_ciente %}
-                    <button type="button" class="btn btn-primary rounded-pill px-4" onclick="darCiente({{ r.id }})">Dar Ciente</button>
-                    {% else %}
-                    <span class="badge bg-success px-3 py-2 rounded-pill"><i class="fas fa-check-double me-1"></i> Ciente registrado em {{ r.aluno_ciente_data|br_time('%d/%m/%Y %H:%M') if r.aluno_ciente_data else '' }}</span>
-                    {% endif %}
-                {% endif %}
                 <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">Fechar</button>
             </div>
         </div>
