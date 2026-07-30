@@ -110,10 +110,41 @@
                 </div>
             </div>
             <div class="modal-footer border-top-0 p-4">
+                {% if r.status in ['Deferido', 'Indeferido'] %}
+                    {% if not r.aluno_ciente %}
+                    <button type="button" class="btn btn-primary rounded-pill px-4" onclick="darCiente({{ r.id }})">Dar Ciente</button>
+                    {% else %}
+                    <span class="badge bg-success px-3 py-2 rounded-pill"><i class="fas fa-check-double me-1"></i> Ciente registrado em {{ r.aluno_ciente_data|br_time('%d/%m/%Y %H:%M') if r.aluno_ciente_data else '' }}</span>
+                    {% endif %}
+                {% endif %}
                 <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">Fechar</button>
             </div>
         </div>
     </div>
 </div>
 {% endfor %}
+
+<script>
+function darCiente(recursoId) {
+    if (!confirm('Deseja registrar ciência nesta decisão?')) return;
+    
+    fetch(`/recursos/aluno/ciente/${recursoId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('input[name="csrf_token"]')?.value || ''
+        }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert('Ciência registrada com sucesso.');
+            location.reload();
+        } else {
+            alert('Erro: ' + (data.message || 'Desconhecido'));
+        }
+    })
+    .catch(e => alert('Erro na comunicação.'));
+}
+</script>
 {% endblock %}

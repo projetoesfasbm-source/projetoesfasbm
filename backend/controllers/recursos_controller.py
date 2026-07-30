@@ -10,6 +10,57 @@ from backend.models.turma import Turma
 from backend.models.user import User  # Necessário para listar instrutores/comandantes
 from backend.services.asset_service import AssetService
 from werkzeug.utils import secure_filename
+import base64
+import uuid
+import shutil
+
+def process_signature(user, tipo, dados, salvar_padrao=False):
+    """Processa e salva assinatura para um Recurso, atualizando o User se salvar_padrao=True"""
+    base_path = current_app.static_folder
+    upload_folder = os.path.join(base_path, 'uploads', 'signatures')
+    os.makedirs(upload_folder, exist_ok=True)
+    
+    filename = f"sig_recurso_{user.id}_{uuid.uuid4().hex[:8]}.jpg"
+    filepath = os.path.join(upload_folder, filename)
+    db_path = f"uploads/signatures/{filename}"
+    
+    try:
+        if tipo == 'padrao':
+            if not user.assinatura_padrao_path:
+                # Fallback para instrutor se não tiver no user (transição suave)
+                if hasattr(user, 'instrutor_profile') and user.instrutor_profile and user.instrutor_profile.assinatura_padrao_path:
+                    shutil.copy2(os.path.join(base_path, user.instrutor_profile.assinatura_padrao_path), filepath)
+                else:
+                    return None
+            else:
+                shutil.copy2(os.path.join(base_path, user.assinatura_padrao_path), filepath)
+        elif tipo == 'canvas':
+            encoded = dados.split(',', 1)[1] if ',' in dados else dados
+            with open(filepath, 'wb') as f: f.write(base64.b64decode(encoded))
+        elif tipo == 'upload':
+            if hasattr(dados, 'save'):
+                dados.save(filepath)
+            else:
+                with open(filepath, 'wb') as f: f.write(dados)
+        else:
+            return None
+            
+        if salvar_padrao and tipo != 'padrao':
+            if user.assinatura_padrao_path:
+                old_path = os.path.join(base_path, user.assinatura_padrao_path)
+                if os.path.exists(old_path):
+                    try: os.remove(old_path)
+                    except: pass
+            
+            filename_padrao = f"user_padrao_{user.id}.jpg"
+            filepath_padrao = os.path.join(upload_folder, filename_padrao)
+            shutil.copy2(filepath, filepath_padrao)
+            user.assinatura_padrao_path = f"uploads/signatures/{filename_padrao}"
+            
+        return db_path
+    except Exception as e:
+        print(f"Erro processando assinatura: {e}")
+        return None
 
 recursos_bp = Blueprint('recursos', __name__, url_prefix='/recursos')
 
@@ -289,16 +340,38 @@ def detalhes_recurso(recurso_id):
 @recursos_bp.route('/admin/salvar_parecer/<int:recurso_id>', methods=['POST'])
 @login_required
 def salvar_parecer(recurso_id):
-    """Lógica para salvar Parecer do Instrutor ou Decisão do Comandante."""
+    """Lógica para salvar Parecer do Instrutor ou Decisão do Comandante com Assinatura."""
     recurso = Recurso.query.get_or_404(recurso_id)
     tipo_acao = request.form.get('tipo_acao') # 'parecer_instrutor' ou 'decisao_cmt'
     
+    # Processa Assinatura
+    tipo_assinatura = request.form.get('tipo_assinatura', 'padrao')
+    dados_assinatura = None
+    if tipo_assinatura == 'canvas':
+        dados_assinatura = request.form.get('assinatura_base64')
+    elif tipo_assinatura == 'upload':
+        arquivo_ass = request.files.get('assinatura_upload')
+        if arquivo_ass and arquivo_ass.filename:
+            dados_assinatura = arquivo_ass
+    
+    salvar_padrao = request.form.get('salvar_assinatura_padrao') == 'on'
+    assinatura_path = process_signature(current_user, tipo_assinatura, dados_assinatura, salvar_padrao)
+    
+    if not assinatura_path:
+        flash("Assinatura inválida ou ausente.", "danger")
+        return redirect(request.url)
+
     try:
         if tipo_acao == 'parecer_instrutor':
             if current_user.id == recurso.instrutor_id:
                 recurso.parecer_instrutor = request.form.get('conteudo_texto')
+                recurso.assinatura_instrutor = assinatura_path
             elif current_user.id == recurso.instrutor2_id:
                 recurso.parecer_instrutor2 = request.form.get('conteudo_texto')
+                # Por simplicidade o segundo instrutor também pode salvar aqui se não houver um campo assinatura_instrutor2 (só sobrescreve ou ignora)
+                # Assumindo que a principal é do instrutor_id, se for o 2 a gente poderia salvar em um assinatura_instrutor2. Como não existe, vamos salvar na mesma se estiver vazia
+                if not recurso.assinatura_instrutor:
+                    recurso.assinatura_instrutor = assinatura_path
             
             # Verifica se ainda falta algum instrutor dar o parecer
             falta_1 = recurso.instrutor_id is not None and not recurso.parecer_instrutor
@@ -310,12 +383,15 @@ def salvar_parecer(recurso_id):
                 recurso.status = "Com Instrutor"
         else:
             recurso.decisao_comandante = request.form.get('conteudo_texto')
+            recurso.assinatura_comandante = assinatura_path
             recurso.status = request.form.get('status_final')
             # A resposta final que o aluno vê na lista dele
             recurso.resposta_admin = recurso.decisao_comandante
+            
+            # TODO: Add Notification for student here?
         
         db.session.commit()
-        flash("Documento processado e retornado ao controle administrativo!", "success")
+        flash("Documento processado, assinado e retornado ao controle administrativo!", "success")
     except Exception as e:
         db.session.rollback()
         flash(f"Erro ao processar documento: {str(e)}", "danger")
@@ -325,12 +401,29 @@ def salvar_parecer(recurso_id):
 @recursos_bp.route('/enviar', methods=['GET', 'POST'])
 @login_required
 def novo_recurso():
-    """Aluno vê a matéria unificada."""
+    """Aluno vê a matéria unificada e assina o envio."""
     if request.method == 'POST':
         prova_id = request.form.get('prova_id')
         questoes = request.form.getlist('questao_texto[]')
         argumentacoes = request.form.getlist('argumentacao_texto[]')
         arquivos = request.files.getlist('arquivo_anexo[]')
+        
+        # Processa Assinatura
+        tipo_assinatura = request.form.get('tipo_assinatura', 'padrao')
+        dados_assinatura = None
+        if tipo_assinatura == 'canvas':
+            dados_assinatura = request.form.get('assinatura_base64')
+        elif tipo_assinatura == 'upload':
+            arquivo_ass = request.files.get('assinatura_upload')
+            if arquivo_ass and arquivo_ass.filename:
+                dados_assinatura = arquivo_ass
+        
+        salvar_padrao = request.form.get('salvar_assinatura_padrao') == 'on'
+        assinatura_path = process_signature(current_user, tipo_assinatura, dados_assinatura, salvar_padrao)
+        
+        if not assinatura_path:
+            flash("Assinatura inválida ou ausente.", "danger")
+            return redirect(request.url)
 
         try:
             for i in range(len(questoes)):
@@ -338,14 +431,15 @@ def novo_recurso():
                     prova_id=prova_id,
                     aluno_id=current_user.id,
                     questao_texto=questoes[i],
-                    argumentacao_texto=argumentacoes[i] if i < len(argumentacoes) else ""
+                    argumentacao_texto=argumentacoes[i] if i < len(argumentacoes) else "",
+                    assinatura_aluno=assinatura_path
                 )
                 if i < len(arquivos) and arquivos[i].filename != '':
                     filename = AssetService.save_file(arquivos[i], folder='recursos_anexos')
                     novo.arquivo_anexo = filename
                 db.session.add(novo)
             db.session.commit()
-            flash("Recurso enviado!", "success")
+            flash("Recurso enviado e assinado com sucesso!", "success")
             return redirect(url_for('recursos.index'))
         except Exception as e:
             db.session.rollback()
@@ -481,3 +575,28 @@ def excluir_recurso_aluno(recurso_id):
         flash(f"Erro ao excluir recurso: {str(e)}", "danger")
         
     return redirect(url_for('recursos.index'))
+
+@recursos_bp.route('/aluno/ciente/<int:recurso_id>', methods=['POST'])
+@login_required
+def dar_ciente(recurso_id):
+    """Registra a ciência do aluno sobre a decisão do recurso."""
+    recurso = Recurso.query.get_or_404(recurso_id)
+    
+    if str(current_user.role).lower().strip() == 'aluno' and recurso.aluno_id != current_user.id:
+        return jsonify({'success': False, 'message': 'Acesso negado'}), 403
+        
+    if recurso.status not in ['Deferido', 'Indeferido']:
+        return jsonify({'success': False, 'message': 'Recurso ainda não foi finalizado'}), 400
+        
+    try:
+        from datetime import datetime
+        recurso.aluno_ciente = True
+        recurso.aluno_ciente_data = datetime.now()
+        # Captura o IP (considera proxy reverso caso exista)
+        recurso.aluno_ciente_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+        
+        db.session.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500

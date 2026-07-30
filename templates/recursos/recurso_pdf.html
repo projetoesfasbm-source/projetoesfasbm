@@ -57,9 +57,60 @@
     {% endif %}
 
     <div class="mt-4 text-center">
-        <p>___________________________________________________</p>
-        <p>Assinatura do Responsável</p>
+        <table style="width: 100%; text-align: center; margin-top: 40px; border: none;">
+            <tr>
+                {% if r.assinatura_aluno %}
+                <td style="width: 33%; vertical-align: bottom;">
+                    <img src="{{ request.url_root }}static/{{ r.assinatura_aluno }}" style="max-height: 80px; margin-bottom: 10px;" /><br/>
+                    _______________________________________<br/>
+                    <small><b>{{ r.aluno.nome_completo }}</b><br/>Aluno(a) Requerente</small>
+                </td>
+                {% else %}
+                <td style="width: 33%; vertical-align: bottom;">
+                    _______________________________________<br/>
+                    <small><b>{{ r.aluno.nome_completo }}</b><br/>Aluno(a) Requerente</small>
+                </td>
+                {% endif %}
+                
+                {% if r.assinatura_instrutor %}
+                <td style="width: 33%; vertical-align: bottom;">
+                    <img src="{{ request.url_root }}static/{{ r.assinatura_instrutor }}" style="max-height: 80px; margin-bottom: 10px;" /><br/>
+                    _______________________________________<br/>
+                    <small><b>Instrutor(a) Avaliador(a)</b></small>
+                </td>
+                {% else %}
+                <td style="width: 33%; vertical-align: bottom;">
+                    _______________________________________<br/>
+                    <small><b>Instrutor(a) Avaliador(a)</b></small>
+                </td>
+                {% endif %}
+                
+                {% if r.assinatura_comandante %}
+                <td style="width: 33%; vertical-align: bottom;">
+                    <img src="{{ request.url_root }}static/{{ r.assinatura_comandante }}" style="max-height: 80px; margin-bottom: 10px;" /><br/>
+                    _______________________________________<br/>
+                    <small><b>Comando/Administração</b></small>
+                </td>
+                {% else %}
+                <td style="width: 33%; vertical-align: bottom;">
+                    _______________________________________<br/>
+                    <small><b>Comando/Administração</b></small>
+                </td>
+                {% endif %}
+            </tr>
+        </table>
     </div>
+    
+    {% if r.aluno_ciente %}
+    <div class="mt-5 text-center" style="border: 2px dashed #4CAF50; padding: 15px; background-color: #f9fff9; width: 60%; margin: 40px auto 0 auto;">
+        <h4 style="color: #4CAF50; margin: 0 0 10px 0;">CIÊNCIA DO ALUNO</h4>
+        <p style="margin: 0; font-size: 14px;">
+            O(A) aluno(a) <b>{{ r.aluno.nome_completo }}</b> registrou ciência da decisão deste recurso.<br/>
+            <b>Data/Hora:</b> {{ r.aluno_ciente_data|br_time('%d/%m/%Y %H:%M') }}<br/>
+            <b>IP de Registro:</b> {{ r.aluno_ciente_ip or 'Não registrado' }}
+        </p>
+    </div>
+    {% endif %}
 
 </body>
 </html>

@@ -37,6 +37,9 @@ class User(UserMixin, db.Model):
     nome_de_guerra: Mapped[t.Optional[str]] = mapped_column(db.String(50), nullable=True)
     posto_graduacao: Mapped[t.Optional[str]] = mapped_column(db.String(50), nullable=True)
 
+    foto_perfil: Mapped[str] = mapped_column(db.String(255), default='default.png')
+    assinatura_padrao_path: Mapped[t.Optional[str]] = mapped_column(db.String(255), nullable=True)
+
     role: Mapped[str] = mapped_column(db.String(20), nullable=False, default='aluno')
 
     is_active: Mapped[bool] = mapped_column(default=False, nullable=False)

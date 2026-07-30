@@ -56,12 +56,20 @@ class Recurso(db.Model):
     status = db.Column(db.String(50), default='Pendente') # Valores sugeridos: Pendente, Em Análise, Deferido, Indeferido
     resposta_admin = db.Column(db.Text, nullable=True)
     
-    # Workflow de aprovação
+    # Assinaturas e Workflow de aprovação
     instrutor_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     instrutor2_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     parecer_instrutor = db.Column(db.Text, nullable=True)
     parecer_instrutor2 = db.Column(db.Text, nullable=True)
     decisao_comandante = db.Column(db.Text, nullable=True)
+    
+    assinatura_aluno = db.Column(db.Text, nullable=True)
+    assinatura_instrutor = db.Column(db.Text, nullable=True)
+    assinatura_comandante = db.Column(db.Text, nullable=True)
+    
+    aluno_ciente = db.Column(db.Boolean, default=False)
+    aluno_ciente_data = db.Column(db.DateTime, nullable=True)
+    aluno_ciente_ip = db.Column(db.String(50), nullable=True)
     
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))

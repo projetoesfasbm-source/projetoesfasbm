@@ -121,11 +121,17 @@ Diante do exposto, este instrutor julga pelo [DEFERIMENTO/INDEFERIMENTO] do recu
 É o parecer.{% endif %}</textarea>
                         </div>
 
-                        <div class="mt-4 p-3 bg-light rounded border text-center border-2" style="border-style: dashed !important;">
-                            <small class="text-muted d-block mb-1"><i class="fas fa-certificate text-success"></i> Documento Assinado Digitalmente</small>
-                            <h5 class="mb-0 fw-bold text-dark uppercase">{{ current_user.rank }} {{ current_user.nome_completo }}</h5>
-                            <small class="text-muted">ID: {{ current_user.matricula }} - Verificado via Sistema</small>
-                        </div>
+                          {% if not is_finalizado %}
+                          <div class="mt-4 p-3 bg-light rounded border text-center border-2">
+                              {% include 'components/_signature_pad.html' %}
+                          </div>
+                          {% else %}
+                          <div class="mt-4 p-3 bg-light rounded border text-center border-2" style="border-style: dashed !important;">
+                              <small class="text-muted d-block mb-1"><i class="fas fa-certificate text-success"></i> Documento Assinado Digitalmente</small>
+                              <h5 class="mb-0 fw-bold text-dark uppercase">{{ current_user.rank }} {{ current_user.nome_completo }}</h5>
+                              <small class="text-muted">ID: {{ current_user.matricula }} - Verificado via Sistema</small>
+                          </div>
+                          {% endif %}
 
                         <div class="mt-4 no-print text-end">
                             {% if is_finalizado %}
