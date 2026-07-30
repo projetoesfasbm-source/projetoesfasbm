@@ -104,15 +104,29 @@
             <div class="modal-body p-4 pt-0">
                 <div class="mb-4 p-3 bg-light rounded" style="border-left: 4px solid var(--primary-color);">
                     <label class="small fw-bold text-muted d-block mb-1">SUA ARGUMENTAÇÃO:</label>
-                    <p class="mb-0 text-dark">{{ r.argumentacao_texto }}</p>
+                    <p class="mb-0 text-dark" style="white-space: pre-wrap;">{{ r.argumentacao_texto }}</p>
                 </div>
 
-                <div class="p-3 rounded border">
-                    <label class="small fw-bold text-muted d-block mb-1">RESPOSTA DA ADMINISTRAÇÃO:</label>
-                    {% if r.resposta_admin %}
-                        <p class="mb-0 text-dark">{{ r.resposta_admin }}</p>
+                {% if r.parecer_instrutor or r.parecer_instrutor2 %}
+                <div class="mb-4 p-3 bg-light rounded border-start border-info border-4" style="border-left: 4px solid #0dcaf0;">
+                    <label class="small fw-bold text-muted d-block mb-2"><i class="fas fa-chalkboard-teacher me-1"></i> PARECER TÉCNICO (INSTRUTOR):</label>
+                    {% if r.parecer_instrutor %}
+                        <div class="mb-2 text-dark" style="white-space: pre-wrap;">{{ r.parecer_instrutor }}</div>
+                    {% endif %}
+                    {% if r.parecer_instrutor2 %}
+                        <div class="mt-3 pt-3 border-top text-dark" style="white-space: pre-wrap;">{{ r.parecer_instrutor2 }}</div>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                <div class="p-3 bg-light rounded" style="border-left: 4px solid #198754;">
+                    <label class="small fw-bold text-muted d-block mb-2"><i class="fas fa-gavel me-1"></i> DECISÃO FINAL (COMANDO):</label>
+                    {% if r.decisao_comandante %}
+                        <p class="mb-0 text-dark" style="white-space: pre-wrap;">{{ r.decisao_comandante }}</p>
+                    {% elif r.resposta_admin %}
+                        <p class="mb-0 text-dark" style="white-space: pre-wrap;">{{ r.resposta_admin }}</p>
                     {% else %}
-                        <p class="mb-0 text-muted fst-italic">Aguardando análise da comissão...</p>
+                        <p class="mb-0 text-muted fst-italic">Aguardando decisão final...</p>
                     {% endif %}
                 </div>
             </div>

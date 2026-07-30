@@ -39,47 +39,49 @@
         
         <div class="row mt-4"><span class="label">Argumentação do Aluno:</span></div>
         <div style="margin-top: 5px; white-space: pre-wrap;">{{ r.argumentacao_texto }}</div>
-    </div>
-
-    {% if r.parecer_instrutor %}
-    <div class="section-title">3. PARECER TÉCNICO (INSTRUTOR 1)</div>
-    <div class="content-box" style="white-space: pre-wrap;">{{ r.parecer_instrutor }}</div>
-    {% endif %}
-
-    {% if r.parecer_instrutor2 %}
-    <div class="section-title">3.1. PARECER TÉCNICO (INSTRUTOR 2)</div>
-    <div class="content-box" style="white-space: pre-wrap;">{{ r.parecer_instrutor2 }}</div>
-    {% endif %}
-
-    {% if r.decisao_comandante %}
-    <div class="section-title">4. DECISÃO FINAL (COMANDO/ADMIN)</div>
-    <div class="content-box" style="white-space: pre-wrap;">{{ r.decisao_comandante }}</div>
-    {% endif %}
-
-    <div class="mt-4 text-center">
-        <div style="margin-top: 40px;">
+        
+        <div style="text-align: center; margin-top: 30px; margin-bottom: 10px;">
             {% if r.assinatura_aluno %}
-            <img src="{{ request.url_root }}static/{{ r.assinatura_aluno }}" style="max-height: 80px; margin-bottom: 10px; background-color: white !important;" /><br/>
+            <img src="{{ request.url_root }}static/{{ r.assinatura_aluno }}" style="max-height: 80px; margin-bottom: 5px; background-color: white !important;" /><br/>
             {% else %}
             <br/><br/><br/>
             {% endif %}
             _______________________________________<br/>
             <small><b>{{ r.aluno.nome_completo }}</b><br/>Aluno(a) Requerente</small>
         </div>
+    </div>
+
+    {% if r.parecer_instrutor or r.parecer_instrutor2 %}
+    <div class="section-title">3. PARECER TÉCNICO</div>
+    <div class="content-box">
+        {% if r.parecer_instrutor %}
+        <div style="white-space: pre-wrap;"><b>Instrutor 1:</b><br/>{{ r.parecer_instrutor }}</div>
+        {% endif %}
         
-        <div style="margin-top: 50px;">
+        {% if r.parecer_instrutor2 %}
+        <div style="white-space: pre-wrap; margin-top: 15px;"><b>Instrutor 2:</b><br/>{{ r.parecer_instrutor2 }}</div>
+        {% endif %}
+        
+        <div style="text-align: center; margin-top: 30px; margin-bottom: 10px;">
             {% if r.assinatura_instrutor %}
-            <img src="{{ request.url_root }}static/{{ r.assinatura_instrutor }}" style="max-height: 80px; margin-bottom: 10px; background-color: white !important;" /><br/>
+            <img src="{{ request.url_root }}static/{{ r.assinatura_instrutor }}" style="max-height: 80px; margin-bottom: 5px; background-color: white !important;" /><br/>
             {% else %}
             <br/><br/><br/>
             {% endif %}
             _______________________________________<br/>
             <small><b>Instrutor(a) Avaliador(a)</b></small>
         </div>
+    </div>
+    {% endif %}
+
+    {% if r.decisao_comandante %}
+    <div class="section-title">4. DECISÃO FINAL (COMANDO/ADMIN)</div>
+    <div class="content-box">
+        <div style="white-space: pre-wrap;">{{ r.decisao_comandante }}</div>
         
-        <div style="margin-top: 50px;">
+        <div style="text-align: center; margin-top: 30px; margin-bottom: 10px;">
             {% if r.assinatura_comandante %}
-            <img src="{{ request.url_root }}static/{{ r.assinatura_comandante }}" style="max-height: 80px; margin-bottom: 10px; background-color: white !important;" /><br/>
+            <img src="{{ request.url_root }}static/{{ r.assinatura_comandante }}" style="max-height: 80px; margin-bottom: 5px; background-color: white !important;" /><br/>
             {% else %}
             <br/><br/><br/>
             {% endif %}
@@ -87,6 +89,7 @@
             <small><b>Comando/Administração</b></small>
         </div>
     </div>
+    {% endif %}
     
     {% if r.aluno_ciente %}
     <div class="mt-5 text-center" style="border: 2px dashed #4CAF50; padding: 15px; background-color: #f9fff9; width: 60%; margin: 40px auto 0 auto;">
