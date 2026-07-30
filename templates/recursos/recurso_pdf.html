@@ -57,48 +57,35 @@
     {% endif %}
 
     <div class="mt-4 text-center">
-        <table style="width: 100%; text-align: center; margin-top: 40px; border: none;">
-            <tr>
-                {% if r.assinatura_aluno %}
-                <td style="width: 33%; vertical-align: bottom;">
-                    <img src="{{ request.url_root }}static/{{ r.assinatura_aluno }}" style="max-height: 80px; margin-bottom: 10px; background-color: white !important;" /><br/>
-                    _______________________________________<br/>
-                    <small><b>{{ r.aluno.nome_completo }}</b><br/>Aluno(a) Requerente</small>
-                </td>
-                {% else %}
-                <td style="width: 33%; vertical-align: bottom;">
-                    _______________________________________<br/>
-                    <small><b>{{ r.aluno.nome_completo }}</b><br/>Aluno(a) Requerente</small>
-                </td>
-                {% endif %}
-                
-                {% if r.assinatura_instrutor %}
-                <td style="width: 33%; vertical-align: bottom;">
-                    <img src="{{ request.url_root }}static/{{ r.assinatura_instrutor }}" style="max-height: 80px; margin-bottom: 10px; background-color: white !important;" /><br/>
-                    _______________________________________<br/>
-                    <small><b>Instrutor(a) Avaliador(a)</b></small>
-                </td>
-                {% else %}
-                <td style="width: 33%; vertical-align: bottom;">
-                    _______________________________________<br/>
-                    <small><b>Instrutor(a) Avaliador(a)</b></small>
-                </td>
-                {% endif %}
-                
-                {% if r.assinatura_comandante %}
-                <td style="width: 33%; vertical-align: bottom;">
-                    <img src="{{ request.url_root }}static/{{ r.assinatura_comandante }}" style="max-height: 80px; margin-bottom: 10px; background-color: white !important;" /><br/>
-                    _______________________________________<br/>
-                    <small><b>Comando/Administração</b></small>
-                </td>
-                {% else %}
-                <td style="width: 33%; vertical-align: bottom;">
-                    _______________________________________<br/>
-                    <small><b>Comando/Administração</b></small>
-                </td>
-                {% endif %}
-            </tr>
-        </table>
+        <div style="margin-top: 40px;">
+            {% if r.assinatura_aluno %}
+            <img src="{{ request.url_root }}static/{{ r.assinatura_aluno }}" style="max-height: 80px; margin-bottom: 10px; background-color: white !important;" /><br/>
+            {% else %}
+            <br/><br/><br/>
+            {% endif %}
+            _______________________________________<br/>
+            <small><b>{{ r.aluno.nome_completo }}</b><br/>Aluno(a) Requerente</small>
+        </div>
+        
+        <div style="margin-top: 50px;">
+            {% if r.assinatura_instrutor %}
+            <img src="{{ request.url_root }}static/{{ r.assinatura_instrutor }}" style="max-height: 80px; margin-bottom: 10px; background-color: white !important;" /><br/>
+            {% else %}
+            <br/><br/><br/>
+            {% endif %}
+            _______________________________________<br/>
+            <small><b>Instrutor(a) Avaliador(a)</b></small>
+        </div>
+        
+        <div style="margin-top: 50px;">
+            {% if r.assinatura_comandante %}
+            <img src="{{ request.url_root }}static/{{ r.assinatura_comandante }}" style="max-height: 80px; margin-bottom: 10px; background-color: white !important;" /><br/>
+            {% else %}
+            <br/><br/><br/>
+            {% endif %}
+            _______________________________________<br/>
+            <small><b>Comando/Administração</b></small>
+        </div>
     </div>
     
     {% if r.aluno_ciente %}
