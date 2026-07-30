@@ -540,12 +540,21 @@ def exportar_recurso_pdf(recurso_id):
     )
     
     pdf_name = f"recurso_{recurso_id}.pdf"
+    
+    meta_data = {"filename": pdf_name, "anexos": []}
+    if recurso.arquivo_anexo:
+        import os
+        from flask import current_app
+        anexo_path = os.path.join(current_app.root_path, '..', 'static', 'uploads', 'recursos_anexos', recurso.arquivo_anexo)
+        if anexo_path.lower().endswith('.pdf'):
+            meta_data["anexos"].append(anexo_path)
+            
     job_id = str(uuid.uuid4())
     job = BackgroundJob(
         id=job_id,
         task_type='generate_pdf',
         payload=html,
-        meta_data=json.dumps({"filename": pdf_name}),
+        meta_data=json.dumps(meta_data),
         user_id=current_user.id
     )
     db.session.add(job)

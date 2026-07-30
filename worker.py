@@ -24,6 +24,31 @@ def process_pdf_job(job):
     logging.info(f"Gerando PDF para job {job.id} em {file_path}")
     HTML(string=job.payload).write_pdf(file_path)
     
+    # Verifica se há anexos para mesclar (ex: fundamentação do recurso)
+    if job.meta_data:
+        import json
+        try:
+            meta = json.loads(job.meta_data)
+            anexos = meta.get('anexos', [])
+            if anexos:
+                try:
+                    from pypdf import PdfWriter, PdfReader
+                    merger = PdfWriter()
+                    merger.append(file_path) # PDF principal gerado
+                    for anexo in anexos:
+                        if os.path.exists(anexo) and anexo.lower().endswith('.pdf'):
+                            logging.info(f"Mesclando anexo {anexo} ao job {job.id}")
+                            merger.append(anexo)
+                    # Sobrescreve o arquivo com a versão mesclada
+                    merger.write(file_path)
+                    merger.close()
+                except ImportError:
+                    logging.warning("pypdf não instalado. Não foi possível mesclar anexos.")
+                except Exception as e:
+                    logging.error(f"Erro ao mesclar anexos no job {job.id}: {e}")
+        except json.JSONDecodeError:
+            pass
+
     return file_path
 
 def cleanup_old_jobs():

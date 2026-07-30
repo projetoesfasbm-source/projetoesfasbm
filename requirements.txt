@@ -106,3 +106,4 @@ pyotp==2.9.0
 qrcode==7.4.2
 gunicorn==22.0.0
 psycopg2-binary==2.9.9
+pypdf==5.1.0
