@@ -130,6 +130,13 @@
                                         <span class="badge {% if r.status == 'Pendente' %}bg-warning text-dark{% elif r.status == 'Deferido' %}bg-success{% elif r.status == 'Indeferido' %}bg-danger{% else %}bg-info text-dark{% endif %} px-3 rounded-pill py-2">
                                             {{ r.status }}
                                         </span>
+                                        {% if r.aluno_ciente %}
+                                        <div class="mt-1">
+                                            <span class="badge bg-secondary" title="Ciência registrada em {{ r.aluno_ciente_data.strftime('%d/%m/%Y %H:%M') if r.aluno_ciente_data else 'Data não registrada' }}">
+                                                <i class="fas fa-check-double"></i> Ciência
+                                            </span>
+                                        </div>
+                                        {% endif %}
                                     </td>
                                     <td class="text-end">
                                         <div class="d-flex gap-2 justify-content-end">
