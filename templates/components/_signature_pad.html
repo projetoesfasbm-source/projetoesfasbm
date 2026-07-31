@@ -138,12 +138,19 @@
     
     // Assegurar que o canvas funcione dentro das abas Bootstrap 5
     document.addEventListener('DOMContentLoaded', function() {
-        signaturePad = new SignaturePad(canvas, {
-            backgroundColor: 'rgb(255, 255, 255)',
-            penColor: 'rgb(0, 0, 0)'
-        });
+        var hasLibrary = typeof SignaturePad !== 'undefined';
+        
+        if (hasLibrary) {
+            signaturePad = new SignaturePad(canvas, {
+                backgroundColor: 'rgb(255, 255, 255)',
+                penColor: 'rgb(0, 0, 0)'
+            });
+        } else {
+            console.error('SignaturePad library failed to load.');
+        }
         
         function resizeCanvas() {
+            if (typeof signaturePad === 'undefined') return;
             var ratio =  Math.max(window.devicePixelRatio || 1, 1);
             // Salvar imagem antes do resize
             var dataURL = signaturePad.toDataURL();
@@ -180,9 +187,9 @@
             form.addEventListener('submit', function(e) {
                 var tipo = document.getElementById('tipo_assinatura').value;
                 if (tipo === 'canvas') {
-                    if (signaturePad.isEmpty()) {
+                    if (typeof signaturePad === 'undefined' || signaturePad.isEmpty()) {
                         e.preventDefault();
-                        alert('Por favor, faça sua assinatura.');
+                        alert('Por favor, faça sua assinatura na caixa indicada (ou aguarde o carregamento).');
                         return;
                     }
                     document.getElementById('assinatura_base64').value = signaturePad.toDataURL('image/jpeg', 0.7);

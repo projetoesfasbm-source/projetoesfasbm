@@ -35,13 +35,14 @@ def process_signature(user, tipo, dados, salvar_padrao=False):
             else:
                 shutil.copy2(os.path.join(base_path, user.assinatura_padrao_path), filepath)
         elif tipo == 'canvas':
+            if not dados or not isinstance(dados, str) or len(dados) < 100:
+                return None
             encoded = dados.split(',', 1)[1] if ',' in dados else dados
             with open(filepath, 'wb') as f: f.write(base64.b64decode(encoded))
         elif tipo == 'upload':
-            if hasattr(dados, 'save'):
-                dados.save(filepath)
-            else:
-                with open(filepath, 'wb') as f: f.write(dados)
+            if not dados or not hasattr(dados, 'save') or not dados.filename:
+                return None
+            dados.save(filepath)
         else:
             return None
             
