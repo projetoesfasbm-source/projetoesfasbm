@@ -220,12 +220,17 @@
             // Pequeno timeout pro CSS renderizar a tab
             setTimeout(function() {
                 var ratio =  Math.max(window.devicePixelRatio || 1, 1);
-                var dataURL = signaturePad.toDataURL();
+                
+                var wasEmpty = signaturePad.isEmpty();
+                var dataURL = wasEmpty ? null : signaturePad.toDataURL();
+                
                 canvas.width = canvas.offsetWidth * ratio;
                 canvas.height = canvas.offsetHeight * ratio;
                 canvas.getContext("2d").scale(ratio, ratio);
+                
                 signaturePad.clear();
-                if (dataURL && dataURL !== 'data:,') {
+                
+                if (!wasEmpty && dataURL && dataURL !== 'data:,') {
                     signaturePad.fromDataURL(dataURL);
                 }
             }, 100);
