@@ -81,6 +81,14 @@
                                                 <i class="fas fa-file-pdf me-1"></i> PDF
                                             </button>
                                             {% endif %}
+                                            {% if current_user.is_super_admin or current_user.is_sens or is_comandante %}
+                                            <form action="{{ url_for('recursos.excluir_recurso_admin', recurso_id=r.id) }}" method="POST" class="d-inline" onsubmit="return confirm('ALERTA: Tem certeza que deseja excluir este recurso permanentemente? Esta ação não pode ser desfeita!');">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                <button type="submit" class="btn btn-outline-danger btn-sm rounded-pill px-3 fw-bold" title="Excluir Recurso">
+                                                    <i class="fas fa-trash me-1"></i> Excluir
+                                                </button>
+                                            </form>
+                                            {% endif %}
                                             <a href="{{ url_for('recursos.detalhes_recurso', recurso_id=r.id) }}" class="btn btn-primary btn-sm rounded-pill px-3 fw-bold">
                                                 <i class="fas fa-search me-1"></i> Analisar
                                             </a>
@@ -129,6 +137,14 @@
                                             <button type="button" class="btn btn-danger btn-sm rounded-pill px-3 fw-bold btn-recurso-pdf" data-url="{{ url_for('recursos.exportar_recurso_pdf', recurso_id=r.id) }}" title="Imprimir PDF">
                                                 <i class="fas fa-file-pdf me-1"></i> PDF
                                             </button>
+                                            {% endif %}
+                                            {% if current_user.is_super_admin or current_user.is_sens or is_comandante %}
+                                            <form action="{{ url_for('recursos.excluir_recurso_admin', recurso_id=r.id) }}" method="POST" class="d-inline" onsubmit="return confirm('ALERTA: Tem certeza que deseja excluir este recurso permanentemente? Esta ação não pode ser desfeita!');">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                <button type="submit" class="btn btn-outline-danger btn-sm rounded-pill px-3 fw-bold" title="Excluir Recurso">
+                                                    <i class="fas fa-trash me-1"></i> Excluir
+                                                </button>
+                                            </form>
                                             {% endif %}
                                             <a href="{{ url_for('recursos.detalhes_recurso', recurso_id=r.id) }}" class="btn btn-primary btn-sm rounded-pill px-3 fw-bold">
                                                 <i class="fas fa-search me-1"></i> Ver Resultado

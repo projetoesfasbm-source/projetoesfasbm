@@ -586,6 +586,28 @@ def excluir_recurso_aluno(recurso_id):
         
     return redirect(url_for('recursos.index'))
 
+@recursos_bp.route('/admin/excluir/<int:recurso_id>', methods=['POST'])
+@login_required
+def excluir_recurso_admin(recurso_id):
+    active_school_id = session.get('active_school_id') or getattr(current_user, 'escola_id', None)
+    is_comandante = current_user.is_admin_escola_in_school(active_school_id)
+    
+    if not (current_user.is_super_admin or current_user.is_sens or is_comandante):
+        flash("Acesso negado. Apenas administradores, chefe da SENS ou comandantes podem excluir recursos nesta etapa.", "danger")
+        return redirect(url_for('recursos.listar_recursos_pendentes'))
+        
+    recurso = Recurso.query.get_or_404(recurso_id)
+    
+    try:
+        db.session.delete(recurso)
+        db.session.commit()
+        flash(f"Recurso #{recurso.id} excluído com sucesso.", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Erro ao excluir recurso: {str(e)}", "danger")
+        
+    return redirect(url_for('recursos.listar_recursos_pendentes'))
+
 @recursos_bp.route('/aluno/ciente/<int:recurso_id>', methods=['POST'])
 @login_required
 def dar_ciente(recurso_id):
