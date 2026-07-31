@@ -26,14 +26,22 @@ def process_signature(user, tipo, dados, salvar_padrao=False):
     
     try:
         if tipo == 'padrao':
+            padrao_path = None
             if not user.assinatura_padrao_path:
-                # Fallback para instrutor se não tiver no user (transição suave)
                 if hasattr(user, 'instrutor_profile') and user.instrutor_profile and user.instrutor_profile.assinatura_padrao_path:
-                    shutil.copy2(os.path.join(base_path, user.instrutor_profile.assinatura_padrao_path), filepath)
-                else:
-                    return None
+                    padrao_path = user.instrutor_profile.assinatura_padrao_path
             else:
-                shutil.copy2(os.path.join(base_path, user.assinatura_padrao_path), filepath)
+                padrao_path = user.assinatura_padrao_path
+                
+            if not padrao_path:
+                return None
+                
+            full_padrao_path = os.path.join(base_path, padrao_path)
+            if not os.path.exists(full_padrao_path) or os.path.getsize(full_padrao_path) < 100:
+                # Assinatura corrompida ou vazia (provável resquício do bug antigo)
+                return None
+                
+            shutil.copy2(full_padrao_path, filepath)
         elif tipo == 'canvas':
             if not dados or not isinstance(dados, str) or len(dados) < 100:
                 return None
