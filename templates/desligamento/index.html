@@ -95,10 +95,14 @@
 
                     <div class="mb-3">
                         <label class="form-label fw-bold">Selecione o Aluno</label>
-                        <select name="aluno_id" class="form-select border-dark" required>
+                        <select name="aluno_id" id="aluno_id" class="form-select border-dark" required style="width: 100%">
                             <option value="">-- Buscar aluno ativo --</option>
-                            {% for a in alunos_ativos %}
-                                <option value="{{ a.id }}">{{ a.user.nome_de_guerra if a.user else 'Sem Nome' }} ({{ a.turma.nome if a.turma else 'Sem Turma' }})</option>
+                            {% for turma, alunos in alunos_ativos|groupby('turma.nome') %}
+                                <optgroup label="{{ turma }}">
+                                    {% for a in alunos %}
+                                        <option value="{{ a.id }}">{{ a.user.nome_de_guerra if a.user else 'Sem Nome' }}</option>
+                                    {% endfor %}
+                                </optgroup>
                             {% endfor %}
                         </select>
                     </div>
@@ -179,6 +183,15 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Inicializar select2 para o select de aluno
+    if (typeof $ !== 'undefined' && $.fn.select2) {
+        $('#aluno_id').select2({
+            theme: 'bootstrap-5',
+            dropdownParent: $('#modalDesligar'),
+            placeholder: '-- Buscar aluno ativo --'
+        });
+    }
+
     const modalReverter = document.getElementById('modalReverter');
     if (modalReverter) {
         modalReverter.addEventListener('show.bs.modal', function(event) {

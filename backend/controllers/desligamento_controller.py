@@ -31,10 +31,19 @@ def index():
         RegistroDesligamento.edicao_id == active_edicao
     ).order_by(RegistroDesligamento.data_desligamento.desc()).all()
 
-    alunos_ativos = db.session.query(Aluno).filter(
+    from backend.models.user import User
+
+    alunos_ativos = db.session.query(Aluno).join(
+        User, Aluno.user_id == User.id
+    ).join(
+        Turma, Aluno.turma_id == Turma.id
+    ).filter(
         Aluno.edicao_id == active_edicao,
         Aluno.status_matricula == 'Ativo',
         Aluno.turma_id != None
+    ).order_by(
+        Turma.nome.asc(),
+        User.nome_de_guerra.asc()
     ).all()
 
     # --- NOVAS BUSCAS PARA O MODAL DE REVERSÃO ---
