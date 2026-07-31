@@ -601,12 +601,22 @@ class HorarioService:
                 elif horario_id:
                     conflict_query = conflict_query.where(Horario.id != int(horario_id))
 
-                conflict_aula = db.session.scalar(conflict_query)
-                if conflict_aula:
+                conflict_aulas = db.session.scalars(conflict_query).all()
+                if conflict_aulas:
                     conflito_school_id = school_id
                     conflito_school_name = "Outra Escola"
+                    pelotao_conflito = conflict_aulas[0].pelotao
+                    
+                    periodos_conflito = []
+                    for c_aula in conflict_aulas:
+                        for p in range(c_aula.periodo, c_aula.periodo + c_aula.duracao):
+                            if p not in periodos_conflito:
+                                periodos_conflito.append(p)
+                    periodos_conflito.sort()
+                    periodos_str = ", ".join(map(str, periodos_conflito))
+
                     try:
-                        semana_conflito = db.session.get(Semana, conflict_aula.semana_id)
+                        semana_conflito = db.session.get(Semana, conflict_aulas[0].semana_id)
                         if semana_conflito and semana_conflito.ciclo_id:
                             ciclo_conflito = db.session.get(Ciclo, semana_conflito.ciclo_id)
                             if ciclo_conflito:
@@ -621,12 +631,12 @@ class HorarioService:
                     if conflito_school_id != school_id:
                         return False, (
                             f"⚠️ CONFLITO DE AGENDA: O instrutor já possui aula marcada na escola "
-                            f"'{conflito_school_name}' neste dia e horário (Período {conflict_aula.periodo})."
+                            f"'{conflito_school_name}' neste dia e horário (Períodos: {periodos_str})."
                         ), 409
                     else:
                         return False, (
                             f"⚠️ CONFLITO DE AGENDA: O instrutor já está alocado na turma "
-                            f"'{conflict_aula.pelotao}' neste horário (Período {conflict_aula.periodo})."
+                            f"'{pelotao_conflito}' neste horário (Períodos: {periodos_str})."
                         ), 409
 
             periodos_solicitados = list(range(periodo_inicio, periodo_fim + 1))
@@ -644,9 +654,20 @@ class HorarioService:
             elif horario_id:
                 conflito_query_interno = conflito_query_interno.where(Horario.id != int(horario_id))
 
-            conflito_interno = db.session.scalar(conflito_query_interno)
-            if conflito_interno:
-                return False, f"⚠️ ERRO DE MARCAÇÃO DUPLA: O {conflito_interno.periodo}º período já está ocupado por '{conflito_interno.disciplina.materia}'.", 409
+            conflito_internos = db.session.scalars(conflito_query_interno).all()
+            if conflito_internos:
+                periodos_ocupados = []
+                materias_ocupadas = set()
+                for c_int in conflito_internos:
+                    for p in range(c_int.periodo, c_int.periodo + c_int.duracao):
+                        if p not in periodos_ocupados:
+                            periodos_ocupados.append(p)
+                    if getattr(c_int, 'disciplina', None):
+                        materias_ocupadas.add(c_int.disciplina.materia)
+                periodos_ocupados.sort()
+                periodos_str = ", ".join(map(str, periodos_ocupados))
+                materias_str = ", ".join(materias_ocupadas) if materias_ocupadas else "outra matéria"
+                return False, f"⚠️ ERRO DE MARCAÇÃO DUPLA: Os períodos {periodos_str} já estão ocupados por '{materias_str}'.", 409
 
             if horario_id:
                 if not aula_original or not HorarioService.can_edit_horario(aula_original, user):
