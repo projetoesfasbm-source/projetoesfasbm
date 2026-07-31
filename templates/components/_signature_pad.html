@@ -152,16 +152,19 @@
         function resizeCanvas() {
             if (typeof signaturePad === 'undefined') return;
             var ratio =  Math.max(window.devicePixelRatio || 1, 1);
-            // Salvar imagem antes do resize
-            var dataURL = signaturePad.toDataURL();
+            
+            // Só salva e restaura a imagem se houver algo desenhado
+            var wasEmpty = signaturePad.isEmpty();
+            var dataURL = wasEmpty ? null : signaturePad.toDataURL();
             
             canvas.width = canvas.offsetWidth * ratio;
             canvas.height = canvas.offsetHeight * ratio;
             canvas.getContext("2d").scale(ratio, ratio);
             
             signaturePad.clear();
+            
             // Restaurar imagem após resize se houver
-            if (dataURL && dataURL !== 'data:,') {
+            if (!wasEmpty && dataURL && dataURL !== 'data:,') {
                 signaturePad.fromDataURL(dataURL);
             }
         }
