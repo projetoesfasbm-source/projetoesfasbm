@@ -131,15 +131,10 @@ class RelatorioService:
                 if chave not in slots_ant:
                     slots_ant.add(chave)
                     dur = duracao_ant_val or 1
-                    user_assinante_ant = diario_assinante_map.get((data_aula_ant, periodo, disc_id))
-                    if user_assinante_ant:
-                        u_id = user_assinante_ant.id
-                        ch_anterior_map[(u_id, disc_id)] = ch_anterior_map.get((u_id, disc_id), 0) + dur
-                    else:
-                        if user1_ant_id:
-                            ch_anterior_map[(user1_ant_id, disc_id)] = ch_anterior_map.get((user1_ant_id, disc_id), 0) + dur
-                        if user2_ant_id and user2_ant_id != user1_ant_id:
-                            ch_anterior_map[(user2_ant_id, disc_id)] = ch_anterior_map.get((user2_ant_id, disc_id), 0) + dur
+                    if user1_ant_id:
+                        ch_anterior_map[(user1_ant_id, disc_id)] = ch_anterior_map.get((user1_ant_id, disc_id), 0) + dur
+                    if user2_ant_id and user2_ant_id != user1_ant_id:
+                        ch_anterior_map[(user2_ant_id, disc_id)] = ch_anterior_map.get((user2_ant_id, disc_id), 0) + dur
         
         # 1.c Perfis de Instrutor da escola atual
         instrutores_escola = db.session.scalars(select(Instrutor).where(Instrutor.school_id == school_id)).all()
@@ -239,21 +234,12 @@ class RelatorioService:
             offset_dias = RelatorioService._get_dia_offset(horario.dia_semana)
             data_aula = semana.data_inicio + timedelta(days=offset_dias)
 
-            # Usa o mapa pré-carregado para achar o diário e o perfil
-            user_assinante = diario_assinante_map.get((data_aula, periodo, disciplina.id))
-
-            if user_assinante:
-                instrutor_perfil = instrutor_perfil_map.get(user_assinante.id)
-                
-                if instrutor_perfil:
-                    processar_instrutor(user_assinante, instrutor_perfil, disciplina, data_aula, periodo, duracao, pelotao)
-            else:
-                # Fallback: Se não houver diário assinado, usa o planejamento original
-                if inst1 and usr1:
-                    processar_instrutor(usr1, inst1, disciplina, data_aula, periodo, duracao, pelotao)
-                if inst2 and usr2:
-                    if not (inst1 and inst1.id == inst2.id):
-                        processar_instrutor(usr2, inst2, disciplina, data_aula, periodo, duracao, pelotao)
+            # Usa estritamente o planejamento original (Quadro Horário), ignorando diários de classe
+            if inst1 and usr1:
+                processar_instrutor(usr1, inst1, disciplina, data_aula, periodo, duracao, pelotao)
+            if inst2 and usr2:
+                if not (inst1 and inst1.id == inst2.id):
+                    processar_instrutor(usr2, inst2, disciplina, data_aula, periodo, duracao, pelotao)
 
         lista_final = []
         chaves_ordenadas = sorted(dados_agrupados.keys())
