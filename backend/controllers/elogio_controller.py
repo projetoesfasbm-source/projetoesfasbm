@@ -104,7 +104,9 @@ def deletar_elogio(elogio_id):
         db.session.delete(elogio)
         db.session.commit()
         flash('Elogio removido.', 'success')
-        return redirect(url_for('aluno.editar_aluno', aluno_id=aluno_id))
+        
+        # O request.referrer joga o usuário de volta para a tela em que ele estava (Justiça ou Perfil)
+        return redirect(request.referrer or url_for('aluno.editar_aluno', aluno_id=aluno_id))
     
     flash('Elogio não encontrado.', 'danger')
-    return redirect(url_for('main.dashboard'))
+    return redirect(request.referrer or url_for('main.dashboard'))
