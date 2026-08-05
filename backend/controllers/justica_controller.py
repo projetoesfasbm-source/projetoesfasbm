@@ -173,16 +173,16 @@ def index():
     agora_hora = datetime.now().strftime('%H:%M')
     hoje = datetime.now().strftime('%Y-%m-%d')
 
-    # >>> INÍCIO DA MODIFICAÇÃO: BUSCA OS ELOGIOS DO USUÁRIO LOGADO <<<
+    # >>> INÍCIO DA BUSCA DOS SEUS ELOGIOS <<<
     stmt_meus_elogios = select(Elogio).options(
         joinedload(Elogio.aluno).joinedload(Aluno.user),
         joinedload(Elogio.aluno).joinedload(Aluno.turma)
     ).where(
         Elogio.registrado_por_id == current_user.id
-    ).order_by(Elogio.data_elogio.desc()).limit(20) # Limitando aos últimos 20 para não pesar a tela
+    ).order_by(Elogio.data_elogio.desc()).limit(20)
     
-    meus_elogios = db.session.scalars(stmt_meus_elogios).all()
-    # >>> FIM DA MODIFICAÇÃO <<<
+    meus_elogios = db.session.scalars(stmt_meus_elogios).unique().all()
+    # >>> FIM DA BUSCA <<<
 
     return render_template('justica/index.html',
                            em_andamento=em_andamento,
@@ -193,7 +193,8 @@ def index():
                            fatos_predefinidos=fatos_predefinidos,
                            agora_hora=agora_hora,
                            hoje=hoje,
-                           agora=agora_dt)
+                           agora=agora_dt,
+                           meus_elogios=meus_elogios)
 
 @justica_bp.route('/registrar-em-massa', methods=['POST'])
 @login_required
