@@ -82,12 +82,16 @@ def novo_elogio(aluno_id):
             db.session.rollback()
             flash(f'Erro ao salvar elogio: {str(e)}', 'danger')
 
+    # NOVA BUSCA: Recupera o histórico de elogios atribuídos pelo chefe/comandante logado
+    meus_elogios = Elogio.query.filter_by(registrado_por_id=current_user.id).order_by(Elogio.data_elogio.desc()).all()
+
     return render_template(
         'elogios/novo.html', 
         aluno=aluno, 
         atributos=ATRIBUTOS_FADA,
         usa_fada=usa_fada,
-        hoje=datetime.today().strftime('%Y-%m-%d')
+        hoje=datetime.today().strftime('%Y-%m-%d'),
+        meus_elogios=meus_elogios # Enviando a lista para a interface
     )
 
 @elogio_bp.route('/deletar/<int:elogio_id>', methods=['POST'])
