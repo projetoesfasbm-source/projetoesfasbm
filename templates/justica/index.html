@@ -17,14 +17,14 @@
             <div class="justice-container">
 
                 <div class="justice-options mb-4">
-                    <button class="btn btn-primary justice-option-btn {% if active_tab != 'finalizados' %}active{% endif %}" data-target="inProgressContent">Em Andamento</button>
+                    <button class="btn btn-primary justice-option-btn {% if active_tab == 'andamento' %}active{% endif %}" data-target="inProgressContent">Em Andamento</button>
                     <button class="btn btn-warning justice-option-btn {% if active_tab == 'finalizados' %}active{% endif %}" data-target="finalizadosContent">Finalizados</button>
 
                     {% if current_user.role != 'aluno' %}
-                        <button class="btn btn-danger justice-option-btn" data-target="newInfracaoContent">
+                        <button class="btn btn-danger justice-option-btn {% if active_tab == 'newInfracaoContent' %}active{% endif %}" data-target="newInfracaoContent">
                             <i class="fas fa-exclamation-triangle me-1"></i>Nova Infração
                         </button>
-                        <button class="btn btn-success justice-option-btn" data-target="newElogioContent">
+                        <button class="btn btn-success justice-option-btn {% if active_tab == 'newElogioContent' %}active{% endif %}" data-target="newElogioContent">
                             <i class="fas fa-star me-1"></i>Novo Elogio
                         </button>
 
@@ -40,7 +40,7 @@
                     {% endif %}
                 </div>
 
-                <div class="justice-content {% if active_tab != 'finalizados' %}active{% endif %}" id="inProgressContent">
+                <div class="justice-content {% if active_tab == 'andamento' %}active{% endif %}" id="inProgressContent">
                     <h3 class="justice-content-title mb-3">Processos em Andamento</h3>
                     {% if em_andamento %}
                         {% for p in em_andamento %}
@@ -671,7 +671,7 @@
                     {% endif %}
                 </div>
 
-                <div class="justice-content" id="newInfracaoContent">
+                <div class="justice-content {% if active_tab == 'newInfracaoContent' %}active{% endif %}" id="newInfracaoContent">
                     <div class="card border-danger shadow-sm">
                         <div class="card-header bg-danger text-white"><h4 class="mb-0">Registrar Infração</h4></div>
                         <div class="card-body">
@@ -754,7 +754,7 @@
                     </div>
                 </div>
 
-                <div class="justice-content" id="newElogioContent">
+                <div class="justice-content {% if active_tab == 'newElogioContent' %}active{% endif %}" id="newElogioContent">
     <div class="row">
         <!-- COLUNA ESQUERDA: Formulário de Registro -->
         <div class="col-lg-7 mb-4">
