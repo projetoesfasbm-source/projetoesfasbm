@@ -83,7 +83,8 @@ def novo_elogio(aluno_id):
             flash(f'Erro ao salvar elogio: {str(e)}', 'danger')
 
     # NOVA BUSCA: Recupera o histórico de elogios atribuídos pelo chefe/comandante logado
-    meus_elogios = Elogio.query.filter_by(registrado_por_id=current_user.id).order_by(Elogio.data_elogio.desc()).all()
+    page = request.args.get('page', 1, type=int)
+    meus_elogios_paginados = db.paginate(db.select(Elogio).filter_by(registrado_por_id=current_user.id).order_by(Elogio.data_elogio.desc()), page=page, per_page=20, error_out=False)
 
     return render_template(
         'elogios/novo.html', 
@@ -91,7 +92,7 @@ def novo_elogio(aluno_id):
         atributos=ATRIBUTOS_FADA,
         usa_fada=usa_fada,
         hoje=datetime.today().strftime('%Y-%m-%d'),
-        meus_elogios=meus_elogios # Enviando a lista para a interface
+        meus_elogios_paginados=meus_elogios_paginados # Enviando o objeto de paginação
     )
 
 @elogio_bp.route('/deletar/<int:elogio_id>', methods=['POST'])
