@@ -179,9 +179,11 @@ def index():
         joinedload(Elogio.aluno).joinedload(Aluno.turma)
     ).where(
         Elogio.registrado_por_id == current_user.id
-    ).order_by(Elogio.data_elogio.desc()).limit(20)
+    ).order_by(Elogio.data_elogio.desc())
     
-    meus_elogios = db.session.scalars(stmt_meus_elogios).unique().all()
+    page_elogios = request.args.get('page_elogios', 1, type=int)
+    meus_elogios_paginados = db.paginate(stmt_meus_elogios, page=page_elogios, per_page=20, error_out=False)
+    meus_elogios = meus_elogios_paginados.items
     # >>> FIM DA BUSCA <<<
 
     return render_template('justica/index.html',
@@ -194,7 +196,8 @@ def index():
                            agora_hora=agora_hora,
                            hoje=hoje,
                            agora=agora_dt,
-                           meus_elogios=meus_elogios)
+                           meus_elogios=meus_elogios,
+                           meus_elogios_paginados=meus_elogios_paginados)
 
 @justica_bp.route('/registrar-em-massa', methods=['POST'])
 @login_required

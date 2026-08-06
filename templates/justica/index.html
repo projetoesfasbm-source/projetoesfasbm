@@ -839,6 +839,31 @@
                         </div>
                     {% endif %}
                 </div>
+                {% if meus_elogios_paginados and meus_elogios_paginados.pages > 1 %}
+                <div class="card-footer bg-white border-top-0 pt-0">
+                    <nav aria-label="Navegação de meus elogios">
+                        <ul class="pagination pagination-sm justify-content-center mb-0 mt-2">
+                            <li class="page-item {% if not meus_elogios_paginados.has_prev %}disabled{% endif %}">
+                                <a class="page-link" href="{{ url_for('justica.index', page_elogios=meus_elogios_paginados.prev_num, tab='newElogioContent', q=request.args.get('q', '')) }}" tabindex="-1">Anterior</a>
+                            </li>
+                            
+                            {% for page_num in meus_elogios_paginados.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=1) %}
+                                {% if page_num %}
+                                    <li class="page-item {% if page_num == meus_elogios_paginados.page %}active{% endif %}">
+                                        <a class="page-link" href="{{ url_for('justica.index', page_elogios=page_num, tab='newElogioContent', q=request.args.get('q', '')) }}">{{ page_num }}</a>
+                                    </li>
+                                {% else %}
+                                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                                {% endif %}
+                            {% endfor %}
+
+                            <li class="page-item {% if not meus_elogios_paginados.has_next %}disabled{% endif %}">
+                                <a class="page-link" href="{{ url_for('justica.index', page_elogios=meus_elogios_paginados.next_num, tab='newElogioContent', q=request.args.get('q', '')) }}">Próximo</a>
+                            </li>
+                        </ul>
+                    </nav>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>
