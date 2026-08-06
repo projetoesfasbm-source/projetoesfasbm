@@ -36,7 +36,7 @@
                         {% for instrutor in todos_instrutores %}
                         <label class="dropdown-option">
                             <input type="checkbox" class="instrutor-checkbox" value="{{ instrutor.id }}">
-                            <span>{{ (instrutor.user.posto_graduacao + ' ' if instrutor.user.posto_graduacao else '') + (instrutor.user.nome_de_guerra or instrutor.user.username) }}</span>
+                            <span>{{ (instrutor.user.posto_graduacao ~ ' ' if instrutor.user.posto_graduacao else '') ~ (instrutor.user.nome_de_guerra or instrutor.user.username or 'Instrutor') }}</span>
                         </label>
                         {% endfor %}
                     </div>
@@ -45,7 +45,7 @@
 
             <select name="instrutor_ids" id="instrutor_ids" multiple required style="display: none;">
                 {% for instrutor in todos_instrutores %}
-                <option value="{{ instrutor.id }}">{{ (instrutor.user.posto_graduacao + ' ' if instrutor.user.posto_graduacao else '') + (instrutor.user.nome_de_guerra or instrutor.user.username) }}</option>
+                <option value="{{ instrutor.id }}">{{ (instrutor.user.posto_graduacao ~ ' ' if instrutor.user.posto_graduacao else '') ~ (instrutor.user.nome_de_guerra or instrutor.user.username or 'Instrutor') }}</option>
                 {% endfor %}
             </select>
 

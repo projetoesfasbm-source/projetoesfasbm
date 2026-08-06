@@ -124,7 +124,7 @@
                                     {% set cell_class = 'cell-bloqueada-admin' %}
                                     {% set cell_type = 'locked-admin' %}
                                 {% endif %}
-                            {% elif aula.is_disposicao %}
+                            {% elif aula.is_disposicao and not aula.id %}
                                 {% set cell_class = 'cell-disponivel' %}
                                 {% set cell_type = 'add' %}
                             {% else %}

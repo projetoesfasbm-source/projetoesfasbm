@@ -82,12 +82,17 @@ def novo_elogio(aluno_id):
             db.session.rollback()
             flash(f'Erro ao salvar elogio: {str(e)}', 'danger')
 
+    # NOVA BUSCA: Recupera o histórico de elogios atribuídos pelo chefe/comandante logado
+    page = request.args.get('page', 1, type=int)
+    meus_elogios_paginados = db.paginate(db.select(Elogio).filter_by(registrado_por_id=current_user.id).order_by(Elogio.data_elogio.desc()), page=page, per_page=20, error_out=False)
+
     return render_template(
         'elogios/novo.html', 
         aluno=aluno, 
         atributos=ATRIBUTOS_FADA,
         usa_fada=usa_fada,
-        hoje=datetime.today().strftime('%Y-%m-%d')
+        hoje=datetime.today().strftime('%Y-%m-%d'),
+        meus_elogios_paginados=meus_elogios_paginados # Enviando o objeto de paginação
     )
 
 @elogio_bp.route('/deletar/<int:elogio_id>', methods=['POST'])
@@ -100,7 +105,9 @@ def deletar_elogio(elogio_id):
         db.session.delete(elogio)
         db.session.commit()
         flash('Elogio removido.', 'success')
-        return redirect(url_for('aluno.editar_aluno', aluno_id=aluno_id))
+        
+        # O request.referrer joga o usuário de volta para a tela em que ele estava (Justiça ou Perfil)
+        return redirect(request.referrer or url_for('aluno.editar_aluno', aluno_id=aluno_id))
     
     flash('Elogio não encontrado.', 'danger')
-    return redirect(url_for('main.dashboard'))
+    return redirect(request.referrer or url_for('main.dashboard'))

@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Recurso - PDF</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; font-size: 12px; }
+        .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; }
+        .header img { max-width: 80px; }
+        .title { font-size: 16px; font-weight: bold; text-transform: uppercase; margin-top: 10px; }
+        .section-title { font-weight: bold; background-color: #f0f0f0; padding: 5px; margin-top: 15px; border: 1px solid #ccc; }
+        .content-box { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; min-height: 50px; }
+        .row { margin-bottom: 5px; }
+        .label { font-weight: bold; }
+        .text-center { text-align: center; }
+        .mt-4 { margin-top: 20px; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="title">Formulário de Recurso de Prova</div>
+        <div>Gerado em: {{ now.strftime('%d/%m/%Y %H:%M') }}</div>
+    </div>
+
+    <div class="section-title">1. IDENTIFICAÇÃO DO ALUNO E PROVA</div>
+    <div class="content-box">
+        <div class="row"><span class="label">Aluno:</span> {% if r.aluno %}{{ r.aluno.nome_completo }}{% endif %}</div>
+        <div class="row"><span class="label">Matrícula/RE:</span> {% if r.aluno %}{{ r.aluno.matricula or '' }}{% endif %}</div>
+        <div class="row"><span class="label">Prova/Disciplina:</span> {% if r.prova %}{{ r.prova.nome }} - {{ r.prova.disciplina.materia }}{% endif %}</div>
+        <div class="row"><span class="label">Data da Solicitação:</span> {{ r.created_at.strftime('%d/%m/%Y %H:%M') }}</div>
+        <div class="row"><span class="label">Status Atual:</span> {{ r.status }}</div>
+    </div>
+
+    <div class="section-title">2. DETALHES DO RECURSO</div>
+    <div class="content-box">
+        <div class="row"><span class="label">Questão Objeto do Recurso:</span></div>
+        <div style="margin-top: 5px; white-space: pre-wrap;">{{ r.questao_texto }}</div>
+        
+        <div class="row mt-4"><span class="label">Argumentação do Aluno:</span></div>
+        <div style="margin-top: 5px; white-space: pre-wrap;">{{ r.argumentacao_texto }}</div>
+        
+        <div style="text-align: center; margin-top: 30px; margin-bottom: 10px;">
+            {% if r.assinatura_aluno %}
+            <img src="{{ request.url_root }}static/{{ r.assinatura_aluno }}" style="max-height: 80px; margin-bottom: 5px; background-color: white !important;" /><br/>
+            {% else %}
+            <br/><br/><br/>
+            {% endif %}
+            _______________________________________<br/>
+            <small><b>{{ r.aluno.nome_completo }}</b><br/>Aluno(a) Requerente</small>
+        </div>
+    </div>
+
+    {% if r.parecer_instrutor or r.parecer_instrutor2 %}
+    <div class="section-title">3. PARECER TÉCNICO</div>
+    <div class="content-box">
+        {% if r.parecer_instrutor %}
+        <div style="white-space: pre-wrap;"><b>Instrutor 1:</b><br/>{{ r.parecer_instrutor }}</div>
+        {% endif %}
+        
+        {% if r.parecer_instrutor2 %}
+        <div style="white-space: pre-wrap; margin-top: 15px;"><b>Instrutor 2:</b><br/>{{ r.parecer_instrutor2 }}</div>
+        {% endif %}
+        
+        <div style="text-align: center; margin-top: 30px; margin-bottom: 10px;">
+            {% if r.assinatura_instrutor %}
+            <img src="{{ request.url_root }}static/{{ r.assinatura_instrutor }}" style="max-height: 80px; margin-bottom: 5px; background-color: white !important;" /><br/>
+            {% else %}
+            <br/><br/><br/>
+            {% endif %}
+            _______________________________________<br/>
+            <small><b>Instrutor(a) Avaliador(a)</b></small>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if r.decisao_comandante %}
+    <div class="section-title">4. DECISÃO FINAL (COMANDO/ADMIN)</div>
+    <div class="content-box">
+        <div style="white-space: pre-wrap;">{{ r.decisao_comandante }}</div>
+        
+        <div style="text-align: center; margin-top: 30px; margin-bottom: 10px;">
+            {% if r.assinatura_comandante %}
+            <img src="{{ request.url_root }}static/{{ r.assinatura_comandante }}" style="max-height: 80px; margin-bottom: 5px; background-color: white !important;" /><br/>
+            {% else %}
+            <br/><br/><br/>
+            {% endif %}
+            _______________________________________<br/>
+            <small><b>Comando/Administração</b></small>
+        </div>
+    </div>
+    {% endif %}
+    
+    {% if r.aluno_ciente %}
+    <div class="mt-5 text-center" style="border: 2px dashed #4CAF50; padding: 15px; background-color: #f9fff9; width: 60%; margin: 40px auto 0 auto;">
+        <h4 style="color: #4CAF50; margin: 0 0 10px 0;">CIÊNCIA DO ALUNO</h4>
+        <p style="margin: 0; font-size: 14px;">
+            O(A) aluno(a) <b>{{ r.aluno.nome_completo }}</b> registrou ciência da decisão deste recurso.<br/>
+            <b>Data/Hora:</b> {{ r.aluno_ciente_data|br_time('%d/%m/%Y %H:%M') }}<br/>
+            <b>IP de Registro:</b> {{ r.aluno_ciente_ip or 'Não registrado' }}
+        </p>
+    </div>
+    {% endif %}
+
+</body>
+</html>

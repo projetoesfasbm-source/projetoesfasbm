@@ -70,11 +70,24 @@
                                     </td>
                                     <td class="text-end">
                                         <div class="d-flex gap-2 justify-content-end">
-                                            {% if current_user.role != 'instrutor' %}
+                                            {% if not force_instrutor %}
                                             <button type="button" class="btn btn-dark text-white btn-sm rounded-pill px-3 fw-bold" 
                                                     onclick="abrirEncaminhamento('{{ r.id }}')">
                                                 <i class="fas fa-share me-1"></i> Encaminhar
                                             </button>
+                                            {% endif %}
+                                            {% if current_user.is_super_admin or current_user.is_sens %}
+                                            <button type="button" class="btn btn-danger btn-sm rounded-pill px-3 fw-bold btn-recurso-pdf" data-url="{{ url_for('recursos.exportar_recurso_pdf', recurso_id=r.id) }}" title="Imprimir PDF">
+                                                <i class="fas fa-file-pdf me-1"></i> PDF
+                                            </button>
+                                            {% endif %}
+                                            {% if current_user.is_super_admin or current_user.is_sens or is_comandante %}
+                                            <form action="{{ url_for('recursos.excluir_recurso_admin', recurso_id=r.id) }}" method="POST" class="d-inline" onsubmit="return confirm('ALERTA: Tem certeza que deseja excluir este recurso permanentemente? Esta ação não pode ser desfeita!');">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                <button type="submit" class="btn btn-outline-danger btn-sm rounded-pill px-3 fw-bold" title="Excluir Recurso">
+                                                    <i class="fas fa-trash me-1"></i> Excluir
+                                                </button>
+                                            </form>
                                             {% endif %}
                                             <a href="{{ url_for('recursos.detalhes_recurso', recurso_id=r.id) }}" class="btn btn-primary btn-sm rounded-pill px-3 fw-bold">
                                                 <i class="fas fa-search me-1"></i> Analisar
@@ -117,9 +130,29 @@
                                         <span class="badge {% if r.status == 'Pendente' %}bg-warning text-dark{% elif r.status == 'Deferido' %}bg-success{% elif r.status == 'Indeferido' %}bg-danger{% else %}bg-info text-dark{% endif %} px-3 rounded-pill py-2">
                                             {{ r.status }}
                                         </span>
+                                        {% if r.aluno_ciente %}
+                                        <div class="mt-1">
+                                            <span class="badge bg-secondary" title="Ciência registrada em {{ r.aluno_ciente_data.strftime('%d/%m/%Y %H:%M') if r.aluno_ciente_data else 'Data não registrada' }}">
+                                                <i class="fas fa-check-double"></i> Ciência
+                                            </span>
+                                        </div>
+                                        {% endif %}
                                     </td>
                                     <td class="text-end">
                                         <div class="d-flex gap-2 justify-content-end">
+                                            {% if current_user.is_super_admin or current_user.is_sens %}
+                                            <button type="button" class="btn btn-danger btn-sm rounded-pill px-3 fw-bold btn-recurso-pdf" data-url="{{ url_for('recursos.exportar_recurso_pdf', recurso_id=r.id) }}" title="Imprimir PDF">
+                                                <i class="fas fa-file-pdf me-1"></i> PDF
+                                            </button>
+                                            {% endif %}
+                                            {% if current_user.is_super_admin or current_user.is_sens or is_comandante %}
+                                            <form action="{{ url_for('recursos.excluir_recurso_admin', recurso_id=r.id) }}" method="POST" class="d-inline" onsubmit="return confirm('ALERTA: Tem certeza que deseja excluir este recurso permanentemente? Esta ação não pode ser desfeita!');">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                <button type="submit" class="btn btn-outline-danger btn-sm rounded-pill px-3 fw-bold" title="Excluir Recurso">
+                                                    <i class="fas fa-trash me-1"></i> Excluir
+                                                </button>
+                                            </form>
+                                            {% endif %}
                                             <a href="{{ url_for('recursos.detalhes_recurso', recurso_id=r.id) }}" class="btn btn-primary btn-sm rounded-pill px-3 fw-bold">
                                                 <i class="fas fa-search me-1"></i> Ver Resultado
                                             </a>
@@ -162,16 +195,8 @@
 
                     <div class="mb-3">
                         <label class="form-label fw-bold small">DESTINATÁRIO ESPECÍFICO</label>
-                        <select name="usuario_destino_id" id="selectDestinatario" class="form-select" required style="width: 100%;">
+                        <select name="usuario_destino_id" id="selectDestinatario" class="form-select" required style="width: 100%;" multiple="multiple">
                             <option value=""></option>
-                            <optgroup label="Instrutores" id="optgroupInstrutores">
-                                <!-- Preenchido dinamicamente via JS -->
-                            </optgroup>
-                            <optgroup label="Comandantes/Admins">
-                                {% for c in comandantes %}
-                                <option value="{{ c.id }}">{{ c.posto_graduacao or '' }} {{ c.nome_completo }}</option>
-                                {% endfor %}
-                            </optgroup>
                         </select>
                     </div>
                 </div>
@@ -192,8 +217,9 @@
 <style>
     /* Estilos para garantir que o Select2 não quebre o layout */
     .modal-backdrop { opacity: 0.5 !important; }
-    .select2-container--default .select2-selection--single {
-        height: 45px !important;
+    .select2-container--default .select2-selection--single,
+    .select2-container--default .select2-selection--multiple {
+        min-height: 45px !important;
         border: 2px solid #e9ecef !important;
         border-radius: 8px !important;
         display: flex;
@@ -210,8 +236,46 @@
 
 <script>
     const instrutoresMap = {{ instrutores_map | safe }};
+    const comandantesList = [
+        {% for c in comandantes %}
+        { id: "{{ c.id }}", nome: "{{ c.posto_graduacao or '' }} {{ c.nome_completo }}" }{% if not loop.last %},{% endif %}
+        {% endfor %}
+    ];
+    let currentRecursoId = null;
+
+    function atualizarDestinatarios() {
+        const tipo = document.querySelector('select[name="tipo_tramite"]').value;
+        const select = $('#selectDestinatario');
+        select.empty();
+        select.append(new Option('', '', false, false));
+        
+        if (tipo === 'instrutor') {
+            const instrutores = instrutoresMap[currentRecursoId] || [];
+            if (instrutores.length > 0) {
+                instrutores.forEach(i => {
+                    select.append(new Option(i.nome, i.id, false, false));
+                });
+            } else {
+                const opt = new Option("Nenhum instrutor disponível para esta matéria", "");
+                opt.disabled = true;
+                select.append(opt);
+            }
+        } else if (tipo === 'comandante') {
+            if (comandantesList.length > 0) {
+                comandantesList.forEach(c => {
+                    select.append(new Option(c.nome, c.id, false, false));
+                });
+            } else {
+                const opt = new Option("Nenhum comandante disponível", "");
+                opt.disabled = true;
+                select.append(opt);
+            }
+        }
+        select.trigger('change');
+    }
 
     function abrirEncaminhamento(recursoId) {
+        currentRecursoId = recursoId;
         const modalElement = document.getElementById('modalEncaminhamentoGeral');
         
         // Remove do container atual e anexa diretamente no body para resolver problema do backdrop (tela escura bloqueando)
@@ -224,47 +288,101 @@
         document.getElementById('displayIdRecurso').innerText = '#' + recursoId;
         document.getElementById('formEncaminhar').action = "/recursos/admin/encaminhar/" + recursoId;
         
-        // Popula dinamicamente os instrutores válidos
-        const instrutores = instrutoresMap[recursoId] || [];
-        const optg = document.getElementById('optgroupInstrutores');
-        optg.innerHTML = '';
-        if (instrutores.length > 0) {
-            instrutores.forEach(i => {
-                const opt = document.createElement('option');
-                opt.value = i.id;
-                opt.textContent = i.nome;
-                optg.appendChild(opt);
-            });
-        } else {
-            const opt = document.createElement('option');
-            opt.value = "";
-            opt.textContent = "Nenhum instrutor vinculado na matéria";
-            opt.disabled = true;
-            optg.appendChild(opt);
-        }
+        document.querySelector('select[name="tipo_tramite"]').value = 'instrutor';
+        atualizarDestinatarios();
 
-        // Limpa o Select2 se já estiver instanciado
-        if ($('#selectDestinatario').hasClass("select2-hidden-accessible")) {
-            $('#selectDestinatario').select2('destroy');
-        }
-        
         modal.show();
     }
 
-    $(document).ready(function() {
-        $('.tabela-recursos').DataTable({
-            "language": { "url": "//cdn.datatables.net/plug-ins/1.13.6/i18n/pt-BR.json" },
-            "order": [[ 0, "desc" ]]
+    // Lógica para o PDF (Movido para fora do document.ready para evitar falhas se o DataTables for bloqueado pelo CSP)
+    document.addEventListener('DOMContentLoaded', function() {
+        document.body.addEventListener('click', function(e) {
+            const btn = e.target.closest('.btn-recurso-pdf');
+            if (!btn) return;
+            
+            e.preventDefault();
+            const originalIcon = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Gerando...';
+            btn.disabled = true;
+            
+            fetch(btn.dataset.url)
+                .then(res => res.json())
+                .then(data => {
+                    if(data.success && data.job_id) {
+                        pollJobStatus(data.job_id, btn, originalIcon);
+                    } else {
+                        alert("Erro ao enviar tarefa de PDF para a fila.");
+                        btn.innerHTML = originalIcon;
+                        btn.disabled = false;
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert("Erro ao conectar com o servidor.");
+                    btn.innerHTML = originalIcon;
+                    btn.disabled = false;
+                });
         });
+    });
+
+    function pollJobStatus(jobId, btn, originalIcon) {
+        let interval = setInterval(() => {
+            fetch(`/api/jobs/${jobId}/status`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'completed') {
+                        clearInterval(interval);
+                        btn.innerHTML = originalIcon;
+                        btn.disabled = false;
+                        if (data.result && data.result.file_url) {
+                            window.open(data.result.file_url, '_blank');
+                        } else {
+                            window.location.href = `/api/jobs/${jobId}/download`;
+                        }
+                    } else if (data.status === 'failed') {
+                        clearInterval(interval);
+                        btn.innerHTML = originalIcon;
+                        btn.disabled = false;
+                        alert('Erro ao gerar o PDF.');
+                    }
+                })
+                .catch(err => {
+                    clearInterval(interval);
+                    btn.innerHTML = originalIcon;
+                    btn.disabled = false;
+                    console.error('Polling error:', err);
+                });
+        }, 3000);
+    }
+
+    $(document).ready(function() {
+        $('select[name="tipo_tramite"]').on('change', function() {
+            if(currentRecursoId) {
+                atualizarDestinatarios();
+            }
+        });
+
+        try {
+            $('.tabela-recursos').DataTable({
+                "language": { "url": "//cdn.datatables.net/plug-ins/1.13.6/i18n/pt-BR.json" },
+                "order": [[ 0, "desc" ]]
+            });
+        } catch(e) {
+            console.error("DataTables não pôde ser carregado (CSP/Rede):", e);
+        }
 
         // Inicializa o Select2 apenas quando o modal estiver visível
         $('#modalEncaminhamentoGeral').on('shown.bs.modal', function () {
-            $('#selectDestinatario').select2({
-                dropdownParent: $('#modalEncaminhamentoGeral'),
-                placeholder: "Digite o nome para buscar...",
-                allowClear: true,
-                width: '100%'
-            }).select2('open'); // Abre automaticamente para economizar clique
+            try {
+                $('#selectDestinatario').select2({
+                    dropdownParent: $('#modalEncaminhamentoGeral'),
+                    placeholder: "Digite o nome para buscar...",
+                    allowClear: true,
+                    width: '100%'
+                }).select2('open'); // Abre automaticamente para economizar clique
+            } catch(e) {
+                console.error("Select2 não carregado:", e);
+            }
         });
     });
 </script>

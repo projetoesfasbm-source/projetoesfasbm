@@ -17,14 +17,14 @@
             <div class="justice-container">
 
                 <div class="justice-options mb-4">
-                    <button class="btn btn-primary justice-option-btn {% if active_tab != 'finalizados' %}active{% endif %}" data-target="inProgressContent">Em Andamento</button>
+                    <button class="btn btn-primary justice-option-btn {% if active_tab == 'andamento' %}active{% endif %}" data-target="inProgressContent">Em Andamento</button>
                     <button class="btn btn-warning justice-option-btn {% if active_tab == 'finalizados' %}active{% endif %}" data-target="finalizadosContent">Finalizados</button>
 
                     {% if current_user.role != 'aluno' %}
-                        <button class="btn btn-danger justice-option-btn" data-target="newInfracaoContent">
+                        <button class="btn btn-danger justice-option-btn {% if active_tab == 'newInfracaoContent' %}active{% endif %}" data-target="newInfracaoContent">
                             <i class="fas fa-exclamation-triangle me-1"></i>Nova Infração
                         </button>
-                        <button class="btn btn-success justice-option-btn" data-target="newElogioContent">
+                        <button class="btn btn-success justice-option-btn {% if active_tab == 'newElogioContent' %}active{% endif %}" data-target="newElogioContent">
                             <i class="fas fa-star me-1"></i>Novo Elogio
                         </button>
 
@@ -40,7 +40,7 @@
                     {% endif %}
                 </div>
 
-                <div class="justice-content {% if active_tab != 'finalizados' %}active{% endif %}" id="inProgressContent">
+                <div class="justice-content {% if active_tab == 'andamento' %}active{% endif %}" id="inProgressContent">
                     <h3 class="justice-content-title mb-3">Processos em Andamento</h3>
                     {% if em_andamento %}
                         {% for p in em_andamento %}
@@ -671,7 +671,7 @@
                     {% endif %}
                 </div>
 
-                <div class="justice-content" id="newInfracaoContent">
+                <div class="justice-content {% if active_tab == 'newInfracaoContent' %}active{% endif %}" id="newInfracaoContent">
                     <div class="card border-danger shadow-sm">
                         <div class="card-header bg-danger text-white"><h4 class="mb-0">Registrar Infração</h4></div>
                         <div class="card-body">
@@ -754,35 +754,116 @@
                     </div>
                 </div>
 
-                <div class="justice-content" id="newElogioContent">
-                    <div class="card border-success shadow-sm">
-                        <div class="card-header bg-success text-white"><h4 class="mb-0">Registrar Elogio</h4></div>
-                        <div class="card-body">
-                             <form method="POST" action="{{ url_for('justica.registrar_em_massa') }}">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <input type="hidden" name="tipo_registro" value="elogio">
-                                <div class="row">
-                                    <div class="col-md-5 border-end">
-                                        <label class="form-label">Turma</label>
-                                        <select class="form-select mb-2" onchange="carregarAlunos(this.value, 'listaAlunosElogio')">
-                                            <option value="">-- Escolha --</option>
-                                            {% for turma in turmas %}
-                                            <option value="{{ turma.id }}">{{ turma.nome }}</option>
-                                            {% endfor %}
-                                        </select>
-                                        <div id="listaAlunosElogio" class="border rounded p-2" style="max-height:300px; overflow-y:auto;"></div>
-                                    </div>
-                                    <div class="col-md-7">
-                                        <label class="form-label">Motivo</label>
-                                        <textarea name="descricao" class="form-control" rows="5" required></textarea>
-                                        <div class="text-end mt-3"><button type="submit" class="btn btn-success">Registrar Elogio</button></div>
-                                    </div>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
+                <div class="justice-content {% if active_tab == 'newElogioContent' %}active{% endif %}" id="newElogioContent">
+    <div class="row">
+        <!-- COLUNA ESQUERDA: Formulário de Registro -->
+        <div class="col-lg-7 mb-4">
+            <div class="card border-success shadow-sm h-100">
+                <div class="card-header bg-success text-white">
+                    <h4 class="mb-0"><i class="fas fa-star me-2"></i>Registrar Elogio</h4>
                 </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('justica.registrar_em_massa') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="tipo_registro" value="elogio">
+                        <div class="row">
+                            <div class="col-md-5 border-end">
+                                <label class="form-label">Turma</label>
+                                <select class="form-select mb-2" onchange="carregarAlunos(this.value, 'listaAlunosElogio')">
+                                    <option value="">-- Escolha --</option>
+                                    {% for turma in turmas %}
+                                    <option value="{{ turma.id }}">{{ turma.nome }}</option>
+                                    {% endfor %}
+                                </select>
+                                <div id="listaAlunosElogio" class="border rounded p-2" style="max-height:300px; overflow-y:auto;"></div>
+                            </div>
+                            <div class="col-md-7">
+                                <label class="form-label">Motivo</label>
+                                <textarea name="descricao" class="form-control" rows="5" required placeholder="Descreva o motivo do elogio..."></textarea>
+                                <div class="text-end mt-3">
+                                    <button type="submit" class="btn btn-success"><i class="fas fa-check me-1"></i>Registrar Elogio</button>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
 
+        <!-- COLUNA DIREITA: Histórico do Usuário Logado -->
+        <div class="col-lg-5 mb-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0"><i class="fas fa-history me-2"></i>Meus Elogios Publicados</h5>
+                </div>
+                <!-- Box com barra de rolagem limitando a altura -->
+                <div class="card-body p-0" style="max-height: 400px; overflow-y: auto;">
+                    {% if meus_elogios %}
+                        <ul class="list-group list-group-flush">
+                            {% for elogio in meus_elogios %}
+                                <li class="list-group-item">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div class="me-2">
+                                            <small class="text-muted"><i class="fas fa-calendar-alt"></i> {{ elogio.data_elogio.strftime('%d/%m/%Y') }}</small>
+                                            
+                                            <!-- Informações do Aluno -->
+                                            {% if elogio.aluno and elogio.aluno.user %}
+                                            <br>
+                                            <strong class="text-success">
+                                                {{ elogio.aluno.user.posto_graduacao or '' }} {{ elogio.aluno.user.nome_de_guerra or elogio.aluno.user.nome_completo }}
+                                            </strong>
+                                            {% if elogio.aluno.turma %}
+                                            <small class="text-muted"> - {{ elogio.aluno.turma.nome }}</small>
+                                            {% endif %}
+                                            {% endif %}
+                                            
+                                            <!-- Descrição -->
+                                            <p class="mb-1 mt-1 small">{{ elogio.descricao }}</p>
+                                        </div>
+                                        
+                                        <!-- Botão de Excluir vinculando à rota de exclusão do elogio -->
+                                        <form action="{{ url_for('elogio.deletar_elogio', elogio_id=elogio.id) }}" method="POST" onsubmit="return confirm('Tem certeza que deseja excluir este elogio?');">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir Elogio">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <div class="p-4 text-center text-muted">
+                            <i class="fas fa-inbox fa-3x mb-3 opacity-50"></i>
+                            <p>Você ainda não publicou nenhum elogio.</p>
+                        </div>
+                    {% endif %}
+                </div>
+                {% if meus_elogios_paginados and meus_elogios_paginados.pages > 1 %}
+                <div class="card-footer bg-white border-top-0 pt-0">
+                    <nav aria-label="Navegação de meus elogios">
+                        <ul class="pagination pagination-sm justify-content-center mb-0 mt-2">
+                            <li class="page-item {% if not meus_elogios_paginados.has_prev %}disabled{% endif %}">
+                                <a class="page-link" href="{{ url_for('justica.index', page_elogios=meus_elogios_paginados.prev_num, tab='newElogioContent', q=request.args.get('q', '')) }}" tabindex="-1">Anterior</a>
+                            </li>
+                            
+                            {% for page_num in meus_elogios_paginados.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=1) %}
+                                {% if page_num %}
+                                    <li class="page-item {% if page_num == meus_elogios_paginados.page %}active{% endif %}">
+                                        <a class="page-link" href="{{ url_for('justica.index', page_elogios=page_num, tab='newElogioContent', q=request.args.get('q', '')) }}">{{ page_num }}</a>
+                                    </li>
+                                {% else %}
+                                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                                {% endif %}
+                            {% endfor %}
+
+                            <li class="page-item {% if not meus_elogios_paginados.has_next %}disabled{% endif %}">
+                                <a class="page-link" href="{{ url_for('justica.index', page_elogios=meus_elogios_paginados.next_num, tab='newElogioContent', q=request.args.get('q', '')) }}">Próximo</a>
+                            </li>
+                        </ul>
+                    </nav>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>

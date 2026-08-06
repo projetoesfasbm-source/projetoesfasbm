@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Dossiê do Aluno - PDF</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; font-size: 12px; }
+        .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; }
+        .header img { max-width: 80px; }
+        .title { font-size: 16px; font-weight: bold; text-transform: uppercase; margin-top: 10px; }
+        .section-title { font-weight: bold; background-color: #f0f0f0; padding: 5px; margin-top: 15px; border: 1px solid #ccc; text-transform: uppercase; }
+        .content-box { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; min-height: 20px; }
+        .row { margin-bottom: 5px; }
+        .label { font-weight: bold; }
+        .text-center { text-align: center; }
+        .mt-4 { margin-top: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #ccc; padding: 5px; text-align: left; }
+        th { background-color: #f9f9f9; }
+        .text-danger { color: #dc3545; }
+        .text-success { color: #28a745; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="title">Dossiê do Aluno - Desligamento</div>
+        <div>Gerado em: {{ now.strftime('%d/%m/%Y %H:%M') }}</div>
+    </div>
+
+    <div class="section-title">1. IDENTIFICAÇÃO DO ALUNO</div>
+    <div class="content-box">
+        <div class="row"><span class="label">Aluno:</span> {% if aluno %}{{ aluno.nome_completo }}{% endif %}</div>
+        <div class="row"><span class="label">Nome de Guerra:</span> {% if aluno and aluno.user %}{{ aluno.user.nome_de_guerra }}{% endif %}</div>
+        <div class="row"><span class="label">Matrícula/RE:</span> {% if aluno %}{{ aluno.id_aluno or 'N/D' }}{% endif %}</div>
+        <div class="row"><span class="label">Turma (Última vinculada):</span> {% if aluno and aluno.turma %}{{ aluno.turma.nome }}{% else %}Sem turma{% endif %}</div>
+    </div>
+
+    <div class="section-title">2. DADOS DO DESLIGAMENTO</div>
+    <div class="content-box">
+        {% if registro %}
+        <div class="row"><span class="label">Data do Desligamento:</span> {{ registro.data_desligamento.strftime('%d/%m/%Y') }}</div>
+        <div class="row"><span class="label">Motivo (Processo/Documento):</span> {{ registro.motivo }}</div>
+        <div class="row"><span class="label">Responsável pelo Registro:</span> {{ registro.admin.nome_completo if registro.admin else 'Sistema' }}</div>
+        {% if registro.observacoes %}
+        <div class="row mt-4"><span class="label">Observações Complementares:</span><br/> {{ registro.observacoes }}</div>
+        {% endif %}
+        {% else %}
+        <div class="row text-center">Nenhum registro ativo de desligamento encontrado.</div>
+        {% endif %}
+    </div>
+
+    <div class="section-title">3. FALTAS E FREQUÊNCIA</div>
+    <div class="content-box">
+        {% set faltas = aluno.frequencias|selectattr('presente', 'equalto', False)|list %}
+        {% if faltas %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Disciplina</th>
+                    <th>Instrutor</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for falta in faltas %}
+                <tr>
+                    <td>{{ falta.diario.data_aula.strftime('%d/%m/%Y') if falta.diario else 'N/D' }}</td>
+                    <td>{{ falta.diario.disciplina.materia if falta.diario and falta.diario.disciplina else 'N/D' }}</td>
+                    <td>{{ falta.diario.instrutor.user.nome_de_guerra if falta.diario and falta.diario.instrutor else '-' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="row text-center mt-4">Nenhuma falta registrada no sistema.</div>
+        {% endif %}
+    </div>
+
+    <div class="section-title">4. JUSTIÇA E DISCIPLINA</div>
+    <div class="content-box">
+        {% if aluno.fada_avaliacoes.count() > 0 or (aluno.processos_disciplinares and aluno.processos_disciplinares|length > 0) %}
+            
+            {% if aluno.processos_disciplinares and aluno.processos_disciplinares|length > 0 %}
+                <div class="row label mt-4">Processos Disciplinares:</div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Fato Constatado</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for processo in aluno.processos_disciplinares %}
+                        <tr>
+                            <td>{{ processo.data_ocorrencia.strftime('%d/%m/%Y') if processo.data_ocorrencia else '' }}</td>
+                            <td>{{ processo.fato_constatado }}</td>
+                            <td>{{ processo.status.value if processo.status else 'N/D' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% endif %}
+
+            {% if aluno.fada_avaliacoes.count() > 0 %}
+                <div class="row label mt-4">Registros de FADA:</div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Observação</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for fada in aluno.fada_avaliacoes %}
+                        <tr>
+                            <td>{{ fada.data_registro.strftime('%d/%m/%Y') if fada.data_registro else '' }}</td>
+                            <td>{{ fada.observacao }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% endif %}
+
+        {% else %}
+        <div class="row text-center mt-4">Nenhum registro disciplinar arquivado.</div>
+        {% endif %}
+    </div>
+
+    <div class="section-title">5. ELOGIOS E MÉRITOS</div>
+    <div class="content-box">
+        {% if aluno.elogios|length > 0 %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Motivo do Elogio</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for elogio in aluno.elogios %}
+                <tr>
+                    <td>{{ elogio.data_registro.strftime('%d/%m/%Y') if elogio.data_registro else '' }}</td>
+                    <td>{{ elogio.motivo }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="row text-center mt-4">Nenhum elogio arquivado.</div>
+        {% endif %}
+    </div>
+
+</body>
+</html>

@@ -58,6 +58,8 @@ from backend.models.frequencia import FrequenciaAluno
 from backend.models.elogio import Elogio
 from backend.models.edicao import Edicao
 from backend.models.chamado_suporte import ChamadoSuporte
+# --- NOVO MÓDULO: DESLIGAMENTOS ---
+from backend.models.desligamento import RegistroDesligamento
 # --- NOVO MÓDULO: BANCO DE QUESTÕES E PROVAS ---
 from backend.models.banco_questoes import QuestaoBanco, DelegacaoProva, RascunhoProva, ConfiguracaoEnvio
 # --- NOVO MÓDULO: RECURSOS ---
@@ -211,6 +213,7 @@ def register_blueprints(app):
     from backend.controllers.edicao_controller import edicao_bp
     from backend.controllers.log_controller import log_bp
     from backend.controllers.cursos_controller import cursos_api_bp, cursos_bp
+    from backend.controllers.desligamento_controller import desligamento_bp # <-- IMPORTAÇÃO AQUI
 
     app.register_blueprint(admin_escola_bp)
     app.register_blueprint(tools_bp)
@@ -236,6 +239,7 @@ def register_blueprints(app):
     app.register_blueprint(vinculo_bp)
     app.register_blueprint(chefe_bp)
     app.register_blueprint(suporte_bp)
+    app.register_blueprint(desligamento_bp) # <-- REGISTRO AQUI
 
     # ### REGISTRO DE NOVOS BLUEPRINTS ###
     app.register_blueprint(elogio_bp)

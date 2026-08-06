@@ -100,6 +100,9 @@ class DisciplinaService:
             total_realizado_global = 0
 
             for d in disciplinas:
+                if d.materia and d.materia.strip().upper() == 'A DISPOSIÇÃO DO C AL /S ENS':
+                    continue
+                
                 prog = DisciplinaService.get_dados_progresso(d)
                 
                 if d.materia not in materias_analysis:

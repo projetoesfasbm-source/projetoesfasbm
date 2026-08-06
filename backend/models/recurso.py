@@ -56,10 +56,20 @@ class Recurso(db.Model):
     status = db.Column(db.String(50), default='Pendente') # Valores sugeridos: Pendente, Em Análise, Deferido, Indeferido
     resposta_admin = db.Column(db.Text, nullable=True)
     
-    # Workflow de aprovação
+    # Assinaturas e Workflow de aprovação
     instrutor_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    instrutor2_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     parecer_instrutor = db.Column(db.Text, nullable=True)
+    parecer_instrutor2 = db.Column(db.Text, nullable=True)
     decisao_comandante = db.Column(db.Text, nullable=True)
+    
+    assinatura_aluno = db.Column(db.Text, nullable=True)
+    assinatura_instrutor = db.Column(db.Text, nullable=True)
+    assinatura_comandante = db.Column(db.Text, nullable=True)
+    
+    aluno_ciente = db.Column(db.Boolean, default=False)
+    aluno_ciente_data = db.Column(db.DateTime, nullable=True)
+    aluno_ciente_ip = db.Column(db.String(50), nullable=True)
     
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
@@ -67,6 +77,7 @@ class Recurso(db.Model):
     # Relacionamentos (a relação 'prova' já vem do backref de ProvaRecurso)
     aluno = db.relationship('User', foreign_keys=[aluno_id], backref=db.backref('meus_recursos', lazy=True))
     instrutor = db.relationship('User', foreign_keys=[instrutor_id], backref=db.backref('recursos_encaminhados', lazy=True))
+    instrutor2 = db.relationship('User', foreign_keys=[instrutor2_id], backref=db.backref('recursos_encaminhados2', lazy=True))
 
     def __repr__(self):
         return f'<Recurso {self.id} - Prova ID {self.prova_id} - Aluno ID {self.aluno_id}>'

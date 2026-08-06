@@ -107,7 +107,7 @@
                                                     {% set max_dur = pos_int_2 - row_idx + 1 %}
                                                 {% endif %}
                                                 
-                                                <td rowspan="{{ max_dur if not parent_aula.is_disposicao else 1 }}">
+                                                <td rowspan="{{ max_dur }}">
                                                     <div class="slot-content">
                                                         <span class="disciplina-title">{{ parent_aula.materia }}</span>
                                                         {% if parent_aula.instrutor %}<span class="instrutor-name">{{ parent_aula.instrutor }}</span>{% endif %}
@@ -136,7 +136,7 @@
                                     {% set max_dur = pos_int_2 - row_idx + 1 %}
                                 {% endif %}
 
-                                <td rowspan="{{ max_dur if not aula.is_disposicao else 1 }}">
+                                <td rowspan="{{ max_dur }}">
                                     <div class="slot-content">
                                         <span class="disciplina-title">{{ aula.materia }}</span>
                                         {% if aula.instrutor %}<span class="instrutor-name">{{ aula.instrutor }}</span>{% endif %}

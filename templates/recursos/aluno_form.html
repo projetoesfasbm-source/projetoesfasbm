@@ -64,7 +64,7 @@
                         <div class="col-md-4">
                             <label class="form-label small fw-bold">ANEXAR FUNDAMENTAÇÃO (PDF/WORD)</label>
                             <input type="file" class="form-control" name="arquivo_anexo[]" accept=".pdf,.doc,.docx">
-                            <div class="form-text small">Opcional. Máximo 5MB.</div>
+                            <div class="form-text small">Opcional. Máximo 5MB (Recomendado PDF).</div>
                         </div>
                     </div>
                 </div>
@@ -75,6 +75,12 @@
             <button type="button" class="btn btn-outline-primary fw-bold rounded-pill px-4 shadow-sm" id="btn-add-questao">
                 <i class="fas fa-plus-circle me-2"></i> Adicionar Mais uma Questão (Mesma Prova)
             </button>
+        </div>
+
+        <div class="card shadow-sm border-0 mb-4" style="border-radius: 12px; border-left: 5px solid var(--primary-color) !important;">
+            <div class="card-body p-4">
+                {% include 'components/_signature_pad.html' %}
+            </div>
         </div>
 
         <div class="card shadow border-0 bg-primary text-white" style="border-radius: 12px;">
@@ -161,6 +167,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div class="col-md-4">
                         <label class="form-label small fw-bold">ANEXAR FUNDAMENTAÇÃO (PDF/WORD)</label>
                         <input type="file" class="form-control" name="arquivo_anexo[]" accept=".pdf,.doc,.docx">
+                        <div class="form-text small">Opcional. Máximo 5MB (Recomendado PDF).</div>
                     </div>
                 </div>
             </div>

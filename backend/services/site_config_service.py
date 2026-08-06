@@ -159,7 +159,20 @@ class SiteConfigService:
             return SiteConfigService._cache
 
         db_configs = db.session.execute(select(SiteConfig)).scalars().all()
-        db_configs_map = {c.config_key: c for c in db_configs}
+        
+        db_configs_map = {}
+        for c in db_configs:
+            detached_c = SiteConfig(
+                config_key=c.config_key,
+                config_value=c.config_value,
+                config_type=c.config_type,
+                description=c.description,
+                category=c.category,
+                updated_by=c.updated_by
+            )
+            detached_c.id = c.id
+            db_configs_map[c.config_key] = detached_c
+            
         final_configs = []
         for key, value, config_type, description, category in SiteConfigService._DEFAULT_CONFIGS:
             if key in db_configs_map:

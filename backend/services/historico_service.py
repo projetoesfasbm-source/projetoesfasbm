@@ -63,7 +63,8 @@ class HistoricoService:
     @staticmethod
     def get_historico_disciplinas_for_aluno(aluno_id: int):
         """Busca todos os registros de disciplinas (matrículas) para um aluno específico."""
-        stmt = select(HistoricoDisciplina).where(HistoricoDisciplina.aluno_id == aluno_id).order_by(HistoricoDisciplina.id)
+        from sqlalchemy.orm import joinedload
+        stmt = select(HistoricoDisciplina).options(joinedload(HistoricoDisciplina.disciplina)).where(HistoricoDisciplina.aluno_id == aluno_id).order_by(HistoricoDisciplina.id)
         return db.session.scalars(stmt).all()
 
     @staticmethod

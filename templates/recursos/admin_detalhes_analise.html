@@ -11,9 +11,16 @@
             </h2>
             <p class="text-muted">Trâmite Atual: <span class="badge bg-info text-dark shadow-sm">{{ r.status }}</span></p>
         </div>
-        <a href="{{ url_for('recursos.listar_recursos_pendentes') }}" class="btn btn-outline-secondary rounded-pill fw-bold">
-            <i class="fas fa-arrow-left me-1"></i> Voltar à Lista
-        </a>
+        <div class="d-flex gap-2">
+            {% if current_user.is_super_admin or current_user.is_sens %}
+            <button type="button" class="btn btn-danger rounded-pill fw-bold btn-recurso-pdf" data-url="{{ url_for('recursos.exportar_recurso_pdf', recurso_id=r.id) }}" title="Imprimir PDF">
+                <i class="fas fa-file-pdf me-1"></i> Imprimir PDF
+            </button>
+            {% endif %}
+            <a href="{{ url_for('recursos.listar_recursos_pendentes') }}" class="btn btn-outline-secondary rounded-pill fw-bold">
+                <i class="fas fa-arrow-left me-1"></i> Voltar à Lista
+            </a>
+        </div>
     </div>
 
     <div class="row g-4">
@@ -31,8 +38,17 @@
             {% if r.parecer_instrutor %}
             <div class="card shadow-sm border-0 mb-3" style="border-radius: 12px; border-left: 5px solid #28a745;">
                 <div class="card-body">
-                    <h6 class="fw-bold text-success small mb-2 uppercase">PARECER DO INSTRUTOR</h6>
+                    <h6 class="fw-bold text-success small mb-2 uppercase">PARECER DO INSTRUTOR 1</h6>
                     <div class="p-2 small bg-light rounded" style="white-space: pre-wrap;">{{ r.parecer_instrutor }}</div>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if r.parecer_instrutor2 %}
+            <div class="card shadow-sm border-0 mb-3" style="border-radius: 12px; border-left: 5px solid #20c997;">
+                <div class="card-body">
+                    <h6 class="fw-bold text-success small mb-2 uppercase">PARECER DO INSTRUTOR 2</h6>
+                    <div class="p-2 small bg-light rounded" style="white-space: pre-wrap;">{{ r.parecer_instrutor2 }}</div>
                 </div>
             </div>
             {% endif %}
@@ -58,18 +74,23 @@
                     {# VARIAVEL DE CONTROLE: Verifica se o recurso já foi finalizado #}
                     {% set is_finalizado = r.status in ['Deferido', 'Indeferido'] %}
 
-                    <form action="{{ url_for('recursos.salvar_parecer', recurso_id=r.id) }}" method="POST">
+                    <form action="{{ url_for('recursos.salvar_parecer', recurso_id=r.id) }}" method="POST" enctype="multipart/form-data">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         
                         <div class="row g-3 mb-4 no-print">
                             <div class="col-md-7">
                                 <label class="form-label fw-bold small">TIPO DE DOCUMENTO A GERAR</label>
-                                <select name="tipo_acao" class="form-select border-primary fw-bold" id="selectTipoDoc" {% if is_finalizado %}disabled{% else %}required{% endif %}>
-                                    <option value="parecer_instrutor" {% if current_user.role == 'instrutor' or r.status in ['Com Instrutor', 'Pendente'] %}selected{% endif %}>PARECER DO INSTRUTOR (CONTEUDISTA)</option>
-                                    <option value="decisao_cmt" {% if current_user.role != 'instrutor' and r.status in ['Com Comandante', 'Retornado ao Admin (Parecer)', 'Deferido', 'Indeferido'] %}selected{% endif %}>DECISÃO DO COMANDANTE DA ESCOLA</option>
+                                <select name="tipo_acao" class="form-select border-primary fw-bold" id="selectTipoDoc" {% if is_finalizado or force_instrutor %}disabled{% else %}required{% endif %}>
+                                    <option value="parecer_instrutor" {% if force_instrutor or r.status in ['Com Instrutor', 'Pendente'] %}selected{% endif %}>PARECER DO INSTRUTOR (CONTEUDISTA)</option>
+                                    {% if not force_instrutor %}
+                                    <option value="decisao_cmt" {% if not force_instrutor and r.status in ['Com Comandante', 'Retornado ao Admin (Parecer)', 'Deferido', 'Indeferido'] %}selected{% endif %}>DECISÃO DO COMANDANTE DA ESCOLA</option>
+                                    {% endif %}
                                 </select>
+                                {% if force_instrutor %}
+                                <input type="hidden" name="tipo_acao" value="parecer_instrutor">
+                                {% endif %}
                             </div>
-                            <div class="col-md-5" id="colStatusFinal" style="{% if current_user.role == 'instrutor' or r.status == 'Com Instrutor' %}display: none;{% endif %}">
+                            <div class="col-md-5" id="colStatusFinal" style="{% if force_instrutor or r.status in ['Com Instrutor', 'Pendente'] %}display: none;{% endif %}">
                                 <label class="form-label fw-bold small text-danger">ESTADO FINAL DO RECURSO</label>
                                 <select name="status_final" class="form-select border-danger fw-bold" {% if is_finalizado %}disabled{% endif %}>
                                     <option value="Deferido" {% if r.status == 'Deferido' %}selected{% endif %}>DEFERIDO (Aceito)</option>
@@ -80,7 +101,7 @@
 
                         <div class="mb-3">
                             <label class="form-label fw-bold small">TEXTO DO DOCUMENTO {% if not is_finalizado %}(EDITE ABAIXO){% endif %}</label>
-                            <textarea name="conteudo_texto" id="editorBM" class="form-control" rows="18" style="font-family: 'Courier New', Courier, monospace; font-size: 0.9rem; {% if is_finalizado %}background-color: #f8f9fa;{% endif %}" {% if is_finalizado %}readonly{% endif %}>{% if r.decisao_comandante %}{{ r.decisao_comandante }}{% elif r.parecer_instrutor and r.status != 'Com Instrutor' %}{{ r.parecer_instrutor }}{% else %}ESTADO DO RIO GRANDE DO SUL
+                            <textarea name="conteudo_texto" id="editorBM" class="form-control" rows="18" style="font-family: 'Courier New', Courier, monospace; font-size: 0.9rem; {% if is_finalizado %}background-color: #f8f9fa;{% endif %}" {% if is_finalizado %}readonly{% endif %}>{% if r.decisao_comandante %}{{ r.decisao_comandante }}{% elif r.parecer_instrutor and current_user.id == r.instrutor_id %}{{ r.parecer_instrutor }}{% elif r.parecer_instrutor2 and current_user.id == r.instrutor2_id %}{{ r.parecer_instrutor2 }}{% else %}ESTADO DO RIO GRANDE DO SUL
 SECRETARIA DA SEGURANÇA PÚBLICA
 BRIGADA MILITAR
 DEPARTAMENTO DE EDUCAÇÃO E CULTURA
@@ -100,11 +121,17 @@ Diante do exposto, este instrutor julga pelo [DEFERIMENTO/INDEFERIMENTO] do recu
 É o parecer.{% endif %}</textarea>
                         </div>
 
-                        <div class="mt-4 p-3 bg-light rounded border text-center border-2" style="border-style: dashed !important;">
-                            <small class="text-muted d-block mb-1"><i class="fas fa-certificate text-success"></i> Documento Assinado Digitalmente</small>
-                            <h5 class="mb-0 fw-bold text-dark uppercase">{{ current_user.rank }} {{ current_user.nome_completo }}</h5>
-                            <small class="text-muted">ID: {{ current_user.matricula }} - Verificado via Sistema</small>
-                        </div>
+                          {% if not is_finalizado %}
+                          <div class="mt-4 p-3 bg-light rounded border text-center border-2">
+                              {% include 'components/_signature_pad.html' %}
+                          </div>
+                          {% else %}
+                          <div class="mt-4 p-3 bg-light rounded border text-center border-2" style="border-style: dashed !important;">
+                              <small class="text-muted d-block mb-1"><i class="fas fa-certificate text-success"></i> Documento Assinado Digitalmente</small>
+                              <h5 class="mb-0 fw-bold text-dark uppercase">{{ current_user.rank }} {{ current_user.nome_completo }}</h5>
+                              <small class="text-muted">ID: {{ current_user.matricula }} - Verificado via Sistema</small>
+                          </div>
+                          {% endif %}
 
                         <div class="mt-4 no-print text-end">
                             {% if is_finalizado %}
@@ -177,6 +204,63 @@ Dê-se ciência ao interessado e realizem-se as retificações necessárias.`;
     
     // Dispara o evento no carregamento inicial para exibir a caixa de Status Final caso "Decisão" seja o selecionado
     selectTipo.dispatchEvent(new Event('change'));
+    
+    // Logica para o PDF
+    document.querySelectorAll('.btn-recurso-pdf').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const originalIcon = this.innerHTML;
+            this.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Gerando...';
+            this.disabled = true;
+            
+            fetch(this.dataset.url)
+                .then(res => res.json())
+                .then(data => {
+                    if(data.success && data.job_id) {
+                        pollJobStatus(data.job_id, this, originalIcon);
+                    } else {
+                        alert("Erro ao enviar tarefa de PDF para a fila.");
+                        this.innerHTML = originalIcon;
+                        this.disabled = false;
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert("Erro ao conectar com o servidor.");
+                    this.innerHTML = originalIcon;
+                    this.disabled = false;
+                });
+        });
+    });
+    
+    function pollJobStatus(jobId, btn, originalIcon) {
+        let interval = setInterval(() => {
+            fetch(`/api/jobs/${jobId}/status`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'completed') {
+                        clearInterval(interval);
+                        btn.innerHTML = originalIcon;
+                        btn.disabled = false;
+                        if (data.result && data.result.file_url) {
+                            window.open(data.result.file_url, '_blank');
+                        } else {
+                            window.location.href = `/api/jobs/${jobId}/download`;
+                        }
+                    } else if (data.status === 'failed') {
+                        clearInterval(interval);
+                        btn.innerHTML = originalIcon;
+                        btn.disabled = false;
+                        alert('Erro ao gerar o PDF.');
+                    }
+                })
+                .catch(err => {
+                    clearInterval(interval);
+                    btn.innerHTML = originalIcon;
+                    btn.disabled = false;
+                    console.error('Polling error:', err);
+                });
+        }, 3000);
+    }
 });
 </script>
 

@@ -2,56 +2,138 @@
 {% block title %}Novo Elogio{% endblock %}
 {% block content %}
 <div class="container mt-4">
-    <div class="card shadow-sm">
-        <div class="card-header bg-success text-white">
-            <h4 class="mb-0"><i class="fas fa-star me-2"></i>Registrar Elogio</h4>
-            <p class="mb-0 small mt-1">Aluno: <strong>{{ aluno.user.nome_completo }}</strong> ({{ aluno.user.matricula }})</p>
-        </div>
-        <div class="card-body">
-            <form method="POST">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token else '' }}">
-                <div class="row">
-                    <div class="col-md-4 mb-3">
-                        <label class="form-label fw-bold">Data do Fato</label>
-                        <input type="date" name="data_elogio" class="form-control" required value="{{ hoje }}">
-                    </div>
+    <div class="row">
+        
+        <!-- COLUNA ESQUERDA: Formulário de Registro -->
+        <div class="col-lg-7 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-success text-white">
+                    <h4 class="mb-0"><i class="fas fa-star me-2"></i>Registrar Elogio</h4>
+                    <p class="mb-0 small mt-1">Aluno: <strong>{{ aluno.user.nome_completo }}</strong> ({{ aluno.user.matricula }})</p>
                 </div>
-                <div class="mb-3">
-                    <label class="form-label fw-bold">Descrição do Elogio</label>
-                    <textarea name="descricao" class="form-control" rows="4" required placeholder="Descreva o motivo do elogio..."></textarea>
-                </div>
-                {% if usa_fada %}
-                <div class="card bg-light border-info mb-3">
-                    <div class="card-body">
-                        <h6 class="card-title text-info"><i class="fas fa-calculator me-1"></i> Pontuação FADA (CBFPM/CSPM)</h6>
-                        <p class="card-text small text-muted">Selecione até 2 atributos impactados. Gera <strong>+0.5 pontos</strong>.</p>
+                <div class="card-body">
+                    <form method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token else '' }}">
                         <div class="row">
-                            <div class="col-md-6 mb-2">
-                                <label class="form-label">Atributo 1</label>
-                                <select name="atributo_1" class="form-select">
-                                    <option value="">-- Selecione --</option>
-                                    {% for id, nome in atributos %}<option value="{{ id }}">{{ id }}. {{ nome }}</option>{% endfor %}
-                                </select>
-                            </div>
-                            <div class="col-md-6 mb-2">
-                                <label class="form-label">Atributo 2</label>
-                                <select name="atributo_2" class="form-select">
-                                    <option value="">-- Selecione --</option>
-                                    {% for id, nome in atributos %}<option value="{{ id }}">{{ id }}. {{ nome }}</option>{% endfor %}
-                                </select>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label fw-bold">Data do Fato</label>
+                                <input type="date" name="data_elogio" class="form-control" required value="{{ hoje }}">
                             </div>
                         </div>
-                    </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Descrição do Elogio</label>
+                            <textarea name="descricao" class="form-control" rows="4" required placeholder="Descreva o motivo do elogio..."></textarea>
+                        </div>
+                        {% if usa_fada %}
+                        <div class="card bg-light border-info mb-3">
+                            <div class="card-body">
+                                <h6 class="card-title text-info"><i class="fas fa-calculator me-1"></i> Pontuação FADA (CBFPM/CSPM)</h6>
+                                <p class="card-text small text-muted">Selecione até 2 atributos impactados. Gera <strong>+0.5 pontos</strong>.</p>
+                                <div class="row">
+                                    <div class="col-md-6 mb-2">
+                                        <label class="form-label">Atributo 1</label>
+                                        <select name="atributo_1" class="form-select">
+                                            <option value="">-- Selecione --</option>
+                                            {% for id, nome in atributos %}<option value="{{ id }}">{{ id }}. {{ nome }}</option>{% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6 mb-2">
+                                        <label class="form-label">Atributo 2</label>
+                                        <select name="atributo_2" class="form-select">
+                                            <option value="">-- Selecione --</option>
+                                            {% for id, nome in atributos %}<option value="{{ id }}">{{ id }}. {{ nome }}</option>{% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% else %}
+                        <div class="alert alert-secondary"><i class="fas fa-info-circle me-1"></i> Escola tipo CTSP: Registro apenas histórico.</div>
+                        {% endif %}
+                        <div class="mt-3 d-flex justify-content-between">
+                            <a href="{{ url_for('aluno.editar_aluno', aluno_id=aluno.id) }}" class="btn btn-outline-secondary">Cancelar</a>
+                            <button type="submit" class="btn btn-success">Salvar Elogio</button>
+                        </div>
+                    </form>
                 </div>
-                {% else %}
-                <div class="alert alert-secondary"><i class="fas fa-info-circle me-1"></i> Escola tipo CTSP: Registro apenas histórico.</div>
-                {% endif %}
-                <div class="mt-3 d-flex justify-content-between">
-                    <a href="{{ url_for('aluno.editar_aluno', aluno_id=aluno.id) }}" class="btn btn-outline-secondary">Cancelar</a>
-                    <button type="submit" class="btn btn-success">Salvar Elogio</button>
-                </div>
-            </form>
+            </div>
         </div>
+
+        <!-- COLUNA DIREITA: Roll de Histórico -->
+        <div class="col-lg-5 mb-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0"><i class="fas fa-history me-2"></i>Meus Elogios Publicados</h5>
+                </div>
+                <!-- Box com limite de altura e barra de rolagem (Roll) -->
+                <div class="card-body p-0" style="max-height: 550px; overflow-y: auto;">
+                    {% if meus_elogios_paginados and meus_elogios_paginados.items %}
+                        <ul class="list-group list-group-flush">
+                            {% for elogio in meus_elogios_paginados.items %}
+                                <li class="list-group-item">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div class="me-2">
+                                            <small class="text-muted"><i class="fas fa-calendar-alt"></i> {{ elogio.data_elogio.strftime('%d/%m/%Y') }}</small>
+                                            
+                                            <!-- Tentativa de mostrar o nome do aluno que recebeu o elogio -->
+                                            {% if elogio.aluno and elogio.aluno.user %}
+                                            <br><small class="text-primary fw-bold">Para: {{ elogio.aluno.user.nome_completo }}</small>
+                                            {% endif %}
+                                            
+                                            <p class="mb-1 mt-1 small">{{ elogio.descricao }}</p>
+                                            
+                                            {% if elogio.pontos > 0 %}
+                                                <span class="badge bg-success">+{{ elogio.pontos }} pts</span>
+                                            {% endif %}
+                                        </div>
+                                        
+                                        <!-- Botão Excluir usando formulário para aceitar método POST exigido pelo Controller -->
+                                        <form action="{{ url_for('elogio.deletar_elogio', elogio_id=elogio.id) }}" method="POST" onsubmit="return confirm('Tem certeza que deseja excluir este elogio?');">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token else '' }}">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir Elogio">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <div class="p-4 text-center text-muted">
+                            <i class="fas fa-inbox fa-3x mb-3 opacity-50"></i>
+                            <p>Você ainda não publicou nenhum elogio.</p>
+                        </div>
+                    {% endif %}
+                </div>
+                
+                {% if meus_elogios_paginados and meus_elogios_paginados.pages > 1 %}
+                <div class="card-footer bg-white border-top-0 pt-0">
+                    <nav aria-label="Navegação de meus elogios">
+                        <ul class="pagination pagination-sm justify-content-center mb-0 mt-2">
+                            <li class="page-item {% if not meus_elogios_paginados.has_prev %}disabled{% endif %}">
+                                <a class="page-link" href="{{ url_for('elogio.novo_elogio', aluno_id=aluno.id, page=meus_elogios_paginados.prev_num) }}" tabindex="-1">Anterior</a>
+                            </li>
+                            
+                            {% for page_num in meus_elogios_paginados.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=1) %}
+                                {% if page_num %}
+                                    <li class="page-item {% if page_num == meus_elogios_paginados.page %}active{% endif %}">
+                                        <a class="page-link" href="{{ url_for('elogio.novo_elogio', aluno_id=aluno.id, page=page_num) }}">{{ page_num }}</a>
+                                    </li>
+                                {% else %}
+                                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                                {% endif %}
+                            {% endfor %}
+
+                            <li class="page-item {% if not meus_elogios_paginados.has_next %}disabled{% endif %}">
+                                <a class="page-link" href="{{ url_for('elogio.novo_elogio', aluno_id=aluno.id, page=meus_elogios_paginados.next_num) }}">Próximo</a>
+                            </li>
+                        </ul>
+                    </nav>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
     </div>
 </div>
 {% endblock %}
